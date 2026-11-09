@@ -385,6 +385,8 @@ export function buildGrandPrixScenery(track, scene) {
       const { p, s } = beside(tt, side * (HW + CURB + 2.2));
       const y = landY(p.x, p.z, 1);
       if (y === null || !free(p.x, p.z, 0.6)) continue;
+      // 지름길(판자 다리)·활주로 같은 다른 길 위에는 안 세움 (예전엔 마지막 지름길 끝에 가로등이 길 한가운데 서 있었음, 사용자 요청 2026-11-09)
+      if (track.onAltPath(p, 3)) continue;
       const k = Math.round(t) + 1000;
       if (k % 3 === 0) {
         const lp = A.lampPost();
