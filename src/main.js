@@ -26,6 +26,7 @@ import { createRaceSystem } from './raceSystem.js';
 import { createGhost } from './ghost.js';
 import { createSectors } from './sectors.js';
 import { fastTrack } from './fastTrack.js';
+import { champRace, recordRace, champStandings, champUrl } from './championship.js';
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -189,13 +190,15 @@ const keyLabel = (id, def) => {
   }
 };
 const hud = createHud(track);
+// --- 챔피언십 (?champ=1): 시즌 내내 같은 봇 (championship.js) ---
+const CHAMP = MODE === 'race' && !ONLINE && !FREE && params.get('champ') ? champRace(mapName) : null;
 // --- 상대 차·레이스 진행·고스트·구간 기록 ---
 const opponents = createOpponents(scene); // 봇 + 온라인 상대 (game.opponents)
 const raceSys = await createRaceSystem({
   track, car, scenery, opponents, laps: trackData.laps, carId, carName, color: lookColor(carCfg.look),
-  botCount: FREE ? 0 : ONLINE ? parseInt(params.get('bots'), 10) || 0 : MODE === 'race' ? settings.values.bots ?? 5 : 0,
-  botLevel: (ONLINE && params.get('botLevel')) || settings.values.botLevel || 'normal',
-  seed: ONLINE ? params.get('room') : null,
+  botCount: FREE ? 0 : ONLINE ? parseInt(params.get('bots'), 10) || 0 : CHAMP ? CHAMP.state.bots : MODE === 'race' ? settings.values.bots ?? 5 : 0,
+  botLevel: (ONLINE && params.get('botLevel')) || (CHAMP && CHAMP.state.level) || settings.values.botLevel || 'normal',
+  seed: ONLINE ? params.get('room') : CHAMP ? 'champ' + CHAMP.state.seed : null,
   loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
 });
 const sectors = createSectors({ mapName, carId });
@@ -235,11 +238,83 @@ function resetRace() {
   car.jumpStall = 0;
   car.needRelease = false;
   Object.assign(race, { lightsT: 0, lightsOutAt: 3.4 + 0.7 + Math.random() * 1.6, lights: 0, reaction: null, reactArmed: false });
-  Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false });
+  Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false, assist: assistOn() });
   sectors.reset();
   if (ghost) ghost.lapStart();
   hud.hideResults();
   snapCamera();
+  startIntro();
+}
+
+// --- 출발 그리드 소개: 불이 켜지기 전에 카메라가 그리드 앞에서부터 차들을 한 대씩 훑고 내 차 뒤로 돌아옴 ---
+//   봇 레이스에서 페이지를 처음 열었을 때만 (다시 시작 Enter에는 없음). 아무 키나 누르면 건너뜀. ?intro=0이면 끔
+const LEVEL_NAME = { easy: '쉬움', normal: '보통', hard: '어려움' };
+const intro = { on: false, played: false, t: 0, dur: 0, keys: [], cards: [] };
+const _ka = new THREE.Vector3(), _kb = new THREE.Vector3(), _kla = new THREE.Vector3(), _klb = new THREE.Vector3();
+function startIntro() {
+  intro.on = false;
+  hud.intro(null);
+  const g = window.game;
+  if (intro.played || FREE || ONLINE || !raceSys.bots.length || params.get('intro') === '0' || params.get('tutorial')) return;
+  if (g && g.car && (g.paused || g.controlsOverride)) return;
+  intro.played = true;
+  const order = raceSys.standings(); // 그리드 앞쪽 차부터
+  const front = order[0].view;
+  // 장면들: [위치, 보는 곳, 그 장면까지 걸리는 시간, 카드]
+  const keys = [];
+  keys.push({ p: front.pos.clone().addScaledVector(front.fwd, 38).addScaledVector(front.up, 13), l: order[Math.floor(order.length / 2)].view.pos.clone(), d: 0, card: null });
+  order.forEach((e, i) => {
+    const c = e.view;
+    const side = (e.lateral || 0) >= 0 ? 1 : -1;
+    keys.push({
+      p: c.pos.clone().addScaledVector(c.fwd, 6.2).addScaledVector(c.right || c.fwd, side * 3.4).addScaledVector(c.up, 1.25),
+      l: c.pos.clone().addScaledVector(c.up, 0.6).addScaledVector(c.fwd, 0.3),
+      d: i === 0 ? 1.1 : 0.62,
+      card: { pos: i + 1, name: e.name, carName: e.carName, color: e.color, isPlayer: !!e.isPlayer },
+    });
+  });
+  keys.push({ chase: true, d: 1.1, card: null });
+  intro.keys = keys;
+  intro.dur = keys.reduce((a, k) => a + k.d, 0);
+  intro.t = 0;
+  intro.on = true;
+}
+function skipIntro() {
+  if (intro.on) intro.t = Math.max(intro.t, intro.dur - 0.5);
+}
+window.addEventListener('keydown', skipIntro);
+window.addEventListener('pointerdown', skipIntro);
+/** 소개 카메라 (updateCamera 뒤에 덮어씀). 끝나면 false */
+function applyIntro(dt) {
+  if (!intro.on) return false;
+  intro.t += dt;
+  if (intro.t >= intro.dur || race.phase !== 'countdown') {
+    intro.on = false;
+    hud.intro(null);
+    return false;
+  }
+  let acc = 0, i = 1;
+  while (i < intro.keys.length - 1 && acc + intro.keys[i].d < intro.t) acc += intro.keys[i++].d;
+  const a = intro.keys[i - 1], b = intro.keys[i];
+  const u = Math.min(1, (intro.t - acc) / b.d);
+  const e = u * u * (3 - 2 * u);
+  const pa = a.chase ? camPos : a.p, la = a.chase ? camLook : a.l;
+  const pb = b.chase ? camPos : b.p, lb = b.chase ? camLook : b.l;
+  _ka.lerpVectors(pa, pb, e);
+  _kla.lerpVectors(la, lb, e);
+  camera.position.copy(_ka);
+  camera.up.set(0, 1, 0).lerp(camUp, b.chase ? e : 0).normalize();
+  camera.lookAt(_kla);
+  camera.fov = 60 + (b.chase ? (camera.fov - 60) * e : 0);
+  camera.updateProjectionMatrix();
+  const card = (e < 0.5 ? a.card : b.card) || null;
+  hud.intro({
+    title: mapTitle,
+    sub: CHAMP ? `🏆 챔피언십 ${CHAMP.index + 1}/${CHAMP.total} 경기 · 봇 ${LEVEL_NAME[raceSys.level] || ''}` : `봇 레이스 · ${raceSys.bots.length + 1}대 · ${LEVEL_NAME[raceSys.level] || ''} · ${trackData.laps}바퀴`,
+    card,
+    hint: '아무 키나 누르면 건너뛰기',
+  });
+  return true;
 }
 
 function updateLaps() {
@@ -271,7 +346,7 @@ function updateLaps() {
     let lapRecord = false;
     if (canSaveRecords()) {
       const prev = records.get(mapName, carId);
-      if (records.saveLap(mapName, carId, lapTime)) {
+      if (records.saveLap(mapName, carId, lapTime, race.assist)) {
         race.newLapRecord = true;
         lapRecord = !!(prev && prev.lap);
       }
@@ -281,7 +356,11 @@ function updateLaps() {
       showFinish();
     } else {
       race.lap++;
-      hud.toast(lapRecord ? `🏆 내 최고 랩! ${fmtTime(lapTime)}` : race.lap === trackData.laps ? '마지막 바퀴!' : isBest ? '최고 기록!' : `LAP ${race.lap}`);
+      // 남은 바퀴 띠 알림 (마지막 바퀴는 크게)
+      const left = trackData.laps - race.lap + 1;
+      if (left === 1) hud.banner('마지막 바퀴!', 'FINAL LAP', 'final', 2.6);
+      else hud.banner(`${left}바퀴 남음`, `LAP ${race.lap}/${trackData.laps}`, 'laps', 2.2);
+      if (lapRecord || isBest) hud.toast(lapRecord ? `🏆 내 최고 랩! ${fmtTime(lapTime)}` : '최고 기록!');
     }
   }
   // 역주행 감지 (t가 계속 뒤로 가면)
@@ -447,6 +526,13 @@ function handleEvents() {
     if (e === 'barricadeBlocked') hud.toast('💥 100 km/h 이상으로 들이받으면 부서져요');
     if (e === 'perfectShift') hud.shiftFlash();
     if (e === 'overRev') hud.toast('회전수가 너무 높아서 기어를 내릴 수 없어요');
+    // 드리프트 탈출 (cars: car.lastDriftInfo = { quality 0~1, gain m/s, hold 초 ... })
+    if (e === 'driftExit') {
+      const di = car.lastDriftInfo || {};
+      const kmh = Math.round((di.gain || 0) * 3.6);
+      hud.toast(`${(di.quality || 0) > 0.8 ? '완벽한 ' : ''}드리프트 탈출!${kmh > 0 ? ` +${kmh} km/h` : ''}`);
+    }
+    if (e === 'driftSpin') hud.toast('스핀! 반대로 꺾어서 각도를 잡아요');
     if (e === 'perfectLaunch') {
       hud.big('완벽한 출발!', 0.9);
       hud.flash('#7dff6a', 0.5);
@@ -604,6 +690,11 @@ window.addEventListener('blur', autoPause);
 document.addEventListener('visibilitychange', () => document.hidden && autoPause());
 
 // --- 완주 결과 ---
+// 운전 도움(브레이크·조향 도움)을 켰는지. 레이스 중 한 번이라도 켜면 race.assist = true → 결과·기록에 '도움 켬' 표시
+function assistOn() {
+  const v = settings.values;
+  return (v.brakeAssist || 'off') !== 'off' || (v.steerAssist || 'off') !== 'off';
+}
 function canSaveRecords() {
   // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
   return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
@@ -616,12 +707,26 @@ function showFinish() {
   const total = race.lapTimes.reduce((a, b) => a + b, 0);
   const prev = records.get(mapName, carId);
   const prevRace = prev && prev.race;
-  const newRace = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length) : false;
+  const newRace = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist) : false;
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
   race.resultsT = 0;
   const showSec = settings.values.sectors ?? true;
+  // 챔피언십: 이 경기 점수 저장 (한 번만) + 시즌 순위
+  let champ = null;
+  if (CHAMP && standings) {
+    if (!race.champRec) race.champRec = recordRace(mapName, standings);
+    const rec = race.champRec;
+    if (rec) {
+      const title = (id) => (mapsMeta.find((m) => m.id === id) || {}).title || id;
+      champ = {
+        no: rec.index + 1, total: rec.state.maps.length, final: rec.final, maps: rec.state.maps.map(title),
+        next: rec.final ? null : title(rec.state.maps[rec.index + 1]),
+        table: champStandings(rec.state).map((d, i) => ({ pos: i + 1, name: d.name, color: d.color, points: d.points, gained: rec.gained[d.id] || 0, isPlayer: d.isPlayer, wins: d.wins })),
+      };
+    }
+  }
   for (const cb of finishCbs) {
     try {
       cb({ time: total, lapTimes: race.lapTimes.slice(), best: race.best, position, standings });
@@ -632,9 +737,15 @@ function showFinish() {
   hud.showResults(race.lapTimes, race.best, {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, hasNext: true,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
+    champ, assist: !!race.assist, noRestart: !!champ, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
     onAction(a) {
       if (a === 'restart') {
-        if (!ONLINE) resetRace(); // 온라인에서는 혼자 다시 출발하지 않음
+        if (!ONLINE && !race.champRec) resetRace(); // 온라인·챔피언십(점수 저장 뒤)에서는 다시 하지 않음
+      }
+      else if (a === 'next' && champ) {
+        const u = champ.final ? null : champUrl();
+        if (u) location.href = u;
+        else goHome();
       }
       else if (a === 'next') {
         const u = new URL(raceUrl(nextMapId(), carId));
@@ -687,8 +798,8 @@ function frame(now, manual = false) {
     }
   }
 
-  if (!ONLINE && !menuHold && input.wasPressed('Enter')) resetRace(); // 온라인에서는 Enter(다시 시작)·M(맵 바꾸기) 막음
-  if (!ONLINE && !menuHold && input.wasPressed('KeyM')) {
+  if (!ONLINE && !(window.game && window.game.net) && !menuHold && !race.champRec && input.wasPressed('Enter')) resetRace(); // 온라인에서는 Enter(다시 시작)·M(맵 바꾸기) 막음
+  if (!ONLINE && !(window.game && window.game.net) && !menuHold && input.wasPressed('KeyM')) {
     // 맵 전환 (페이지를 새로 불러옴, 차는 그대로)
     const url = new URL(location.href);
     const next = MAP_ORDER[(MAP_ORDER.indexOf(mapName) + 1) % MAP_ORDER.length];
@@ -713,7 +824,7 @@ function frame(now, manual = false) {
 
   if (race.phase === 'countdown') {
     // 출발 전: 차는 움직이지 않음. 빨간불 5개가 꺼지는 순간 출발
-    if (!race.hold) race.lightsT += dt; // 온라인: 모두 준비될 때까지 출발 신호를 멈춰 둠 (raceCtl.holdStart)
+    if (!race.hold && !intro.on) race.lightsT += dt; // 온라인: 모두 준비될 때까지 출발 신호를 멈춰 둠 (raceCtl.holdStart). 그리드 소개 중에도 멈춤
     race.countdown = race.lightsOutAt - race.lightsT;
     race.lights = Math.max(0, Math.min(5, Math.floor((race.lightsT - 0.6) / 0.7) + 1));
     const pre = input.read();
@@ -733,10 +844,11 @@ function frame(now, manual = false) {
     car.reactionLaunch(race.time);
     if (race.time > (car.cfg.engine.perfectReaction ?? 0.3)) hud.toast(`반응 ${race.time.toFixed(2)}초`);
   }
-  hud.startLights(race.phase === 'countdown' ? race.lights : -1);
+  hud.startLights(race.phase === 'countdown' && !intro.on ? race.lights : -1);
 
   const ctlOverride = window.game && window.game.controlsOverride; // 테스트용: 자동 운전 함수
   const controls = race.phase === 'racing' && !menuHold ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
+  if (race.phase === 'racing' && !race.assist && !ctlOverride && assistOn()) race.assist = true; // 레이스 중에 도움을 켜도 표시
   acc += dt;
   while (acc >= FIXED_DT) {
     stepWorld(controls);
@@ -771,6 +883,7 @@ function frame(now, manual = false) {
     camera.fov = 45;
     camera.updateProjectionMatrix();
   }
+  if (applyIntro(dt)) _shakeBase.copy(camera.position);
   hud.shakeCamera(camera, dt);
   if (!co && shakeK !== 1) camera.position.lerpVectors(_shakeBase, camera.position, shakeK);
   if (!co) speedFx.update(car, camera, dt);
@@ -794,6 +907,12 @@ function frame(now, manual = false) {
     }
   }
   const showSectors = !FREE && (settings.values.sectors ?? true);
+  // 레이스 알림: 이번 레이스 최고 랩 (봇 포함)
+  if (raceSys.notices.length) {
+    const many = raceSys.active() && !FREE;
+    for (const n of raceSys.notices) if (many && race.phase === 'racing') hud.banner('⏱ 레이스 최고 랩', `${n.isPlayer ? '나' : n.name} ${fmtTime(n.time)}`, 'fastest', 2.6);
+    raceSys.notices.length = 0;
+  }
 
   hud.update({
     label: FREE ? '🧪 테스트 맵' : null,
@@ -804,6 +923,8 @@ function frame(now, manual = false) {
     speed: Math.abs(car.forwardSpeed) * 3.6,
     driftTime: car.drifting ? car.driftTime : 0,
     driftLevel: car.driftLevel,
+    driftAngle: car.driftAngle || 0,
+    driftHold: car.driftHold || 0,
     drifting: car.drifting,
     cfg: carCfg,
     wrongWay: race.wrongWay > 60,
@@ -826,6 +947,7 @@ function frame(now, manual = false) {
     sliding: car.sliding,
     brake: car.brk,
     others: raceSys.active() ? raceSys.dots() : null,
+    draft: race.phase === 'racing' ? car.draft || 0 : 0,
     sectors: showSectors ? sectors.hud(race.phase === 'countdown' ? 0 : race.time - race.lapStart) : null,
     ghostDelta: ghost && ghost.kind !== 'off' && race.phase === 'racing' ? ghost.delta(playerProgress() - (race.lap - 1), race.time - race.lapStart, playerProgress(), race.time) : null,
     ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : '내 최고',
@@ -843,7 +965,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records,
   resetRace,
-  mode: MODE, opponents, raceSys, ghost, sectors,
+  mode: MODE, opponents, raceSys, ghost, sectors, champ: CHAMP, intro,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작

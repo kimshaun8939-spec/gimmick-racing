@@ -574,10 +574,10 @@ export function buildNeonScenery(track, scene) {
       const hd = track.surf(s, side * (rl - 3.2), 8.8, new THREE.Vector3());
       const col = k % 7 === 0 ? pinkC : k % 3 === 0 ? cool : warm;
       heads.push({ x: hd.x, y: hd.y, z: hd.z, ry: yaw, color: '#' + col.getHexString() });
-      // 빛 웅덩이 (도로 면 위, 반지름 7 m)
-      const lat = side * (rl - 3.5);
-      const r = 7;
-      const di = Math.round(r / (track.length / N));
+      // 젖은 길에 비친 가로등 줄기 (round 2: 둥근 색 웅덩이 → 길 방향으로 길쭉하고 좁은 반사)
+      const lat = side * (rl - 3.4);
+      const r = 1.5;
+      const di = Math.round(11 / (track.length / N));
       const sA = samples[(i - di + N) % N], sB = samples[(i + di) % N];
       const a = track.surf(sA, lat - r, 0.06, new THREE.Vector3()), b = track.surf(sA, lat + r, 0.06, new THREE.Vector3());
       const c2 = track.surf(sB, lat + r, 0.06, new THREE.Vector3()), d = track.surf(sB, lat - r, 0.06, new THREE.Vector3());
@@ -587,7 +587,7 @@ export function buildNeonScenery(track, scene) {
     // 팔: 로컬 x가 도로 옆 방향이 되도록 (ry = 도로 방향) → 상자 x축 = 옆
     inst(new THREE.BoxGeometry(1, 0.16, 0.16).rotateY(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#30333f', metalness: 0.7, roughness: 0.4 }), arms.map((a) => ({ ...a, ry: a.ry + Math.PI / 2 })));
     inst(new THREE.BoxGeometry(1.4, 0.25, 0.7), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), heads);
-    const poolMat = new THREE.MeshBasicMaterial({ map: glowTexture('rgba(255,255,255,0.3)', 'rgba(255,255,255,0.08)'), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    const poolMat = new THREE.MeshBasicMaterial({ map: glowTexture('rgba(255,255,255,0.7)', 'rgba(255,255,255,0.16)'), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
     const pm = pools.mesh(poolMat);
     pm.renderOrder = 1;
     city.add(pm);
@@ -827,6 +827,25 @@ export function buildNeonScenery(track, scene) {
 
   // ---------------------------------------------------------------- 젖은 도로 반사용 환경 지도 (네온 색 하늘·간판 띠) — 렌더러가 생긴 뒤 한 번
   let envDone = false;
+  /** 환경맵용: 원점을 바라보는 작은 사각형들을 한 메시로 */
+  function quadBatchEnv() {
+    const P = [], C = [];
+    return {
+      add(x, y, z, w, h, col) {
+        const len = Math.hypot(x, z) || 1;
+        const rx = -z / len * w * 0.5, rz = x / len * w * 0.5; // 옆 방향
+        const hy = h * 0.5;
+        const v = [[x - rx, y - hy, z - rz], [x + rx, y - hy, z + rz], [x + rx, y + hy, z + rz], [x - rx, y + hy, z - rz]];
+        for (const q of [0, 1, 2, 0, 2, 3]) P.push(...v[q]), C.push(col.r, col.g, col.b);
+      },
+      mesh() {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+        return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+      },
+    };
+  }
   function makeEnv() {
     const renderer = window.game && window.game.renderer;
     if (!renderer || envDone) return;
@@ -843,15 +862,21 @@ export function buildNeonScenery(track, scene) {
       g.fillRect(0, 0, w, h);
     }) }));
     es.add(box);
-    // 수평선 근처 네온 판들 (반사에 비치는 간판 불빛)
-    for (let k = 0; k < 18; k++) {
-      const a = (k / 18) * Math.PI * 2;
-      const col = NEON[k % NEON.length];
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(R(6, 14), R(2, 8)), new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide }));
-      p.position.set(Math.cos(a) * 40, R(2, 14), Math.sin(a) * 40);
-      p.lookAt(0, p.position.y, 0);
-      es.add(p);
+    // 반사에 비치는 도시 불빛 (round 2): 예전엔 큰 네온 판 18개 → 젖은 길에 큰 색 얼룩.
+    //   지금은 작은 창문 불빛·간판 조각 수백 개 → 반사가 잘게 부서진 빛으로 보임 (진짜 젖은 아스팔트처럼)
+    const lights = quadBatchEnv();
+    for (let k = 0; k < 420; k++) {
+      const a = R(0, Math.PI * 2);
+      const y = Math.pow(rand(), 1.6) * 16 + 0.5;
+      const neon = rand() < 0.28;
+      const col = new THREE.Color(neon ? NEON[k % NEON.length] : rand() < 0.5 ? '#ffd8a8' : '#bcd4ff').multiplyScalar(neon ? 2.2 : R(0.8, 1.8)); // 1보다 밝게 (HDR) → 매끈한 웅덩이에 또렷한 점으로 비침
+      lights.add(Math.cos(a) * 40, y, Math.sin(a) * 40, neon ? R(0.8, 2.6) : R(0.3, 0.9), neon ? R(0.3, 1.2) : R(0.3, 0.7), col);
     }
+    es.add(lights.mesh());
+    // 수평선 쪽 희미한 도시 빛 띠
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(39, 39, 6, 32, 1, true), new THREE.MeshBasicMaterial({ color: '#3a1d55', side: THREE.BackSide, transparent: true, opacity: 0.6 }));
+    band.position.y = 2;
+    es.add(band);
     const pm = new THREE.PMREMGenerator(renderer);
     const rt = pm.fromScene(es, 0.02);
     cityEnv = rt.texture;

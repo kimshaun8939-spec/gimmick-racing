@@ -101,12 +101,16 @@ export async function createRaceSystem(o) {
       b.car.events.length = 0;
       b.car.mode = 'normal';
       b.car.manual = false;
-      b.driver.reset();
+      b.driver.reset(true);
       Object.assign(b, { lastT: s.t, progress: s.t > 0.5 ? s.t - 1 : s.t, lapsDone: 0, lapStart: 0, lap: 1, finished: false, finishTime: null, bestLap: null, lapTimes: [], slowT: 0, offT: 0, wrongT: 0, chkT: 0, chkProg: s.t - 1, grace: 0, respawns: 0 });
       b.marks.fill(NaN);
       b.nextMark = 0;
     }
-    Object.assign(me, { finished: false, finishTime: null, bestLap: null, lapTimes: [], progress: p.t - 1 });
+    Object.assign(me, { finished: false, finishTime: null, bestLap: null, lapTimes: [], progress: p.t - 1, draft: 0 });
+    for (const b of bots) b.draft = b.car.draft = 0;
+    car.draft = 0;
+    fastest = null;
+    notices.length = 0;
     me.marks.fill(NaN);
     me.nextMark = 0;
     return p;
@@ -138,6 +142,7 @@ export async function createRaceSystem(o) {
       b.lapStart = time;
       b.lapsDone++;
       if (b.bestLap == null || lt < b.bestLap) b.bestLap = lt;
+      lapSet(b, lt);
       if (b.lapsDone >= laps && !b.finished) {
         b.finished = true;
         b.finishTime = time;
@@ -165,18 +170,27 @@ export async function createRaceSystem(o) {
       return;
     }
     const ti = bc.trackInfo;
-    b.slowT = Math.abs(bc.speed) < 3 && bc.grounded ? b.slowT + dt : 0;
-    b.offT = ti && ti.dist > halfW + 12 && bc.grounded ? b.offT + dt : 0;
+    // 루프·벽(자석 도로)·뒤집힌 자세에서는 방향·진행 판정이 맞지 않음 → 멈춤만 봄
+    const loopy = bc.surface === 'magnet' || bc.up.y < 0.8 || (ti && ti.sample && ti.sample.roll);
+    if (loopy) {
+      b.wrongT = b.offT = 0;
+      b.chkT = 0;
+      b.chkProg = b.progress;
+    }
+    b.slowT = Math.abs(bc.speed) < 3 && (bc.grounded || loopy) ? b.slowT + dt : 0;
+    b.offT = !loopy && ti && ti.dist > halfW + 12 && bc.grounded ? b.offT + dt : 0;
     const tan = ti && ti.sample.tan;
-    b.wrongT = tan && bc.fwd.x * tan.x + bc.fwd.z * tan.z < -0.3 && bc.grounded ? b.wrongT + dt : 0;
+    b.wrongT = !loopy && tan && bc.fwd.x * tan.x + bc.fwd.z * tan.z < -0.3 && bc.grounded ? b.wrongT + dt : 0;
     b.chkT += dt;
     let noProg = false;
-    if (b.chkT > 5) {
+    if (b.chkT > 5 && !loopy) {
       noProg = (b.progress - b.chkProg) * L < 25;
       b.chkT = 0;
       b.chkProg = b.progress;
     }
     if (b.slowT > 2.5 || b.offT > 1.6 || b.wrongT > 1.8 || noProg) {
+      const why = b.slowT > 2.5 ? 'slow' : b.offT > 1.6 ? 'off' : b.wrongT > 1.8 ? 'wrong' : 'noProg';
+      respawnLog.push({ name: b.name, why, t: +(ti ? ti.t : -1).toFixed(4), time: +since.toFixed(1), mode: bc.mode });
       bc.respawn();
       bc.events.length = 0;
       b.driver.reset();
@@ -215,6 +229,13 @@ export async function createRaceSystem(o) {
       }
     if (best <= 0) return;
     stats.contacts++;
+    if (a === car || b === car) stats.player = (stats.player || 0) + 1; // 플레이어 차가 낀 접촉
+    if (stats.time < 8) stats.start = (stats.start || 0) + 1; // 출발 8초 안 (한 덩어리로 출발할 때)
+    if (stats.where) {
+      const k = a.trackInfo ? Math.floor(a.trackInfo.t * 100) : -1;
+      stats.where[k] = (stats.where[k] || 0) + 1;
+      stats.pair = [a, b];
+    }
     // 겹친 만큼 밀어냄 (반반, 움직이지 않는 상대면 내 차만)
     const share = bStatic ? 1 : 0.5;
     a.pos.addScaledVector(_n, best * share);
@@ -244,10 +265,53 @@ export async function createRaceSystem(o) {
   }
 
   const stats = { contacts: 0, hard: 0 }; // 테스트용: 차끼리 닿은 수, 세게 부딪힌 수
+  const respawnLog = []; // 테스트용: 봇이 복귀한 이유·위치
+
+  // --- 슬립스트림 (드래프트): 앞차 바로 뒤(4~30 m, 옆 2 m 안)에 있으면 공기 저항이 줄어듦 → car.draft (0~1) ---
+  //   car.js가 car.draft만큼 공기 저항을 줄임 (cars 담당). 여기서는 값만 계산해서 넣음 (플레이어·봇)
+  const DRAFT_MIN = 4, DRAFT_MAX = 30, DRAFT_LAT = 2;
+  function draftFor(x) {
+    const c = x.view;
+    if (!c || (c.mode === 'fly' && c.flying) || Math.abs(c.speed || 0) < 15) return 0;
+    let best = 0;
+    for (const y of all()) {
+      if (y === x) continue;
+      const d = near(x, y);
+      if (d < DRAFT_MIN - 1 || d > DRAFT_MAX) continue;
+      const dl = Math.abs((y.lateral || 0) - (x.lateral || 0));
+      if (dl > DRAFT_LAT + 0.6) continue;
+      if (Math.abs(y.view.pos.y - c.pos.y) > 3) continue; // 위아래로 다른 길
+      const kd = d < DRAFT_MIN ? (d - (DRAFT_MIN - 1)) : 1 - Math.pow((d - DRAFT_MIN) / (DRAFT_MAX - DRAFT_MIN), 1.3);
+      const kl = dl <= DRAFT_LAT ? 1 : 1 - (dl - DRAFT_LAT) / 0.6;
+      const ks = Math.min(1, (Math.abs(c.speed) - 15) / 15);
+      best = Math.max(best, Math.max(0, kd) * kl * ks);
+    }
+    return best;
+  }
+  function updateDraft(x, dt, racing) {
+    const want = racing ? draftFor(x) : 0;
+    const k = want > (x.draft || 0) ? 3 : 5; // 들어갈 땐 천천히, 빠질 땐 빨리
+    x.draft = (x.draft || 0) + (want - (x.draft || 0)) * Math.min(1, dt * k);
+    if (x.draft < 0.01) x.draft = 0;
+    x.view.draft = x.draft;
+  }
+
+  // --- 레이스 알림 (main.js가 꺼내 감): 최고 랩 ---
+  const notices = [];
+  let fastest = null; // { name, time, isPlayer, color }
+  function lapSet(e, lt) {
+    if (lt < 5) return;
+    if (!fastest || lt < fastest.time) {
+      const first = !fastest;
+      fastest = { name: e.name, time: lt, isPlayer: e === me, color: e.color };
+      if (!first || laps > 1) notices.push({ type: 'fastest', ...fastest });
+    }
+  }
   let paceT = 0;
   /** 물리 한 스텝 (main.js의 고정 스텝마다) */
   function step(dt, phase, time, playerProgress) {
     const racing = phase !== 'countdown';
+    stats.time = racing ? time : 0;
     // 플레이어 진행
     me.progress = playerProgress;
     me.speed = Math.abs(car.speed);
@@ -263,7 +327,7 @@ export async function createRaceSystem(o) {
       } else {
         const others = [];
         for (const e of all()) {
-          if (e === b) continue;
+          if (e === b || (e.finished && !b.finished && !e.isPlayer)) continue; // 완주하고 천천히 도는 봇은 피하지 않음 (부딪힘도 없음)
           others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
@@ -280,7 +344,8 @@ export async function createRaceSystem(o) {
       } else b.lateral = bc.trackInfo ? bc.trackInfo.lateral : 0;
     }
     // 차끼리 충돌 (플레이어 + 봇), 온라인 상대는 움직이지 않는 벽처럼 (내 차만 밀림)
-    const bodies = [car, ...bots.map((b) => b.car)];
+    // 완주한 봇은 (천천히 돌며 길을 막으므로) 다른 차와 부딪히지 않음
+    const bodies = [car, ...bots.filter((b) => !b.finished).map((b) => b.car)];
     for (let i = 0; i < bodies.length; i++) for (let k = i + 1; k < bodies.length; k++) collide(bodies[i], bodies[k], false);
     for (const e of opponents.entries) {
       if (!e.remote || !e.target) continue;
@@ -288,6 +353,9 @@ export async function createRaceSystem(o) {
       collide(car, e.view, true);
       for (const b of bots) collide(b.car, e.view, true);
     }
+    // 슬립스트림
+    updateDraft(me, dt, racing);
+    for (const b of bots) updateDraft(b, dt, racing);
     // 간격 기록
     if (racing) {
       mark(me, time);
@@ -374,6 +442,7 @@ export async function createRaceSystem(o) {
   }
   function playerLap(lapTime) {
     if (me.bestLap == null || lapTime < me.bestLap) me.bestLap = lapTime;
+    lapSet(me, lapTime);
   }
 
   /** 화면 */
@@ -385,7 +454,10 @@ export async function createRaceSystem(o) {
   const dots = () => opponents.entries.map((e) => ({ x: e.view.pos.x, z: e.view.pos.z, color: e.color }));
 
   return {
-    bots, me, M, stats, active: () => bots.length > 0 || opponents.entries.length > 0, hasGrid: () => bots.length > 0 || gridTotal != null,
+    bots, me, M, stats, respawnLog, notices, get fastest() {
+      return fastest;
+    },
+    active: () => bots.length > 0 || opponents.entries.length > 0, hasGrid: () => bots.length > 0 || gridTotal != null,
     placeGrid, step, update, standings, hudInfo, results, playerFinished, playerLap, dots, gapText, fmtTime,
     /** 온라인: 내 그리드 칸 (0 = 맨 앞)과 전체 수 */
     setGrid(index, total, humans = 0) {

@@ -397,11 +397,13 @@ export function buildSeaTrack(data, scene) {
   const lineSamples = samples.slice(0, SAMPLES);
   const lineUse = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
   // 물길: 부표 줄 안쪽 1.5 m까지 (연석 없음)
+  // 가드레일 쪽 한계 (가드레일을 만든 뒤 채움): 레일에서 2.4 m 안쪽까지만 (봇이 레일에 끼어 멈추지 않게)
+  const railCap = [new Float32Array(SAMPLES).fill(99), new Float32Array(SAMPLES).fill(99)];
   const lineLimit = (i, side) => {
     const q = wrapI(i);
     if (samples[q].water) return HW - 1.5;
     const u = lineUse[sideI(side)][q];
-    return HW - LINE_PLAIN + u * Math.max(0, kerbAt(q, side) - LINE_MARGIN + LINE_PLAIN);
+    return Math.min(railCap[sideI(side)][q], HW - LINE_PLAIN + u * Math.max(0, kerbAt(q, side) - LINE_MARGIN + LINE_PLAIN));
   };
   const noRailP = (data.noRail || []).map(([p0, p1, sd]) => [tOfP(p0), tOfP(p1), sd]);
   const inNoRail = (i, side) => noRailP.some(([t0, t1, sd]) => (sd === side || sd === 0) && inRangeT(samples[i].t, t0, t1));
@@ -427,7 +429,8 @@ export function buildSeaTrack(data, scene) {
     }
     if (pass === 0) apexes0 = prelimApexes();
   }
-  const racingLine = computeRacingLine(lineSamples, lineLimit, length, { bank: lineSamples.map((s) => s.bank || 0), water: lineSamples.map((s) => !!s.water) });
+  const lineOpts = { bank: lineSamples.map((s) => s.bank || 0), water: lineSamples.map((s) => !!s.water) };
+  let racingLine = computeRacingLine(lineSamples, lineLimit, length, lineOpts); // 가드레일을 만든 뒤 한 번 더 계산 (아래)
   const lineY = (i, d = 0) => roadYAt(samples[i], racingLine.offset[i] + d);
 
   // ---------------------------------------------------------------- 도로, 연석, 선착장
@@ -844,6 +847,48 @@ export function buildSeaTrack(data, scene) {
       railRuns.push({ side, a, b });
     }
   }
+  // 레일 아래 갓길: 연석 끝 ~ 레일 바깥까지 도로 높이의 포장면 (6 m 격자 지형이 절벽 쪽으로 처져서 연석과 레일 사이에 0.8 m 도랑이 생겼고,
+  //   봇이 그 도랑에 바퀴가 빠져 멈췄음)
+  const shoulderMat = new THREE.MeshStandardMaterial({ color: '#b9ad9a', roughness: 0.95 });
+  for (const [n, side] of [[0, -1], [1, 1]]) for (const [a, b] of runsOf((i) => railSide[n][i] === 1 && !samples[i].bridge)) {
+    // (다리 구간은 따로 끊음: 예전엔 다리 샘플만 빼고 이어서 다리 앞뒤를 잇는 긴 띠가 도로를 가로질렀음)
+    const L = spanList(a, b);
+    if (L.length < 2) continue;
+    const inner = (s) => HW + kerbAt(s.i, side), outer = (s) => Math.max(inner(s) + 0.3, railLatAt(s) + 0.6);
+    strip(L, (s) => (side < 0 ? [[-outer(s), 0.01], [-inner(s), 0.01]] : [[inner(s), 0.01], [outer(s), 0.01]]), shoulderMat, { vScale: 6, surface: 'ground' });
+  }
+  // 레이싱 라인 다시: 레일이 있는 쪽은 레일 2.4 m 안쪽까지만
+  {
+    let capped = 0;
+    for (const n of [0, 1])
+      for (let i = 0; i < SAMPLES; i++)
+        if (railSide[n][i] && !samples[i].bridge) (railCap[n][i] = railLatAt(samples[i]) - 2.4), capped++;
+    if (capped) racingLine = computeRacingLine(lineSamples, lineLimit, length, lineOpts);
+  }
+  // 코너 탈출 바깥 포장 런오프 (F1 서킷처럼): 빠르게 나가다 연석 밖으로 밀려도 잔디에 빠져 멈추지 않게
+  //   레이싱 라인이 연석까지 쓰는 탈출 구간(에이펙스 +4~+75 m 바깥)을 연석 끝에서 5.5 m 더 포장. 레일 쪽·다리·물·선착장 근처는 빼고
+  const RUNOFF_W = 5.5; // (풍경 물체는 연석 2.8 m + 4~5 m 밖이라 겹치지 않음)
+  const runoffW = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
+  const addRunoff = (n, i0, i1, wMax, ramp) => {
+    for (let i = i0; i <= i1; i++) {
+      const q = wrapI(i), sm = samples[q];
+      if (sm.water || sm.bridge || railSide[n][q] || nearWater[q] < SLIP_CLEAR + 4 || nearBridge[q] < BRIDGE_EXT) continue;
+      runoffW[n][q] = Math.max(runoffW[n][q], wMax * smooth(0, ramp, i - i0) * smooth(0, ramp, i1 - i));
+    }
+  };
+  for (const ap of racingLine.apexes) {
+    if (ap.radius > 150) continue;
+    addRunoff(sideI(-ap.side), ap.i + mS(4), ap.i + mS(75), RUNOFF_W, mS(14)); // 탈출 바깥
+    addRunoff(sideI(ap.side), ap.i - mS(40), ap.i + mS(30), 4, mS(10)); // 에이펙스 안쪽 (연석을 넘어 안쪽을 자른 차도 잔디에 안 걸림)
+  }
+  const runoffMat = new THREE.MeshStandardMaterial({ color: '#8f8a84', roughness: 0.95 });
+  for (const [n, side] of [[0, -1], [1, 1]]) {
+    for (const [a, b] of runsOf((i) => runoffW[n][i] > 0.05)) {
+      const L = spanList(a - 1, b + 1);
+      const inner = (s) => HW + kerbAt(s.i, side), outer = (s) => inner(s) + runoffW[n][wrapI(s.i)];
+      strip(L, (s) => (side < 0 ? [[-outer(s), -0.12], [-inner(s), 0.0]] : [[inner(s), 0.0], [outer(s), -0.12]]), runoffMat, { vScale: 12, surface: 'ground' });
+    }
+  }
   if (posts.length) {
     const postIm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 1.15, 0.16).translate(0, 0.52, 0), new THREE.MeshStandardMaterial({ color: '#7d8590', metalness: 0.5, roughness: 0.5 }), posts.length);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
@@ -1069,7 +1114,9 @@ export function buildSeaTrack(data, scene) {
     // 선착장 콘크리트 위: 도로처럼
     if (near.sample.water || nearWater[near.index] < 6) return { kerb: 0, off: 0, runoff: true };
     const k = kerbAt(near.index, near.lateral < 0 ? -1 : 1);
-    return { ...edgeFraction(near.dist, HW, HW + k), runoff: !!near.sample.bridge };
+    const sd = near.lateral < 0 ? 0 : 1;
+    // 다리 위와 레일 아래 포장 갓길은 포장 런오프 (잔디처럼 많이 느려지지 않음)
+    return { ...edgeFraction(near.dist, HW, HW + k), runoff: !!near.sample.bridge || !!railSide[sd][near.index] || (runoffW[sd][near.index] > 0.5 && near.dist < HW + k + runoffW[sd][near.index]) };
   }
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);

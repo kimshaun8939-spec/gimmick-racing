@@ -30,6 +30,7 @@ export async function startNetRace(game, params) {
     pid,
     players: new Map(), // pid → { pid, name, car, carName, look, host, opp(화면 핸들), last(마지막 상태), connected }
     results: new Map(), // pid → { pid, name, carName, time, laps, best }
+    gone: new Map(), // 레이스 중에 나간 사람
     started: false,
     startAt: 0, // 방장 시계 기준 출발(빨간불 시작) 시각
     lightsOut: 0,
@@ -93,6 +94,7 @@ export async function startNetRace(game, params) {
     if (!pl) {
       pl = { ...p, connected: true, opp: null, last: null };
       net.players.set(p.pid, pl);
+      net.gone.delete(p.pid);
       if (opps) pl.opp = opps.add({ id: 'net:' + p.pid, name: p.name, look: p.look, carName: p.carName, remote: true });
       ui.toast(`🟢 ${p.name} 님이 들어왔어요`);
     } else {
@@ -106,6 +108,8 @@ export async function startNetRace(game, params) {
     if (!pl) return;
     if (pl.opp) pl.opp.remove();
     net.players.delete(id);
+    // 레이스 중에 나간 사람은 결과표에 "나감"으로 남김 (다시 들어오면 지워짐)
+    if (net.started && !net.results.has(id)) net.gone.set(id, { pid: id, name: pl.name, carName: pl.carName, progress: pl.last ? pl.last.pr : 0, lap: pl.last ? pl.last.l : 1, gone: true });
     ui.toast(`🔴 ${pl.name} 님이 ${why || '나갔어요'}`);
     ui.refresh();
   }
@@ -193,11 +197,13 @@ export async function startNetRace(game, params) {
     const meRow = { pid, name, carName: game.carName, me: true, progress: myProgress(), lap: race.lap };
     rows.push(meRow);
     for (const pl of net.players.values()) rows.push({ pid: pl.pid, name: pl.name, carName: pl.carName, progress: pl.last ? pl.last.pr : 0, lap: pl.last ? pl.last.l : 1, gone: !pl.connected });
+    for (const g of net.gone.values()) if (!net.results.has(g.pid)) rows.push({ ...g });
+    for (const r of net.results.values()) if (!rows.some((x) => x.pid === r.pid)) rows.push({ pid: r.pid, name: r.name, carName: r.carName, progress: 99 }); // 완주하고 나간 사람
     for (const r of rows) {
       const res = net.results.get(r.pid);
       if (res) Object.assign(r, { time: res.time, best: res.best, finished: true });
     }
-    rows.sort((a, b) => (a.finished && b.finished ? a.time - b.time : a.finished ? -1 : b.finished ? 1 : b.progress - a.progress));
+    rows.sort((a, b) => (a.finished && b.finished ? a.time - b.time : a.finished ? -1 : b.finished ? 1 : !!a.gone - !!b.gone || b.progress - a.progress));
     return rows;
   };
 

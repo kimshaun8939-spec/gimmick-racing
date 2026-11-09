@@ -344,7 +344,12 @@ export async function openLobby(opts = {}) {
         going = true;
         const list = s.players().sort((a, b) => (a.host ? -1 : b.host ? 1 : (a.joinedAt || 0) - (b.joinedAt || 0)));
         list.forEach((p, i) => (p.slot = i));
-        const msg = { t: 'go', map: mapId, bots, players: list, code };
+        // 봇 실력도 방장 설정으로 통일 (사람마다 다르면 봇 움직임이 달라짐)
+        let botLevel = 'normal';
+        try {
+          botLevel = (JSON.parse(localStorage.getItem('gimmick.settings') || '{}') || {}).botLevel || 'normal';
+        } catch {}
+        const msg = { t: 'go', map: mapId, bots, botLevel, players: list, code };
         hub.broadcast(msg);
         launch(msg, true);
         setTimeout(() => hub.close(), 2600); // 참가자가 'go'를 받을 시간을 주고 정리
@@ -518,7 +523,7 @@ export async function openLobby(opts = {}) {
     const bots = s.bots();
     $('#lbBots').innerHTML = `<span>🤖 컴퓨터 차</span>${
       s.isHost
-        ? `<div class="gm-seg">${[0, 2, 4, 6].map((n) => `<button data-act="bots" data-n="${n}" class="${n === bots ? 'on' : ''}">${n ? n + '대' : '없음'}</button>`).join('')}</div>`
+        ? `<div class="gm-seg">${[0, 1, 3, 5].map((n) => `<button data-act="bots" data-n="${n}" class="${n === bots ? 'on' : ''}">${n ? n + '대' : '없음'}</button>`).join('')}</div>`
         : `<b>${bots ? bots + '대' : '없음'}</b>`
     }`;
     el.querySelectorAll('#lbCars2 [data-car]').forEach((b) => b.classList.toggle('on', b.dataset.car === (s.me().car || carId)));
@@ -576,6 +581,7 @@ export async function openLobby(opts = {}) {
     q.set('name', nick);
     q.set('mode', 'race');
     q.set('bots', String(msg.bots || 0));
+    if (msg.bots && msg.botLevel) q.set('botLevel', msg.botLevel);
     if (me && me.slot != null) q.set('slot', String(me.slot));
     if (new URLSearchParams(location.search).get('net') === 'local') q.set('net', 'local');
     setLast({ map: msg.map, car: (me && me.car) || carId });

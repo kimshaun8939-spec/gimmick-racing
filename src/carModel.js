@@ -46,6 +46,8 @@ const MODE_COLORS = {
   fly: new THREE.Color('#9ad8ff'),
 };
 const BOOST_FLAME = new THREE.Color('#ffb347');
+const DRIFT_EXIT_GOLD = new THREE.Color('#ffd34a'); // 깔끔한 드리프트 탈출 (품질 높음)
+const DRIFT_EXIT_BLUE = new THREE.Color('#7fd8ff'); // 깔끔한 드리프트 탈출
 const SPIKE_FLAME = new THREE.Color('#6dff5a');
 
 // --- 애니메이션 도우미 ---
@@ -1278,6 +1280,8 @@ function buildKart({ add, body, M, look }) {
       spark: [0.76, 0.2, -1.25],
       seams: [0.38, 0.08, 0.0],
       lean: 0.05,
+      pitch: 0.03, // 카트는 서스펜션이 없어 거의 안 숙임
+      hull: [0.8, 0.85, 0.56, -0.15], // 배 모드 선체: 작은 카트에 맞게 [폭, 높이, 길이 배수, 앞뒤 이동 m]
       drsRest: 0.2,
     },
   };
@@ -1847,6 +1851,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     { z: -2.32, w: 0.84, h: 0.18, y: 0.14 },
   ];
   const hull = new THREE.Group();
+  const HULL_FULL = [1, 1, 1, 0];
   body.add(hull);
   add(loft(HULL.map((s) => ({ ...s, n: 2.4 })), 24), hullWhite, 0, 0, 0, hull);
   add(loft(HULL.map((s) => ({ z: s.z, w: s.w + 0.012, h: s.h * 0.55, y: s.y - s.h * 0.5, n: 2.4 })), 24), hullRed, 0, 0, 0, hull);
@@ -2044,9 +2049,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
   sweep.visible = false;
   root.add(sweep);
   let sweepT = 1, clunkT = 1;
-  function scan(c) {
+  function scan(c, clunk = true) {
     sweepT = 0;
-    clunkT = 0;
+    if (clunk) clunkT = 0;
     sweep.material.color.copy(c);
   }
   let fxT = 1;
@@ -2066,7 +2071,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   // ------------------------------------------------------------------ 상태
   let wheelAngle = 0;
-  let lean = 0;
+  let lean = 0, leanV = 0, pitchNow = 0, pitchV = 0, lastDriftT = null;
   let driftYaw = 0;
   let spikeP = 0; // 스파이크(부스터) 변신 진행도 0~1
   let lastForm = null;
@@ -2162,7 +2167,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
     // (바퀴 접기는 poseWheels에서)
     hull.visible = sHull > 0.01;
     hull.position.y = -0.3 * (1 - sHull);
-    hull.scale.set(0.85 + 0.15 * sHull, Math.max(0.001, sHull), 0.9 + 0.1 * sHull);
+    const hs = A.hull || HULL_FULL; // 차마다 선체 크기 [폭, 높이, 길이, 앞뒤 이동]
+    hull.position.z = hs[3] || 0;
+    hull.scale.set((0.85 + 0.15 * sHull) * hs[0], Math.max(0.001, sHull) * hs[1], (0.9 + 0.1 * sHull) * hs[2]);
     for (const m of motors) {
       m.g.visible = sMotor > 0.01;
       m.g.scale.setScalar(Math.max(0.001, sMotor));
@@ -2327,13 +2334,31 @@ export function createCarModel(lookOrColor = '#e8463a') {
       qTarget.multiply(qMode);
       root.quaternion.slerp(qTarget, instant ? 1 : 1 - Math.exp(-25 * dt));
 
-      // 코너에서 차체가 바깥으로 기울어짐 (F1은 낮고 단단해서 조금만), 공중에서는 속도 방향으로 기수가 움직임
-      const targetLean = car.grounded ? car.steerVisual * Math.min(1, Math.abs(car.forwardSpeed) / 30) * A.lean * (car.drifting ? 1.8 : 1) : 0;
-      lean = THREE.MathUtils.lerp(lean, targetLean, 1 - Math.exp(-6 * dt));
+      // 무게 이동 (2026-11-10): 실제로 받는 옆 가속(car.latG)만큼 차체가 코너 바깥으로 기울고(롤),
+      //   앞뒤 가속(car.lonG)만큼 브레이크 때 앞이 숙고(다이브) 가속 때 뒤가 주저앉음(스쿼트)
+      //   크기 = 모양마다 A.lean / A.pitch (F1·카트는 단단해서 조금, 머슬카·트럭은 출렁) × 차마다 cfg.feel.roll / pitch
+      //   스프링처럼 살짝 넘쳤다 돌아옴 (feel.bounce). latG가 없는 차(옛 스냅샷)는 핸들 기준
+      const feel = (car.cfg && car.cfg.feel) || {};
+      const hasG = typeof car.latG === 'number';
+      const rollK = A.lean * (feel.roll ?? 1), pitchK = (A.pitch ?? A.lean * 0.7) * (feel.pitch ?? 1);
+      const targetLean = !car.grounded || car.flying ? 0
+        : hasG ? THREE.MathUtils.clamp(car.latG / 17, -1.4, 1.4) * rollK * (car.drifting ? 1.3 : 1)
+        : car.steerVisual * Math.min(1, Math.abs(car.forwardSpeed) / 30) * A.lean * (car.drifting ? 1.8 : 1);
+      const targetPitch = !car.grounded || car.flying ? THREE.MathUtils.clamp(-car.vel.dot(car.up) * 0.015, -0.3, 0.3)
+        : hasG ? THREE.MathUtils.clamp(-car.lonG / 17, -1, 1.4) * pitchK
+        : -car.load * 0.03;
+      if (instant) (lean = targetLean), (pitchNow = targetPitch), (leanV = pitchV = 0);
+      else {
+        // 감쇠 스프링 (k: 단단함, c: 감쇠) → 브레이크를 놓으면 앞이 살짝 튀어 올랐다 가라앉음
+        const kS = feel.spring ?? 90, cS = (feel.damp ?? 0.6) * 2 * Math.sqrt(kS);
+        const h = Math.min(dt, 1 / 30);
+        leanV += (kS * (targetLean - lean) - cS * leanV) * h;
+        lean += leanV * h;
+        pitchV += (kS * (targetPitch - pitchNow) - cS * pitchV) * h;
+        pitchNow += pitchV * h;
+      }
       body.rotation.z = -lean;
-      // 땅에서는 무게 이동: 가속하면 앞이 들리고, 브레이크를 밟으면 앞이 숙여짐
-      const pitch = car.grounded ? -car.load * 0.03 : THREE.MathUtils.clamp(-car.vel.dot(car.up) * 0.015, -0.3, 0.3);
-      body.rotation.x = THREE.MathUtils.lerp(body.rotation.x, pitch, 1 - Math.exp(-6 * dt));
+      body.rotation.x = pitchNow;
 
       // 접힌 바퀴(배 모드, 비행 중)는 멈추고 조향도 풀림
       wheelAngle += (car.forwardSpeed / 0.4) * dt * (1 - wheelQ);
@@ -2351,6 +2376,12 @@ export function createCarModel(lookOrColor = '#e8463a') {
       if (mode !== lastMode) {
         if (lastMode !== undefined && MODE_COLORS[mode]) scan(MODE_COLORS[mode]);
         lastMode = mode;
+      }
+      // 깔끔한 드리프트 탈출: 차체에 빛이 한 번 훑고 지나감 (품질이 높으면 금색)
+      const di = car.lastDriftInfo;
+      if (di && di.t !== lastDriftT) {
+        if (di.clean && !instant) scan(di.quality > 0.75 ? DRIFT_EXIT_GOLD : DRIFT_EXIT_BLUE, false);
+        lastDriftT = di.t;
       }
       // 부스터(스파이크): 0.45초 동안 펼쳐지고, 0.35초 동안 접힘
       // 부스터 중 E를 다시 눌러도 form은 그대로 'spike'라서 진행도는 1에 머묾 (애니메이션 재시작 없음)

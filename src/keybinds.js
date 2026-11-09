@@ -85,6 +85,24 @@ function changed() {
   save();
   for (const fn of listeners) fn(binds);
 }
+
+/**
+ * 게임에서 지금 쓰는 기능 (꺼진 기능의 키는 조작법·조작키·불러오는 화면에서 숨김)
+ *   booster: data/car.json의 booster.enabled (2026-11-09부터 꺼 둠)
+ */
+export const features = { booster: false };
+export const actionVisible = (id) => id !== 'booster' || features.booster;
+try {
+  fetch('data/car.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      const on = !!(j && j.booster && j.booster.enabled);
+      if (on === features.booster) return;
+      features.booster = on;
+      for (const fn of listeners) fn(binds); // 화면들이 다시 그림
+    })
+    .catch(() => {});
+} catch {}
 // 다른 탭(홈 ↔ 게임)에서 바꿔도 따라감
 try {
   window.addEventListener('storage', (e) => {
@@ -176,12 +194,12 @@ export const keybinds = {
   /** 이 행동과 같은 키를 쓰는(같은 때 쓰여서 겹치는) 다른 행동들: [{ id, label, code }] */
   conflictsOf(id) {
     const a = BY_ID[id];
-    if (!a) return [];
+    if (!a || !actionVisible(id)) return [];
     const out = [];
     for (const code of binds[id]) {
       if (!code) continue;
       for (const b of ACTIONS) {
-        if (b.id === id || !overlap(a, b)) continue;
+        if (b.id === id || !overlap(a, b) || !actionVisible(b.id)) continue;
         if (binds[b.id].some((k) => k && (k === code || TWIN[k] === code || TWIN[code] === k)))
           if (!out.some((o) => o.id === b.id)) out.push({ id: b.id, label: b.label, code });
       }
@@ -191,7 +209,7 @@ export const keybinds = {
   /** 이 키를 이미 쓰는 다른 행동 (바꾸기 전에 경고용) */
   whoUses(code, exceptId) {
     const a = BY_ID[exceptId];
-    return ACTIONS.filter((b) => b.id !== exceptId && (!a || overlap(a, b)) && binds[b.id].includes(code));
+    return ACTIONS.filter((b) => b.id !== exceptId && actionVisible(b.id) && (!a || overlap(a, b)) && binds[b.id].includes(code));
   },
   label(id) {
     return this.keys(id).map(codeLabel).join(' / ');
@@ -317,6 +335,7 @@ export function createKeybindPanel(opts = {}) {
   let lastMsg = null; // { id, code, others: [id] }
   function refresh() {
     for (const { a, row } of rows) {
+      row.hidden = !actionVisible(a.id);
       const ks = binds[a.id];
       row.querySelectorAll('.kb-slot').forEach((b) => {
         const s = +b.dataset.slot;
@@ -333,6 +352,8 @@ export function createKeybindPanel(opts = {}) {
       d.innerHTML = c.length ? `⚠ ${c.map((o) => `<b>${escHtml(codeLabel(o.code))}</b> 키가 '${escHtml(o.label)}'와 겹쳐요`).join(' · ')}` : escHtml(a.desc || '');
     }
     const all = ACTIONS.filter((a) => keybinds.conflictsOf(a.id).length).length;
+    // 줄이 다 숨겨진 묶음은 제목도 숨김
+    root.querySelectorAll('.kb-group').forEach((g) => (g.hidden = ![...g.querySelectorAll('.kb-row')].some((r) => !r.hidden)));
     if (lastMsg) {
       const { id, code, others } = lastMsg;
       const still = others.filter((o) => binds[o].includes(code));

@@ -60,27 +60,33 @@ function wetRoadTextures() {
     g.fillStyle = '#c9a63a';
     g.fillRect(w * 0.492, 0, w * 0.016, h * 0.45);
   });
-  // 거칠기: 대부분 젖어서 매끈(검정에 가까움), 군데군데 마른 곳(밝음)
+  // 거칠기 (round 2: 색 얼룩 → 젖은 아스팔트): 바탕은 반쯤 거칠어서 반사가 흐릿하고 어둡게,
+  //   물웅덩이(길쭉한 검은 얼룩)만 거울처럼 매끈, 1픽셀 잡티로 반사가 자글자글 부서지게
   const rough = canvasTexture(256, 512, (g, w, h) => {
-    g.fillStyle = '#5a5a5a';
+    g.fillStyle = '#8a8a8a';
     g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 60; i++) {
-      const x = rnd() * w, y = rnd() * h, r = 10 + rnd() * 40;
+    for (let i = 0; i < 9000; i++) {
+      const v = 90 + rnd() * 110;
+      g.fillStyle = `rgba(${v},${v},${v},0.55)`;
+      g.fillRect(rnd() * w, rnd() * h, 1, 1 + (rnd() * 2) | 0);
+    }
+    // 바퀴 자국 줄은 물이 고여 조금 더 매끈
+    g.fillStyle = 'rgba(30,30,30,0.35)';
+    for (const x of [0.25, 0.36, 0.64, 0.75]) g.fillRect(w * x - 7, 0, 14, h);
+    for (let i = 0; i < 46; i++) {
+      const x = rnd() * w, y = rnd() * h, r = 8 + rnd() * 30;
       const gr = g.createRadialGradient(x, y, 0, x, y, r);
       gr.addColorStop(0, 'rgba(10,10,10,0.95)');
       gr.addColorStop(1, 'rgba(10,10,10,0)');
       g.fillStyle = gr;
       for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) {
         g.save();
-        g.translate(ox, oy);
+        g.translate(ox + x, oy + y);
+        g.scale(0.7, 1.8); // 길 방향으로 길쭉한 웅덩이
+        g.translate(-x, -y);
         g.fillRect(x - r, y - r, r * 2, r * 2);
         g.restore();
       }
-    }
-    for (let i = 0; i < 3000; i++) {
-      const v = 70 + rnd() * 60;
-      g.fillStyle = `rgba(${v},${v},${v},0.25)`;
-      g.fillRect(rnd() * w, rnd() * h, 2, 2);
     }
   });
   rough.colorSpace = THREE.NoColorSpace;
@@ -380,7 +386,7 @@ export function buildNeonTrack(data, scene) {
 
   // ---------------------------------------------------------------- 도로, 연석, 갓길
   const wet = wetRoadTextures();
-  const roadMat = new THREE.MeshStandardMaterial({ map: wet.map, roughnessMap: wet.rough, roughness: 0.55, metalness: 0.15, envMapIntensity: 1.0 }); // 젖은 길 반사 (1.4면 색 얼룩처럼 너무 진함)
+  const roadMat = new THREE.MeshStandardMaterial({ map: wet.map, roughnessMap: wet.rough, roughness: 0.55, metalness: 0.2, envMapIntensity: 1.1 }); // 젖은 길 반사: 웅덩이만 또렷, 나머지는 흐릿하고 어둡게
   const glitchRoadTex = gridRoadTexture();
   const glitchRoadMat = new THREE.MeshStandardMaterial({ map: glitchRoadTex, emissiveMap: glitchRoadTex, emissive: '#ffffff', emissiveIntensity: 0.9, roughness: 0.25, metalness: 0.3 });
   const curbMat = new THREE.MeshStandardMaterial({ map: curbTexture('#ff2f8e', '#f2f2f6'), roughness: 0.5, metalness: 0.1 });
@@ -391,11 +397,35 @@ export function buildNeonTrack(data, scene) {
   const isG = (i) => !!samples[i].glitch;
   // 갓길·벽 위치 (쪽마다): 기본 DECK. 넓힌 연석(코너 안쪽·탈출 바깥) 옆은 벽을 더 멀리 (차가 넓게 나가도 벽에 안 닿게),
   // 튜브 앞뒤에서는 튜브 벽 바깥으로 벌어짐. 앞뒤로 부드럽게 이어지게 평균
+  // 저중력 점프 착지 구간: 공중에서는 핸들이 안 들어서 비스듬히 내려앉는 차가 많음 → 언덕부터 착지 뒤 100 m까지 벽을 3 m 더 바깥으로
+  const landW = new Float32Array(SAMPLES);
+  if (data.gravity) {
+    const [a, b] = rangeI(data.gravity.t0, data.gravity.t1);
+    const r = mS(25), e = mS(100);
+    for (let i = a - r; i <= b + e; i++) landW[wrapI(i)] = smooth(a - r, a, i) * smooth(b + e, b + e - r, i);
+  }
+  // 코너 갓길: 굽은 곳(반지름 약 400 m보다 급함)은 양쪽 벽을 최대 2.4 m 더 바깥으로.
+  //   봇·초보는 라인보다 넓게 나가서 연석 밖 벽을 긁었음 (봇 레이스에서 S자·헤어핀·다운타운 S 탈출). 앞뒤 ±20 m 평균이라 벽이 부드럽게 벌어짐
+  const cornerW = new Float32Array(SAMPLES);
+  {
+    const d = mS(12), w = mS(20);
+    const kRaw = new Float32Array(SAMPLES);
+    for (let i = 0; i < SAMPLES; i++) {
+      const ta = samples[wrapI(i - d)].tan, tb = samples[wrapI(i + d)].tan;
+      const ang = Math.acos(THREE.MathUtils.clamp((ta.x * tb.x + ta.z * tb.z) / (Math.hypot(ta.x, ta.z) * Math.hypot(tb.x, tb.z) || 1), -1, 1));
+      kRaw[i] = ang / ((2 * d * length) / SAMPLES);
+    }
+    for (let i = 0; i < SAMPLES; i++) {
+      let m = 0;
+      for (let j = -w; j <= w; j++) m += kRaw[wrapI(i + j)];
+      cornerW[i] = 2.4 * smooth(1 / 400, 1 / 160, m / (2 * w + 1));
+    }
+  }
   const railLat = [-1, 1].map((side) => {
     const raw = new Float32Array(SAMPLES);
     for (let i = 0; i < SAMPLES; i++) {
       const wide = (kerbAt(i, side) - CURB) / (KERB_WIDE - CURB);
-      raw[i] = Math.max(DECK + wide * 2.6, DECK + (TUBE_RAIL - DECK) * smooth(0, 0.25, tubeK[i] || 0));
+      raw[i] = Math.max(DECK + wide * 2.6 + cornerW[i] * 0.4, DECK + cornerW[i], DECK + 3 * landW[i], DECK + (TUBE_RAIL - DECK) * smooth(0, 0.25, tubeK[i] || 0));
     }
     const r = mS(14);
     const out = new Float32Array(SAMPLES + 1);

@@ -330,7 +330,7 @@ export function buildJungleTrack(data, scene) {
   }
 
   // ---------------------------------------------------------------- 다리 (상판, 갓길)
-  const DECK = HW + CURB + 1.2; // 상판 반폭 (난간 위치)
+  const DECK = HW + CURB + 2.6; // 상판 반폭 (난간 위치). 정글: gp(1.2)보다 넓은 갓길
   const deckTex = deckTexture();
   const deckMat = new THREE.MeshStandardMaterial({ map: deckTex, roughness: 0.85, side: THREE.DoubleSide });
   const plankMat = new THREE.MeshStandardMaterial({ map: plankTexture(), roughness: 0.9, side: THREE.DoubleSide }); // 밧줄 다리 판자
@@ -1063,6 +1063,11 @@ export function buildJungleTrack(data, scene) {
   }
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);
+  // 미니맵 조각: 정글 구간(흰 선) / 지하 세계 구간(주황 점선). hud가 지원하면 outline 대신 이걸로 그림
+  const minimapParts = runsOf((i) => !!samples[i].space).map(([a, b]) => ({
+    kind: 'under', color: '#ff8a3a', dash: [5, 4], label: '🌋',
+    pts: spanList(a, b).filter((_, k, L) => k % 6 === 0 || k === L.length - 1).map((s) => [s.pos.x, s.pos.z]),
+  }));
 
   function animate(time) {
     SPM.road.emissiveIntensity = 0.75 + 0.25 * Math.sin(time * 2.1); // 용암 틈이 숨 쉬듯 빛남
@@ -1093,7 +1098,7 @@ export function buildJungleTrack(data, scene) {
     arena: false, pad: null, inPad: () => false, spawn: null,
     sea: null, inSea: () => false, waterRanges: [], isWaterT: () => false, buoys: [],
     // 그랑프리 방식 (gpCorners.js 코너 표지판이 씀) + 정글 전용
-    grandprix: true, jungle: true, gravityAt, gravZones, apronAt, marks: data.marks || {}, surf, roadYAt, heightAt, fieldAt, islands, loops, bridgeRuns, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
+    grandprix: true, jungle: true, gravityAt, gravZones, apronAt, minimapParts, marks: data.marks || {}, surf, roadYAt, heightAt, fieldAt, islands, loops, bridgeRuns, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
     runway, apron, plank, rings, skyPath, inSkyCorridor, onAltPath, altPaths, indexAt, S, spanList, noise,
     dimension, setWorld, get inSpace() { return curWorld; }, buildMs, sampleCount: SAMPLES,
   };

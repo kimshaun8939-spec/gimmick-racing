@@ -1,8 +1,10 @@
 // 설정: 홈 화면과 ESC 메뉴가 같이 쓰는 설정 저장소 + 설정 화면(패널) 만들기
 //   - 브라우저(localStorage 'gimmick.settings')에 저장되고, 바꾸면 바로 게임에 적용됨 (onChange로 알림)
 //   - 화면은 소리 / 화면·그래픽 / 주행 / 레이스 / 표시 묶음. 마우스 또는 키보드(↑↓ 고르기, ←→ 바꾸기)로 조절
-//   - 위쪽 탭: [일반 설정] [조작키] (조작키 = keybinds.js의 createKeybindPanel)
-import { keybinds, createKeybindPanel, codeLabel } from './keybinds.js';
+//   - 위쪽 탭: [일반 설정] [조작키] [게임패드] (조작키 = keybinds.js의 createKeybindPanel, 게임패드 = gamepad.js의 createPadPanel)
+//   - tab: 'pad'인 설정은 게임패드 탭에 보임. hidden: true는 화면에 안 보이는 설정 (홈의 다른 화면에서 바꿈)
+import { keybinds, createKeybindPanel, codeLabel, actionVisible } from './keybinds.js';
+import { pad, createPadPanel } from './gamepad.js';
 
 const KEY = 'gimmick.settings';
 
@@ -29,6 +31,24 @@ export const SETTING_DEFS = [
   { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: () => `도로 위 추천 길 (${keybinds.main('racingLine')} 키)`, type: 'toggle', def: true },
   { group: '주행', key: 'autoPause', label: '자동 일시정지', desc: '다른 창을 보면 게임을 멈춰요', type: 'toggle', def: true },
 
+  // 조향 느낌·운전 도움 (input.js·assists.js가 조작 명령에 적용)
+  { group: '조향 · 운전 도움', key: 'steerSens', label: '조향 감도', desc: '핸들을 꺾는 양 (키보드·패드)', type: 'choice',
+    options: [[0.7, '둔하게'], [0.85, '−'], [1, '보통'], [1.15, '+'], [1.3, '예민하게']], def: 1 },
+  { group: '조향 · 운전 도움', key: 'steerRamp', label: '키보드 조향', desc: '부드럽게 = 키를 누르면 핸들이 서서히 끝까지 (살짝 고치기 쉬움)', type: 'choice',
+    options: [['instant', '바로'], ['fast', '빠르게'], ['smooth', '부드럽게']], def: 'instant' },
+  { group: '조향 · 운전 도움', key: 'brakeAssist', label: '브레이크 도움', desc: '코너 앞에서 너무 빠르면 자동으로 브레이크 (초보용)', type: 'choice',
+    options: [['off', '끔'], ['light', '약하게'], ['full', '강하게']], def: 'off' },
+  { group: '조향 · 운전 도움', key: 'steerAssist', label: '조향 도움', desc: '레이싱 라인 쪽으로 핸들을 살짝 돌려 줘요 (초보용)', type: 'choice',
+    options: [['off', '끔'], ['light', '약하게'], ['full', '강하게']], def: 'off' },
+  { group: '조향 · 운전 도움', key: 'tcs', label: '트랙션 컨트롤', desc: '출발·코너 탈출에서 바퀴가 헛돌면 가속을 줄여 줘요', type: 'toggle', def: false },
+
+  // 게임패드 (게임패드 탭에 보임)
+  { group: '게임패드', tab: 'pad', key: 'padDeadzone', label: '스틱 데드존', desc: '가운데에서 이만큼은 무시 (스틱이 저절로 조금 꺾이면 크게)', type: 'choice',
+    options: [[0.05, '아주 작게'], [0.1, '작게'], [0.15, '보통'], [0.22, '크게']], def: 0.1 },
+  { group: '게임패드', tab: 'pad', key: 'padCurve', label: '스틱 커브', desc: '가운데 섬세 = 조금 기울이면 조금만 꺾여서 고속에서 안정적', type: 'choice',
+    options: [[1, '직선'], [1.5, '보통'], [2.2, '가운데 섬세']], def: 1.5 },
+  { group: '게임패드', tab: 'pad', key: 'padVibe', label: '진동', desc: '연석·잔디·부딪힘에서 패드가 떨려요 (지원하는 패드만)', type: 'toggle', def: true },
+
   // 레이스 (main.js·봇·고스트가 settings.values.X ?? 기본값으로 읽음. 키 이름·값은 .debug/agents/contracts.md 약속)
   { group: '레이스', key: 'ghost', label: '고스트 차', desc: '타임 어택에서 같이 달리는 반투명 차', type: 'choice',
     options: [['off', '끔'], ['best', '내 최고 기록'], ['bot', '봇 기록']], def: 'best' },
@@ -37,6 +57,9 @@ export const SETTING_DEFS = [
   { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '', type: 'choice',
     options: [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']], def: 'normal' },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
+  // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
+  { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,
+    options: [[3, '3경기'], [5, '5경기']], def: 5 },
 
   { group: '표시', key: 'unit', label: '속도 단위', desc: '', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
@@ -130,6 +153,7 @@ export function createSettingsPanel(opts = {}) {
   wrap.innerHTML = `<div class="gm-set-tabs" role="tablist">
       <button class="gm-tab on" data-tab="general" data-nav role="tab">⚙️ 일반 설정</button>
       <button class="gm-tab" data-tab="keys" data-nav role="tab">⌨️ 조작키<span class="badge" hidden>!</span></button>
+      <button class="gm-tab" data-tab="pad" data-nav role="tab">🎮 게임패드<span class="dot" hidden></span></button>
     </div>`;
   const root = document.createElement('div');
   root.className = 'gm-settings';
@@ -137,11 +161,19 @@ export function createSettingsPanel(opts = {}) {
   const keyPanel = createKeybindPanel({ sound: uiSound });
   keyPanel.el.hidden = true;
   wrap.appendChild(keyPanel.el);
+  const padPanel = createPadPanel({ sound: uiSound });
+  padPanel.el.hidden = true;
+  wrap.appendChild(padPanel.el);
+  // 패드가 연결돼 있으면 탭에 초록 점
+  const padDot = () => (wrap.querySelector('.gm-tab .dot').hidden = !pad.connected());
+  padDot();
+  const offPad = pad.onConnect(padDot);
   let tab = 'general';
   function showTab(name) {
-    tab = name === 'keys' ? 'keys' : 'general';
+    tab = name === 'keys' || name === 'pad' ? name : 'general';
     root.hidden = tab !== 'general';
     keyPanel.el.hidden = tab !== 'keys';
+    padPanel.el.hidden = tab !== 'pad';
     wrap.querySelectorAll('.gm-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   }
   wrap.querySelector('.gm-set-tabs').addEventListener('click', (e) => {
@@ -160,12 +192,14 @@ export function createSettingsPanel(opts = {}) {
   const rows = [];
   let group = null, groupEl = null;
   for (const d of SETTING_DEFS) {
+    if (d.hidden) continue;
+    const host = d.tab === 'pad' ? padPanel.settingsEl : root;
     if (d.group !== group) {
       group = d.group;
       groupEl = document.createElement('section');
       groupEl.className = 'gm-set-group';
       groupEl.innerHTML = `<h3>${group}</h3>`;
-      root.appendChild(groupEl);
+      host.appendChild(groupEl);
     }
     const row = document.createElement('div');
     row.className = 'gm-set-row';
@@ -239,10 +273,11 @@ export function createSettingsPanel(opts = {}) {
     uiSound('toggle');
   }
   // 클릭한 줄로 포커스 (마우스로 고른 줄도 키보드로 이어서 조절)
-  root.addEventListener('pointerdown', (e) => {
-    const row = e.target.closest('.gm-set-row');
-    if (row) row.focus({ preventScroll: true });
-  });
+  for (const host of [root, padPanel.settingsEl])
+    host.addEventListener('pointerdown', (e) => {
+      const row = e.target.closest('.gm-set-row');
+      if (row) row.focus({ preventScroll: true });
+    });
   return {
     el: wrap,
     adjust,
@@ -254,7 +289,9 @@ export function createSettingsPanel(opts = {}) {
     destroy() {
       off();
       offKeys();
+      offPad();
       keyPanel.destroy();
+      padPanel.destroy();
     },
   };
 }
@@ -276,7 +313,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
       ${row(K('drift'), '드리프트', '꺾으면서 누르기')}
-      ${row(K('booster'), '부스터', '3초 동안 더 빠르게 · 브레이크로 바로 꺼짐')}
+      ${actionVisible('booster') ? row(K('booster'), '부스터', '3초 동안 더 빠르게 · 브레이크로 바로 꺼짐') : ''}
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${k1('throttle')}! 미리 밟으면 시동이 꺼져요`)}
@@ -296,6 +333,14 @@ export function createControlsPage(opts = {}) {
       ${row(K('sound'), '소리 끄기/켜기')}
       ${row(K('map'), '다음 맵으로')}
     </section>
+    <section class="gm-padctl${pad.connected() ? ' on' : ''}"><h3>🎮 게임패드 ${pad.connected() ? '<span class="ok">연결됨</span>' : '<small>(연결하고 버튼을 누르면 바로 써요)</small>'}</h3>
+      ${row('<kbd class="pad">L 스틱</kbd>', '조향', '기울인 만큼 꺾여요 (설정 → 게임패드에서 데드존·커브)')}
+      ${row(pad.html('throttle') + pad.html('brake'), '가속 · 브레이크', '트리거를 밟은 만큼')}
+      ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}
+      ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '부스터 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
+      ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')}`)}
+      ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 처음부터 다시', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
+    </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
       ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.allDefault() ? '' : ' <span class="gm-custom">(내가 바꾼 키로 보여요)</span>'}</p>`;
     const b = el.querySelector('[data-editkeys]');
@@ -303,6 +348,8 @@ export function createControlsPage(opts = {}) {
   }
   render();
   keybinds.onChange(render);
+  pad.onChange(render);
+  pad.onConnect(render);
   return el;
 }
 

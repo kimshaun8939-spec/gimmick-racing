@@ -30,24 +30,26 @@ export const records = {
     return best;
   },
   /** 한 바퀴 기록 저장. 새 최고 기록이면 true */
-  saveLap(map, car, lap) {
+  saveLap(map, car, lap, assist = false) {
     const all = readAll();
     const m = (all[map] = all[map] || {});
     const v = (m[car] = m[car] || {});
     if (v.lap && v.lap <= lap) return false;
     v.lap = +lap.toFixed(3);
+    v.lapAssist = !!assist; // 운전 도움을 켜고 낸 기록이면 true ('도움 켬' 표시용)
     v.date = Date.now();
     writeAll(all);
     return true;
   },
   /** 완주 기록 저장. 새 최고 기록이면 true */
-  saveRace(map, car, total, laps) {
+  saveRace(map, car, total, laps, assist = false) {
     const all = readAll();
     const m = (all[map] = all[map] || {});
     const v = (m[car] = m[car] || {});
     if (v.race && v.race <= total) return false;
     v.race = +total.toFixed(3);
     v.laps = laps;
+    v.raceAssist = !!assist;
     v.date = Date.now();
     writeAll(all);
     return true;

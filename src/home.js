@@ -13,8 +13,11 @@ import { settings, SETTING_DEFS, createSettingsPanel, createControlsPage, spatia
 import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutorialUrl, RACE_MODES, sampleOutline, outlineLength, drawTrackThumb } from './gameData.js';
 import { records, fmtTime } from './records.js';
 import { createCarModel } from './carModel.js';
+import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 
 export const VERSION = 'v0.9 · 2026.11';
+/** 운전 도움을 켜고 낸 기록 표시 */
+const ASSIST_TAG = '<span class="h-assist" title="운전 도움을 켜고 낸 기록">🛟 도움</span>';
 const STAT_NAMES = [['speed', '속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력']]; // 부스터는 꺼 둠 (car.json booster.enabled)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -77,6 +80,7 @@ export async function runHome() {
     <div class="h-top">
       <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">기믹 <em>레이싱</em></div><div class="sub">GIMMICK RACING</div></div></div>
       <div class="h-icons">
+        <button class="gm-btn small h-name" data-act="name" data-nav title="레이스에서 보일 이름 바꾸기">👤 <span></span></button>
         <button class="gm-btn small" data-go="records" data-nav>🏆 기록</button>
         <button class="gm-btn small" data-go="controls" data-nav>🎮 조작법</button>
         <button class="gm-btn small" data-go="settings" data-nav>⚙️ 설정</button>
@@ -89,7 +93,7 @@ export async function runHome() {
     <div class="h-view" data-view="controls"></div>
     <div class="h-view" data-view="records"></div>
     <div class="h-view" data-view="mode"></div>
-    <div class="h-foot"><span>${VERSION} · 기믹 레이싱 · Three.js</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span></span></div>
+    <div class="h-foot"><span>${VERSION} · 기믹 레이싱 · Three.js</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
     <div class="h-launch"><div class="ld" id="hLaunch"></div></div>
     <div class="h-toast" id="hToast"></div>`;
   document.body.appendChild(home);
@@ -123,8 +127,8 @@ export async function runHome() {
         <button class="gm-btn h-item" data-go="car" data-nav><span class="ic">🏎️</span><span class="t"><b>차 고르기</b><small data-f="car"></small></span><span class="arrow">›</span></button>
         <button class="gm-btn h-item" data-go="map" data-nav><span class="ic">🗺️</span><span class="t"><b>맵 고르기</b><small data-f="map"></small></span><span class="arrow">›</span></button>
         <button class="gm-btn h-item" data-go="records" data-nav><span class="ic">🏆</span><span class="t"><b>내 기록</b><small>맵마다 가장 빠른 랩</small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="settings" data-nav><span class="ic">⚙️</span><span class="t"><b>설정</b><small>소리 · 그래픽 · 주행 도움</small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="controls" data-nav><span class="ic">🎮</span><span class="t"><b>조작법</b><small>키보드 안내</small></span><span class="arrow">›</span></button>
+        <button class="gm-btn h-item" data-go="settings" data-nav><span class="ic">⚙️</span><span class="t"><b>설정</b><small>소리 · 그래픽 · 운전 도움 · 조작키</small></span><span class="arrow">›</span></button>
+        <button class="gm-btn h-item" data-go="controls" data-nav><span class="ic">🎮</span><span class="t"><b>조작법</b><small>키보드 · 게임패드 안내</small></span><span class="arrow">›</span></button>
       </div>
     </div>
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
@@ -303,9 +307,10 @@ export async function runHome() {
       const mine = records.get(id, carId);
       const best = records.bestOfMap(id);
       const el = card.querySelector('.rec');
+      const bestRec = best ? records.get(id, best.car) : null;
       if (mapInfo[id].free) el.textContent = '';
-      else if (mine && mine.lap) el.textContent = `🏆 ${fmtTime(mine.lap)}`;
-      else if (best) el.textContent = `🏆 ${fmtTime(best.lap)} (${carOf(best.car).name})`;
+      else if (mine && mine.lap) el.innerHTML = `🏆 ${fmtTime(mine.lap)}${mine.lapAssist ? ASSIST_TAG : ''}`;
+      else if (best) el.innerHTML = `🏆 ${fmtTime(best.lap)} (${esc(carOf(best.car).name)})${bestRec && bestRec.lapAssist ? ASSIST_TAG : ''}`;
       else el.textContent = '기록 없음';
       el.title = '내 최고 랩 (지금 고른 차)';
     });
@@ -339,7 +344,7 @@ export async function runHome() {
         const race = entries.filter(([, v]) => v.race).sort((a, b) => a[1].race - b[1].race)[0];
         const perCar = cars
           .filter((c) => r[c.id] && r[c.id].lap)
-          .map((c) => `${esc(c.name)} ${fmtTime(r[c.id].lap)}`)
+          .map((c) => `${esc(c.name)} ${fmtTime(r[c.id].lap)}${r[c.id].lapAssist ? ASSIST_TAG : ''}`)
           .join(' · ');
         // 구간마다 (어느 차든) 최고 → 이론상 최고 랩 = 합
         const best3 = [0, 1, 2].map((i) => Math.min(...Object.values(sec[m.id] || {}).map((v) => (v && v[i]) || Infinity)));
@@ -347,8 +352,8 @@ export async function runHome() {
           ? `<span class="h-sec">${best3.map((v, i) => `<i>S${i + 1} ${v.toFixed(2)}</i>`).join('')}</span><br><small class="none">이론상 ${fmtTime(best3[0] + best3[1] + best3[2])}</small>`
           : '<span class="none">—</span>';
         return `<tr><td class="m"><b>${esc(m.title)}</b><small>${mapInfo[m.id].laps}바퀴</small></td>
-          <td>${lap ? `<span class="gold">${fmtTime(lap[1].lap)}</span><br><small class="none">${esc(carOf(lap[0]).name)}</small>` : '<span class="none">—</span>'}</td>
-          <td>${race ? `${fmtTime(race[1].race)}<br><small class="none">${esc(carOf(race[0]).name)}</small>` : '<span class="none">—</span>'}</td>
+          <td>${lap ? `<span class="gold">${fmtTime(lap[1].lap)}</span>${lap[1].lapAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(lap[0]).name)}</small>` : '<span class="none">—</span>'}</td>
+          <td>${race ? `${fmtTime(race[1].race)}${race[1].raceAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(race[0]).name)}</small>` : '<span class="none">—</span>'}</td>
           <td>${secHtml}</td>
           <td><small class="none">${perCar || '아직 달리지 않았어요'}</small></td></tr>`;
       })
@@ -356,7 +361,7 @@ export async function runHome() {
     const box = views.records.querySelector('.scroll');
     box.innerHTML = `<table class="h-rec"><thead><tr><th>맵</th><th>최고 랩</th><th>최고 완주</th><th>최고 구간</th><th>차마다 최고 랩</th></tr></thead><tbody>${rows}</tbody></table>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;color:var(--gm-dim);font-size:12px">
-        <span>기록은 이 브라우저에만 저장돼요</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>`;
+        <span>기록은 이 브라우저에만 저장돼요 · ${ASSIST_TAG} = 운전 도움(브레이크·조향·트랙션)을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>`;
   }
 
   // ------------------------------------------------------------------ 화면 바꾸기
@@ -384,6 +389,7 @@ export async function runHome() {
         : name === 'main' ? views.main.querySelector('.h-start')
         : name === 'mode' ? views.mode.querySelector('.h-mode.sel .h-modecard')
         : name === 'settings' && sub === 'keys' ? views.settings.querySelector('.kb-slot')
+        : name === 'settings' && sub === 'pad' ? views.settings.querySelector('.gm-tab[data-tab="pad"]')
         : views[name].querySelector('.gm-set-row, [data-nav]');
       if (target) target.focus({ preventScroll: true });
       if (target && name === 'car') target.scrollIntoView({ block: 'center' }); // 고른 차가 목록 아래쪽이어도 보이게
@@ -421,17 +427,19 @@ export async function runHome() {
       </div>
     </div>`;
   // 방식마다 고를 수 있는 것 (설정 값을 바로 바꿈: 홈 설정·Esc 메뉴 설정과 같은 값)
-  const MODE_OPTS = { race: ['bots', 'botLevel'], time: ['ghost'], net: [], free: [] };
-  const OPT_LABEL = { bots: '봇 수', botLevel: '봇 실력', ghost: '고스트' };
+  const MODE_OPTS = { race: ['bots', 'botLevel'], champ: ['champLen', 'botLevel'], time: ['ghost'], net: [], free: [] };
+  const OPT_LABEL = { bots: '봇 수', botLevel: '봇 실력', ghost: '고스트', champLen: '시즌' };
   const MODE_TIPS = {
     race: '🏁 봇들과 같은 출발선에서 출발해요. 봇은 내 차와 같은 등급의 차를 타요',
     time: '⏱️ 혼자 달리며 고스트(내 최고 기록)와 겨뤄요. 구간마다 빨라졌는지 느려졌는지 알려 줘요',
     net: '🌐 방을 만들어 코드를 친구에게 보내거나, 친구 코드로 들어가요. 모두 준비되면 같이 출발해요',
     free: '🧭 봇·고스트 없이 혼자 달려요. 코스를 익히거나 레이싱 라인을 연습할 때 좋아요',
+    champ: '🏆 같은 봇들과 여러 맵을 차례로 달려요. 1위 25점 · 2위 18점 · 3위 15점… 시즌이 끝나면 점수로 챔피언을 정해요',
   };
   for (const box of views.mode.querySelectorAll('.h-mode')) {
     const opts = box.querySelector('.opts');
-    const keys = MODE_OPTS[box.dataset.mode];
+    const keys = MODE_OPTS[box.dataset.mode] || [];
+    if (box.dataset.mode === 'champ') box.querySelector('.h-modecard').insertAdjacentHTML('afterend', '<div class="h-champ"></div>');
     if (!keys.length) {
       opts.innerHTML = `<div class="none">${box.dataset.mode === 'net' ? '방 만들기 · 코드로 참가' : '봇 없음 · 고스트 없음'}</div>`;
       continue;
@@ -452,7 +460,7 @@ export async function runHome() {
     const k = classOfId(c.class);
     set('cm', [k ? k.name : '', c.tag || ''].filter(Boolean).join(' · '));
     const mine = records.get(mapId, carId);
-    set('rb', mine && mine.lap ? fmtTime(mine.lap) : '—');
+    box.querySelector('[data-s="rb"]').innerHTML = mine && mine.lap ? `${fmtTime(mine.lap)}${mine.lapAssist ? ASSIST_TAG : ''}` : '—';
     set('rm', mine && mine.race ? `완주 ${fmtTime(mine.race)}` : '아직 기록 없음');
   }
   function refreshModes() {
@@ -463,10 +471,100 @@ export async function runHome() {
       const opt = d && d.options.find((x) => x[0] === v);
       o.querySelector('b').textContent = o.dataset.adjust === 'bots' ? `${v}대` : opt ? opt[1] : String(v);
     });
+    refreshChamp();
     const m = RACE_MODES.find((x) => x.id === raceMode);
     views.mode.querySelector('.h-modetip').textContent = MODE_TIPS[raceMode] || '';
-    views.mode.querySelector('[data-act="start"]').innerHTML = raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>' : `${m ? m.icon : ''} 출발! <kbd>Enter</kbd>`;
+    views.mode.querySelector('[data-act="start"]').innerHTML =
+      raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>'
+      : raceMode === 'champ' ? (champState() ? '▶ 시즌 이어 하기 <kbd>Enter</kbd>' : '🏆 시즌 시작 <kbd>Enter</kbd>')
+      : `${m ? m.icon : ''} 출발! <kbd>Enter</kbd>`;
   }
+
+  // ------------------------------------------------------------------ 챔피언십 (race 담당의 championship.js)
+  var champMod = null, champReady = null; // null = 확인 중, false = 아직 없음 (var: 위의 refreshModes가 먼저 불려도 되게)
+  import('./championship.js')
+    .then((m) => {
+      champMod = m;
+      champReady = typeof m.startChamp === 'function' && typeof m.getChamp === 'function';
+    })
+    .catch(() => (champReady = false))
+    .finally(() => (refreshChamp(), refreshModes(), refreshSummary()));
+  function champState() {
+    try {
+      return champReady ? champMod.getChamp() : null;
+    } catch {
+      return null;
+    }
+  }
+  /** 챔피언십 카드: 진행 중이면 몇 경기째·점수·순위 + 이어 하기 / 그만두기 */
+  function refreshChamp() {
+    const box = views.mode.querySelector('.h-mode[data-mode="champ"]');
+    if (!box) return;
+    const el = box.querySelector('.h-champ');
+    box.classList.toggle('soon', champReady === false);
+    box.classList.remove('running');
+    if (champReady === false) {
+      el.innerHTML = '<div class="soonchip">🚧 준비 중</div>';
+      return;
+    }
+    const st = champState();
+    if (!st) {
+      let last = null;
+      try {
+        last = champMod && champMod.lastChamp ? champMod.lastChamp() : null;
+      } catch {}
+      if (last && last.finished && champMod.champStandings) {
+        const tbl = champMod.champStandings(last);
+        const pos = tbl.findIndex((d) => d.isPlayer) + 1;
+        el.innerHTML = pos ? `<div class="last">지난 시즌: <b>${pos === 1 ? '🏆 챔피언!' : `${pos}위`}</b> · ${tbl[pos - 1].points}점</div>` : '';
+      } else el.innerHTML = '';
+      return;
+    }
+    box.classList.add('running'); // 진행 중인 시즌: 시즌 길이·실력은 이미 정해져 있어서 고르기 줄 숨김
+    const done = st.results.length, total = st.maps.length;
+    const tbl = champMod.champStandings ? champMod.champStandings(st) : [];
+    const meI = tbl.findIndex((d) => d.isPlayer);
+    const me = meI >= 0 ? tbl[meI] : null;
+    const next = st.maps[done];
+    const dots = st.maps.map((m, i) => `<i class="${i < done ? 'done' : i === done ? 'now' : ''}" title="${esc(mapOf(m).title || m)}"></i>`).join('');
+    el.innerHTML = `<div class="prog"><span class="dots">${dots}</span><b>${done}/${total}경기</b>${me ? ` · <b>${me.points}점</b> · ${meI + 1}위` : ''}</div>
+      <div class="nx">다음: ${esc(next ? mapOf(next).title || next : '-')} · ${esc(carOf(st.carId).name || st.carId)}</div>
+      <div class="b"><button class="gm-btn small primary" data-champ="resume" data-nav>▶ 이어 하기</button><button class="gm-btn small" data-champ="quit" data-nav>그만두기</button></div>`;
+  }
+  async function champStart() {
+    if (!champReady) return toast('🏆 챔피언십은 곧 열려요 (준비 중)');
+    const cur = champState();
+    if (cur) {
+      const url = champMod.champUrl();
+      if (url) return launch(url, '🏆 챔피언십', `${cur.results.length + 1}/${cur.maps.length}경기 · ${mapOf(cur.maps[cur.results.length]).title}`);
+    }
+    const n = settings.get('champLen') || 5;
+    const ok = maps.filter((m) => mapInfo[m.id] && mapInfo[m.id].ok && !mapInfo[m.id].free);
+    const at = Math.max(0, ok.findIndex((m) => m.id === mapId));
+    const order = [...ok.slice(at), ...ok.slice(0, at)].slice(0, n).map((m) => m.id);
+    const c = carOf(carId);
+    let url;
+    try {
+      url = champMod.startChamp({ classId: c.class || null, carId, level: settings.get('botLevel') || 'normal', maps: order, bots: settings.get('bots') || 5 });
+    } catch (err) {
+      console.warn('챔피언십 시작 실패', err);
+      return toast('🏆 챔피언십을 시작하지 못했어요');
+    }
+    setLast({ map: mapId, car: carId, mode: 'champ' });
+    launch(url, '🏆 챔피언십 개막', `${order.length}경기 · ${order.map((id) => mapOf(id).title).join(' → ')}`);
+  }
+  views.mode.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-champ]');
+    if (!b) return;
+    e.stopPropagation();
+    pickMode('champ');
+    if (b.dataset.champ === 'resume') return champStart();
+    if (await confirmDialog('시즌을 그만둘까요?', '지금까지 모은 챔피언십 점수가 사라지고 되돌릴 수 없어요.', '그만두기', '계속하기')) {
+      champMod.abandonChamp();
+      uiSound('back');
+      refreshModes();
+    }
+  });
   settings.onChange(refreshModes);
   views.mode.addEventListener('click', (e) => {
     const adj = e.target.closest('[data-adj]');
@@ -504,6 +602,7 @@ export async function runHome() {
       toast('🚧 이 맵은 아직 준비 중이에요');
       return;
     }
+    if (mode === 'champ') return champStart();
     setLast({ map: mapId, car: carId, mode });
     if (mode === 'net') return openLobby({ map: mapId, car: carId });
     launching = true;
@@ -513,6 +612,15 @@ export async function runHome() {
     $('.h-launch').classList.add('on');
     const extra = mode === 'race' || mode === 'time' ? { mode } : {};
     setTimeout(() => (location.href = raceUrl(mapId, carId, extra)), 380);
+  }
+  /** 다른 주소로 출발 (챔피언십 등): 출발 화면을 보여 주고 이동 */
+  function launch(url, title, sub = '') {
+    if (launching || !url) return;
+    launching = true;
+    uiSound('select');
+    $('#hLaunch').innerHTML = `<div class="logo">기믹 레이싱</div><div class="map">${esc(title)}</div><div class="car">${esc(sub)}</div>`;
+    $('.h-launch').classList.add('on');
+    setTimeout(() => (location.href = url), 380);
   }
   function startTutorial() {
     if (launching) return;
@@ -560,6 +668,10 @@ export async function runHome() {
     else if (act === 'nextCar') stepCar(1);
     else if (act === 'pickCar') show('map');
     else if (act === 'editKeys') show('settings', true, 'keys');
+    else if (act === 'name') {
+      const r = await welcomeDialog({ first: false });
+      if (r) showName();
+    }
     else if (act === 'clearRec') {
       if (await confirmDialog('기록을 지울까요?', '모든 맵의 최고 기록·구간 기록·고스트가 사라지고 되돌릴 수 없어요.', '지우기')) {
         records.clear();
@@ -589,6 +701,18 @@ export async function runHome() {
     if (k === 'Escape' || k === 'Backspace') {
       e.preventDefault();
       if (view !== 'main') show(view === 'mode' ? modeFrom : 'main');
+      return;
+    }
+    // 설정: PageUp / PageDown (패드 LB / RB) = 탭 넘기기
+    if (view === 'settings' && (k === 'PageUp' || k === 'PageDown')) {
+      e.preventDefault();
+      const tabs = ['general', 'keys', 'pad'];
+      const i = tabs.indexOf(setPanel.tab);
+      const next = tabs[(i + (k === 'PageUp' ? 2 : 1)) % 3];
+      setPanel.showTab(next);
+      uiSound('toggle');
+      const f = views.settings.querySelector(`.gm-tab[data-tab="${next}"]`);
+      if (f) f.focus({ preventScroll: true });
       return;
     }
     // 차 고르기: Q / E = 등급 탭 바꾸기
@@ -644,7 +768,7 @@ export async function runHome() {
   selectMap(mapId);
   refreshModes();
   const startView = params.get('menu');
-  if (startView === 'keys') show('settings', true, 'keys');
+  if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : 'main');
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
   const ld = document.getElementById('loading');
@@ -668,12 +792,28 @@ export async function runHome() {
       } catch {}
       setTimeout(async () => {
         if (view !== 'main' || launching || dialogOpen()) return;
-        if (await confirmDialog('처음 오셨나요? 🎓', '약 5분짜리 튜토리얼에서 운전하는 법부터 빠르게 달리는 요령(브레이크·에이펙스·탈출)과 변신까지 배워 봐요. 나중에 메인 메뉴의 "튜토리얼"로도 할 수 있어요.', '튜토리얼 시작', '나중에'))
-          startTutorial();
+        const r = await welcomeDialog({ first: true });
+        showName();
+        if (r && r.tutorial) startTutorial();
       }, 700);
     }
   }
-  window.home = { show, selectCar, selectMap, start, startTutorial, openLobby, preview, get mode() { return raceMode; }, get view() { return view; }, get carId() { return carId; }, get mapId() { return mapId; } };
+  // 이름 (멀티플레이 대기실과 같은 'gimmick.nick')
+  function showName() {
+    const n = getNick();
+    $('.h-name span').textContent = n || '이름 정하기';
+    $('.h-name').classList.toggle('empty', !n);
+  }
+  showName();
+  // 게임패드가 연결되면 아래 안내에 패드 버튼도
+  const padHint = () => {
+    const h = $('.h-foot .padhint');
+    h.hidden = !pad.connected();
+    if (!h.hidden) h.innerHTML = `🎮 ${padKbd(0)} 확인 ${padKbd(1)} 뒤로 ${padKbd(4)}${padKbd(5)} 탭`;
+  };
+  padHint();
+  pad.onConnect(padHint);
+  window.home = { show, selectCar, selectMap, start, startTutorial, openLobby, preview, welcome: welcomeDialog, champ: champStart, get mode() { return raceMode; }, get view() { return view; }, get carId() { return carId; }, get mapId() { return mapId; } };
 }
 
 /** 3D 차 미리보기 (턴테이블 위에서 빙글빙글, 마우스로 끌어서 돌리기) */
@@ -948,4 +1088,87 @@ function createPreview(home) {
   api.scene = scene;
   api.camera = camera;
   return api;
+}
+
+// ------------------------------------------------------------------ 이름 (net.js와 같은 저장 칸 'gimmick.nick')
+const NICK_KEY = 'gimmick.nick';
+const cleanNick = (v) => String(v || '').replace(/[<>&"]/g, '').trim().slice(0, 12);
+const randomNick = () => ['번개', '질주', '드리프트', '터보', '로켓', '바람', '유성', '폭풍', '코너', '에이펙스'][Math.floor(Math.random() * 10)] + Math.floor(10 + Math.random() * 90);
+function getNick() {
+  try {
+    return localStorage.getItem(NICK_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+function setNick(n) {
+  try {
+    localStorage.setItem(NICK_KEY, n);
+  } catch {}
+}
+
+/**
+ * 환영 창 (처음 왔을 때) / 이름 바꾸기 창
+ *   first: true → 이름 + "튜토리얼부터 / 바로 둘러보기". Promise<{ name, tutorial } | null>
+ *   first: false → 이름만 [저장] [취소]
+ */
+function welcomeDialog({ first = false } = {}) {
+  return new Promise((resolve) => {
+    const prevFocus = document.activeElement;
+    const wrap = document.createElement('div');
+    wrap.className = 'gm-confirm gm-welcome';
+    const cur = getNick();
+    wrap.innerHTML = `<div class="box" role="dialog" aria-modal="true">
+      ${first ? '<div class="wl-flag">🏁</div><h3>기믹 레이싱에 온 걸 환영해요!</h3><p>먼저 레이스에서 보일 <b>이름</b>을 정해 주세요. 멀티플레이와 결과표에 나와요.</p>' : '<h3>👤 내 이름</h3><p>멀티플레이 대기실과 레이스 결과표에 보이는 이름이에요.</p>'}
+      <div class="wl-name"><input type="text" maxlength="12" spellcheck="false" autocomplete="off" aria-label="이름"><button class="gm-btn small" data-r="dice" title="아무 이름이나">🎲</button></div>
+      <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
+      ${first ? `<div class="wl-tut"><span class="ic">🎓</span><div><b>처음이라면 튜토리얼부터!</b><small>약 5분 · 출발 신호, 브레이크, 에이펙스, 드리프트, 변신(가속·배·비행)까지 직접 해 보며 배워요</small></div></div>` : ''}
+      <div class="btns">${first ? '<button class="gm-btn" data-r="skip">바로 둘러보기</button><button class="gm-btn primary" data-r="tut">🎓 튜토리얼 시작<kbd>Enter</kbd></button>' : '<button class="gm-btn" data-r="cancel">취소</button><button class="gm-btn primary" data-r="ok">저장<kbd>Enter</kbd></button>'}</div></div>`;
+    const inp = wrap.querySelector('input');
+    inp.value = cur || (first ? randomNick() : '');
+    const done = (r) => {
+      window.removeEventListener('keydown', onKey, true);
+      wrap.remove();
+      if (r) {
+        const n = cleanNick(inp.value) || cur || randomNick();
+        setNick(n);
+        uiSound('select');
+        if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
+        resolve({ name: n, tutorial: r === 'tut' });
+      } else {
+        uiSound('back');
+        if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
+        resolve(null);
+      }
+    };
+    const primary = first ? 'tut' : 'ok';
+    const onKey = (e) => {
+      e.stopImmediatePropagation(); // 홈·게임은 키를 안 받음 (글자 입력은 그대로 됨)
+      const a = document.activeElement;
+      if (e.code === 'Escape') return e.preventDefault(), done(first ? 'skip' : null);
+      if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+        e.preventDefault();
+        if (a && a.dataset && a.dataset.r === 'dice') return (inp.value = randomNick()), uiSound('move');
+        return done(a && a.dataset && a.dataset.r && a !== inp ? (a.dataset.r === 'cancel' ? null : a.dataset.r) : primary);
+      }
+      if (['ArrowUp', 'ArrowDown'].includes(e.code) || (a !== inp && ['ArrowLeft', 'ArrowRight'].includes(e.code))) {
+        e.preventDefault();
+        const items = [inp, ...wrap.querySelectorAll('button')];
+        const i = items.indexOf(a);
+        const d = e.code === 'ArrowUp' || e.code === 'ArrowLeft' ? -1 : 1;
+        items[(i + d + items.length) % items.length].focus();
+        uiSound('move');
+      }
+    };
+    wrap.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.r === 'dice') return (inp.value = randomNick()), inp.focus(), uiSound('move');
+      done(b.dataset.r === 'cancel' ? null : b.dataset.r);
+    });
+    window.addEventListener('keydown', onKey, true);
+    document.body.appendChild(wrap);
+    inp.focus();
+    inp.select();
+  });
 }

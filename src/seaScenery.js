@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { seededRandom, canvasTexture } from './track.js';
 import * as A from './gpAssets.js';
 import { SEA } from './seaTrack.js';
+import { buildSeaLife } from './seaLife.js';
 
 const CAR_R = 1.3;
 const CELL = 24;
@@ -162,7 +163,8 @@ export function buildSeaScenery(track, scene) {
   const free = (x, z, r) => occupied.every((o) => (o.x - x) ** 2 + (o.z - z) ** 2 > (o.r + r) ** 2);
   const occupy = (x, z, r) => occupied.push({ x, z, r });
   /** 도로(연석 + 여유 margin)에서 r만큼 떨어졌는가 */
-  const roadClear = (x, z, r, margin = 4) => track.nearestRaw(tmpV.set(x, 0, z)) > HW + CURB + margin + r;
+  //   (기준은 넓힌 코너 연석 2.8 m: 미끄러져 나간 차가 바로 옆 물체에 걸려 멈추지 않게)
+  const roadClear = (x, z, r, margin = 4) => track.nearestRaw(tmpV.set(x, 0, z)) > HW + Math.max(CURB, 2.8) + margin + r;
   const groundY = (x, z) => track.groundY(x, z);
   /** 물 위로 나온 땅 높이 (minY보다 낮으면 null) */
   const landY = (x, z, minY = 0.4) => {
@@ -750,6 +752,8 @@ export function buildSeaScenery(track, scene) {
       const py = A.bridgePylon({ height: H });
       const yaw = yawOf(s);
       py.obj.scale.set((DECK + 2) / 11, 1, 1);
+      // 주탑 그림자가 다리 위에 진한 네모로 떨어져 이상해 보였음 → 주탑은 그림자 안 만듦 (케이블·상판은 그대로)
+      py.obj.traverse((o) => (o.castShadow = false));
       add(py.obj, s.pos.x, s.pos.y - 1.6, s.pos.z, yaw);
       anim(py);
       for (const side of [-1, 1]) {
@@ -1002,7 +1006,8 @@ export function buildSeaScenery(track, scene) {
       crest.position.set(0, wv.h + 0.12, -1.2);
       crest.rotation.x = -Math.PI / 2 + 0.35;
       wv.mesh.add(crest);
-      for (const side of [-1, 1]) {
+      // 옆으로 비킨 파도는 바깥쪽에만 깃발 (물길 가운데에 깃대가 서 있지 않게)
+      for (const side of wv.offset ? [Math.sign(wv.offset)] : [-1, 1]) {
         const p = track.surf(wv.s, wv.offset + side * (wv.w / 2 + 1.2), 0, new THREE.Vector3()).addScaledVector(wv.s.tan, -wv.len);
         const flag = A.flagPole({ color: '#ff7a3c' });
         flag.obj.scale.setScalar(0.5);
@@ -1198,7 +1203,7 @@ export function buildSeaScenery(track, scene) {
   // ---------------------------------------------------------------- 아치 배너, 안내판, 코너 화살표판, 타이어 벽
   function arch(p, text, color) {
     const s = sAt(p);
-    const width = s.bridge ? W + 2 * CURB + 2 : W + 2 * CURB + 8;
+    const width = s.bridge ? W + 2 * CURB + 2 : s.water ? W + 22 : W + 2 * CURB + 8; // 물 위는 배가 넓게 다니니 기둥을 멀리
     const a = A.archBanner({ width, text, color });
     add(a.obj, s.pos.x, s.pos.y, s.pos.z, yawOf(s));
     anim(a);
@@ -1208,7 +1213,7 @@ export function buildSeaScenery(track, scene) {
       occupy(q.x, q.z, 3);
     }
   }
-  for (const [p, text, color] of P.arches || [[3.9, 'HARBOR TOWN', '#ff7a3c'], [12.2, 'CLIFF ROAD', '#2e6fd8'], [32.4, 'BOAT ZONE', '#19b3a6'], [44.4, 'SUNSET BEACH', '#ff5fa2']]) arch(p, text, color);
+  for (const [p, text, color] of P.arches || [[3.9, 'HARBOR TOWN', '#ff7a3c'], [12.2, 'CLIFF ROAD', '#2e6fd8'], [32.4, 'BOAT ZONE', '#19b3a6'], [34.5, 'SPLASH!', '#2ec4ff'], [44.4, 'SUNSET BEACH', '#ff5fa2']]) arch(p, text, color);
   function sign(p, l, title, sub, bg, accent = '#ffd21f', width = 12) {
     const { p: q, s } = beside(tAt(p), l);
     const y = landY(q.x, q.z, 0.3);
@@ -1236,7 +1241,8 @@ export function buildSeaScenery(track, scene) {
       const outSide = d > 0 ? 1 : -1;
       const rail = track.railLimit({ lateral: outSide, index: i, sample: s });
       if (rail == null) {
-        const p = track.surf(s, outSide * (HW + track.kerbAt(i, outSide) + 6), 0, new THREE.Vector3());
+        // (연석 끝에서 9 m: 미끄러진 차가 갇히지 않게 넉넉히)
+        const p = track.surf(s, outSide * (HW + track.kerbAt(i, outSide) + 9), 0, new THREE.Vector3());
         const y = landY(p.x, p.z, 0.3);
         if (y !== null && roadClear(p.x, p.z, 0.5, 3.5)) {
           for (const u of [-0.6, 0, 0.6]) tires.push({ x: p.x + s.tan.x * u * 1.6, y, z: p.z + s.tan.z * u * 1.6, s: 1, ry: 0 });
@@ -1244,13 +1250,13 @@ export function buildSeaScenery(track, scene) {
         }
       }
       if (i - lastI < 14) continue;
-      const lat = outSide * (rail != null ? rail + 1.2 : HW + CURB + 3.2);
+      // 화살표판은 부딪히지 않음 (예전엔 연석 2 m 밖 단단한 기둥이라 미끄러져 나간 봇이 걸려 멈췄음)
+      const lat = outSide * (rail != null ? rail + 1.2 : HW + track.kerbAt(i, outSide) + 4);
       const p = track.surf(s, lat, 0, new THREE.Vector3());
       const y = landY(p.x, p.z, 0.3) ?? (rail != null ? p.y : null);
       if (y === null) continue;
       const cb = A.chevronBoard({ dir: -outSide });
       add(cb.obj, p.x, y, p.z, Math.atan2(-s.tan.x, -s.tan.z));
-      circle(p.x, p.z, 0.4, y, y + 3);
       lastI = i;
     }
     if (tires.length) instanced(tw.geo, tw.mat, tires, { name: 'tires' });
@@ -1276,6 +1282,9 @@ export function buildSeaScenery(track, scene) {
       n++;
     }
   }
+
+  // ---------------------------------------------------------------- 움직이는 것들 (seaLife.js): 항구 모터보트, 수상비행기, 결승선 등불·불꽃놀이, 물보라
+  buildSeaLife(track, group, animators, rand);
 
   // ---------------------------------------------------------------- 인스턴스 만들기
   instanced(palmGeometry(), vcMat, palms, { name: 'palms' });

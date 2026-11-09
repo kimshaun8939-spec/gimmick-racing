@@ -477,8 +477,10 @@ export function buildMoonTrack(data, scene) {
   const centerOnly = new Float32Array(SAMPLES).fill(Infinity);
   if (roll) for (let i = roll.a - roll.pad - mS(25); i <= roll.b + roll.pad + mS(10); i++) centerOnly[wrapI(i)] = 0.3;
   // 점프: 립 60 m 앞부터는 가운데 ±1.2 m로 곧게 (비스듬히 뛰면 착지 도로 옆으로 떨어져 속도를 크게 잃었음)
+  //   착지 뒤 65 m까지도 곧게 (2차: 공중에서 봇이 착지 뒤 라인 점을 겨냥해 차 머리가 20° 돌아간 채 착지 → 미끄러져 T12 밖으로 나갔음)
   for (const j of jumps)
-    for (let i = j.lipI - mS(110); i <= j.landI + mS(30); i++) centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(60) ? HW - 3.5 : 1.2);
+    for (let i = j.lipI - mS(110); i <= j.landI + mS(95); i++)
+      centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(60) || i > j.landI + mS(65) ? HW - 3.5 : 1.2);
   const lineLimit = (i, side) => {
     const q = wrapI(i);
     const u = lineUse[sideI(side)][q];
@@ -1031,8 +1033,23 @@ export function buildMoonTrack(data, scene) {
     return bi;
   }
   /** 이 자리의 중력 배수 (car.js가 매 스텝 부름) */
+  // 중력 쿠션 (2026-11-10 2차): 협곡 위 '립→착지' 선보다 아래로 떨어지면 아래로 갈수록 중력이 줄다가 거꾸로(위로) 밀어 줌
+  //   → 느리게(브레이크 밟고·쉬운 봇·느린 차) 뛰어도 쿠션 위를 둥실 떠서 건너감. 빠른 차는 쿠션보다 높이 날아서 그대로
+  //   off: 선보다 이만큼 위부터 쿠션 (립 1.4 m → 착지 1.9 m, 착지 도로보다 살짝 위로 띄워 착지 턱에 안 걸리게)
+  //   K: 1 m 내려갈 때 줄어드는 중력 배수, GMIN: 가장 세게 밀어 올리는 값(−), DEEP: 이보다 깊이 떨어지면 쿠션 없음
+  const CUSHION = { off0: 1.4, off1: 1.9, K: 0.7, GMIN: -0.75, DEEP: 14, side: HW + 9 };
+  for (const j of jumps)
+    for (let i = j.lipI; i !== j.landI; i = wrapI(i + 1)) {
+      const u = wrapI(i - j.lipI) / Math.max(1, wrapI(j.landI - j.lipI));
+      samples[i].cushionOff = CUSHION.off0 + (CUSHION.off1 - CUSHION.off0) * u;
+    }
   function gravityAt(pos) {
-    return samples[nearIndexFast(pos)].grav;
+    const s = samples[nearIndexFast(pos)];
+    if (s.cushionOff === undefined) return s.grav;
+    const d = s.pos.y + s.cushionOff - pos.y;
+    if (d <= 0 || d > CUSHION.DEEP) return s.grav;
+    if (Math.hypot(pos.x - s.pos.x, pos.z - s.pos.z) > CUSHION.side) return s.grav;
+    return Math.max(CUSHION.GMIN, s.grav - CUSHION.K * d);
   }
 
   const raycaster = new THREE.Raycaster();
@@ -1090,7 +1107,36 @@ export function buildMoonTrack(data, scene) {
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);
 
+  // 중력 쿠션 그림 (2차): 협곡 위 립→착지 사이에 하늘색 빛 그물 + 위로 흐르는 화살표 → "느려도 둥실 건너갈 수 있음"이 보이게
+  const cushionTex = canvasTexture(128, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,240,255,0.55)';
+    g.lineWidth = 3;
+    for (let k = 0; k <= 4; k++) {
+      g.beginPath();
+      g.moveTo((k * w) / 4, 0);
+      g.lineTo((k * w) / 4, h);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(0, (k * h) / 4);
+      g.lineTo(w, (k * h) / 4);
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(170,250,255,0.85)';
+    g.beginPath();
+    g.moveTo(w * 0.5, h * 0.3);
+    g.lineTo(w * 0.68, h * 0.55);
+    g.lineTo(w * 0.32, h * 0.55);
+    g.fill();
+  });
+  const cushionMat = new THREE.MeshBasicMaterial({ map: cushionTex, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  for (const j of jumps) {
+    const L = spanList(j.lipI, j.landI);
+    strip(L, [[-HW - 2, -0.6], [HW + 2, -0.6]], cushionMat, { vScale: 6, uScale: 6 });
+  }
   function animate(time) {
+    cushionTex.offset.y = -time * 0.5;
+    cushionMat.opacity = 0.4 + Math.sin(time * 2.4) * 0.1;
     magnetMat.emissiveIntensity = 0.5 + Math.sin(time * 3) * 0.15;
     magTex.offset.y = -time * 0.6;
     lipGlow.color.setHSL(0.52, 1, 0.6 + Math.sin(time * 6) * 0.15);

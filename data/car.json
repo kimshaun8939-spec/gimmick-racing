@@ -45,7 +45,9 @@
     "loadShift": 0.2, "loadAccel": 14,
     "wheelspinSlide": 0.55, "rearSwing": 0.3, "yawResponse": 9, "yawResponseHighSpeed": 0.3,
     "_swingFade": "꼬리가 돌아가는 힘(rearSwing)을 미끄러짐 각도(rad)가 앞 값을 넘으면 줄이기 시작해서 뒤 값에서 0 (크게 미끄러지면 스스로 계속 도는 것 방지)",
-    "swingFade": [0.4, 0.75]
+    "swingFade": [0.4, 0.75],
+    "_powerSlide": "손맛 (2026-11-10): 타이어는 앞뒤로 힘을 쓰는 만큼 옆으로 덜 버팀. powerSlide = 뒷바퀴 굴림이 코너에서 힘을 다 쓰면 뒤 옆 접지가 이 비율만큼 줄어듦 (파워 오버스티어, 낮은 단에서 잘 느껴짐), powerPush = 앞바퀴 굴림이면 앞이 줄어듦 (밟으면 앞이 밀림), liftOff = 코너에서 액셀을 확 떼면 잠깐 뒤 옆 접지가 줄어듦 (리프트오프 오버스티어, 천천히 떼면 거의 없음). 리프트오프는 빠른 코너에서 0.6초 이상 꽉 밟다가 확 뗄 때만 (톡톡 끊어 밟기는 괜찮음). 뒤 한계에는 이 값들의 capShare(0.5)배만 줄이고, 대신 꼬리가 바깥으로 돌아 차 머리가 안쪽으로 더 돎: 파워는 tuck배, 리프트오프는 liftTuck배. 미끄러짐이 tuckMax rad(리프트오프는 최대 0.2)가 되면 멈춤 → 살짝 흐르고 스스로 잡힘. liftOff를 0.5 넘게 올리면 봇·키보드가 못 잡아 랩이 10%쯤 느려졌음",
+    "powerSlide": 0.3, "powerPush": 0.25, "liftOff": 0.4, "tuck": 1.4, "liftTuck": 1.4, "tuckMax": 0.2, "capShare": 0.5
   },
   "_impact": "세게 부딪혔을 때 (벽·블록·건물·가드레일). 들이받는 속도(벽 쪽 성분)가 minSpeed m/s부터 효과가 생겨 minSpeed+fullSpeed에서 최대. friction: 긁히는 마찰로 잃는 속도 = 들이받는 속도 × 이 값 (최대 maxLoss 비율), align: 차 방향을 새 진행 방향 쪽으로 돌리는 비율, maxSlip: 부딪힌 뒤 남는 미끄러짐 최대(rad), yawKeep: 돌던 회전이 남는 비율, recover: 이 시간(초) 동안 꼬리가 더 돌아가지 않고 드리프트도 다시 안 걸림, alignRate: 차 방향이 돌아가는 빠르기 (클수록 확 돎, 15면 0.1초에 약 78%)",
   "impact": { "minSpeed": 6, "fullSpeed": 14, "friction": 0.35, "maxLoss": 0.45, "align": 0.7, "maxSlip": 0.3, "yawKeep": 0.25, "recover": 0.7, "alignRate": 15 },
@@ -61,8 +63,16 @@
     "level1Time": 0.9,
     "level2Time": 2.0,
     "level1Boost": 0.7,
-    "level2Boost": 1.4
+    "level2Boost": 1.4,
+    "_기술": "드리프트 기술 (2026-11-10): 각도(rad) = 차 머리와 진행 방향 차이. holdAngle [최소, 최대] 안에서 버티면 레벨이 쌓이고 덜 느려짐(holdDrag 배). 안쪽으로 꺾으면 각도↑, 반대로 꺾으면(카운터) 각도↓. 뒷바퀴 굴림은 액셀을 밟을수록 각도↑ (throttleAngle, 4륜은 60%), 앞바퀴 굴림은 밟으면 펴짐 (fwdThrottleAngle). spinAngle을 넘으면 스핀: 드리프트 끊김 + 속도 spinLoss 손해. 깔끔한 탈출 = 키를 뗄 때 각도 exitAngle 아래 + 창 안에서 exitMinHold초 이상 → 드리프트로 잃은 속도의 exitKeep×품질(최대 exitMax m/s)을 exitRate m/s²로 돌려받고, 미끄러짐이 exitAlign×품질만큼 바로 펴짐. 품질 = 버틴 시간(level2Time에 최대) × 탈출 각도(exitGood 아래면 만점)",
+    "holdAngle": [0.28, 0.75], "holdDrag": 0.7, "throttleAngle": 0.3, "fwdThrottleAngle": 0.3,
+    "spinAngle": 1.15, "spinLoss": 0.15,
+    "exitAngle": 0.6, "exitGood": 0.35, "exitMinHold": 0.4, "exitKeep": 0.45, "exitMax": 3.5, "exitAlign": 0.4, "exitRate": 16
   },
+  "_draft": "슬립스트림 (앞차 바로 뒤, car.draft 0~1은 raceSystem이 넣어 줌): 공기 저항이 dragCut 비율만큼 줄고 최고 속도가 topGain 비율만큼 늘어남",
+  "draft": { "dragCut": 0.3, "topGain": 0.04 },
+  "_feel": "차체 연출 (carModel): roll = 코너에서 바깥으로 기우는 정도 배수, pitch = 브레이크 때 앞이 숙고 가속 때 뒤가 주저앉는 정도 배수 (모양마다 기본값 × 이 값), spring = 서스펜션 단단함 (클수록 빨리 따라감), damp = 출렁임 줄이기 (1이면 안 넘침, 작을수록 출렁)",
+  "feel": { "roll": 1, "pitch": 1, "spring": 90, "damp": 0.6 },
   "_boostsEnabled": "false = 부스트 패드·드리프트 부스트·비행 고리 부스트를 끔 (E 부스터는 booster.enabled로 따로). true로 바꾸면 다시 켜짐",
   "boostsEnabled": false,
   "boost": { "speedFactor": 1.2, "accel": 30 },

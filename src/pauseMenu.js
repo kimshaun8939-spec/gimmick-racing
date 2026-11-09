@@ -4,6 +4,7 @@
 import { createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { fmtTime } from './records.js';
 import { actionsFor } from './keybinds.js';
+import { pad } from './gamepad.js';
 
 /**
  * @param {object} o
@@ -69,7 +70,7 @@ export function createPauseMenu(o) {
     closePageBtn.style.display = name ? '' : 'none';
     if (name === 'settings' || name === 'keys') {
       pageTitle.textContent = name === 'keys' ? '조작키' : '설정';
-      setPanel.showTab(name === 'keys' ? 'keys' : 'general');
+      setPanel.showTab(name === 'keys' ? (pad.usingPad() ? 'pad' : 'keys') : 'general'); // 패드로 연 거면 게임패드 탭
       pageBody.appendChild(setPanel.el);
       setPanel.refresh();
     } else if (name === 'controls') {
@@ -154,6 +155,17 @@ export function createPauseMenu(o) {
         e.preventDefault();
         if (page && inPage) act('closePage');
         else doClose();
+        return;
+      }
+      // 설정 화면: PageUp / PageDown (패드 LB / RB) = 탭 넘기기
+      if ((k === 'PageUp' || k === 'PageDown') && (page === 'settings' || page === 'keys')) {
+        e.preventDefault();
+        const tabs = ['general', 'keys', 'pad'];
+        const next = tabs[(tabs.indexOf(setPanel.tab) + (k === 'PageUp' ? 2 : 1)) % 3];
+        setPanel.showTab(next);
+        uiSound('toggle');
+        const f = pageBody.querySelector(`.gm-tab[data-tab="${next}"]`);
+        if (f) f.focus({ preventScroll: true });
         return;
       }
       const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' }[k];

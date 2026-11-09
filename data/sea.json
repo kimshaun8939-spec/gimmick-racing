@@ -38,19 +38,19 @@
    110
   ],
   [
-   170,
+   172,
    5,
    150
   ],
   [
-   190,
+   185,
    5.5,
-   185
+   188
   ],
   [
-   186,
+   190,
    6,
-   225
+   228
   ],
   [
    200,
@@ -436,17 +436,40 @@
   },
   {
    "type": "wave",
+   "p": 36.6,
+   "offset": 5,
+   "length": 14,
+   "height": 2.0,
+   "width": 7
+  },
+  {
+   "type": "wave",
    "p": 37.4,
    "length": 16,
    "height": 1.6,
    "width": 12
+  },
+  {
+   "type": "wave",
+   "p": 39.6,
+   "length": 18,
+   "height": 1.9,
+   "width": 13
+  },
+  {
+   "type": "wave",
+   "p": 41.0,
+   "offset": -5,
+   "length": 14,
+   "height": 2.0,
+   "width": 7
   }
  ],
  "whirlpools": [
   {
    "p": 40.6,
-   "offset": 40,
-   "r": 26
+   "offset": 27,
+   "r": 20
   }
  ]
 }

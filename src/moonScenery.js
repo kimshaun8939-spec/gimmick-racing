@@ -23,6 +23,7 @@ export function buildMoonScenery(track, scene) {
   group.name = 'moonScenery';
   scene.add(group);
   const animators = []; // (time, dt, car) => void
+  const extraStats = {};
   const tmpV = new THREE.Vector3();
 
   // ---------------------------------------------------------------- 빛: 공기가 없어 그림자가 진하고 햇빛은 하얗게
@@ -1160,7 +1161,7 @@ export function buildMoonScenery(track, scene) {
   const beacons = [];
   for (const j of track.jumps || []) {
     const sJ = track.S(j.lipI - track.mS(95));
-    gate(sJ, 'low', ['LUNAR JUMP', `협곡 ${Math.round(j.gapLen)} m · 풀 가속!`]);
+    gate(sJ, 'low', ['LUNAR JUMP', `협곡 ${Math.round(j.gapLen)} m · 중력 쿠션이 받쳐 줘요`]);
     const lip = j.lip;
     for (const sd of [-1, 1]) {
       const p = lip.pos.clone().addScaledVector(lip.right, sd * (HW + CURB + 1.5));
@@ -1215,6 +1216,376 @@ export function buildMoonScenery(track, scene) {
     for (const r of rockets) r.update(t, dt || 0, car);
   });
 
+  // ---------------------------------------------------------------- 길가를 오가는 탐사차 (2차): 코스 옆 곧은 길을 따라 왔다 갔다 + 뒤에 달 먼지
+  {
+    const NS = track.samples.length - 1;
+    const S = (i) => track.samples[((i % NS) + NS) % NS];
+    const hd = (s) => Math.atan2(s.tan.x, s.tan.z);
+    const LEN = 70; // 샘플 (약 130 m)
+    const used = new Uint8Array(NS);
+    const routes = [];
+    const blocked = (x, z) => !free(x, z, 3) || allColliders.some((c) => (c.x - x) ** 2 + (c.z - z) ** 2 < (c.r + 3) ** 2);
+    for (let i = 0; i < NS && routes.length < 5; i += 6) {
+      let ok = true;
+      for (let k = 0; k <= LEN && ok; k += 5) {
+        const s = S(i + k);
+        if (s.gap || s.roll || s.magnet || used[(i + k) % NS]) ok = false;
+      }
+      if (!ok) continue;
+      let d = hd(S(i + LEN)) - hd(S(i));
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.abs(d) > 0.08) continue;
+      for (const side of routes.length % 2 ? [1, -1] : [-1, 1]) {
+        const off = side * (HW + CURB + 17);
+        const pts = [];
+        let good = true;
+        for (let k = 0; k <= LEN && good; k += 2) {
+          const s = S(i + k);
+          const x = s.pos.x + s.right.x * off, z = s.pos.z + s.right.z * off;
+          const y = ground(x, z);
+          if (blocked(x, z) || Math.abs(y - s.pos.y) > 7 || roadDist(x, z) < HW + CURB + 10) good = false;
+          pts.push(new THREE.Vector3(x, y, z));
+        }
+        if (!good) continue;
+        routes.push(pts);
+        for (const p of pts) occupy(p.x, p.z, 2.5);
+        for (let k = -25; k <= LEN + 25; k++) used[(((i + k) % NS) + NS) % NS] = 1;
+        i += LEN;
+        break;
+      }
+    }
+    // 먼지 (모든 탐사차가 같이 쓰는 점 묶음 하나)
+    const DN = 160;
+    const dPos = new Float32Array(DN * 3).fill(-9999), dCol = new Float32Array(DN * 3), dAge = new Float32Array(DN).fill(99), dVel = new Float32Array(DN * 3);
+    const dGeo = new THREE.BufferGeometry();
+    dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+    dGeo.setAttribute('color', new THREE.BufferAttribute(dCol, 3));
+    const puffTex = canvasTexture(64, 64, (c, w, h) => {
+      const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,0.8)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = gr;
+      c.fillRect(0, 0, w, h);
+    }, false);
+    const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 2.6, map: puffTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    dust.frustumCulled = false;
+    group.add(dust);
+    let dHead = 0;
+    const rovers = routes.map((pts, k) => {
+      const rv = roverObj(['#f2f4f8', '#ffcf3f', '#ff7a45', '#9fe8ff', '#c8ff6a'][k % 5]);
+      group.add(rv.g);
+      const cum = [0];
+      for (let q = 1; q < pts.length; q++) cum.push(cum[q - 1] + pts[q].distanceTo(pts[q - 1]));
+      return { rv, pts, cum, len: cum[cum.length - 1], u: rand() * cum[cum.length - 1], dir: rand() < 0.5 ? 1 : -1, v: 6 + rand() * 4, wait: 0, emit: 0 };
+    });
+    const at = new THREE.Vector3(), nx = new THREE.Vector3();
+    const pointAt = (r, u, out) => {
+      let q = 1;
+      while (q < r.cum.length - 1 && r.cum[q] < u) q++;
+      const f = (u - r.cum[q - 1]) / Math.max(1e-6, r.cum[q] - r.cum[q - 1]);
+      return out.lerpVectors(r.pts[q - 1], r.pts[q], THREE.MathUtils.clamp(f, 0, 1));
+    };
+    animators.push((t, dt) => {
+      dt = Math.min(0.05, dt || 1 / 60);
+      for (const r of rovers) {
+        if (r.wait > 0) r.wait -= dt;
+        else {
+          r.u += r.dir * r.v * dt;
+          if (r.u > r.len - 1 || r.u < 1) (r.dir *= -1), (r.u = THREE.MathUtils.clamp(r.u, 1, r.len - 1)), (r.wait = 1.5 + rand() * 2);
+        }
+        pointAt(r, r.u, at);
+        pointAt(r, r.u + r.dir * 2, nx);
+        r.rv.g.position.copy(at);
+        r.rv.g.rotation.y = Math.atan2(nx.x - at.x, nx.z - at.z);
+        if (r.wait > 0) continue;
+        for (const w of r.rv.wheels) w.rotation.x += r.v * dt * 1.8;
+        r.emit += dt;
+        if (r.emit > 0.09) {
+          r.emit = 0;
+          const i = dHead;
+          dHead = (dHead + 1) % DN;
+          dPos[i * 3] = at.x - (nx.x - at.x) * 1.2 + (rand() - 0.5);
+          dPos[i * 3 + 1] = at.y + 0.4;
+          dPos[i * 3 + 2] = at.z - (nx.z - at.z) * 1.2 + (rand() - 0.5);
+          dVel[i * 3] = (rand() - 0.5) * 1.2;
+          dVel[i * 3 + 1] = 0.8 + rand() * 1.2;
+          dVel[i * 3 + 2] = (rand() - 0.5) * 1.2;
+          dAge[i] = 0;
+        }
+      }
+      for (let i = 0; i < DN; i++) {
+        if (dAge[i] > 3.2) continue;
+        dAge[i] += dt;
+        dVel[i * 3 + 1] -= 1.62 * 0.5 * dt; // 달 중력이라 천천히 내려앉음
+        dPos[i * 3] += dVel[i * 3] * dt;
+        dPos[i * 3 + 1] += dVel[i * 3 + 1] * dt;
+        dPos[i * 3 + 2] += dVel[i * 3 + 2] * dt;
+        const c = Math.max(0, 0.2 * (1 - dAge[i] / 3.2));
+        dCol[i * 3] = c;
+        dCol[i * 3 + 1] = c * 0.97;
+        dCol[i * 3 + 2] = c * 0.92;
+        if (dAge[i] > 3.2) dPos[i * 3 + 1] = -9999;
+      }
+      dGeo.attributes.position.needsUpdate = true;
+      dGeo.attributes.color.needsUpdate = true;
+    });
+    extraStats.roadRovers = rovers.length;
+    extraStats.roverRoutes = routes.map((p) => [Math.round(p[0].x), Math.round(p[0].y), Math.round(p[0].z), Math.round(p[p.length - 1].x), Math.round(p[p.length - 1].z)]);
+  }
+
+  // ---------------------------------------------------------------- 대형 로켓 발사 (2차): 레이스 중 정해진 시간마다 출발 직선 옆 발사대에서 큰 로켓이 하늘로
+  //   레이스 시간 24초에 첫 발사, 그 뒤 80초마다 (2바퀴 레이스에서 2~3번). 출발 직선 옆 전광판에 카운트다운 (T-10 … 발사!)
+  //   발사 순간 window에 'moonlaunch' 이벤트 → moonProps가 화면 알림 + 낮은 우르릉 소리
+  const LAUNCH = { first: 24, every: 80, count: 10, flight: 34 };
+  {
+    const sA = track.sampleAt(0.03);
+    let sp = null, side = 1;
+    for (const sd of [1, -1]) {
+      sp = findSpot(sA.pos.x + sA.right.x * sd * 200 + sA.tan.x * 160, sA.pos.z + sA.right.z * sd * 200 + sA.tan.z * 160, 30, 50, 110);
+      if (sp) {
+        side = sd;
+        break;
+      }
+    }
+    if (sp) {
+      const pad = new THREE.Group();
+      const concrete = new THREE.MeshStandardMaterial({ color: '#8d8f96', roughness: 0.9 });
+      const towerMat = new THREE.MeshStandardMaterial({ color: '#b5462e', roughness: 0.6, metalness: 0.4 });
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(20, 22, 3, 32), concrete);
+      base.position.y = 1.5;
+      const trench = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 44), M.dark);
+      trench.position.y = 3.05;
+      pad.add(base, trench);
+      // 발사탑: 기둥·가로대·팔을 인스턴스 하나로 (그리기 호출 1번)
+      const beams = [];
+      for (const [x, z] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) beams.push([x, 39, z, 0.7, 78, 0.7]);
+      for (let y = 4; y < 78; y += 6) beams.push([0, y, -2.2, 5.1, 0.4, 0.4], [0, y, 2.2, 5.1, 0.4, 0.4], [-2.2, y, 0, 0.4, 0.4, 5.1], [2.2, y, 0, 0.4, 0.4, 5.1]);
+      beams.push([-6, 46, 0, 8, 0.8, 1.6], [-6.5, 62, 0, 9, 0.8, 1.6]);
+      const tower = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), towerMat, beams.length);
+      const mtx = new THREE.Matrix4();
+      beams.forEach(([x, y, z, sx, sy, sz], k) => tower.setMatrixAt(k, mtx.compose(new THREE.Vector3(x + 13, y + 3, z), new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz))));
+      tower.castShadow = true;
+      pad.add(tower);
+      const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moteTex, color: '#ff3b30', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+      beacon.scale.setScalar(6);
+      beacon.position.set(13, 83, 0);
+      pad.add(beacon);
+      // 로켓 (흰 몸통 + 검은 띠 + 부스터 2개)
+      const R = new THREE.Group();
+      R.position.y = 3;
+      const white = new THREE.MeshStandardMaterial({ color: '#f4f5f8', roughness: 0.45, metalness: 0.2, emissive: '#3c4048' });
+      const add = (geo, mat, x, y, z = 0) => {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(x, y, z);
+        m.castShadow = true;
+        R.add(m);
+        return m;
+      };
+      add(new THREE.CylinderGeometry(3, 3, 46, 20), white, 0, 25);
+      add(new THREE.CylinderGeometry(3.06, 3.06, 1.8, 20), M.dark, 0, 44);
+      add(new THREE.CylinderGeometry(2.6, 3, 12, 20), white, 0, 54);
+      add(new THREE.ConeGeometry(2.6, 8, 20), white, 0, 64);
+      add(new THREE.CylinderGeometry(1.4, 2.4, 3, 14, 1, true), M.dark, 0, 0.6);
+      for (const sx of [-1, 1]) {
+        add(new THREE.CylinderGeometry(1.6, 1.6, 30, 14), white, sx * 4.7, 17);
+        add(new THREE.ConeGeometry(1.6, 5, 14), white, sx * 4.7, 34.5);
+        add(new THREE.CylinderGeometry(0.9, 1.5, 2.2, 10, 1, true), M.dark, sx * 4.7, 1);
+      }
+      const flameMat = new THREE.MeshBasicMaterial({ color: '#ff9a3c', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
+      const coreMat = new THREE.MeshBasicMaterial({ color: '#fff4c2', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
+      const flame = new THREE.Group();
+      const f1 = new THREE.Mesh(new THREE.ConeGeometry(4.2, 34, 16, 1, true), flameMat);
+      f1.rotation.x = Math.PI;
+      f1.position.y = -17;
+      const f2 = new THREE.Mesh(new THREE.ConeGeometry(2.2, 20, 12, 1, true), coreMat);
+      f2.rotation.x = Math.PI;
+      f2.position.y = -10;
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: moteTex, color: '#ffb060', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+      glow.scale.setScalar(70);
+      glow.position.y = -6;
+      flame.add(f1, f2, glow);
+      flame.visible = false;
+      R.add(flame);
+      pad.add(R);
+      // 발사 때 퍼지는 먼지 구름 (달 표면 레골리스)
+      const puffMat = new THREE.MeshStandardMaterial({ color: '#a9a49a', roughness: 1, transparent: true, opacity: 0.5, depthWrite: false });
+      const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+      const puffs = [];
+      for (let k = 0; k < 18; k++) {
+        const m = new THREE.Mesh(puffGeo, puffMat);
+        m.visible = false;
+        pad.add(m);
+        puffs.push({ m, a: (k / 18) * TAU + rand() * 0.3, sp: 7 + rand() * 6, life: 0 });
+      }
+      // 꼬리 빛 (지나간 자리에 남는 불빛 점, 천천히 사라짐)
+      const TN = 140;
+      const tPos = new Float32Array(TN * 3).fill(-9999), tCol = new Float32Array(TN * 3), tAge = new Float32Array(TN).fill(99);
+      const tGeo = new THREE.BufferGeometry();
+      tGeo.setAttribute('position', new THREE.BufferAttribute(tPos, 3));
+      tGeo.setAttribute('color', new THREE.BufferAttribute(tCol, 3));
+      const trail = new THREE.Points(tGeo, new THREE.PointsMaterial({ size: 14, map: moteTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+      trail.frustumCulled = false;
+      group.add(trail);
+      let tHead = 0, tEmit = 0;
+      const yaw = Math.atan2(sA.pos.x - sp.x, sA.pos.z - sp.z);
+      pad.scale.setScalar(1.4); // 출발 직선에서도 잘 보이게 크게 (로켓 높이 약 95 m)
+      const padY = place(pad, sp.x, sp.z, yaw, 28);
+      circle(sp.x, sp.z, 30, padY - 2, padY + 125);
+      // 카운트다운 전광판 (출발 직선 옆, 다가오는 차를 바라봄)
+      const sB = track.sampleAt(0.012);
+      const boardLat = side * (HW + CURB + 12);
+      const bx = sB.pos.x + sB.right.x * boardLat, bz = sB.pos.z + sB.right.z * boardLat;
+      const bc = document.createElement('canvas');
+      bc.width = 512;
+      bc.height = 176;
+      const bctx = bc.getContext('2d');
+      const bTex = new THREE.CanvasTexture(bc);
+      bTex.colorSpace = THREE.SRGBColorSpace;
+      let bText = '';
+      const drawBoard = (l1, l2, col) => {
+        const key = l1 + l2 + col;
+        if (key === bText) return;
+        bText = key;
+        bctx.fillStyle = '#060a16';
+        bctx.fillRect(0, 0, 512, 176);
+        bctx.strokeStyle = col;
+        bctx.lineWidth = 6;
+        bctx.strokeRect(5, 5, 502, 166);
+        bctx.textAlign = 'center';
+        bctx.textBaseline = 'middle';
+        bctx.fillStyle = '#9fb4d8';
+        bctx.font = 'bold 30px "Segoe UI","Malgun Gothic",sans-serif';
+        bctx.fillText('ARTEMIS HEAVY 로켓', 256, 44);
+        bctx.fillStyle = col;
+        bctx.font = 'bold 64px "Segoe UI","Malgun Gothic",sans-serif';
+        bctx.fillText(l1, 256, 110);
+        bctx.font = 'bold 22px "Segoe UI","Malgun Gothic",sans-serif';
+        bctx.fillStyle = '#dfe8ff';
+        bctx.fillText(l2, 256, 154);
+        bTex.needsUpdate = true;
+      };
+      drawBoard('발사 대기', '레이스가 시작되면 카운트다운', '#5ff0ff');
+      if (free(bx, bz, 5)) {
+        occupy(bx, bz, 5);
+        const board = new THREE.Group();
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.8), new THREE.MeshBasicMaterial({ map: bTex, toneMapped: false }));
+        panel.position.y = 7.4;
+        const back = new THREE.Mesh(new THREE.BoxGeometry(14.6, 5.4, 0.4), M.dark);
+        back.position.set(0, 7.4, -0.25);
+        board.add(panel, back);
+        for (const px of [-5.5, 5.5]) {
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 5, 8), M.steel);
+          post.position.set(px, 2.5, -0.25);
+          board.add(post);
+        }
+        const by = place(board, bx, bz, Math.atan2(-sB.tan.x, -sB.tan.z) + side * 0.35, 0, 0);
+        for (const px of [-5.5, 5.5]) {
+          const c = Math.cos(board.rotation.y), s = Math.sin(board.rotation.y);
+          circle(bx + c * px, bz - s * px, 0.5, by - 1, by + 10);
+        }
+      }
+      let state = 'pad', st = 0, v = 0, next = LAUNCH.first, lastRt = -1;
+      const resetRocket = () => {
+        R.position.set(0, 3, 0);
+        R.rotation.set(0, 0, 0);
+        R.visible = true;
+        flame.visible = false;
+        v = 0;
+      };
+      const wp = new THREE.Vector3();
+      animators.push((t, dt) => {
+        dt = Math.min(0.05, dt || 1 / 60);
+        const g = window.game;
+        const racing = g && g.race && g.race.phase === 'racing';
+        const rt = racing ? g.race.time : null;
+        if (rt != null && rt < lastRt - 1) {
+          // 다시 시작: 처음부터
+          state = 'pad';
+          next = LAUNCH.first;
+          resetRocket();
+        }
+        if (rt != null) lastRt = rt;
+        beacon.material.color.set(Math.sin(t * 4) > 0 ? '#ff3b30' : '#3a0d0a');
+        if (state === 'pad' && rt != null && rt >= next - LAUNCH.count) state = 'count';
+        if (state === 'count') {
+          const left = rt != null ? next - rt : 0;
+          drawBoard(left > 0 ? `T-${String(Math.ceil(left)).padStart(2, '0')}` : '발사!', left > 0 ? `발사 카운트다운 — ${side > 0 ? '오른쪽' : '왼쪽'} 하늘을 보세요` : 'LIFTOFF', left > 3 ? '#ffcf3f' : '#ff6a3c');
+          flame.visible = left < 2.5;
+          if (flame.visible) flame.scale.setScalar(0.25 + 0.1 * Math.sin(t * 40));
+          if (left <= 0) {
+            state = 'lift';
+            st = 0;
+            v = 0;
+            window.dispatchEvent(new CustomEvent('moonlaunch', { detail: { side } }));
+            for (const p of puffs) (p.m.visible = true), (p.life = 0);
+          }
+        } else if (state === 'lift') {
+          st += dt;
+          v += (3 + st * 0.9) * dt;
+          R.position.y += v * dt;
+          R.rotation.z = Math.min(0.45, Math.max(0, st - 7) * 0.025) * side;
+          R.position.x += Math.sin(R.rotation.z) * -v * dt;
+          const fl = 0.9 + 0.15 * Math.sin(t * 37) + 0.1 * Math.sin(t * 23);
+          flame.scale.set(fl, fl * (1 + Math.min(1, st * 0.3)), fl);
+          drawBoard('발사!', `고도 ${Math.round(R.position.y)} m · ${Math.round(v * 3.6)} km/h`, '#ff6a3c');
+          tEmit += dt;
+          if (tEmit > 0.07) {
+            tEmit = 0;
+            R.getWorldPosition(wp);
+            const i = tHead;
+            tHead = (tHead + 1) % TN;
+            tPos[i * 3] = wp.x;
+            tPos[i * 3 + 1] = wp.y - 6;
+            tPos[i * 3 + 2] = wp.z;
+            tAge[i] = 0;
+          }
+          if (st > LAUNCH.flight) {
+            state = 'gone';
+            R.visible = false;
+            flame.visible = false;
+          }
+        } else if (state === 'gone') {
+          const left = rt != null ? next + LAUNCH.every - rt : 99;
+          drawBoard('발사 성공', `다음 발사까지 ${Math.max(0, Math.ceil(left))}초`, '#5ff0ff');
+          // 다음 로켓을 세움 (발사 25초 전)
+          if (rt != null && left < 25) {
+            next += LAUNCH.every;
+            state = 'pad';
+            resetRocket();
+          }
+        } else if (state === 'pad' && rt != null) {
+          drawBoard(`T-${Math.max(0, Math.ceil(next - rt))}`, '다음 로켓 발사까지 (초)', '#5ff0ff');
+        }
+        // 먼지 구름
+        for (const p of puffs) {
+          if (!p.m.visible) continue;
+          p.life += dt;
+          const r = 6 + p.life * p.sp;
+          p.m.position.set(Math.cos(p.a) * r, 3 + p.life * 1.4, Math.sin(p.a) * r);
+          p.m.scale.setScalar(3 + p.life * 3.2);
+          if (p.life > 7) p.m.visible = false;
+        }
+        // 꼬리 빛
+        let any = false;
+        for (let i = 0; i < TN; i++) {
+          if (tAge[i] > 6) continue;
+          any = true;
+          tAge[i] += dt;
+          const k = Math.max(0, 1 - tAge[i] / 6);
+          tCol[i * 3] = k;
+          tCol[i * 3 + 1] = k * (0.45 + 0.4 * k);
+          tCol[i * 3 + 2] = k * (0.25 + 0.5 * (1 - k));
+          if (tAge[i] > 6) tPos[i * 3 + 1] = -9999;
+        }
+        if (any) {
+          tGeo.attributes.position.needsUpdate = true;
+          tGeo.attributes.color.needsUpdate = true;
+        }
+      });
+      extraStats.launchPad = { x: Math.round(sp.x), z: Math.round(sp.z), side };
+    }
+  }
+
   // ---------------------------------------------------------------- 차와 충돌
   function collideCar(car) {
     stamp++;
@@ -1249,6 +1620,7 @@ export function buildMoonScenery(track, scene) {
     },
     sky,
     domes,
-    stats: { colliders: allColliders.length, occupied: occupied.length, buildMs },
+    stats: Object.assign(extraStats, { colliders: allColliders.length, occupied: occupied.length, buildMs }),
+    launch: LAUNCH,
   };
 }

@@ -121,6 +121,19 @@ export class Car {
     this.understeer = 0; // 0~1 앞이 밀림
     this.sliding = 0; // 0~1 뒤가 미끄러짐
     this.limiter = false; // 회전수 한계에 닿음
+    // 손맛 (2026-11-10 2라운드)
+    this.draft = 0; // 0~1 슬립스트림: 앞차 바로 뒤 (raceSystem이 매 스텝 밖에서 넣어 줌) → 공기 저항 ↓
+    this.latG = 0; // 옆 가속 (m/s², + = 오른쪽으로 도는 중) → 차체 기울기 (carModel)
+    this.lonG = 0; // 앞뒤 가속 (m/s², + 가속, - 브레이크) → 차체 앞뒤 숙임
+    this.tyreSlip = 0; // 0~1 타이어가 비명을 지르는 정도 (미끄러짐·헛돎·앞 밀림·바퀴 잠김·드리프트) → 타이어 소리
+    this.thrHeld = 0; // 가속 페달을 꽉 밟고 있던 시간 (리프트오프 감지)
+    this.liftKick = 0; // 리프트오프 순간 1 → 0.45초 동안 0으로
+    this.liftOff = 0; // 0~1 코너 중 액셀을 확 뗌 → 뒤가 가벼워져 꼬리가 살짝 돎
+    this.driftAngle = 0; // 드리프트 각도 (rad, 도는 쪽이 +)
+    this.driftHold = 0; // 좋은 각도 창 안에서 버틴 시간 (초)
+    this.driftLoss = 0; // 이번 드리프트로 잃은 속도 (m/s)
+    this.exitRefund = 0; // 깔끔한 드리프트 탈출로 돌려받을 남은 속도 (m/s)
+    this.lastDriftInfo = null; // HUD용 { clean, quality, gain, hold, spin, t }
     this.launchTime = 0; // 완벽한 출발 효과 남은 시간
     this.launchSpin = 0; // 출발 실패(휠스핀) 남은 시간
     this.hitT = 0; // 세게 부딪힌 뒤 차가 자세를 되찾는 남은 시간 (이 동안은 꼬리가 더 돌아가지 않음)
@@ -176,6 +189,10 @@ export class Car {
     this.load = this.yawRate = 0;
     this.wheelspin = this.understeer = this.sliding = 0;
     this.spool = 0;
+    this.latG = this.lonG = this.tyreSlip = this.thrHeld = this.liftKick = this.liftOff = 0;
+    this.driftAngle = this.driftHold = this.driftLoss = this.exitRefund = 0;
+    this.draft = 0;
+    if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
     this.jumpStall = 0; // 부정 출발로 시동 꺼진 남은 시간
@@ -510,6 +527,20 @@ export class Car {
     if (this.boostTime > 0) this.boostTime -= dt;
     if (this.pos.y < -30 || (!this.grounded && this.airTime > 8)) this.respawn();
 
+    // 차가 받는 가속 (옆·앞뒤): 차체 기울기·숙임 연출용. 복귀·착지 같은 순간 이동은 잘라 냄
+    const pv = this._pv || (this._pv = this.vel.clone());
+    if (dt > 0) {
+      const ax = (this.vel.x - pv.x) / dt, ay = (this.vel.y - pv.y) / dt, az = (this.vel.z - pv.z) / dt;
+      const r = this.right, onG = this.grounded && !this.flying;
+      const lat = onG ? THREE.MathUtils.clamp(ax * r.x + ay * r.y + az * r.z, -40, 40) : 0;
+      const lon = onG ? THREE.MathUtils.clamp(ax * this.fwd.x + ay * this.fwd.y + az * this.fwd.z, -45, 30) : 0;
+      const k = 1 - Math.exp(-dt / 0.09);
+      this.latG += (lat - this.latG) * k;
+      this.lonG += (lon - this.lonG) * k;
+    }
+    pv.copy(this.vel);
+    if (!this.grounded || this.flying || this.surface === 'water') this.tyreSlip = 0;
+
     this.forwardSpeed = this.speed;
     this.steerVisual = this.steerIn;
   }
@@ -543,6 +574,7 @@ export class Car {
     // 활주로(비행 모드로 땅을 달리는 중): 비행 최고 속도까지 빠르게 줄임 (가속 모드로 너무 빨리 들어오면 이륙 뒤 고리 쪽으로 못 돎)
     // (착륙한 뒤 활주로 밖에서는 안 줄임: 착륙장에서 비행 최고 속도로 확 깎이지 않게)
     const flyGround = this.mode === 'fly' && M.fly && this.rwZoneLast > 0;
+    if (this.draft > 0 && !flyGround) maxSpeed *= 1 + (cfg.draft?.topGain ?? 0.04) * Math.min(1, this.draft); // 슬립스트림: 최고 속도도 살짝 (추월 가능)
     if (flyGround) maxSpeed = Math.min(maxSpeed, M.fly.maxSpeed);
     const e = cfg.engine, G = this.gearSpeeds(), tire = cfg.tire;
     const v = Math.abs(f);
@@ -568,7 +600,7 @@ export class Car {
     const brakeLimit = tire.brakeGrip * (1 + df) * surfGrip;
 
     // --- 엔진 → 바퀴 (drive), 브레이크·저항 (dec) ---
-    let drive = 0, dec = 0;
+    let drive = 0, dec = 0, brakeOver = 0;
     this.wheelspin = 0;
     this.limiter = false;
     const reverse = f < -0.5 || (f <= 0.5 && c.brake > 0 && !c.throttle);
@@ -609,16 +641,40 @@ export class Car {
         drive *= 0.45;
       }
       if (v > 0.5) dec += e.engineBrake * (1 - this.thr) * Math.min(1, this.rpm / e.redline); // 엔진 브레이크
-      if (this.brk > 0 && f > 0) dec += Math.min(cfg.brake * this.brk, brakeLimit);
+      if (this.brk > 0 && f > 0) {
+        dec += Math.min(cfg.brake * this.brk, brakeLimit);
+        // 타이어 한계 가까이 밟음 → 바퀴가 잠기기 직전 '끼익' (소리만)
+        if (v > 6) brakeOver = THREE.MathUtils.clamp(((cfg.brake * this.brk) / brakeLimit - 0.85) * 2.5, 0, 1);
+      }
     }
-    dec += cfg.aero.drag * v * v + cfg.aero.rolling; // 공기 저항 + 구름 저항
+    // 공기 저항 + 구름 저항. 슬립스트림(앞차 바로 뒤, car.draft 0~1)이면 공기 저항이 draft.dragCut만큼 줄어듦
+    const draftK = this.draft > 0 ? 1 - (cfg.draft?.dragCut ?? 0.3) * Math.min(1, this.draft) : 1;
+    dec += cfg.aero.drag * v * v * draftK + cfg.aero.rolling;
     f += drive * dt;
     f = Math.sign(f) * Math.max(0, Math.abs(f) - dec * dt); // 저항은 속도를 0까지만 줄임
     // 무게 이동: 가속 → 뒤로, 감속 → 앞으로 쏠림
     const accelNow = drive - dec * Math.sign(f || 1);
     this.load = THREE.MathUtils.lerp(this.load, THREE.MathUtils.clamp(accelNow / tire.loadAccel, -1, 1), 1 - Math.exp(-6 * dt));
+    // 구동 바퀴가 쓰는 힘의 비율 (0~1): 타이어는 앞뒤로 쓰는 만큼 옆으로 버티는 힘이 줄어듦 (마찰원)
+    const powerUse = drive > 0 ? Math.min(1, drive / Math.max(1, tractionLimit)) : 0;
+    // 리프트오프: 빠른 코너에서 액셀을 꽉 밟고 있다가(0.6초 이상) 확 떼면 무게가 앞으로 쏠려 뒤가 순간 가벼워짐
+    //   (코너 중에 W를 톡톡 끊어 밟는 것으로는 안 생김 → 키보드로 속도 맞추기는 그대로 편함). 0.45초 동안 줄어듦
+    const latUse = THREE.MathUtils.clamp((Math.abs(this.yawRate) * v) / Math.max(1, tire.lateral), 0, 1);
+    if (this.thr > 0.8) this.thrHeld = (this.thrHeld || 0) + dt;
+    else if (this.thr < 0.3) {
+      if (this.thrHeld > 0.6 && latUse > 0.5 && v > 15) this.liftKick = 1;
+      this.thrHeld = 0;
+    }
+    this.liftKick = Math.max(0, (this.liftKick || 0) - dt / 0.45);
+    this.liftOff = this.liftKick * THREE.MathUtils.clamp((latUse - 0.35) / 0.4, 0, 1);
 
     if (boosting && f < maxSpeed) f = Math.min(maxSpeed, f + cfg.boost.accel * dt);
+    // 깔끔한 드리프트 탈출: 드리프트로 잃은 속도 일부를 0.3초쯤에 걸쳐 돌려받음 (부스트 아님: 최고 속도를 넘지 않음)
+    if (this.exitRefund > 0) {
+      const a = Math.min(this.exitRefund, (cfg.drift.exitRate ?? 16) * dt);
+      this.exitRefund -= a;
+      if (f > 0 && f < maxSpeed) f = Math.min(maxSpeed, f + a);
+    }
     if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : 2.5) * dt));
     if (offK > 0) f -= f * cfg.offroad.drag * offK * (this.runoff ? 0.3 : 1) * dt;
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
@@ -630,6 +686,7 @@ export class Car {
       this.driftDir = Math.sign(c.steer);
       this.driftTime = 0;
       this.driftLevel = 0;
+      this.driftHold = this.driftLoss = this.exitRefund = 0;
       this.events.push('driftStart');
       if (this.up.y > 0.9) {
         // 평지에서는 살짝 점프하며 드리프트 진입
@@ -638,7 +695,7 @@ export class Car {
         return;
       }
     }
-    if (this.drifting && (!c.drift || f < cfg.drift.minSpeed * 0.6)) this.endDrift(f >= cfg.drift.minSpeed * 0.6);
+    if (this.drifting && (!c.drift || f < cfg.drift.minSpeed * 0.6)) this.endDrift(f >= cfg.drift.minSpeed * 0.6, !c.drift);
 
     // 방향 전환
     const speedK = THREE.MathUtils.clamp(Math.abs(f) / 8, 0, 1);
@@ -665,7 +722,14 @@ export class Car {
       // 드리프트도 아주 빠르면 덜 돎 (그래도 그냥 꺾는 것보다는 많이 돎)
       turn *= Math.min(1, cfg.drift.highSpeedLat / (Math.max(1, vNow) * (cfg.drift.baseTurn + cfg.drift.steerTurn * 0.5)));
       this.yawRate = turn;
-      this.driftTime += dt * (1 + 0.5 * Math.max(0, c.steer * this.driftDir));
+      // 드리프트 각도 창: holdAngle [최소, 최대] rad 안에서 버티면 드리프트가 쌓임 (레벨·탈출 보상)
+      //   안쪽으로 꺾으면 각도↑, 카운터(반대로 꺾기)면 각도↓, 뒷바퀴 굴림은 액셀을 밟을수록 각도↑ / 떼면↓ (앞바퀴 굴림은 반대: 밟으면 펴짐)
+      const win = cfg.drift.holdAngle || [0.28, 0.75];
+      const ang = this.slip * this.driftDir;
+      this.driftAngle = ang;
+      const inWin = ang >= win[0] && ang <= win[1];
+      if (inWin) this.driftHold += dt;
+      this.driftTime += dt * (inWin ? 1 : 0.35);
       const lvl = this.driftTime > cfg.drift.level2Time ? 2 : this.driftTime > cfg.drift.level1Time ? 1 : 0;
       if (lvl > this.driftLevel) this.events.push('driftLevel');
       this.driftLevel = lvl;
@@ -673,7 +737,9 @@ export class Car {
       let want = this.steerIn * cfg.steerRate * speedK * highK * Math.sign(f || 1);
       // 앞바퀴 한계: 무게가 뒤로 쏠리면(가속 중) 앞이 가벼워져 덜 돎 → 언더스티어
       //   앞바퀴 굴림(fwd)은 헛돌면 앞이 더 밀림 (frontSpinK)
-      const yawMax = vNow > 2 ? (lat * (1 - tire.loadShift * this.load) * (1 - tire.wheelspinSlide * frontSpinK * this.wheelspin)) / vNow : Infinity;
+      //   앞바퀴 굴림은 코너에서 힘을 많이 쓰면 앞이 옆으로 덜 버팀 (tire.powerPush, 토크 언더스티어)
+      const powerPush = (tire.powerPush ?? 0.25) * frontSpinK * powerUse * powerUse;
+      const yawMax = vNow > 2 ? (lat * (1 - tire.loadShift * this.load) * (1 - tire.wheelspinSlide * frontSpinK * this.wheelspin) * (1 - powerPush)) / vNow : Infinity;
       if (Math.abs(want) > yawMax) {
         this.understeer = Math.min(1, (1 - yawMax / Math.abs(want)) * 1.6);
         want = Math.sign(want) * yawMax;
@@ -697,13 +763,24 @@ export class Car {
     this.slip -= dYaw; // 차는 돌았지만 이동 방향은 그대로 → 미끄러짐
 
     // 접지력: 이동 방향이 차 방향을 따라잡음
-    if (this.drifting) this.slip *= Math.exp(-cfg.drift.grip * dt);
-    else {
+    if (this.drifting) {
+      const D = cfg.drift;
+      const thrA = drv === 'fwd' ? -(D.fwdThrottleAngle ?? 0.3) : (D.throttleAngle ?? 0.35) * (drv === 'awd' ? 0.6 : 1);
+      this.slip *= Math.exp(-D.grip * (1 - thrA * (this.thr - 0.5) * 2) * dt);
+      // 너무 많이 돌아감 → 스핀: 드리프트가 끊기고 속도 손해
+      if (this.slip * this.driftDir > (D.spinAngle ?? 1.1)) {
+        f *= 1 - (D.spinLoss ?? 0.15);
+        this.endDrift(false, false, true);
+      }
+    } else {
       let grip = cfg.grip * (1 - 0.4 * offK);
       if (spike) grip *= cfg.booster.gripFactor;
       const natural = this.slip * (1 - Math.exp(-grip * dt));
       // 뒷바퀴 한계: 브레이크로 앞에 쏠리거나, 바퀴가 헛돌면 뒤가 약해짐
-      const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * rearSpinK * this.wheelspin);
+      //   + 파워 오버스티어: 뒷바퀴 굴림이 코너에서 힘을 많이 쓰면(powerUse) 뒤가 옆으로 덜 버팀 (tire.powerSlide)
+      //   + 리프트오프 오버스티어: 코너에서 액셀을 확 떼면 잠깐 뒤가 가벼워짐 (tire.liftOff)
+      const powerSlide = (tire.powerSlide ?? 0.3) * rearSpinK * powerUse * powerUse;
+      const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * rearSpinK * this.wheelspin) * (1 - (tire.capShare ?? 0.5) * Math.min(0.6, powerSlide + (tire.liftOff ?? 0.4) * this.liftOff));
       const capStep = vNow > 2 ? (rearCap / vNow) * dt : Infinity;
       if (Math.abs(natural) > capStep) {
         // 뒤가 버티지 못함 → 꼬리가 바깥으로 돌아 차가 더 돌아감 (오버스티어)
@@ -717,10 +794,40 @@ export class Car {
         this.fwd.applyAxisAngle(this.up, swing);
         this.slip -= swing;
       } else this.slip -= natural;
+      // 리프트오프·파워 오버스티어가 눈에 보이게: 뒤가 가벼워진 만큼 꼬리가 바깥으로 돌아 차 머리가 안쪽으로 더 돎
+      //   (뒤 접지 한계는 여유가 커서 한계만 줄여서는 거의 안 느껴졌음). 세기 = 도는 속도 × (리프트오프 + 파워) × tire.tuck
+      //   → 액셀을 확 떼거나 낮은 단에서 꽉 밟으면 꼬리가 살짝 흐르고 '끼익', 카운터로 잡거나 페달을 부드럽게 쓰면 안 흐름
+      if (!(this.hitT > 0) && vNow > 6) {
+        // 꼬리가 도는 건 미끄러짐이 tuckMax rad가 될 때까지만 (그 위로는 줄어듦) → 살짝 흐르고 스스로 잡힘, 계속 돌지는 않음
+        //   리프트오프는 liftTuck배, tuckMax와 0.2 rad 중 작은 쪽까지 (크게 흐르면 봇·키보드가 못 잡음), 파워는 tuck배, tuckMax까지
+        const liftK = Math.min(0.6, (tire.liftOff ?? 0.4) * this.liftOff);
+        const sNow = this.slip * Math.sign(this.yawRate);
+        const room = (m) => THREE.MathUtils.clamp((m - sNow) / (0.5 * m), 0, 1);
+        const tm = tire.tuckMax ?? 0.2;
+        const tuck = (liftK * (tire.liftTuck ?? 1.4) * room(Math.min(tm, 0.2)) + Math.min(0.55, powerSlide) * (tire.tuck ?? 1.4) * room(tm)) * this.yawRate;
+        if (tuck) {
+          const sw = -tuck * dt;
+          this.fwd.applyAxisAngle(this.up, sw);
+          this.slip -= sw;
+        }
+      }
       this.slip = THREE.MathUtils.clamp(this.slip, -1.3, 1.3);
     }
     this.sliding = this.drifting ? 0 : THREE.MathUtils.clamp((Math.abs(this.slip) - 0.12) / 0.35, 0, 1);
-    f -= f * Math.abs(Math.sin(this.slip)) * cfg.drift.slipDrag * dt;
+    {
+      // 옆으로 미끄러지면 느려짐. 드리프트 중 좋은 각도 창 안이면 덜 느려짐 (drift.holdDrag)
+      const D = cfg.drift, win = D.holdAngle || [0.28, 0.75];
+      const inWin = this.drifting && this.driftAngle >= win[0] && this.driftAngle <= win[1];
+      const lost = f * Math.abs(Math.sin(this.slip)) * D.slipDrag * (inWin ? D.holdDrag ?? 0.7 : 1) * dt;
+      f -= lost;
+      if (this.drifting) this.driftLoss += Math.abs(lost);
+    }
+    // 타이어 소리 크기 (0~1): 가장 심한 것 하나. 잔디 위에서는 비명 대신 흙 소리(offroadFx)라 줄임
+    {
+      const dAng = this.drifting ? THREE.MathUtils.clamp(0.45 + Math.abs(this.slip) * 0.7, 0, 1) : 0;
+      const sl = Math.max(this.sliding * 0.95, this.understeer * 0.6, this.wheelspin * 0.85, brakeOver * 0.7, dAng, this.liftOff * 0.5);
+      this.tyreSlip = sl * (1 - 0.85 * offK) * Math.min(1, vNow / 6) * (this.magnet ? 0.6 : 1);
+    }
     this.speed = f;
     } // motion
 
@@ -1328,11 +1435,33 @@ export class Car {
     this.pos.add(step);
   }
 
-  endDrift(giveBoost) {
+  /**
+   * 드리프트 끝. released = 드리프트 키를 떼서 끝냄, spun = 너무 돌아가 스핀
+   * 깔끔한 탈출 (2026-11-10): 키를 뗄 때 각도가 exitAngle 아래(차가 이미 나갈 쪽을 봄) + 각도 창 안에서 exitMinHold초 이상 버팀
+   *   → 이번 드리프트로 잃은 속도의 exitKeep 비율(버틴 시간·탈출 각도에 따라, 최대 exitMax m/s)을 돌려받고, 미끄러짐이 exitAlign만큼 바로 펴짐
+   */
+  endDrift(giveBoost, released = false, spun = false) {
+    const D = this.cfg.drift;
     if (giveBoost && this.driftLevel > 0) {
-      this.startBoost(this.driftLevel === 2 ? this.cfg.drift.level2Boost : this.cfg.drift.level1Boost);
+      this.startBoost(this.driftLevel === 2 ? D.level2Boost : D.level1Boost);
     }
+    const ang = this.slip * this.driftDir;
+    const exitA = D.exitAngle ?? 0.6, good = D.exitGood ?? 0.35;
+    const clean = !spun && released && giveBoost && this.driftHold >= (D.exitMinHold ?? 0.4) && ang < exitA && ang > -0.15 && !(this.hitT > 0);
+    let quality = 0, gain = 0;
+    if (clean) {
+      const holdQ = THREE.MathUtils.clamp(0.35 + (0.65 * this.driftHold) / (D.level2Time || 2), 0, 1);
+      const angQ = ang <= good ? 1 : 1 - (0.5 * (ang - good)) / Math.max(0.01, exitA - good);
+      quality = holdQ * angQ;
+      gain = Math.min(D.exitMax ?? 5, this.driftLoss * (D.exitKeep ?? 0.6) * quality);
+      this.exitRefund = gain;
+      this.slip *= 1 - (D.exitAlign ?? 0.4) * quality; // 진행 방향이 차 머리 쪽으로 바로 펴짐 (쭉 뻗어 나감)
+      this.events.push('driftExit');
+    } else if (spun) this.events.push('driftSpin');
+    if (this.driftTime > 0.3 || spun) this.lastDriftInfo = { clean, quality, gain, hold: this.driftHold, angle: ang, spin: spun, level: this.driftLevel, t: this.simT };
     this.drifting = false;
+    this.driftAngle = 0;
+    this.driftHold = this.driftLoss = 0;
     this.driftTime = 0;
     this.driftLevel = 0;
   }

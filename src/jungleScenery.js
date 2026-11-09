@@ -13,6 +13,8 @@
 // 큰 물체는 충돌체(원, 높이 범위)가 있어 차가 통과하지 못합니다 (gpScenery.js와 같은 방식).
 import * as THREE from 'three';
 import * as A from './gpAssets.js';
+import { templeGantry, templeStand } from './jungleStart.js';
+import { buildTempleGate } from './jungleTrap.js';
 import { waterfall } from './gpSky.js';
 import { buildUnderworld } from './jungleWorld.js';
 import { seededRandom, canvasTexture, glowTexture, stoneTexture, TAU } from './jungleUtil.js';
@@ -245,6 +247,39 @@ function plantGeos(rnd) {
     g.add(new THREE.DodecahedronGeometry(1, 0), M(0, 0.45, 0, 1.3, 0.9, 1.1), (c, n) => (n.y > 0.55 ? jit('#4f7f32', 0.1) : jit('#7a7666', 0.1)));
     out.rock = g.build();
   }
+  // ---- 멀리서 보는 가벼운 모양 (LOD): 실루엣·색은 비슷하게, 삼각형은 1/4~1/10
+  {
+    const g = new Geo();
+    g.add(new THREE.CylinderGeometry(0.6, 0.95, 16, 5, 1, true), M(0, 8, 0), () => C('#654d35'));
+    for (const [x, y, z, r] of [[0, 18.3, 0, 7], [3.5, 16.8, 1.2, 5], [-3.2, 17, -2.2, 5.2], [0, 16.6, -3.8, 4.4]])
+      g.add(new THREE.IcosahedronGeometry(r, 0), M(x, y, z, 1, 0.55, 1, 0, x + z, 0), (c, n) => (n.y > 0.3 ? C('#3f8f32') : C('#2b6a24')));
+    out.kapokLo = g.build();
+  }
+  {
+    const g = new Geo();
+    g.add(new THREE.CylinderGeometry(0.18, 0.3, 13, 4, 1, true), M(2.6, 6.4, 0, 1, 1, 1, 0, 0, -0.4), () => C('#7f6a4e'));
+    for (let k = 0; k < 6; k++) {
+      const leaf = new THREE.PlaneGeometry(1.1, 5.2, 1, 1);
+      leaf.translate(0, 2.6, 0);
+      leaf.rotateX(-Math.PI / 2 + 0.6);
+      g.add(leaf, M(5.2, 12.3, 0, 1, 1, 1, 0, (k / 6) * TAU, 0), () => C('#4f9a35'));
+    }
+    out.palmLo = g.build();
+  }
+  {
+    const g = new Geo();
+    for (let k = 0; k < 3; k++) {
+      const a = k * 2.1, h = 10 + k;
+      g.add(new THREE.CylinderGeometry(0.1, 0.13, h, 3, 1, true), M(Math.cos(a) * 0.7, h / 2, Math.sin(a) * 0.7), () => C('#8aa64a'));
+      g.add(new THREE.OctahedronGeometry(1.6, 0), M(Math.cos(a) * 0.7, h * 0.85, Math.sin(a) * 0.7, 1, 0.6, 1), () => C('#5c9a3a'));
+    }
+    out.bambooLo = g.build();
+  }
+  {
+    const g = new Geo();
+    g.add(new THREE.IcosahedronGeometry(1.5, 0), M(0, 0.9, 0, 1.3, 0.75, 1.2), () => C('#3f7f2c'));
+    out.bushLo = g.build();
+  }
   // 고원 아래 정글 바다용 나무 꼭대기 (멀리서만 보임, 가볍게)
   {
     const g = new Geo();
@@ -396,6 +431,71 @@ export function buildJungleScenery(track, scene) {
   const plants = plantGeos(seededRandom(99));
   const plantMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const plantMat2 = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+  /**
+   * 거리에 따라 모양을 바꾸는 인스턴스 (LOD): 카메라에서 near m 안 = 자세한 모양(hi), far m 안 = 가벼운 모양(lo, 없으면 안 그림).
+   * 카메라가 15 m 넘게 움직일 때만 다시 나눔 (행렬 복사만 하므로 가벼움)
+   */
+  const lodSets = [];
+  function instancedLOD(hiGeo, loGeo, mat, items, { near = 170, far = 2000, shadow = false, name = '' } = {}) {
+    if (!items.length) return;
+    const n = items.length;
+    const mats = new Float32Array(n * 16), cols = items.some((it) => it.color) ? new Float32Array(n * 3) : null;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), col = new THREE.Color(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    items.forEach((it, i) => {
+      q.setFromAxisAngle(UP, it.ry || 0);
+      m4.compose(v.set(it.x, it.y, it.z), q, sc.set(it.sx ?? it.s, it.sy ?? it.s, it.sz ?? it.s)).toArray(mats, i * 16);
+      if (cols) col.set(it.color || '#ffffff').toArray(cols, i * 3);
+    });
+    const mk = (geo, cast, suffix) => {
+      if (!geo) return null;
+      const im = new THREE.InstancedMesh(geo, mat, n);
+      im.name = name + suffix;
+      im.castShadow = cast;
+      im.receiveShadow = true;
+      im.frustumCulled = false; // 숲 전체에 퍼져 있음 (개수는 count로 줄임)
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      if (cols) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+      im.count = 0;
+      group.add(im);
+      return im;
+    };
+    lodSets.push({ items, mats, cols, hi: mk(hiGeo, shadow, ''), lo: mk(loGeo, false, 'Lo'), near2: near * near, far2: far * far });
+  }
+  const lodAt = new THREE.Vector3(1e9, 0, 0);
+  function updateLOD(cx, cz, force = false) {
+    if (!force && (lodAt.x - cx) ** 2 + (lodAt.z - cz) ** 2 < 15 * 15) return;
+    lodAt.set(cx, 0, cz);
+    for (const L of lodSets) {
+      let nh = 0, nl = 0;
+      const hm = L.hi.instanceMatrix.array, lm = L.lo ? L.lo.instanceMatrix.array : null;
+      const hc = L.cols && L.hi.instanceColor.array, lc = L.cols && L.lo && L.lo.instanceColor.array;
+      for (let i = 0; i < L.items.length; i++) {
+        const it = L.items[i];
+        const d2 = (it.x - cx) ** 2 + (it.z - cz) ** 2;
+        if (d2 < L.near2) {
+          hm.set(L.mats.subarray(i * 16, i * 16 + 16), nh * 16);
+          if (hc) hc.set(L.cols.subarray(i * 3, i * 3 + 3), nh * 3);
+          nh++;
+        } else if (lm && d2 < L.far2) {
+          lm.set(L.mats.subarray(i * 16, i * 16 + 16), nl * 16);
+          if (lc) lc.set(L.cols.subarray(i * 3, i * 3 + 3), nl * 3);
+          nl++;
+        }
+      }
+      L.hi.count = nh;
+      L.hi.instanceMatrix.needsUpdate = true;
+      if (hc) L.hi.instanceColor.needsUpdate = true;
+      if (L.lo) {
+        L.lo.count = nl;
+        L.lo.instanceMatrix.needsUpdate = true;
+        if (lc) L.lo.instanceColor.needsUpdate = true;
+      }
+    }
+  }
+  animators.push(() => {
+    const cam = window.game && window.game.camera;
+    if (cam) updateLOD(cam.position.x, cam.position.z);
+  });
   /** 인스턴스 메시 하나 만들기: items = [{x,y,z,s,ry,color?}] */
   function instanced(geo, mat, items, { shadow = false, name = '' } = {}) {
     if (!items.length) return null;
@@ -499,12 +599,12 @@ export function buildJungleScenery(track, scene) {
   // ---------------------------------------------------------------- 출발 직선: 출발 게이트, 관중석, 피트, 깃발
   {
     const s0 = track.sampleAt(0);
-    const g = A.startGantry({ width: W + 2 * CURB });
-    rebrand(g.obj);
+    // 사원식 출발 게이트 (jungleStart.js): 새김 무늬 돌기둥 + 글자 돌보 + 매달린 빨간불 5개
+    const g = templeGantry({ width: W + 2 * CURB });
     add(g.obj, s0.pos.x, s0.pos.y, s0.pos.z, yawOf(s0));
     anim(g);
     if (g.setLights) {
-      // 빨간불: 운전자 기준 왼쪽부터 하나씩 → 모두 꺼지면 출발 (gpAssets 게이트 0번 전구 = 왼쪽)
+      // 빨간불: 운전자 기준 왼쪽부터 하나씩 → 모두 꺼지면 출발 (0번 전구 = 로컬 +x = 왼쪽)
       animators.push(() => {
         const race = window.game && window.game.race;
         if (!race) return;
@@ -518,8 +618,8 @@ export function buildJungleScenery(track, scene) {
       });
     }
     for (const side of [-1, 1]) {
-      const p = track.surf(s0, side * (HW + CURB + 1.5), 0, new THREE.Vector3());
-      circle(p.x, p.z, 1.2, p.y - 1, p.y + 12);
+      const p = track.surf(s0, side * g.legX, 0, new THREE.Vector3());
+      circle(p.x, p.z, g.legR, p.y - 1, p.y + 16);
     }
   }
   const stands = [];
@@ -528,8 +628,7 @@ export function buildJungleScenery(track, scene) {
     const front = HW + CURB + 5.5;
     const lat = side * front;
     const p = track.surf(s, lat, 0, new THREE.Vector3());
-    const st = A.grandstand({ length, roofColor });
-    rebrand(st.obj);
+    const st = templeStand({ length, accent: roofColor, seed: stands.length + 1 }); // 돌 계단 관중석 (jungleStart.js)
     add(st.obj, p.x, p.y - 0.05, p.z, yawOf(s) + (side > 0 ? Math.PI : 0));
     const hd = st.halfDepth || 7;
     const c = track.surf(s, side * (front + hd), 0, new THREE.Vector3());
@@ -559,7 +658,7 @@ export function buildJungleScenery(track, scene) {
     for (let u = -32; u <= 32; u += 8) circle(c.x + s.tan.x * u, c.z + s.tan.z * u, 9, p.y - 2, p.y + 16);
     occupy(c.x, c.z, 40);
   }
-  for (let m = -140; m < 120; m += 14) {
+  for (let m = -140; m < 120; m += 20) {
     for (const side of [-1, 1]) {
       const { p, s } = beside(tM(m), side * (HW + CURB + 2.2));
       if (!free(p.x, p.z, 0.6)) continue;
@@ -742,6 +841,7 @@ export function buildJungleScenery(track, scene) {
   stoneArch(mt('float', -20), '저중력 · FLOATING STONES');
   stoneArch(mt('gorge', -40), 'GORGE BRIDGE');
 
+  let templeTrap = null;
   // ---------------------------------------------------------------- 태양의 대피라미드 (사원 광장 끝, 도로가 속을 지나 포털 A로)
   if (track.dimension) {
     const sP = track.sampleAt(track.dimension.t0);
@@ -838,6 +938,10 @@ export function buildJungleScenery(track, scene) {
         circle(p.x, p.z, 13, sP.pos.y - 3, sP.pos.y + 40);
       }
     occupy(cen.x, cen.z, 60);
+    // 사원 함정: 터널 입구 돌문이 차가 다가오면 쿠구궁 내려옴 (보이기만, jungleTrap.js)
+    const trap = buildTempleGate(track, group, { sP, d: -L0 - 8, TW, top: 11, stoneMat: stoneDark, goldMat });
+    animators.push((t, dt, car) => trap.update(t, dt, car));
+    templeTrap = trap;
     // 광장 앞 석상 머리 두 개 + 횃불 길
     for (const sx of [-1, 1]) {
       const p = back.clone().addScaledVector(sP.tan, -L0 - 30).addScaledVector(sP.right, sx * (HW + CURB + 12));
@@ -944,7 +1048,70 @@ export function buildJungleScenery(track, scene) {
     geo.computeVertexNormals();
     const water = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: waterTex, roughness: 0.25, metalness: 0.1, color: '#9fe6dc', side: THREE.DoubleSide }));
     group.add(water);
-    animators.push((t) => (waterTex.offset.y = -t * 0.25));
+    // 빠른 물살 거품 (위에 한 겹 더, 더 빨리 흐름) → 물이 흐르는 게 잘 보임
+    const foamTex = canvasTexture(128, 256, (g, w, h) => {
+      for (let i = 0; i < 140; i++) {
+        const x = Math.random() * w, y = Math.random() * h, l = 16 + Math.random() * 50;
+        const gr = g.createLinearGradient(0, y, 0, y + l);
+        gr.addColorStop(0, 'rgba(255,255,255,0)');
+        gr.addColorStop(0.5, `rgba(240,255,255,${0.35 + Math.random() * 0.4})`);
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr;
+        g.fillRect(x, y, 3 + Math.random() * 7, l);
+      }
+    });
+    foamTex.repeat.set(3, 16);
+    const foam = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }));
+    foam.position.y = 0.06;
+    foam.renderOrder = 1;
+    group.add(foam);
+    // 떠내려가는 통나무·잎 (강을 따라 흐르다 끝에서 다시 위로)
+    const NL = 26;
+    const logGeo = new THREE.CylinderGeometry(0.5, 0.55, 5, 6).rotateZ(Math.PI / 2);
+    const leafGeo = new THREE.CircleGeometry(0.9, 6).rotateX(-Math.PI / 2);
+    const logs = new THREE.InstancedMesh(logGeo, new THREE.MeshLambertMaterial({ color: '#6b4a2a', flatShading: true }), NL);
+    const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: '#4f9a35', side: THREE.DoubleSide }), NL);
+    for (const im of [logs, leaves]) (im.frustumCulled = false), group.add(im);
+    const floaters = Array.from({ length: NL }, () => ({ u: rand(), lat: R(-0.6, 0.6), sp: R(0.012, 0.02), ph: R(0, TAU), rot: R(0, TAU) }));
+    // 강 속 바위 + 둘레 흰 물보라
+    const foamRing = new THREE.SpriteMaterial({ map: glowTexture('rgba(255,255,255,0.9)', 'rgba(220,255,250,0.35)'), transparent: true, depthWrite: false });
+    const rocksIn = [];
+    for (let i = 0; i < 14; i++) {
+      const u = (i + 0.5) / 14;
+      const p = curve.getPointAt(u), tg = curve.getTangentAt(u);
+      const k = Math.min(gorge.length - 1, Math.floor(u * gorge.length));
+      const off = R(-0.7, 0.7) * (gorge[k].r * 1.4 + 6);
+      const x = p.x - tg.z * off, z = p.z + tg.x * off;
+      const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(R(1.5, 3.5), 0), stoneDark);
+      rk.position.set(x, RIVER_Y + 0.3, z);
+      rk.rotation.set(R(0, 3), R(0, 3), 0);
+      group.add(rk);
+      const sp = new THREE.Sprite(foamRing);
+      sp.position.set(x, RIVER_Y + 0.4, z);
+      sp.scale.set(9, 2.5, 1);
+      group.add(sp);
+      rocksIn.push({ sp, ph: R(0, TAU) });
+    }
+    const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v4 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+    animators.push((t, dt) => {
+      waterTex.offset.y = -t * 0.25;
+      foamTex.offset.y = -t * 0.7;
+      foamTex.offset.x = Math.sin(t * 0.3) * 0.05;
+      floaters.forEach((f, i) => {
+        f.u = (f.u + f.sp * Math.min(dt || 0, 0.05)) % 1;
+        const p = curve.getPointAt(f.u), tg = curve.getTangentAt(f.u);
+        const k = Math.min(gorge.length - 1, Math.floor(f.u * gorge.length));
+        const off = f.lat * (gorge[k].r * 1.4 + 6);
+        v4.set(p.x - tg.z * off, RIVER_Y + 0.25 + Math.sin(t * 2 + f.ph) * 0.12, p.z + tg.x * off);
+        e4.set(Math.sin(t * 1.3 + f.ph) * 0.08, Math.atan2(tg.x, tg.z) + f.rot + t * 0.2, 0);
+        m4.compose(v4, q4.setFromEuler(e4), one);
+        (i % 2 ? leaves : logs).setMatrixAt(i, m4);
+        // 안 쓰는 쪽은 숨김 (크기 0)
+        (i % 2 ? logs : leaves).setMatrixAt(i, m4.makeScale(0, 0, 0));
+      });
+      logs.instanceMatrix.needsUpdate = leaves.instanceMatrix.needsUpdate = true;
+      for (const r of rocksIn) r.sp.scale.set(9 + 1.5 * Math.sin(t * 6 + r.ph), 2.5 + 0.4 * Math.sin(t * 5 + r.ph), 1); // 물보라가 출렁
+    });
   }
   // 폭포: 고원 가장자리(도로에서 보이는 곳)에서 아래로 떨어짐. 바깥 방향 = 땅 값이 줄어드는 쪽
   {
@@ -1255,17 +1422,18 @@ export function buildJungleScenery(track, scene) {
   scatterAll('bush', 500, 1, 2, 10);
   const flowerCols = ['#ff4f6a', '#ffcf3f', '#c07cff', '#ff8a1f', '#ffffff', '#ff5fa2'];
   for (const f of veg.flower) f.color = pick(flowerCols);
-  instanced(plants.kapok, plantMat, veg.kapok, { shadow: true, name: 'kapok' });
-  instanced(plants.palm, plantMat2, veg.palm, { shadow: true, name: 'palm' });
-  instanced(plants.bamboo, plantMat, veg.bamboo, { shadow: true, name: 'bamboo' });
-  instanced(plants.fern, plantMat2, veg.fern, { name: 'fern' });
-  instanced(plants.bush, plantMat, veg.bush, { name: 'bush' });
-  instanced(plants.flower, plantMat, veg.flower, { name: 'flower' });
+  // 가까운 것만 자세한 모양 (LOD). 고사리·꽃은 작아서 멀면 안 그림
+  instancedLOD(plants.kapok, plants.kapokLo, plantMat, veg.kapok.concat(veg.kapokFar || []), { near: 190, shadow: true, name: 'kapok' });
+  instancedLOD(plants.palm, plants.palmLo, plantMat2, veg.palm.concat(veg.palmFar || []), { near: 150, shadow: true, name: 'palm' });
+  instancedLOD(plants.bamboo, plants.bambooLo, plantMat, veg.bamboo, { near: 140, shadow: true, name: 'bamboo' });
+  instancedLOD(plants.fern, null, plantMat2, veg.fern, { near: 140, name: 'fern' });
+  instancedLOD(plants.bush, plants.bushLo, plantMat, veg.bush.concat(veg.bushFar || []), { near: 150, far: 700, name: 'bush' });
+  instancedLOD(plants.flower, null, plantMat, veg.flower, { near: 110, name: 'flower' });
   instanced(plants.rock, plantMat, veg.rock, { shadow: true, name: 'rock' });
-  // 먼 숲 (그림자 안 만듦: 그림자 그리기 양을 줄여 FPS 유지)
-  instanced(plants.kapok, plantMat, veg.kapokFar || [], { name: 'kapokFar' });
-  instanced(plants.palm, plantMat2, veg.palmFar || [], { name: 'palmFar' });
-  instanced(plants.bush, plantMat, veg.bushFar || [], { name: 'bushFar' });
+  {
+    const s0 = track.sampleAt(0);
+    updateLOD(s0.pos.x, s0.pos.z, true);
+  }
   // 도로 가까운 단단한 것만 충돌체 (멀리 있는 것은 차가 닿을 일이 없음)
   for (const type of ['kapok', 'palm', 'bamboo', 'rock'])
     for (const it of veg[type]) if (roadD(it.x, it.z) < 60) circle(it.x, it.z, SOLID[type] * it.s, it.y - 1, it.y + 18 * it.s);
@@ -1418,6 +1586,9 @@ export function buildJungleScenery(track, scene) {
     },
     space: under,
     under,
+    get trap() {
+      return templeTrap;
+    },
     stats: { colliders: allColliders.length, veg: Object.fromEntries(Object.entries(veg).map(([k, v]) => [k, v.length])) },
   };
 }

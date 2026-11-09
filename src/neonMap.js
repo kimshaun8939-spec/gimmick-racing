@@ -2,31 +2,30 @@
 //   main.js가 buildTrack / buildScenery / buildProps 를 불러 씀
 //   - 코스: neonTrack.js (도로·방호벽·자석 튜브·글리치 구간·저중력)
 //   - 풍경: neonScenery.js (밤 도시·빌딩·네온 간판·홀로그램·비·관중석·출발 게이트·글리치 차원)
-//   - 소품: 지금은 움직이는 소품 없음 (드론·홀로그램 움직임은 풍경 animate에서)
+//   - 소품: neonProps.js (부딪히면 날아가는 라바콘·상자, 배달 드론, 결승선 홀로그램 쇼, 길가 관중)
+//     소품 부딪힘은 scenery.collideCar(car)에서 함 → main.js(플레이어)와 raceSystem(봇) 모두 부르기 때문
 import { buildNeonTrack } from './neonTrack.js';
 import { buildNeonScenery } from './neonScenery.js';
+import { buildNeonProps } from './neonProps.js';
+
+let propsRef = null; // buildProps가 만든 소품 (scenery.collideCar가 씀)
 
 export function buildTrack(data, scene) {
+  propsRef = null;
   return buildNeonTrack(data, scene);
 }
 
 export function buildScenery(track, scene) {
-  return buildNeonScenery(track, scene);
+  const sc = buildNeonScenery(track, scene);
+  const orig = sc.collideCar;
+  sc.collideCar = (car) => {
+    orig(car);
+    if (propsRef) propsRef.hit(car);
+  };
+  return sc;
 }
 
 export function buildProps(track, scene) {
-  void track;
-  void scene;
-  return {
-    group: null,
-    update() {},
-    reset() {},
-    animate() {},
-    props: [],
-    cubes: [],
-    barricade: null,
-    barricades: [],
-    rings: [],
-    stats: {},
-  };
+  propsRef = buildNeonProps(track, scene);
+  return propsRef;
 }

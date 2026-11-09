@@ -5,8 +5,27 @@
 // 어떤 키가 어떤 행동인지는 keybinds.js (설정 → 조작키에서 바꿈, localStorage 'gimmick.keys')
 //   - 예전 코드처럼 wasPressed('KeyR')로 물어도 "복귀 키"가 눌렸는지로 바꿔서 답함 (keybinds.js의 LEGACY)
 //   - 새 코드는 actionPressed('respawn') / actionHeld('throttle')를 써도 됨
+// 게임패드(gamepad.js)도 여기서 섞음: 스틱·트리거는 아날로그, 버튼은 행동. 안내 글자(keyName)는 마지막에 쓴 쪽(키보드/패드)을 따름
+// 조향 느낌·운전 도움(설정 → 조향·도움)도 여기서 적용 → main.js는 그대로 read()만 부름
+//   steerSens(감도) · steerRamp(키보드 핸들을 서서히) · brakeAssist · steerAssist · tcs (assists.js)
 
-import { keybinds, actionsFor, LEGACY } from './keybinds.js';
+import { keybinds, actionsFor, LEGACY, codeLabel, actionVisible } from './keybinds.js';
+import { pad, padConfig, pollPad } from './gamepad.js';
+import { settings } from './settings.js';
+import { applyAssists } from './assists.js';
+
+// 패드 설정 → gamepad.js
+function syncPadConfig() {
+  const v = settings.values;
+  padConfig.deadzone = v.padDeadzone ?? 0.1;
+  padConfig.curve = v.padCurve ?? 1.5;
+  padConfig.sens = v.steerSens ?? 1;
+  padConfig.vibe = v.padVibe ?? true;
+}
+syncPadConfig();
+settings.onChange(syncPadConfig);
+// 키보드 핸들 서서히 꺾기: 초당 얼마나 (돌아올 때는 2.5배 빠르게)
+const RAMP = { instant: 0, fast: 7, smooth: 3.2 };
 
 /** @typedef {{ throttle:number, brake:number, steer:number, drift:boolean, climb:boolean, dive:boolean, booster:boolean, mode:(null|'normal'|'accel'|'boat'|'fly'), shiftUp:boolean, shiftDown:boolean }} ControlState */
 
@@ -25,6 +44,8 @@ export function createKeyboardInput() {
   // Shift는 키보드·입력기(한글)에 따라 e.code가 비거나 다르게 올 때가 있어서 e.key·e.location으로도 알아봄 (오른쪽 Shift = location 2)
   const codeOf = (e) => (e.key === 'Shift' && !/^Shift(Left|Right)$/.test(e.code) ? (e.location === 2 ? 'ShiftRight' : 'ShiftLeft') : e.code);
   window.addEventListener('keydown', (e) => {
+    if (e.gmPad) return; // 패드가 메뉴용으로 보낸 가짜 키 (게임 입력이 아님)
+    if (e.isTrusted) pad.markKeyboard();
     const code = codeOf(e);
     const acts = actionsFor(code);
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
@@ -51,21 +72,67 @@ export function createKeyboardInput() {
   window.addEventListener('blur', () => down.clear());
 
   /** 이 행동의 키가 지금 눌려 있나 (Shift처럼 왼쪽·오른쪽이 있는 키는 양쪽 다) */
-  const held = (id) => {
+  const kbHeld = (id) => {
     for (const code of down) if (actionsFor(code).includes(id)) return true;
     return false;
   };
+  const held = (id) => kbHeld(id) || pad.held(id);
   const hit = (id) => pressedActs.has(id);
+  // 패드 버튼 → 이번 프레임에 눌린 행동
+  pad.onAction((id) => pressedActs.add(id));
+
+  // 키보드 조향 (서서히 꺾기)
+  let kSteer = 0, lastT = 0;
+  function keyboardSteer(target) {
+    const now = performance.now();
+    const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0;
+    lastT = now;
+    const sens = settings.values.steerSens ?? 1;
+    const rate = (RAMP[settings.values.steerRamp] || 0) * Math.max(0.6, sens);
+    if (!rate) return (kSteer = target * Math.min(1, sens));
+    const back = target === 0 || Math.sign(target) !== Math.sign(kSteer);
+    const r = rate * (back ? 2.5 : 1);
+    const goal = target * Math.min(1, sens);
+    kSteer += Math.max(-r * dt, Math.min(r * dt, goal - kSteer));
+    return kSteer;
+  }
+
+  // 패드 진동: 연석·잔디 떨림 + 부딪힘(속도가 갑자기 줄면)
+  let rumbleT = 0, lastSpeed = 0;
+  function rumble() {
+    if (!pad.connected() || !(settings.values.padVibe ?? true)) return;
+    const g = window.game, car = g && g.car;
+    if (!car || g.paused) return;
+    const now = performance.now();
+    const sp = Math.abs(car.speed || 0);
+    const bump = lastSpeed - sp;
+    lastSpeed = sp;
+    if (bump > 4) {
+      pad.rumble(Math.min(1, bump / 14), 0.5, 220);
+      rumbleT = now + 220;
+      return;
+    }
+    if (now < rumbleT) return;
+    const k = Math.min(1, sp / 30);
+    const weak = ((car.kerbK || 0) * 0.45 + (car.offK || 0) * 0.25) * k + (car.wheelspin || 0) * 0.2;
+    if (weak > 0.04) {
+      pad.rumble(weak * 0.4, weak, 110);
+      rumbleT = now + 100;
+    }
+  }
 
   return {
     /** @returns {ControlState} */
     read() {
+      pollPad();
       const left = held('left') ? 1 : 0;
       const right = held('right') ? 1 : 0;
-      return {
-        throttle: held('throttle') ? 1 : 0,
-        brake: held('brake') ? 1 : 0,
-        steer: right - left, // +1 = 오른쪽
+      const pa = pad.analog();
+      const kb = keyboardSteer(right - left);
+      const c = {
+        throttle: Math.max(kbHeld('throttle') ? 1 : 0, pa.throttle),
+        brake: Math.max(kbHeld('brake') ? 1 : 0, pa.brake),
+        steer: Math.max(-1, Math.min(1, kb + pa.steer)), // +1 = 오른쪽
         drift: held('drift'),
         // 비행 모드: 상승(이륙) / 하강 (기본 Space / Shift)
         climb: held('climb'),
@@ -81,6 +148,11 @@ export function createKeyboardInput() {
         shiftUp: hit('shiftUp'),
         shiftDown: hit('shiftDown'),
       };
+      const v = settings.values;
+      if ((v.brakeAssist || 'off') !== 'off' || (v.steerAssist || 'off') !== 'off' || v.tcs)
+        applyAssists(c, { brakeAssist: v.brakeAssist || 'off', steerAssist: v.steerAssist || 'off', tcs: !!v.tcs });
+      rumble();
+      return c;
     },
     /** 화면 버튼을 눌렀을 때: 그 키(기본 키 이름)를 한 번 누른 것처럼 */
     press(code) {
@@ -106,8 +178,10 @@ export function createKeyboardInput() {
     },
     /** 행동의 키 이름 (안내 글자용, 예: keyName('respawn') → 'R') */
     keyName(id) {
-      return keybinds.main(id);
+      return keyName(id);
     },
+    /** 패드를 쓰는 중인가 (안내 글자를 패드 버튼으로 보여 줄 때) */
+    usingPad: () => pad.usingPad(),
     endFrame() {
       pressed.clear();
       pressedActs.clear();
@@ -119,4 +193,54 @@ export function createKeyboardInput() {
       if (!keepHeld) down.clear();
     },
   };
+}
+
+/** 행동의 키 이름: 패드를 쓰는 중이면 패드 버튼 (예: 'RT', 'A'), 아니면 키보드 키 (예: 'W') */
+export function keyName(id) {
+  if (pad.usingPad()) {
+    const l = pad.label(id);
+    if (l) return l;
+  }
+  return keybinds.main(id);
+}
+
+// ------------------------------------------------------------------ 불러오는 화면: 지금 정한 키 보여 주기
+// (main.js의 팁 글자에 박힌 기본 키(W·L·R…)를 바뀐 키로 고치고, 아래에 주요 키 줄을 붙임)
+function decorateLoading() {
+  const ld = document.getElementById('loading');
+  const box = ld && ld.querySelector('.ld');
+  if (!box || box.querySelector('.ld-keys')) return;
+  const K = (id) => `<kbd>${codeLabel(keybinds.keys(id)[0]) || '?'}</kbd>`;
+  const LR = () => [keybinds.keys('left')[0], keybinds.keys('right')[0]].filter(Boolean).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('');
+  const el = document.createElement('div');
+  el.className = 'ld-keys';
+  const draw = () =>
+    (el.innerHTML =
+      [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], actionVisible('booster') && [K('booster'), '부스터'], [K('respawn'), '복귀'], ['<kbd>Esc</kbd>', '메뉴']]
+        .filter(Boolean)
+        .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
+        .join('') + (pad.connected() ? '<span class="pad">🎮 패드 OK</span>' : ''));
+  draw();
+  keybinds.onChange(() => el.isConnected && draw());
+  box.appendChild(el);
+  const tip = document.getElementById('ldTip');
+  if (!tip) return;
+  const LETTER = Object.fromEntries(Object.entries(LEGACY).filter(([c]) => /^Key[A-Z]$/.test(c)).map(([c, a]) => [c.slice(3), a]));
+  let mine = '';
+  const fix = () => {
+    const t = tip.textContent;
+    if (!t || t === mine) return;
+    let out = t.replace(/\b([A-Z]) 키/g, (m, L) => (LETTER[L] ? `${keybinds.main(LETTER[L])} 키` : m));
+    out = out.replace(/순간 W!/, `순간 ${keybinds.main('throttle')}!`);
+    mine = out;
+    if (out !== t) tip.textContent = out;
+  };
+  fix();
+  try {
+    new MutationObserver(fix).observe(tip, { childList: true, characterData: true, subtree: true });
+  } catch {}
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', decorateLoading, { once: true });
+  else decorateLoading();
 }

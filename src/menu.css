@@ -585,3 +585,126 @@ kbd.none { opacity: 0.5; font-weight: 600; }
   .tut-panel { top: 110px; }
   .tut-svg { max-height: 150px; }
 }
+
+/* ================================================================== 2라운드 (ui): 게임패드 · 조향 도움 · 챔피언십 · 환영 창 */
+/* 패드 버튼 글자: A 초록 · B 빨강 · X 파랑 · Y 노랑 (PlayStation 배치도 같은 자리 색) */
+kbd.pad { background: #222b44; border-color: #3a4566; color: #e8eeff; border-radius: 8px; font-weight: 900; }
+kbd.pad.pf { min-width: 24px; height: 24px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; }
+kbd.pad.pf0 { background: #1d7a3a; border-color: #34c25f; }
+kbd.pad.pf1 { background: #8a2027; border-color: #ff4b5c; }
+kbd.pad.pf2 { background: #1d4f9a; border-color: #4c8dff; }
+kbd.pad.pf3 { background: #8a6a12; border-color: #ffcf3f; color: #fff6d6; }
+.gm-set-tabs .gm-tab .dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: #3ddc6a; box-shadow: 0 0 8px #3ddc6a; vertical-align: middle; }
+.gm-set-tabs .gm-tab .dot[hidden] { display: none; }
+
+/* 게임패드 탭 */
+.gm-pad-panel .pad-status { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px dashed var(--gm-line2); }
+.gm-pad-panel.on .pad-status { border-style: solid; border-color: rgba(61, 220, 106, 0.5); background: linear-gradient(120deg, rgba(61, 220, 106, 0.1), transparent 60%); }
+.gm-pad-panel .pad-pic { display: grid; grid-template-columns: 52px 1fr; grid-template-rows: auto auto auto; gap: 6px 12px; align-items: center; min-width: 230px; opacity: 0.45; }
+.gm-pad-panel.on .pad-pic { opacity: 1; }
+.gm-pad-panel .stick { grid-row: 1 / 3; width: 46px; height: 46px; border-radius: 50%; background: #0b1020; border: 2px solid #34405f; display: grid; place-items: center; }
+.gm-pad-panel .stick i { width: 16px; height: 16px; border-radius: 50%; background: var(--gm-accent); box-shadow: 0 0 10px var(--gm-accent); transition: transform 0.04s linear; }
+.gm-pad-panel .trig { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 900; color: var(--gm-dim); }
+.gm-pad-panel .trig b { flex: 1; height: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.gm-pad-panel .trig b i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gm-accent2), var(--gm-accent)); }
+.gm-pad-panel .btnrow { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+.gm-pad-panel .btnrow span { min-width: 26px; padding: 2px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); font-size: 11px; font-weight: 900; text-align: center; color: var(--gm-dim); transition: background 0.06s; }
+.gm-pad-panel .btnrow span.on { background: var(--gm-accent); color: #1b1300; }
+.gm-pad-panel .pad-txt { display: flex; flex-direction: column; gap: 4px; }
+.gm-pad-panel .pad-txt b { font-size: 16px; }
+.gm-pad-panel .pad-txt small { color: var(--gm-dim); font-size: 12px; font-weight: 700; }
+.gm-pad-panel .pad-settings { grid-column: 1 / -1; }
+.gm-pad-panel .pad-settings:empty { display: none; }
+.kb-slot.pad-slot { min-width: 110px; }
+
+/* 패드 연결 알림 띠 */
+#padToast { position: fixed; left: 50%; bottom: 26px; z-index: 120; transform: translate(-50%, 16px); padding: 10px 18px; border-radius: 14px; background: rgba(14, 20, 38, 0.95); border: 1px solid rgba(61, 220, 106, 0.5); color: #eef3ff; font: 800 13px/1.4 system-ui, sans-serif; box-shadow: 0 12px 34px #000a; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#padToast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* 불러오는 화면: 주요 키 */
+#loading .ld .ld-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px; margin-top: 16px; max-width: 560px; animation: gmFade 0.4s ease-out; }
+#loading .ld .ld-keys span { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+#loading .ld .ld-keys small { color: var(--gm-dim); font-weight: 700; margin-left: 2px; }
+#loading .ld .ld-keys kbd { min-width: 22px; }
+#loading .ld .ld-keys .pad { color: #3ddc6a; font-weight: 800; }
+
+/* 조작법 화면: 게임패드 묶음 */
+.gm-controls .gm-padctl h3 small { font-size: 12px; color: var(--gm-dim); font-weight: 700; text-transform: none; letter-spacing: 0; }
+.gm-controls .gm-padctl h3 .ok { font-size: 12px; color: #3ddc6a; margin-left: 6px; letter-spacing: 0; }
+.gm-controls .gm-padctl:not(.on) { opacity: 0.75; }
+
+/* 홈: 이름 칩 · 패드 안내 */
+#home .h-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#home .h-name.empty { border-color: var(--gm-accent); color: var(--gm-accent); }
+#home .h-foot .padhint[hidden] { display: none; }
+
+/* 레이스 방식: 5칸 (챔피언십 추가) */
+.h-modegrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.h-mode[data-mode="champ"] .h-modecard { background: linear-gradient(160deg, rgba(255, 207, 63, 0.2), transparent 62%); }
+.h-mode.soon .h-modecard { filter: grayscale(0.8); opacity: 0.6; }
+.h-champ:empty { display: none; }
+.h-champ { padding: 10px 14px 12px; border-top: 1px solid var(--gm-line); display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.h-champ .prog { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.h-champ .prog b { color: var(--gm-accent); }
+.h-champ .dots { display: inline-flex; gap: 3px; margin-right: 4px; }
+.h-champ .dots i { width: 10px; height: 10px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); }
+.h-champ .dots i.done { background: var(--gm-accent); }
+.h-champ .dots i.now { background: transparent; box-shadow: inset 0 0 0 2px var(--gm-accent); animation: tutPulse 1.2s ease-in-out infinite; }
+.h-champ .nx { color: var(--gm-dim); }
+.h-champ .b { display: flex; gap: 6px; }
+.h-champ .b .gm-btn { flex: 1; justify-content: center; }
+.h-champ .last { color: var(--gm-dim); }
+.h-champ .last b { color: var(--gm-accent); }
+.h-champ .soonchip { color: var(--gm-dim); font-weight: 800; }
+.h-modegrid { gap: 12px; }
+.h-modegrid .h-modecard { padding: 20px 16px 14px; min-height: 150px; }
+.h-modegrid .h-modecard .ic { font-size: 38px; }
+.h-modegrid .h-modecard b { font-size: 23px; }
+.h-modegrid .h-mopt { font-size: 12px; }
+@media (max-width: 1180px) {
+  .h-modegrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .h-modegrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .h-modegrid { grid-template-columns: 1fr; }
+}
+
+/* 환영 창 · 이름 바꾸기 */
+.gm-welcome .box { width: min(480px, calc(100vw - 32px)); text-align: left; }
+.gm-welcome .wl-flag { font-size: 44px; line-height: 1; margin-bottom: 6px; animation: gmPop 0.4s ease-out; }
+.gm-welcome h3 { font-size: 22px; }
+.gm-welcome p b { color: var(--gm-accent); }
+.gm-welcome .wl-name { display: flex; gap: 8px; margin-top: 14px; }
+.gm-welcome .wl-name input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--gm-line2); background: #0b1020; color: #fff; font: 800 18px/1.2 system-ui, sans-serif; outline: none; }
+.gm-welcome .wl-name input:focus { border-color: var(--gm-accent); box-shadow: 0 0 0 3px rgba(255, 207, 63, 0.18); }
+.gm-welcome .wl-hint { display: block; margin-top: 6px; color: var(--gm-dim); font-size: 12px; font-weight: 700; }
+.gm-welcome .wl-tut { display: flex; gap: 12px; align-items: center; margin-top: 16px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(120deg, rgba(255, 207, 63, 0.14), rgba(255, 75, 58, 0.06)); border: 1px solid rgba(255, 207, 63, 0.35); }
+.gm-welcome .wl-tut .ic { font-size: 30px; }
+.gm-welcome .wl-tut b { display: block; font-size: 14px; }
+.gm-welcome .wl-tut small { color: var(--gm-dim); font-size: 12px; font-weight: 700; line-height: 1.45; }
+.gm-welcome .btns { margin-top: 18px; }
+/* 꺼진 기능(부스터 등)의 조작키 줄 숨김 */
+.gm-keys-panel .kb-row[hidden], .gm-keys-panel .kb-group[hidden] { display: none; }
+/* 운전 도움을 켜고 낸 기록 */
+.h-assist { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(80, 160, 255, 0.16); border: 1px solid rgba(80, 160, 255, 0.45); color: #9cc8ff; font-size: 10px; font-weight: 800; font-style: normal; letter-spacing: 0; vertical-align: middle; white-space: nowrap; }
+/* 튜토리얼: 드리프트 각도 막대 */
+.tut-gauge { margin-top: 8px; padding: 8px 10px 9px; border-radius: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--gm-line); display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; font-size: 12px; font-weight: 800; transition: border-color 0.1s; }
+.tut-gauge.good { border-color: #3ddc6a; }
+.tut-gauge.bad { border-color: #ff4b5c; animation: tutPulse 0.4s ease-in-out infinite; }
+.tut-gauge .gt { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--gm-dim); }
+.tut-gauge .gt b { color: #fff; font-size: 15px; font-variant-numeric: tabular-nums; }
+.tut-gauge.good .gt b { color: #3ddc6a; }
+.tut-gauge.bad .gt b { color: #ff4b5c; }
+.tut-gauge .gb { grid-column: 1 / -1; position: relative; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); }
+.tut-gauge .gb i { position: absolute; top: 0; bottom: 0; }
+.tut-gauge .gb .win { background: rgba(61, 220, 106, 0.75); border-radius: 3px; }
+.tut-gauge .gb .spin { right: 0; background: rgba(255, 75, 92, 0.8); border-radius: 0 6px 6px 0; }
+.tut-gauge .gb .exit { width: 2px; top: -3px; bottom: -3px; background: var(--gm-accent); }
+.tut-gauge .gb .needle { width: 4px; top: -4px; bottom: -4px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 8px #fff; transition: left 0.06s linear; }
+.tut-gauge:not(.on) .gb .needle { opacity: 0.35; }
+.tut-gauge .gs { color: #eef3ff; }
+.tut-gauge .gh { color: var(--gm-dim); font-variant-numeric: tabular-nums; }
+.tut-tip.tut-pad { font-size: 12.5px; }
+.h-mode.running .opts { display: none; }

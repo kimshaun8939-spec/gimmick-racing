@@ -29,6 +29,13 @@
     #speedUnit { font-size: 14px; opacity: 0.8; }
     #driftBar { margin-top: 8px; width: 180px; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.2); overflow: hidden; margin-left: auto; }
     #driftFill { height: 100%; width: 0%; background: #fff; transition: background 0.1s; }
+    /* 드리프트 각도 막대 (드리프트 중에만): 초록 칸 안에 바늘을 두면 드리프트가 쌓임 */
+    #driftAng { position: relative; margin: 5px 0 0 auto; width: 180px; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.14); opacity: 0; transition: opacity 0.2s; }
+    #driftAng.on { opacity: 1; }
+    #driftWin { position: absolute; top: 0; bottom: 0; background: rgba(92,255,138,0.45); border-radius: 3px; }
+    #driftNeedle { position: absolute; top: -3px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6); }
+    #driftNeedle.in { background: #5cff8a; }
+    #driftNeedle.over { background: #ff5a4a; }
     /* 회전수계 + 기어 */
     #tachRow { display: flex; align-items: center; gap: 10px; margin-top: 8px; justify-content: flex-end; }
     #gear { font-size: 34px; font-weight: 900; min-width: 30px; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -98,6 +105,77 @@
     #results table.stand .proj { opacity: 0.6; }
     #results table.secs { font-size: 13px; margin-top: 4px; }
     #results table.secs tr.theo td { font-size: 12px; opacity: 0.8; padding-top: 6px; }
+    /* 2라운드 (race): 배너·순위 변화·슬립스트림·출발 그리드 소개·시상대·챔피언십 */
+    #racePosRow { display: flex; align-items: baseline; gap: 8px; }
+    #posFlash { font-size: 18px; font-weight: 900; opacity: 0; }
+    #posFlash.up { color: #7dff6a; }
+    #posFlash.down { color: #ff6b5e; }
+    #posFlash.go { animation: posFlash 1.6s ease-out; }
+    @keyframes posFlash { 0% { opacity: 0; transform: translateY(6px) scale(0.8); } 12% { opacity: 1; transform: translateY(0) scale(1.25); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+    #banner { left: 50%; top: 96px; transform: translateX(-50%) translateY(-14px); opacity: 0; transition: opacity 0.3s, transform 0.3s; display: flex; flex-direction: column; align-items: center; padding: 8px 34px 9px; border-radius: 10px;
+      background: linear-gradient(90deg, transparent, rgba(10, 14, 26, 0.88) 18%, rgba(10, 14, 26, 0.88) 82%, transparent); border-top: 2px solid var(--bc, #fff); border-bottom: 2px solid var(--bc, #fff); }
+    #banner.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #banner b { font-size: 26px; font-weight: 900; letter-spacing: 0.04em; color: var(--bc, #fff); font-style: italic; }
+    #banner span { font-size: 14px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
+    #banner.final { --bc: #ffffff; } #banner.final b { font-size: 34px; }
+    #banner.laps { --bc: #ffd23a; }
+    #banner.fastest { --bc: #c98bff; top: 150px; }
+    #banner.champ { --bc: #ffb020; }
+    #draftBox { right: 16px; bottom: 214px; opacity: 0; padding: 5px 12px; border-radius: 10px; background: rgba(20, 60, 90, 0.7); border: 1px solid #8fe3ff88; color: #bff0ff; font-size: 14px; font-weight: 900; letter-spacing: 0.05em; transition: opacity 0.2s; }
+    #draftBox.on { animation: draftPulse 1.1s ease-in-out infinite alternate; }
+    @keyframes draftPulse { from { box-shadow: 0 0 0 #8fe3ff00; } to { box-shadow: 0 0 14px #8fe3ff99; } }
+    #draftLines { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.25s; z-index: 1;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 46px, rgba(190, 240, 255, 0.10) 46px 48px, transparent 48px 110px),
+        radial-gradient(ellipse at 50% 55%, transparent 42%, rgba(160, 230, 255, 0.10) 75%, rgba(160, 230, 255, 0.18) 100%);
+      -webkit-mask-image: linear-gradient(90deg, #000 0 14%, transparent 30% 70%, #000 86%); mask-image: linear-gradient(90deg, #000 0 14%, transparent 30% 70%, #000 86%);
+      animation: draftFlow 0.35s linear infinite; }
+    @keyframes draftFlow { from { background-position: 0 0, 0 0; } to { background-position: 0 48px, 0 0; } }
+    #introBox { left: 0; right: 0; bottom: 0; top: 0; display: none; pointer-events: none; }
+    #introBox.on { display: block; }
+    #introBox .it { position: absolute; left: 50%; top: 90px; transform: translateX(-50%); text-align: center; text-shadow: 0 3px 14px #000c; }
+    #introBox .it b { display: block; font-size: 40px; font-weight: 900; font-style: italic; letter-spacing: 0.03em; }
+    #introBox .it span { font-size: 16px; font-weight: 800; color: #ffd23a; }
+    #introBox .ic { position: absolute; left: 7%; bottom: 120px; display: flex; align-items: center; gap: 14px; padding: 10px 22px 10px 12px; border-radius: 12px; background: rgba(8, 12, 22, 0.86); border-left: 8px solid var(--c); animation: introCard 0.35s ease-out; }
+    #introBox .ic.me { box-shadow: 0 0 0 2px #ffd23a; }
+    #introBox .ic em { font-style: normal; font-size: 38px; font-weight: 900; color: #fff; min-width: 54px; text-align: center; }
+    #introBox .ic b { display: block; font-size: 24px; font-weight: 900; }
+    #introBox .ic small { font-size: 13px; opacity: 0.75; }
+    @keyframes introCard { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+    #introBox .ih { position: absolute; right: 24px; bottom: 24px; font-size: 13px; opacity: 0.7; font-weight: 700; }
+    /* 결과: 시상대 */
+    #results .podium { display: flex; justify-content: center; align-items: flex-end; gap: 6px; margin: 14px auto 2px; max-width: 420px; }
+    #results .podium .pd { flex: 1; text-align: center; animation: podUp 0.6s ease-out both; }
+    #results .podium .pd .who { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gm-text, #fff); }
+    #results .podium .pd .who i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+    #results .podium .pd small { display: block; font-size: 11px; opacity: 0.6; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #results .podium .blk { border-radius: 8px 8px 0 0; font-size: 26px; font-weight: 900; display: grid; place-items: center; color: #1b1300; }
+    #results .podium .p1 .blk { height: 74px; background: linear-gradient(180deg, #ffe27a, #e0a422); }
+    #results .podium .p2 .blk { height: 54px; background: linear-gradient(180deg, #eef2f7, #a9b3c2); }
+    #results .podium .p3 .blk { height: 40px; background: linear-gradient(180deg, #f2b98a, #b8733e); }
+    #results .podium .p1 { animation-delay: 0.35s; } #results .podium .p2 { animation-delay: 0.15s; } #results .podium .p3 { animation-delay: 0s; }
+    #results .podium .pd.me .who { color: #ffd23a; }
+    #results .podium.season .blk { box-shadow: 0 0 22px #ffd23a55; }
+    @keyframes podUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+    /* 결과: 챔피언십 순위 */
+    #results .champ { margin-top: 12px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 176, 32, 0.08); border: 1px solid rgba(255, 176, 32, 0.35); }
+    #results .champ .ct { font-weight: 900; color: #ffb020; font-size: 15px; }
+    #results .champ .cmaps { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin: 6px 0 0; }
+    #results .champ .cmaps span { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.08); opacity: 0.6; }
+    #results .champ .cmaps span.done { opacity: 1; background: rgba(255, 176, 32, 0.25); }
+    #results .champ .cmaps span.now { box-shadow: 0 0 0 1px #ffb020; }
+    #results .champ table.cst { margin: 8px 0 4px; font-size: 14px; }
+    #results .champ table.cst tr.hd td { font-size: 11px; opacity: 0.6; font-weight: 800; }
+    #results .champ table.cst td.nm { text-align: left; white-space: nowrap; }
+    #results .champ table.cst td.nm i { display: inline-block; width: 6px; height: 14px; border-radius: 2px; margin-right: 7px; vertical-align: -2px; }
+    #results .champ table.cst td.nm small { opacity: 0.7; font-size: 11px; }
+    #results .champ table.cst td.gain { color: #7dff6a; font-weight: 800; }
+    #results .champ table.cst tr.me { background: rgba(255, 207, 63, 0.18); font-weight: 800; }
+    #results .res.final h2 { color: #ffd23a; }
+    #results .res { position: relative; }
+    #results .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; }
+    #results .confetti i { position: absolute; top: -12px; width: 8px; height: 13px; border-radius: 2px; opacity: 0; animation: confetti 3s ease-in forwards; }
+    @keyframes confetti { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0.9; transform: translate(var(--dx), 640px) rotate(var(--rot)); } }
     #minimap { right: 16px; top: 16px; }
     #center { inset: 0; display: grid; place-items: center; }
     #startLights { left: 50%; top: 18px; transform: translateX(-50%); display: none; gap: 12px; padding: 10px 16px; background: #111c; border-radius: 14px; box-shadow: 0 4px 16px #0006; }
@@ -166,7 +244,7 @@
     </div>
     <!-- 레이스(봇·온라인)일 때만 보임: 순위, 앞·뒤 간격, 순위표 -->
     <div id="raceBox" class="panel">
-      <div id="racePos">P-</div>
+      <div id="racePosRow"><div id="racePos">P-</div><div id="posFlash"></div></div>
       <div id="raceGaps"></div>
       <div id="tower"></div>
     </div>
@@ -178,6 +256,7 @@
     <div id="speed">0</div>
     <div id="speedUnit">km/h</div>
     <div id="driftBar"><div id="driftFill"></div></div>
+    <div id="driftAng" title="드리프트 각도: 초록 칸 안에서 버티면 드리프트가 쌓여요"><div id="driftWin"></div><div id="driftNeedle"></div></div>
     <div id="tachRow">
       <div id="tach"><div id="tachFill"></div><div id="tachGreen"></div><div id="tachRed"></div></div>
       <div id="gear">1</div>
@@ -205,6 +284,11 @@
   <div id="center" class="hud"><div id="bigText"></div></div>
   <div id="toast" class="hud"></div>
   <div id="lapSum" class="hud"></div>
+  <!-- 2라운드: 띠 알림, 슬립스트림, 출발 그리드 소개 -->
+  <div id="banner" class="hud"></div>
+  <div id="draftLines"></div>
+  <div id="draftBox" class="hud">💨 슬립스트림</div>
+  <div id="introBox" class="hud"></div>
 
   <!-- 완주 결과 (hud.js가 채움) -->
   <div id="results"></div>

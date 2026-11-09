@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { settings } from './settings.js';
 
-const DUST_N = 360;
+const DUST_N = 720;
 
 export function buildMoonProps(track, scene) {
   const group = new THREE.Group();
@@ -66,6 +66,33 @@ export function buildMoonProps(track, scene) {
     });
   }
 
+  // 로켓 발사 (moonScenery가 'moonlaunch' 이벤트를 보냄) → 화면 알림 + 낮은 우르릉 소리
+  function rumble() {
+    if (!actx || actx.state !== 'running' || settings.get('muted')) return;
+    const t0 = actx.currentTime, len = 3.2;
+    const buf = actx.createBuffer(1, Math.floor(actx.sampleRate * len), actx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < d.length; i++) {
+      last = last * 0.985 + (Math.random() * 2 - 1) * 0.015; // 낮은 소리만 남긴 잡음
+      d[i] = last * 6;
+    }
+    const src = actx.createBufferSource(), g = actx.createGain(), lp = actx.createBiquadFilter();
+    src.buffer = buf;
+    lp.type = 'lowpass';
+    lp.frequency.value = 160;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(0.5, t0 + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + len);
+    src.connect(lp).connect(g).connect(actx.destination);
+    src.start(t0);
+  }
+  const onLaunch = (e) => {
+    showToast('🚀 로켓 발사!', 'ARTEMIS HEAVY — 출발 직선 옆 발사대에서 하늘로', '#ff8a3c');
+    rumble();
+  };
+  window.addEventListener('moonlaunch', onLaunch);
+
   // ---------------------------------------------------------------- 달 먼지 (점 묶음 하나)
   const dPos = new Float32Array(DUST_N * 3), dVel = new Float32Array(DUST_N * 3), dLife = new Float32Array(DUST_N), dCol = new Float32Array(DUST_N * 3);
   const dGeo = new THREE.BufferGeometry();
@@ -85,7 +112,7 @@ export function buildMoonProps(track, scene) {
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
-  const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.75, map: dustTex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.42 }));
+  const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.6, map: dustTex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.3 }));
   dust.frustumCulled = false;
   group.add(dust);
   let dHead = 0, spawnAcc = 0;
@@ -101,8 +128,100 @@ export function buildMoonProps(track, scene) {
     return s.zone ? s.zone.kind : 'plain';
   };
 
+  // ---------------------------------------------------------------- 루프 자석 가이드 (2026-11-10 2차)
+  //   루프 안(세로로 도는 자석 도로)에서는 차 방향을 차선 방향 쪽으로 천천히 돌려 줌 + 가운데에서 벗어나면 가운데 쪽으로 살짝
+  //   → 봇(수평면에서 겨냥하는 운전)이나 핸들을 크게 꺾은 사람이 벽에 긁히지 않음. 플레이어·봇 모든 차에 똑같이
+  const GUIDE = { rate: 7, center: 0.09, maxBias: 0.35 };
+  const gD = new THREE.Vector3(), gC = new THREE.Vector3();
+  function loopGuide(c, dt) {
+    const ti = c.trackInfo;
+    if (!ti || !c.grounded || c.flying || c.speed < 2) return;
+    const s = ti.sample;
+    if (!s || !s.roll) return;
+    const bias = THREE.MathUtils.clamp(-ti.lateral * GUIDE.center, -GUIDE.maxBias, GUIDE.maxBias);
+    gD.copy(s.tan3).addScaledVector(s.right, bias);
+    gD.addScaledVector(c.up, -gD.dot(c.up));
+    if (gD.lengthSq() < 1e-6) return;
+    gD.normalize();
+    const a = Math.atan2(gC.crossVectors(c.fwd, gD).dot(c.up), c.fwd.dot(gD));
+    c.fwd.applyAxisAngle(c.up, a * (1 - Math.exp(-GUIDE.rate * dt))); // 미끄럼각(slip)은 그대로 → 진행 방향도 같이 돎
+  }
+  // 점프 공중 자세 잡기: 협곡 위를 나는 동안 차 머리를 날아가는 방향 쪽으로 천천히 돌림
+  //   (공중에서 핸들을 꺾으면 차 머리만 돌아 20° 넘게 비스듬히 착지 → 미끄러져 T12 바깥으로 나갔음. 봇도 사람도 똑같이)
+  const UPW = new THREE.Vector3(0, 1, 0);
+  const jumpNear = new Uint8Array(track.samples.length);
+  for (const j of track.jumps || []) {
+    const n = track.samples.length - 1, ds = track.length / n;
+    for (let i = j.lipI - Math.round(10 / ds); i <= j.landI + Math.round(70 / ds); i++) jumpNear[((i % n) + n) % n] = 1;
+  }
+  function airAlign(c, dt) {
+    const ti = c.trackInfo;
+    if (!ti || c.grounded || c.flying || !jumpNear[ti.index]) return;
+    const vx = c.vel.x, vz = c.vel.z, vl = Math.hypot(vx, vz), fl = Math.hypot(c.fwd.x, c.fwd.z);
+    if (vl < 3 || fl < 0.3) return;
+    const a = Math.atan2((c.fwd.z * vx - c.fwd.x * vz) / (vl * fl), (c.fwd.x * vx + c.fwd.z * vz) / (vl * fl));
+    c.fwd.applyAxisAngle(UPW, a * (1 - Math.exp(-5 * dt)));
+  }
+  function assist(c, dt) {
+    loopGuide(c, dt);
+    airAlign(c, dt);
+  }
+  function guideAll(dt, car) {
+    if (car) assist(car, dt);
+    const rs = window.game && window.game.raceSys;
+    if (rs && rs.bots) for (const b of rs.bots) if (b.car && b.car !== car) assist(b.car, dt);
+  }
+
+  // 먼지 뿌리기: 플레이어 차 + 가까운 봇 차 (뒤 바퀴에서 줄기, 착지할 때 둥글게 한 번)
+  //   저중력에서는 먼지가 높이 떠서 오래 머묾 (중력 배수만큼 천천히 떨어지고, 수명도 길어짐)
+  function emitDust(c, n, spread, upMul, g) {
+    const v = Math.abs(c.speed);
+    back.copy(c.fwd).multiplyScalar(-2.1).add(c.pos);
+    for (let k = 0; k < n; k++) {
+      const i = dHead;
+      dHead = (dHead + 1) % DUST_N;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const a = Math.random() * Math.PI * 2;
+      dPos[i * 3] = back.x + c.fwd.z * side * 0.9 + (spread ? Math.cos(a) * spread : (Math.random() - 0.5) * 0.4);
+      dPos[i * 3 + 1] = back.y + 0.15;
+      dPos[i * 3 + 2] = back.z - c.fwd.x * side * 0.9 + (spread ? Math.sin(a) * spread : (Math.random() - 0.5) * 0.4);
+      const up = (1.5 + Math.random() * 2.5) * Math.max(0.6, v / 40) * upMul;
+      // 차 속도를 조금 물려받아 뒤로 덜 날아옴 (카메라 바로 앞을 큰 점이 가리지 않게)
+      dVel[i * 3] = c.vel.x * 0.5 + (spread ? Math.cos(a) * 4 : (Math.random() - 0.5) * 2);
+      dVel[i * 3 + 1] = up * 0.75;
+      dVel[i * 3 + 2] = c.vel.z * 0.5 + (spread ? Math.sin(a) * 4 : (Math.random() - 0.5) * 2);
+      dLife[i] = 2.2 + 2.4 * Math.max(0, 1 - g); // 저중력: 오래 떠 있음
+      const col = 0.42 + Math.random() * 0.16;
+      dCol[i * 3] = col;
+      dCol[i * 3 + 1] = col * 0.98;
+      dCol[i * 3 + 2] = col * 0.94;
+    }
+  }
+  const dustState = new WeakMap();
+  function carDust(c, dt, near) {
+    let s = dustState.get(c);
+    if (!s) dustState.set(c, (s = { acc: 0, wasGround: true }));
+    const g = c.gravityScale ? c.gravityScale() : 1;
+    const v = Math.abs(c.speed);
+    if (c.grounded && !s.wasGround && near) emitDust(c, g < 0.8 ? 26 : 12, 1.6, g < 0.8 ? 1.4 : 0.8, g); // 착지 먼지
+    s.wasGround = c.grounded;
+    if (!c.grounded || v < 12 || c.surface === 'magnet') return;
+    s.acc += dt * Math.min(70, v * 1.4) * (near ? 1 : 0.35) * (g < 0.8 ? 1.4 : 1);
+    const n = Math.floor(s.acc);
+    if (n > 0) (s.acc -= n), emitDust(c, n, 0, g < 0.8 ? 1.5 : 1, g);
+  }
+
   function update(dt, car) {
     if (!car) return;
+    guideAll(dt, car);
+    carDust(car, dt, true);
+    const rs = window.game && window.game.raceSys;
+    if (rs && rs.bots)
+      for (const b of rs.bots) {
+        if (!b.car || b.car === car) continue;
+        const d2 = b.car.pos.distanceToSquared(car.pos);
+        if (d2 < 180 * 180) carDust(b.car, dt, d2 < 70 * 70);
+      }
     const g = car.gravityScale ? car.gravityScale() : 1;
     const key = zoneKey(car);
     // 구역 바뀜 → 알림
@@ -125,32 +244,8 @@ export function buildMoonProps(track, scene) {
       }
     } else stuckT = 0;
 
-    // 먼지: 땅 위에서 빠르면 뒤에 뿌림
-    const v = Math.abs(car.speed);
-    if (car.grounded && v > 12 && car.surface !== 'magnet') {
-      spawnAcc += dt * Math.min(70, v * 1.4);
-      back.copy(car.fwd).multiplyScalar(-2.1).add(car.pos);
-      while (spawnAcc >= 1) {
-        spawnAcc -= 1;
-        const i = dHead;
-        dHead = (dHead + 1) % DUST_N;
-        const side = Math.random() < 0.5 ? -1 : 1;
-        dPos[i * 3] = back.x + car.fwd.z * side * 0.9 + (Math.random() - 0.5) * 0.4;
-        dPos[i * 3 + 1] = back.y + 0.15;
-        dPos[i * 3 + 2] = back.z - car.fwd.x * side * 0.9 + (Math.random() - 0.5) * 0.4;
-        const up = (1.5 + Math.random() * 2.5) * (v / 40);
-        dVel[i * 3] = car.vel.x * 0.25 + (Math.random() - 0.5) * 2;
-        dVel[i * 3 + 1] = up;
-        dVel[i * 3 + 2] = car.vel.z * 0.25 + (Math.random() - 0.5) * 2;
-        dLife[i] = 2.6;
-        const c = 0.42 + Math.random() * 0.16;
-        dCol[i * 3] = c;
-        dCol[i * 3 + 1] = c * 0.98;
-        dCol[i * 3 + 2] = c * 0.94;
-      }
-    }
-    // 먼지 움직임: 달 중력(1.62 m/s²) × 구역 배수 → 저중력에서는 오래 떠 있음
-    const grav = 1.62 * g * 2.2;
+    // 먼지 움직임: 달 중력(1.62 m/s²) × 그 자리 구역 배수 (알갱이마다 다르면 비싸서, 플레이어 둘레 구역 값으로)
+    const grav = 1.62 * Math.max(0.3, g) * 2.2;
     for (let i = 0; i < DUST_N; i++) {
       if (dLife[i] <= 0) continue;
       dLife[i] -= dt;
@@ -201,5 +296,5 @@ export function buildMoonProps(track, scene) {
     toast.style.opacity = '0';
   }
 
-  return { group, update, reset, animate, props: [], cubes: [], barricade: null, barricades: [], hud };
+  return { group, update, reset, animate, loopGuide: assist, assist, props: [], cubes: [], barricade: null, barricades: [], hud };
 }
