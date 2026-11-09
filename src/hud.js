@@ -8,6 +8,21 @@ export function fmtTime(sec) {
   return `${m}:${s.toFixed(3).padStart(6, '0')}`;
 }
 
+/** 결과표 순위 줄들 (rows = raceSystem.results) */
+function standRows(rows) {
+  const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
+  const lead = rows[0].total;
+  return (
+    '<tr class="hd"><td>순위</td><td>이름</td><td>최고 랩</td><td>기록</td></tr>' +
+    rows
+      .map((r, i) => {
+        const time = i === 0 ? fmtTime(r.total) : `+${(r.total - lead).toFixed(3)}`;
+        return `<tr class="${r.isPlayer ? 'me' : ''}"><td>${r.pos}</td><td class="nm"><i style="background:${esc(r.color)}"></i>${esc(r.name)}<small>${esc(r.carName || '')}</small></td><td>${r.bestLap ? fmtTime(r.bestLap) : '-'}</td><td>${r.projected ? `<span class="proj" title="아직 달리는 중: 예상 기록">≈${time}</span>` : time}</td></tr>`;
+      })
+      .join('')
+  );
+}
+
 export function createHud(track) {
   const el = {
     lap: $('lap'), time: $('time'), best: $('best'), speed: $('speed'),
@@ -18,6 +33,17 @@ export function createHud(track) {
     modes: { normal: $('modeNormal'), accel: $('modeAccel'), boat: $('modeBoat'), fly: $('modeFly') }, sinkWarn: $('sinkWarn'),
   };
   let shiftPerfectTimer = 0;
+  // 구간·고스트·레이스 순위 (raceSystem·sectors·ghost)
+  el.sectorRow = $('sectorRow');
+  el.ghostDelta = $('ghostDelta');
+  el.raceBox = $('raceBox');
+  el.racePos = $('racePos');
+  el.raceGaps = $('raceGaps');
+  el.tower = $('tower');
+  el.lapSum = $('lapSum');
+  const secBoxes = [...el.sectorRow.children].map((div) => ({ div, span: div.querySelector('span') }));
+  let secOn = false, ghostOn = false, raceOn = false, lastPos = 0, lapSumTimer = 0;
+  const escH = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   // 속도 단위 (설정): km/h 또는 mph
   let unit = 'kmh';
   const KMH_TO_MPH = 0.621371;
@@ -38,7 +64,7 @@ export function createHud(track) {
   const toMap = (x, z) => [mm.width - pad - (x - minX) * scale - ((mm.width - pad * 2) - (maxX - minX) * scale) / 2,
     mm.height - pad - (z - minZ) * scale - ((mm.height - pad * 2) - (maxZ - minZ) * scale) / 2];
 
-  function drawMinimap(pos, yaw) {
+  function drawMinimap(pos, yaw, others) {
     g.clearRect(0, 0, mm.width, mm.height);
     g.lineJoin = 'round';
     g.beginPath();
@@ -59,6 +85,19 @@ export function createHud(track) {
     g.strokeStyle = 'rgba(255,255,255,0.85)';
     g.lineWidth = 3;
     g.stroke();
+    // 상대 차 (봇·온라인): 차 색 점
+    if (others)
+      for (const o of others) {
+        const [a, b] = toMap(o.x, o.z);
+        g.fillStyle = '#0009';
+        g.beginPath();
+        g.arc(a, b, 4.2, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = o.color || '#4fc3ff';
+        g.beginPath();
+        g.arc(a, b, 3.2, 0, Math.PI * 2);
+        g.fill();
+      }
     const [u, v] = toMap(pos.x, pos.z);
     g.save();
     g.translate(u, v);
@@ -119,6 +158,10 @@ export function createHud(track) {
         bigTimer -= 1 / 60;
         if (bigTimer <= 0) el.big.textContent = '';
       }
+      if (lapSumTimer > 0) {
+        lapSumTimer -= 1 / 60;
+        if (lapSumTimer <= 0) el.lapSum.style.opacity = 0;
+      }
       if (toastTimer > 0) {
         toastTimer -= 1 / 60;
         if (toastTimer <= 0) el.toast.style.opacity = 0;
@@ -132,7 +175,33 @@ export function createHud(track) {
           toastTimer = 0;
         } else if (toastTimer <= 0) el.toast.style.opacity = 0;
       }
-      drawMinimap(s.carPos, s.carYaw);
+      drawMinimap(s.carPos, s.carYaw, s.others);
+      // 구간 기록 칸 (S1 S2 S3)
+      if (s.sectors !== undefined) {
+        const on = !!s.sectors;
+        if (on !== secOn) el.sectorRow.classList.toggle('on', (secOn = on));
+        if (on)
+          s.sectors.forEach((c, i) => {
+            const box = secBoxes[i];
+            const txt = c.time == null ? '-' : c.color === 'live' ? c.time.toFixed(1) : c.time.toFixed(3);
+            if (box._t !== txt) box.span.textContent = box._t = txt;
+            if (box._c !== c.color) {
+              box.div.className = 'sec ' + c.color + (c.color !== 'live' && c.color !== 'none' ? ' flash' : '');
+              box._c = c.color;
+            }
+          });
+      }
+      // 고스트와 시간 차이
+      const gd = s.ghostDelta;
+      const gOn = gd != null && isFinite(gd);
+      if (gOn !== ghostOn) el.ghostDelta.classList.toggle('on', (ghostOn = gOn));
+      if (gOn) {
+        const txt = `<small>👻 ${s.ghostLabel || '고스트'}</small>${gd < 0 ? '−' : '+'}${Math.abs(gd).toFixed(2)}`;
+        if (txt !== el.ghostDelta._t) {
+          el.ghostDelta.innerHTML = el.ghostDelta._t = txt;
+          el.ghostDelta.style.color = gd < 0 ? '#7dff6a' : '#ff8a7e';
+        }
+      }
 
       // 부스터: 사용 중이면 남은 시간
       const on = s.form === 'spike';
@@ -145,6 +214,38 @@ export function createHud(track) {
           ? `✈️ 높이 ${Math.max(0, s.altitude).toFixed(0)}m${s.speed / 3.6 < s.cfg.modes.fly.minSpeed ? ' · ⚠️ 실속! Shift로 기수를 내려요' : ''}`
           : s.speed / 3.6 >= s.cfg.modes.fly.takeoffSpeed ? '🛫 Space를 누르면 이륙!' : `이륙 속도 ${spd(s.cfg.modes.fly.takeoffSpeed * 3.6).toFixed(0)} ${unitName()}까지 가속`;
       } else el.flightInfo.style.display = 'none';
+    },
+    /**
+     * 레이스 순위 패널 (raceSystem.hudInfo). null이면 숨김
+     * info = { pos, total, ahead: { name, gap }, behind: { name, gap }, tower: [{ pos, name, color, gap, isPlayer, finished }] }
+     */
+    race(info) {
+      const on = !!info;
+      if (on !== raceOn) el.raceBox.classList.toggle('on', (raceOn = on));
+      if (!on) return;
+      el.racePos.innerHTML = `P${info.pos}<small>/${info.total}</small>`;
+      if (lastPos && info.pos !== lastPos) {
+        el.racePos.classList.remove('up', 'down');
+        void el.racePos.offsetWidth;
+        el.racePos.classList.add(info.pos < lastPos ? 'up' : 'down');
+      }
+      lastPos = info.pos;
+      const g = (x) => (!x ? '' : x.laps ? `${x.laps}랩` : `${x.sec.toFixed(1)}초`);
+      el.raceGaps.innerHTML =
+        (info.ahead ? `<div class="a">▲ ${escH(info.ahead.name)}${info.ahead.gap ? ` ${g(info.ahead.gap)} 앞` : ''}</div>` : '<div class="a">🏁 선두!</div>') +
+        (info.behind ? `<div class="b">▼ ${escH(info.behind.name)}${info.behind.gap ? ` ${g(info.behind.gap)} 뒤` : ''}</div>` : '');
+      el.tower.innerHTML = info.tower
+        .map((r) => `<div class="tw${r.isPlayer ? ' me' : ''}${r.finished ? ' done' : ''}"><b>${r.pos}</b><i style="background:${escH(r.color)}"></i><span>${escH(r.name)}${r.remote ? ' 🌐' : ''}</span><em>${escH(r.gap)}</em></div>`)
+        .join('');
+    },
+    /** 바퀴 끝 요약: LAP 2 1:05.123 + 구간 색 칸 */
+    lapSummary(lapNum, lapTime, splits) {
+      if (!splits) return;
+      el.lapSum.innerHTML =
+        `<span>LAP ${lapNum} ${fmtTime(lapTime)}</span>` +
+        splits.map((sp, i) => (sp ? `<span class="sx ${sp.color}">S${i + 1} ${sp.time.toFixed(2)}</span>` : `<span class="sx">S${i + 1} -</span>`)).join('');
+      el.lapSum.style.opacity = 1;
+      lapSumTimer = 3.2;
     },
     /** 모드가 바뀔 때 아래 모드 버튼이 살짝 커졌다 돌아옴 */
     modePulse(mode) {
@@ -211,12 +312,23 @@ export function createHud(track) {
       if (info.newRace) badges.push('<span class="badge">🏆 새 완주 기록!</span>');
       if (info.newLap) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
       if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">내 기록 ${fmtTime(info.prevRace)} (${total - info.prevRace >= 0 ? '+' : '−'}${Math.abs(total - info.prevRace).toFixed(3)}초)</span>`);
-      el.results.innerHTML = `<div class="res">
-        <div class="flag">🏁</div><h2>완주!</h2>
+      // 레이스(봇·온라인): 순위 결과표, 구간 기록표
+      const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
+      const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>` : '';
+      const secHtml = info.sectorLaps && info.sectorLaps.length
+        ? `<table class="secs"><tr class="hd"><td></td><td>S1</td><td>S2</td><td>S3</td></tr>${info.sectorLaps
+            .map((lap, i) => `<tr><td>LAP ${i + 1}</td>${[0, 1, 2].map((k) => (lap[k] ? `<td style="color:${SC[lap[k].color] || '#fff'}">${lap[k].time.toFixed(3)}</td>` : '<td>-</td>')).join('')}</tr>`)
+            .join('')}${info.theoretical ? `<tr class="theo"><td colspan="4">이론상 최고 랩 (구간 최고 합) ${fmtTime(info.theoretical)}</td></tr>` : ''}</table>`
+        : '';
+      const title = info.position ? (info.position === 1 ? '우승!' : `${info.position}위`) : '완주!';
+      el.results.innerHTML = `<div class="res${standHtml ? ' wide' : ''}">
+        <div class="flag">${info.position === 1 ? '🏆' : '🏁'}</div><h2>${title}</h2>
         <div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}</div>
         <div class="total">${fmtTime(total)}</div>
         <div>${badges.join('')}</div>
-        <table>${lapTimes.map((t, i) => `<tr class="${t === best ? 'best' : ''}"><td>LAP ${i + 1}${t === best ? ' ⭐' : ''}</td><td>${fmtTime(t)}</td></tr>`).join('')}</table>
+        ${standHtml}
+        <table class="laps">${lapTimes.map((t, i) => `<tr class="${t === best ? 'best' : ''}"><td>LAP ${i + 1}${t === best ? ' ⭐' : ''}</td><td>${fmtTime(t)}</td></tr>`).join('')}</table>
+        ${secHtml}
         <div class="btns">
           <button class="gm-btn primary" data-res="restart">다시 하기 <kbd>Enter</kbd></button>
           ${info.hasNext ? '<button class="gm-btn" data-res="next">다음 맵 ›</button>' : ''}
@@ -235,6 +347,11 @@ export function createHud(track) {
       el.toast.style.opacity = 0;
       toastTimer = 0;
       el.big.textContent = '';
+    },
+    /** 결과표의 순위 부분만 다시 (봇이 계속 들어오는 중) */
+    updateStandings(rows) {
+      const t = el.results.querySelector('table.stand');
+      if (t && rows) t.innerHTML = standRows(rows);
     },
     hideResults() {
       el.results.classList.remove('on');

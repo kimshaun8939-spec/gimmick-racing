@@ -3,6 +3,7 @@
 //   ESC를 다시 누르면 계속하기. 설정·조작법은 오른쪽 칸에 열림
 import { createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { fmtTime } from './records.js';
+import { actionsFor } from './keybinds.js';
 
 /**
  * @param {object} o
@@ -23,6 +24,7 @@ export function createPauseMenu(o) {
           <button class="gm-btn" data-act="restart" data-nav><span class="ic">↺</span>다시 시작</button>
           <div class="sep"></div>
           <button class="gm-btn" data-act="settings" data-nav><span class="ic">⚙️</span>설정</button>
+          <button class="gm-btn" data-act="keys" data-nav><span class="ic">⌨️</span>조작키 바꾸기</button>
           <button class="gm-btn" data-act="controls" data-nav><span class="ic">🎮</span>조작법</button>
           <div class="sep"></div>
           <button class="gm-btn" data-act="car" data-nav><span class="ic">🏎️</span>차 바꾸기</button>
@@ -42,7 +44,7 @@ export function createPauseMenu(o) {
   const pageBody = pageEl.querySelector('.scroll');
   const closePageBtn = pageEl.querySelector('[data-act="closePage"]');
   const setPanel = createSettingsPanel({ inGame: true });
-  const controls = createControlsPage();
+  const controls = createControlsPage({ onEditKeys: () => act('keys') });
   let open = false, page = null;
 
   function renderInfo() {
@@ -65,8 +67,9 @@ export function createPauseMenu(o) {
     pageBody.innerHTML = '';
     side.querySelectorAll('[data-act]').forEach((b) => b.classList.toggle('cur', b.dataset.act === name));
     closePageBtn.style.display = name ? '' : 'none';
-    if (name === 'settings') {
-      pageTitle.textContent = '설정';
+    if (name === 'settings' || name === 'keys') {
+      pageTitle.textContent = name === 'keys' ? '조작키' : '설정';
+      setPanel.showTab(name === 'keys' ? 'keys' : 'general');
       pageBody.appendChild(setPanel.el);
       setPanel.refresh();
     } else if (name === 'controls') {
@@ -113,7 +116,7 @@ export function createPauseMenu(o) {
     else if (name === 'restart') {
       doClose();
       o.onRestart();
-    } else if (name === 'settings' || name === 'controls') {
+    } else if (name === 'settings' || name === 'controls' || name === 'keys') {
       showPage(page === name ? null : name);
       uiSound('select');
       const first = pageBody.querySelector('[data-nav]');
@@ -146,7 +149,8 @@ export function createPauseMenu(o) {
       const k = e.code;
       const a = document.activeElement;
       const inPage = a && pageEl.contains(a);
-      if (k === 'Escape') {
+      // Esc, 또는 메뉴 보조 키(조작키에서 정한 키)
+      if (k === 'Escape' || (!inPage || !(a && a.closest('.gm-keys-panel'))) && actionsFor(k).includes('menu')) {
         e.preventDefault();
         if (page && inPage) act('closePage');
         else doClose();
@@ -166,6 +170,8 @@ export function createPauseMenu(o) {
           return;
         }
         if (inPage && dir === 'left' && !(a.dataset && a.dataset.adjust)) {
+          // 조작키 칸처럼 옆에 버튼이 더 있으면 그쪽으로, 없으면 왼쪽 메뉴로
+          if (spatialMove(pageEl, 'left')) return uiSound('move');
           const back = side.querySelector(`[data-act="${page}"]`);
           if (back) (back.focus({ preventScroll: true }), uiSound('move'));
           return;

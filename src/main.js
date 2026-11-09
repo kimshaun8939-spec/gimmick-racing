@@ -21,6 +21,11 @@ import { settings, dialogOpen } from './settings.js';
 import { createPauseMenu } from './pauseMenu.js';
 import { records, fmtTime } from './records.js';
 import { loadMaps, loadRoster, setLast, raceUrl, homeUrl } from './gameData.js';
+import { createOpponents, lookColor } from './opponents.js';
+import { createRaceSystem } from './raceSystem.js';
+import { createGhost } from './ghost.js';
+import { createSectors } from './sectors.js';
+import { fastTrack } from './fastTrack.js';
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -32,10 +37,15 @@ async function loadJSON(url) {
 
 // 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 M 키로 차례대로 바꿈
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
-const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json' };
+// 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
+const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
+// 레이스 방식: ?mode=race (AI 봇과 레이스) / ?mode=time (혼자 타임 어택 + 고스트) / 없음 = 예전처럼 혼자 달리기 (테스트가 그대로 돌게)
+const MODE = ['race', 'time'].includes(params.get('mode')) ? params.get('mode') : null;
+// 온라인 레이스 (?room=코드): 봇 수·실력은 주소(&bots=N&botLevel=..)로 → 모든 사람이 같은 봇 (방 코드로 같은 씨앗)
+const ONLINE = !!params.get('room');
 if (!mapParam) {
   // 홈 화면 (차·맵 고르기). 출발하면 ?map=..&car=.. 주소로 새로 불러와서 아래 게임이 시작됨
   const { runHome } = await import('./home.js');
@@ -63,8 +73,9 @@ ld('ldTip', '💡 ' + LOAD_TIPS[Math.floor(Math.random() * LOAD_TIPS.length)]);
 // 차: ?car=<id> (없으면 기본 차 = 테스트가 늘 같은 차로 돌게). 차 목록·성능은 carRoster.js
 const carParam = params.get('car');
 let carCfg;
+let rosterMod = null; // 봇 차 설정 불러오기용
 try {
-  const roster = await loadRoster();
+  const roster = (rosterMod = await loadRoster());
   carCfg = await roster.loadCarConfig(carParam || roster.DEFAULT_CAR_ID || 'f1');
 } catch (err) {
   console.warn('차 설정 불러오기 실패 → 기본 차', err);
@@ -127,10 +138,13 @@ addEventListener('resize', resize);
 resize();
 
 // --- 게임 오브젝트 ---
-const track = buildTrack(trackData, scene);
-const scenery = buildScenery(track, scene);
-const props = buildProps(track, scene);
-const car = new Car(carCfg, track);
+// 맵 전용 모듈: 맵 json에 "module": "neonMap" 처럼 적으면 src/neonMap.js의 buildTrack/buildScenery/buildProps를 씀 (없는 함수는 기본 것)
+const mapMod = trackData.module ? await import(`./${trackData.module}.js`) : null;
+const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : buildTrack(trackData, scene);
+const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : buildScenery(track, scene);
+const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : buildProps(track, scene);
+// 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
+const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
 scene.add(model.root);
 const offroadFx = createOffroadFx(scene);
@@ -151,6 +165,7 @@ const cornerBest = (() => {
     /** 이번 기록 → 내 최고 기록과 차이 (처음이면 null). 더 빠르면 새 기록으로 저장 */
     delta(num, time) {
       if (time == null) return null;
+      if (!canSaveRecords()) return null; // 테스트 자동 운전·튜토리얼 중에는 코너 기록을 비교·저장하지 않음
       const b = best[num];
       if (b == null || time < b) {
         best[num] = +time.toFixed(3);
@@ -165,7 +180,27 @@ const cornerBest = (() => {
 const transformSfx = createTransformSfx(); // 변신할 때 기계 소리
 const speedFx = createSpeedFx(scene, carCfg.speedFx); // 속도감: 바람 줄기, 화면 가장자리 속도선, 비네트, 바람 소리
 const input = createKeyboardInput();
+// 키 이름 (키 바꾸기 설정을 따름). input.keyName이 없으면 기본 글자
+const keyLabel = (id, def) => {
+  try {
+    return (input.keyName && input.keyName(id)) || def;
+  } catch {
+    return def;
+  }
+};
 const hud = createHud(track);
+// --- 상대 차·레이스 진행·고스트·구간 기록 ---
+const opponents = createOpponents(scene); // 봇 + 온라인 상대 (game.opponents)
+const raceSys = await createRaceSystem({
+  track, car, scenery, opponents, laps: trackData.laps, carId, carName, color: lookColor(carCfg.look),
+  botCount: FREE ? 0 : ONLINE ? parseInt(params.get('bots'), 10) || 0 : MODE === 'race' ? settings.values.bots ?? 5 : 0,
+  botLevel: (ONLINE && params.get('botLevel')) || settings.values.botLevel || 'normal',
+  seed: ONLINE ? params.get('room') : null,
+  loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
+});
+const sectors = createSectors({ mapName, carId });
+const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992 });
+const finishCbs = []; // raceCtl.onFinish
 // 화면 아래 모드/부스터 버튼: 누르면 그 키를 누른 것과 같음
 for (const b of document.querySelectorAll('[data-key]')) {
   b.addEventListener('pointerdown', (ev) => {
@@ -191,14 +226,18 @@ const race = {
 };
 
 function resetRace() {
+  let startT = 0.992;
   if (FREE) car.placeAtPos(track.spawn.x, track.spawn.z, track.spawn.yaw);
+  else if (raceSys.hasGrid()) startT = raceSys.placeGrid().t; // 봇 레이스·온라인: 2열 출발 그리드
   else car.placeAt(0.992, 0); // 출발선 바로 뒤
   props.reset();
   // F1식 출발 신호: 0.6초 뒤부터 빨간불이 0.7초마다 하나씩 → 5개 다 켜지면 0.7~2.3초(무작위) 기다렸다가 한꺼번에 꺼짐
   car.jumpStall = 0;
   car.needRelease = false;
   Object.assign(race, { lightsT: 0, lightsOutAt: 3.4 + 0.7 + Math.random() * 1.6, lights: 0, reaction: null, reactArmed: false });
-  Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: 0.992, newLapRecord: false });
+  Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false });
+  sectors.reset();
+  if (ghost) ghost.lapStart();
   hud.hideResults();
   snapCamera();
 }
@@ -222,6 +261,12 @@ function updateLaps() {
     race.nextCp = 0;
     const isBest = lapTime < race.best;
     if (isBest) race.best = lapTime;
+    // 구간 기록 (S3 닫기) · 고스트 (최고 랩이면 저장) · 레이스 순위표의 내 최고 랩
+    const splits = sectors.lapDone(lapTime, race.time, canSaveRecords());
+    if (ghost && ghost.lapDone(lapTime, canSaveRecords()) && settings.values.ghost === 'best' && MODE !== 'race') race.ghostSaved = true;
+    if (ghost) ghost.lapStart();
+    raceSys.playerLap(lapTime);
+    if (settings.values.sectors ?? true) hud.lapSummary(race.lapTimes.length, lapTime, splits);
     // 내 기록 (맵 + 차마다, 브라우저에 저장). 자동 운전 테스트(game.paused) 중에는 저장 안 함
     let lapRecord = false;
     if (canSaveRecords()) {
@@ -245,6 +290,21 @@ function updateLaps() {
   if (d < -0.5) d += 1;
   race.wrongWay = d < -0.0004 && car.forwardSpeed > 5 ? (race.wrongWay || 0) + 1 : 0;
   race.lastT = t;
+}
+
+/** 플레이어 레이스 진행 = 지난 바퀴 + 이번 바퀴 위치 (출발선 뒤 그리드는 음수) → 순위·구간·고스트 */
+function playerProgress() {
+  if (race.phase === 'finished') return trackData.laps + (race.lastT < 0.5 ? race.lastT : 0);
+  const t = race.lastT;
+  return race.lap - 1 + (race.nextCp === 0 && t > 0.5 ? t - 1 : t);
+}
+/** 매 물리 스텝 (주행 중): 구간 경계·고스트 기록 */
+function trackStep() {
+  if (FREE || race.phase !== 'racing') return;
+  const lapT = race.time - race.lapStart;
+  const frac = playerProgress() - (race.lap - 1);
+  sectors.step(frac, lapT, race.time);
+  if (ghost) ghost.record(lapT, car, frac);
 }
 
 // --- 카메라: 차의 위쪽 방향을 따라 함께 회전 (벽, 천장에서도 차 뒤에 붙어 있음) ---
@@ -372,7 +432,7 @@ function handleEvents() {
       hud.flash('#7dff6a', 0.35);
       hud.shake(0.12);
     }
-    if (e === 'takeoff') hud.toast('✈️ 이륙! Space 상승 · Shift 하강');
+    if (e === 'takeoff') hud.toast(`✈️ 이륙! ${keyLabel('climb', 'Space')} 상승 · ${keyLabel('dive', 'Shift')} 하강`);
     if (e === 'forceLand') hud.toast('🛬 비행 구역 끝! 땅으로 내려가요');
     if (e === 'smash') hud.shake(0.1);
     if (e === 'explode') {
@@ -395,14 +455,14 @@ function handleEvents() {
     if (e === 'jumpStart') {
       hud.big('부정 출발!', 1.4);
       hud.flash('#ff3b30', 0.6);
-      hud.toast('불이 꺼지기 전에 밟아서 시동이 꺼졌어요 · W를 뗐다가 다시 누르세요');
+      hud.toast(`불이 꺼지기 전에 밟아서 시동이 꺼졌어요 · ${keyLabel('throttle', 'W')}를 뗐다가 다시 누르세요`);
     }
     if (e === 'launchSpin') hud.toast('회전수가 너무 높아 바퀴가 헛돌아요!');
     // 모드가 바뀔 때: 큰 글자·화면 번쩍임 없이 차가 변신하는 모습(carModel) + 변신 소리 + 아래 버튼만 살짝 (아래 checkModeChange)
-    if (e === 'splash') hud.toast('🌊 물에 빠지는 중! 3번 = 배 모드');
+    if (e === 'splash') hud.toast('🌊 물에 빠지는 중! 곧 자동으로 배 모드');
     if (e === 'autoBoat') hud.toast('🚤 물에 닿아서 자동으로 배 모드!');
-    if (e === 'autoFly') hud.toast('🛫 활주로! 자동으로 비행 모드 · Space 이륙');
-    if (e === 'sink') hud.toast('가라앉았어요. 물에서는 배 모드(3)로!');
+    if (e === 'autoFly') hud.toast(`🛫 활주로! 자동으로 비행 모드 · ${keyLabel('climb', 'Space')} 이륙`);
+    if (e === 'sink') hud.toast(`가라앉았어요. ${keyLabel('respawn', 'R')} 키로 도로에 돌아와요`);
     if (e === 'apex' || e === 'apexPerfect') {
       lineFx.apex(car.lastApexInfo);
       if (corners) corners.apexHit(car.lastApexN);
@@ -430,6 +490,9 @@ function stepWorld(controls) {
   } else car.update(FIXED_DT, controls);
   scenery.collideCar(car);
   props.update(FIXED_DT, car);
+  // 봇 운전·차끼리 충돌·순위 기록 (봇·상대가 없으면 거의 아무것도 안 함)
+  if (race.phase !== 'countdown') race.clock += FIXED_DT; // 내가 완주한 뒤에도 흐르는 레이스 시계 (봇 완주 시간)
+  raceSys.step(FIXED_DT, race.phase, race.clock, playerProgress());
 }
 
 // --- 설정 적용 (settings.js: 홈·ESC 메뉴에서 바꾸면 바로 여기로) ---
@@ -483,6 +546,8 @@ function applySettings(key) {
   fpsEl.style.display = s.showFps ? 'block' : 'none';
   if (!key || key === 'gearbox') car.manual = s.gearbox === 'manual';
   if (!key || key === 'quality') applyQuality(s.quality);
+  // 고스트 (설정 ghost: off | best | bot). 봇 레이스에서는 끔
+  if (ghost && (!key || key === 'ghost')) ghost.setKind(MODE === 'race' ? 'off' : s.ghost ?? 'best');
   if (key && menuOpen()) renderer.render(scene, camera); // 메뉴 뒤 화면도 새 설정으로
 }
 settings.onChange((k) => applySettings(k));
@@ -530,6 +595,7 @@ const markUser = (e) => e.isTrusted && (userActive = true);
 window.addEventListener('keydown', markUser, true);
 window.addEventListener('pointerdown', markUser, true);
 function autoPause() {
+  if (ONLINE) return; // 온라인: 창을 벗어나도 멈추지 않음 (내 차만 멈추면 안 되니까)
   if (!userActive || !settings.get('autoPause') || menu.isOpen || race.phase === 'finished') return;
   if (window.game && window.game.paused) return;
   menu.open();
@@ -539,7 +605,8 @@ document.addEventListener('visibilitychange', () => document.hidden && autoPause
 
 // --- 완주 결과 ---
 function canSaveRecords() {
-  return !(window.game && (window.game.paused || window.game.controlsOverride));
+  // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
+  return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
 }
 function nextMapId() {
   const order = mapsMeta.map((m) => m.id).filter((id) => MAPS[id]);
@@ -550,11 +617,30 @@ function showFinish() {
   const prev = records.get(mapName, carId);
   const prevRace = prev && prev.race;
   const newRace = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length) : false;
+  // 레이스 순위 (봇·온라인 상대가 있을 때)
+  const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
+  const standings = raceSys.active() ? raceSys.results(race.clock) : null;
+  race.resultsT = 0;
+  const showSec = settings.values.sectors ?? true;
+  for (const cb of finishCbs) {
+    try {
+      cb({ time: total, lapTimes: race.lapTimes.slice(), best: race.best, position, standings });
+    } catch (err) {
+      console.warn(err);
+    }
+  }
   hud.showResults(race.lapTimes, race.best, {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, hasNext: true,
+    position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
     onAction(a) {
-      if (a === 'restart') resetRace();
-      else if (a === 'next') location.href = raceUrl(nextMapId(), carId);
+      if (a === 'restart') {
+        if (!ONLINE) resetRace(); // 온라인에서는 혼자 다시 출발하지 않음
+      }
+      else if (a === 'next') {
+        const u = new URL(raceUrl(nextMapId(), carId));
+        if (MODE) u.searchParams.set('mode', MODE);
+        location.href = u.toString();
+      }
       else if (a === 'car') goHome('map');
       else if (a === 'home') goHome();
     },
@@ -577,7 +663,7 @@ function frame(now, manual = false) {
   // 프레임 제한 (설정): 너무 이르면 이번 화면은 건너뜀
   const cap = settings.values.fpsCap;
   if (!manual && cap && now - last < 1000 / cap - 1.5) return requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); // 음수 방지 (game.tick 뒤 진짜 화면 프레임이 오면 시간이 거꾸로였음)
   last = now;
   if (window.game && window.game.paused) {
     engineAudio.update(car); // 일시정지 중엔 엔진 소리를 줄여 끔
@@ -585,7 +671,9 @@ function frame(now, manual = false) {
     return;
   }
   // ESC 메뉴가 열려 있으면 모두 멈춤 (물리·시간·출발 신호). 화면은 마지막 장면 그대로
-  if (menu.isOpen) {
+  //   온라인에서는 멈추지 않음 (다른 사람은 계속 달림): 내 차만 손을 뗀 채로 굴러감
+  const menuHold = menu.isOpen;
+  if (menuHold && !ONLINE) {
     if (!manual) requestAnimationFrame(frame);
     return;
   }
@@ -599,8 +687,8 @@ function frame(now, manual = false) {
     }
   }
 
-  if (input.wasPressed('Enter')) resetRace();
-  if (input.wasPressed('KeyM')) {
+  if (!ONLINE && !menuHold && input.wasPressed('Enter')) resetRace(); // 온라인에서는 Enter(다시 시작)·M(맵 바꾸기) 막음
+  if (!ONLINE && !menuHold && input.wasPressed('KeyM')) {
     // 맵 전환 (페이지를 새로 불러옴, 차는 그대로)
     const url = new URL(location.href);
     const next = MAP_ORDER[(MAP_ORDER.indexOf(mapName) + 1) % MAP_ORDER.length];
@@ -612,11 +700,11 @@ function frame(now, manual = false) {
   if (input.wasPressed('KeyT')) {
     car.manual = !car.manual;
     settings.set('gearbox', car.manual ? 'manual' : 'auto'); // 설정에도 기억
-    hud.toast(car.manual ? '수동 변속: X 올림 · Z 내림' : '자동 변속');
+    hud.toast(car.manual ? `수동 변속: ${keyLabel('shiftUp', 'X')} 올림 · ${keyLabel('shiftDown', 'Z')} 내림` : '자동 변속');
   }
   if (input.wasPressed('KeyN')) {
     settings.set('muted', !settings.get('muted')); // → applySettings가 모든 소리를 끄고 켬
-    hud.toast(settings.get('muted') ? '소리 끔 (N)' : '소리 켬 (N)');
+    hud.toast(`${settings.get('muted') ? '소리 끔' : '소리 켬'} (${keyLabel('sound', 'N')})`);
   }
   if (input.wasPressed('KeyL')) {
     hud.toast(lineFx.toggle() ? '레이싱 라인 켬 (초록 밟기 · 노랑 떼기 · 빨강 브레이크)' : '레이싱 라인 끔');
@@ -625,7 +713,7 @@ function frame(now, manual = false) {
 
   if (race.phase === 'countdown') {
     // 출발 전: 차는 움직이지 않음. 빨간불 5개가 꺼지는 순간 출발
-    race.lightsT += dt;
+    if (!race.hold) race.lightsT += dt; // 온라인: 모두 준비될 때까지 출발 신호를 멈춰 둠 (raceCtl.holdStart)
     race.countdown = race.lightsOutAt - race.lightsT;
     race.lights = Math.max(0, Math.min(5, Math.floor((race.lightsT - 0.6) / 0.7) + 1));
     const pre = input.read();
@@ -648,7 +736,7 @@ function frame(now, manual = false) {
   hud.startLights(race.phase === 'countdown' ? race.lights : -1);
 
   const ctlOverride = window.game && window.game.controlsOverride; // 테스트용: 자동 운전 함수
-  const controls = race.phase === 'racing' ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
+  const controls = race.phase === 'racing' && !menuHold ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
   acc += dt;
   while (acc >= FIXED_DT) {
     stepWorld(controls);
@@ -658,6 +746,7 @@ function frame(now, manual = false) {
     if (race.phase === 'racing') {
       race.time += FIXED_DT;
       updateLaps();
+      trackStep();
     }
     acc -= FIXED_DT;
   }
@@ -688,6 +777,23 @@ function frame(now, manual = false) {
   track.animate(elapsed);
   scenery.animate(elapsed, dt, car);
   props.animate(elapsed);
+  // 봇·온라인 상대 모델 + 이름표, 고스트
+  raceSys.update(dt, elapsed, camera);
+  if (ghost) ghost.update(dt, elapsed, race.time - race.lapStart, race.time, camera, race.phase === 'racing' && ghost.kind !== 'off');
+  // 순위 패널은 1초에 5번만 (글자 바꾸기가 무거움). 완주 뒤 결과표 순위도 봇이 들어오면 갱신
+  race.hudT = (race.hudT || 0) + dt;
+  if (race.hudT > 0.2) {
+    race.hudT = 0;
+    hud.race(raceSys.active() && !FREE ? raceSys.hudInfo(race.clock) : null);
+    if (race.phase === 'finished' && raceSys.active() && hud.resultsOpen) {
+      race.resultsT = (race.resultsT || 0) + 0.2;
+      if (race.resultsT > 0.6) {
+        race.resultsT = 0;
+        hud.updateStandings(raceSys.results(race.clock));
+      }
+    }
+  }
+  const showSectors = !FREE && (settings.values.sectors ?? true);
 
   hud.update({
     label: FREE ? '🧪 테스트 맵' : null,
@@ -719,6 +825,10 @@ function frame(now, manual = false) {
     understeer: car.understeer,
     sliding: car.sliding,
     brake: car.brk,
+    others: raceSys.active() ? raceSys.dots() : null,
+    sectors: showSectors ? sectors.hud(race.phase === 'countdown' ? 0 : race.time - race.lapStart) : null,
+    ghostDelta: ghost && ghost.kind !== 'off' && race.phase === 'racing' ? ghost.delta(playerProgress() - (race.lap - 1), race.time - race.lapStart, playerProgress(), race.time) : null,
+    ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : '내 최고',
   });
   engineAudio.update(car);
 
@@ -733,6 +843,38 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records,
   resetRace,
+  mode: MODE, opponents, raceSys, ghost, sectors,
+  /**
+   * 레이스 진행 조절 (온라인 레이스용, net 담당)
+   *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작
+   *   onFinish(cb) = 내가 완주하면 cb({ time, lapTimes, best, position, standings })
+   *   setGrid(index, total) = 내 그리드 칸 (0 = 맨 앞)
+   */
+  raceCtl: {
+    holdStart(on) {
+      race.hold = !!on;
+      if (on && race.phase === 'countdown') race.lightsT = 0;
+    },
+    startCountdown(opts = {}) {
+      resetRace();
+      race.hold = false;
+      if (opts.wait != null) race.lightsOutAt = 3.4 + 0.7 + opts.wait; // 모두 같은 때 불이 꺼지게 (0~1.6초)
+    },
+    onFinish(cb) {
+      finishCbs.push(cb);
+    },
+    setGrid(index, total, humans) {
+      raceSys.setGrid(index, total, humans);
+      if (race.phase === 'countdown') resetRace();
+    },
+    get phase() {
+      return race.phase;
+    },
+    get time() {
+      return race.time;
+    },
+    progress: () => playerProgress(),
+  },
   /** 테스트용: 지금 화면(게임 + 속도선 레이어)을 한 장의 캔버스로 */
   grab(w = 640, h = 400) {
     renderer.render(scene, camera);
@@ -751,6 +893,7 @@ window.game = {
       stepWorld(controlsFn());
       race.time += FIXED_DT;
       updateLaps();
+      trackStep();
     }
     return { phase: race.phase, lap: race.lap, lapTimes: race.lapTimes.map((t) => t.toFixed(2)) };
   },
@@ -814,3 +957,6 @@ window.game = {
     renderer.render(scene, camera);
   },
 };
+// 튜토리얼 (?tutorial=1, src/tutorial.js), 멀티플레이 (?room=코드, src/netRace.js): 주소에 있을 때만 불러옴
+if (params.get('tutorial')) import('./tutorial.js').then((m) => m.startTutorial(window.game)).catch((e) => console.warn('튜토리얼 불러오기 실패', e));
+if (params.get('room')) import('./netRace.js').then((m) => m.startNetRace(window.game, params)).catch((e) => console.warn('멀티플레이 불러오기 실패', e));

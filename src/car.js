@@ -117,6 +117,7 @@ export class Car {
     this.load = 0; // 무게 이동: + 뒤로 쏠림(가속), - 앞으로 쏠림(브레이크)
     this.yawRate = 0;
     this.wheelspin = 0; // 0~1 바퀴 헛돎
+    this.spool = 0; // 0~1 터보 압력 (engine.turbo가 있는 차만: 밟고 잠깐 뒤에 힘이 붙음)
     this.understeer = 0; // 0~1 앞이 밀림
     this.sliding = 0; // 0~1 뒤가 미끄러짐
     this.limiter = false; // 회전수 한계에 닿음
@@ -174,6 +175,7 @@ export class Car {
     this.thr = this.brk = this.steerIn = 0;
     this.load = this.yawRate = 0;
     this.wheelspin = this.understeer = this.sliding = 0;
+    this.spool = 0;
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
     this.jumpStall = 0; // 부정 출발로 시동 꺼진 남은 시간
@@ -216,8 +218,8 @@ export class Car {
         const v = 0.8 * this.lineSpeed(i);
         this.speed = v;
         this.vel.copy(this.fwd).multiplyScalar(v);
-        const G = this.gearSpeeds();
-        this.gear = Math.max(1, G.findIndex((g) => g >= v * 1.15) + 1 || G.length);
+        this.fitGear();
+        this.spool = 0.7;
       }
     }
     this.events.push('respawn');
@@ -284,6 +286,15 @@ export class Car {
   gearSpeeds() {
     if (this.mode !== 'accel') return this.cfg.gears;
     return (this._accelGears ||= this.cfg.gears.map((g) => g * this.cfg.modes.accel.gearFactor));
+  }
+
+  /** 지금 속도에 맞는 기어로 바로 바꿈 (착지·복귀 직후: 변속을 여러 번 하느라 힘이 끊기지 않게) */
+  fitGear() {
+    const v = Math.max(0, this.speed), G = this.gearSpeeds(), e = this.cfg.engine;
+    const i = G.findIndex((g) => g >= v * 1.15);
+    this.gear = i < 0 ? G.length : i + 1;
+    this.shiftTimer = 0;
+    this.rpm = Math.max(e.idleRpm, Math.min(e.redline, (e.redline * v) / G[this.gear - 1]));
   }
 
   /** 기어 변속 (자동: 회전수를 보고 알아서, 수동: X 올림 / Z 내림) */
@@ -530,7 +541,8 @@ export class Car {
     if (accel) maxSpeed *= M.accel.speedFactor;
     if (boatOnLand && !boosting) maxSpeed *= M.boat.landSpeedFactor; // 배 바닥이 땅에 끌림
     // 활주로(비행 모드로 땅을 달리는 중): 비행 최고 속도까지 빠르게 줄임 (가속 모드로 너무 빨리 들어오면 이륙 뒤 고리 쪽으로 못 돎)
-    const flyGround = this.mode === 'fly' && M.fly;
+    // (착륙한 뒤 활주로 밖에서는 안 줄임: 착륙장에서 비행 최고 속도로 확 깎이지 않게)
+    const flyGround = this.mode === 'fly' && M.fly && this.rwZoneLast > 0;
     if (flyGround) maxSpeed = Math.min(maxSpeed, M.fly.maxSpeed);
     const e = cfg.engine, G = this.gearSpeeds(), tire = cfg.tire;
     const v = Math.abs(f);
@@ -543,7 +555,16 @@ export class Car {
     if (accel) surfGrip *= M.accel.gripFactor; // 힘이 세진 만큼 타이어가 버거움
     if (boatOnLand) surfGrip *= M.boat.landGrip;
     const launchK = this.launchTime > 0 ? 1.5 : 1;
-    const tractionLimit = tire.traction * (1 + df) * (1 + tire.loadShift * this.load) * surfGrip * launchK;
+    // 구동 방식 (2026-11-10, 차마다 손맛): cfg.drivetrain
+    //   'rwd' 뒷바퀴 굴림(기본): 가속하면 무게가 뒤로 쏠려 출발 접지↑, 바퀴가 헛돌면 꼬리가 미끄러짐(파워 오버스티어)
+    //   'fwd' 앞바퀴 굴림: 가속하면 앞이 가벼워져 출발 접지↓, 헛돌면 앞이 밀림(언더스티어), 꼬리는 안정
+    //   'awd' 네 바퀴 굴림: 출발 접지 ×awdTraction, 헛돌아도 앞뒤가 반씩만 흔들림
+    const drv = cfg.drivetrain || 'rwd';
+    const loadT = drv === 'fwd' ? 1 - tire.loadShift * this.load : drv === 'awd' ? 1 + 0.4 * tire.loadShift * this.load : 1 + tire.loadShift * this.load;
+    const drvK = drv === 'awd' ? tire.awdTraction ?? 1.12 : 1;
+    const tractionLimit = tire.traction * (1 + df) * loadT * drvK * surfGrip * launchK;
+    const rearSpinK = drv === 'fwd' ? 0 : drv === 'awd' ? 0.5 : 1; // 헛돌 때 뒤가 약해지는 비율
+    const frontSpinK = drv === 'fwd' ? 0.8 : drv === 'awd' ? 0.3 : 0; // 헛돌 때 앞이 밀리는 비율
     const brakeLimit = tire.brakeGrip * (1 + df) * surfGrip;
 
     // --- 엔진 → 바퀴 (drive), 브레이크·저항 (dec) ---
@@ -566,9 +587,17 @@ export class Car {
       this.rpm = THREE.MathUtils.lerp(this.rpm, target, 1 - Math.exp(-18 * dt));
       this.limiter = wheelRpm >= e.limiter && !boosting;
       if (this.limiter) this.rpm = e.limiter - Math.random() * 500; // 회전수 한계: 힘이 끊기며 덜덜
+      // 터보 (engine.turbo = { share, lag }): 힘의 share 비율이 터보 몫. 밟으면 lag초쯤 걸려 차오르고(터보 랙), 떼면 빨리 빠짐
+      //   회전수가 낮으면 덜 참 → 코너에서 너무 떨어뜨리면 탈출이 굼뜸. 계속 밟고 있으면 100%라 속도 계획(lineCarModel)과 같음
+      const tb = e.turbo;
+      if (tb) {
+        const tgt = this.thr * THREE.MathUtils.clamp((this.rpm - e.idleRpm) / (e.redline * 0.72 - e.idleRpm), 0, 1);
+        this.spool += (tgt - this.spool) * (1 - Math.exp(-dt / (tgt > this.spool ? tb.lag : tb.lag * 0.35)));
+      }
+      const turboK = tb ? 1 - tb.share * (1 - this.spool) : 1;
       if (this.shiftTimer <= 0 && wheelRpm < e.limiter && this.thr > 0) {
         const modeK = accel ? M.accel.powerFactor : boatOnLand ? M.boat.landPowerFactor : 1;
-        const want = (this.thr * e.power * modeK * torqueAt(e.torque, this.rpm) * launchK) / G[g - 1];
+        const want = (this.thr * e.power * modeK * torqueAt(e.torque, this.rpm) * launchK * turboK) / G[g - 1];
         if (want > tractionLimit) {
           // 타이어가 버티지 못함 → 바퀴가 헛돌며 힘이 새어 나감
           this.wheelspin = Math.min(1, ((want - tractionLimit) / tractionLimit) * 2.5);
@@ -593,7 +622,7 @@ export class Car {
     if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : 2.5) * dt));
     if (offK > 0) f -= f * cfg.offroad.drag * offK * (this.runoff ? 0.3 : 1) * dt;
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
-    if (!this.magnet) f -= cfg.gravity * this.moveDir.y * 0.5 * dt;
+    if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDir.y * 0.5 * dt;
 
     // 드리프트 시작 / 종료
     if (!this.drifting && c.drift && this.mode !== 'fly' && Math.abs(c.steer) > 0.3 && f > cfg.drift.minSpeed && !(this.hitT > 0)) {
@@ -643,7 +672,8 @@ export class Car {
     } else {
       let want = this.steerIn * cfg.steerRate * speedK * highK * Math.sign(f || 1);
       // 앞바퀴 한계: 무게가 뒤로 쏠리면(가속 중) 앞이 가벼워져 덜 돎 → 언더스티어
-      const yawMax = vNow > 2 ? (lat * (1 - tire.loadShift * this.load)) / vNow : Infinity;
+      //   앞바퀴 굴림(fwd)은 헛돌면 앞이 더 밀림 (frontSpinK)
+      const yawMax = vNow > 2 ? (lat * (1 - tire.loadShift * this.load) * (1 - tire.wheelspinSlide * frontSpinK * this.wheelspin)) / vNow : Infinity;
       if (Math.abs(want) > yawMax) {
         this.understeer = Math.min(1, (1 - yawMax / Math.abs(want)) * 1.6);
         want = Math.sign(want) * yawMax;
@@ -673,7 +703,7 @@ export class Car {
       if (spike) grip *= cfg.booster.gripFactor;
       const natural = this.slip * (1 - Math.exp(-grip * dt));
       // 뒷바퀴 한계: 브레이크로 앞에 쏠리거나, 바퀴가 헛돌면 뒤가 약해짐
-      const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * this.wheelspin);
+      const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * rearSpinK * this.wheelspin);
       const capStep = vNow > 2 ? (rearCap / vNow) * dt : Infinity;
       if (Math.abs(natural) > capStep) {
         // 뒤가 버티지 못함 → 꼬리가 바깥으로 돌아 차가 더 돌아감 (오버스티어)
@@ -778,7 +808,7 @@ export class Car {
     if (this.mode !== 'boat') this.autoBoatFrom = null; // 직접 다른 모드를 고르면 자동 복귀 취소
     // 활주로(그랑프리 비행 루트)에 들어서면 자동으로 비행 모드, 내려앉아 활주로 밖이면 원래 모드로
     if (this.track.runway && cfg.modes.fly.autoSwitch) {
-      const zone = this.runwayZone();
+      const zone = (this.rwZoneLast = this.runwayZone());
       if (zone === 2 && this.mode !== 'fly' && this.mode !== 'boat') {
         this.autoFlyFrom = this.mode;
         this.setMode('fly');
@@ -1087,6 +1117,12 @@ export class Car {
     return false;
   }
 
+  /** 이 자리의 중력 배수 (1 = 보통, 0.3 = 달처럼 가벼움, 1.5 = 무거움). 맵의 track.gravityAt(pos)가 없으면 1 */
+  gravityScale() {
+    const g = this.track.gravityAt ? this.track.gravityAt(this.pos) : 1;
+    return Number.isFinite(g) ? g : 1;
+  }
+
   /** 땅에서 날아오름 */
   takeOff() {
     this.flying = true;
@@ -1126,7 +1162,7 @@ export class Car {
     if (forced && !this.forceLanding) this.events.push('forceLand');
     this.forceLanding = forced;
     this.forceSink = forced ? Math.min(F.forceSinkMax ?? 30, (this.forceSink || 0) + (F.forceSinkRate ?? 15) * dt) : 0;
-    if (forced && s > F.takeoffSpeed) s = Math.max(F.takeoffSpeed, s - F.brake * dt);
+    if (forced && s > F.takeoffSpeed) s = Math.max(F.takeoffSpeed, s - (F.forceBrake ?? F.brake) * dt); // 강제 착륙 감속 (forceBrake, 예전엔 brake 10으로 확 줄었음)
     // 기수: Space 위, Shift 아래, 둘 다 안 누르면 수평으로
     let pT = (c.climb && !forced ? F.pitchMax : 0) - (c.dive ? F.pitchMax : 0);
     if (forced) pT = Math.min(pT, -(F.forceDive ?? 0.5));
@@ -1191,13 +1227,15 @@ export class Car {
     this.load *= Math.exp(-4 * dt);
     this.sink = Math.max(0, this.sink - dt * 3);
 
-    // 중력
-    this.vel.y -= cfg.gravity * dt;
+    // 중력 (맵이 track.gravityAt(pos)를 주면 구역마다 배수: 달 기지 저중력 등)
+    this.vel.y -= cfg.gravity * this.gravityScale() * dt;
 
     // 공중 조작: 살짝 방향 전환
     const turn = -c.steer * 0.8 * dt;
     this.fwd.applyAxisAngle(WORLD_UP, turn);
-    this.vel.multiplyScalar(1 - cfg.airDrag);
+    // 공기 저항: 초당 airDragPerSec 비율 (2026-11-10: 예전엔 물리 스텝(1/120초)마다 airDrag 0.2%씩이라 초당 21%나 줄었음
+    //   → 점프·저중력에서 착지 속도가 30~40% 깎였음. 지금은 시간 기준 초당 약 5%)
+    this.vel.multiplyScalar(Math.exp(-(cfg.airDragPerSec ?? 0.05) * dt));
 
     // 공중에서 천천히 똑바로 돌아옴 (천장에서 떨어지면 뒤집힌 채로 회전)
     _q.setFromUnitVectors(this.up, WORLD_UP);
@@ -1223,13 +1261,18 @@ export class Car {
     if (hit && this.vel.dot(hit.normal) < 0) {
       const canLand = hit.surface === 'magnet' || hit.normal.y > 0.5;
       if (canLand) {
+        const wasFlying = this.flying;
+        let landS = 0, landHard = 0;
         if (this.flying) {
-          // 비행 착지: 너무 세게 내리꽂으면 쿵 하고 속도가 줄어듦
-          const descent = -this.vel.dot(hit.normal);
-          if (descent > cfg.modes.fly.crashSpeed) {
-            this.vel.multiplyScalar(0.45);
-            this.events.push('bump');
-          }
+          // 비행 착지 (2026-11-10 고침: 예전엔 착지할 때 속도가 확 줄었음)
+          //   예전: 내려오는 속도가 crashSpeed(22)를 넘으면 무조건 속도 ×0.45, 게다가 강제 착륙의 "억지로 끌어내리는 속도"(forceSink)까지
+          //   내려오는 속도로 쳐서, 강제 착륙이나 Shift로 내려앉으면 거의 항상 쿵 → 180 km/h가 70 km/h로 떨어졌음
+          //   지금: 억지로 끌어내린 속도는 빼고 재고, 아주 세게 내리꽂을 때만 조금(crashLoss까지) 잃음
+          const F = cfg.modes.fly, fs = this.forceSink || 0;
+          const descent = -this.vel.dot(hit.normal) - fs * Math.max(0, hit.normal.y);
+          landS = Math.hypot(this.vel.x, this.vel.y + fs, this.vel.z); // 진짜 비행 속도 (끌어내린 속도 뺌)
+          landHard = THREE.MathUtils.clamp((descent - F.crashSpeed) / (F.crashRange ?? 20), 0, 1);
+          if (landHard > 0) this.events.push('bump');
           this.flying = false;
           this.pitch = this.bank = this.stallFall = 0;
           if (this.forceLanding && this.mode === 'fly') {
@@ -1245,6 +1288,13 @@ export class Car {
         this.pos.copy(hit.point);
         this.alignTo(hit.normal);
         this.setVelocityOnSurface(this.vel);
+        if (wasFlying) {
+          // 땅과 나란한 속도 + 내려오던 속도의 대부분(landKeep)을 앞으로 이어 줌 → 부드럽게 내려앉으면 속도가 거의 그대로
+          const F = cfg.modes.fly, tang = Math.max(0, this.speed);
+          const keep = tang + Math.max(0, landS - tang) * (F.landKeep ?? 0.8);
+          this.speed = Math.min(landS, keep) * (1 - (F.crashLoss ?? 0.35) * landHard);
+          this.fitGear(); // 비행 중 기어(대충 정한 값)를 이 속도에 맞는 기어로 → 착지 뒤 변속을 여러 번 하느라 힘이 끊기지 않게
+        }
         this.grounded = true;
         this.surface = hit.surface;
         this.magnet = hit.surface === 'magnet';
@@ -1316,9 +1366,21 @@ export function lineCarModel(cfg) {
       const gears = hi(v) ? cfg.gears.map((g) => g * A.gearFactor) : cfg.gears;
       const G = gears.find((g) => g >= v * 1.06) ?? gears[gears.length - 1];
       const eng = (cfg.engine.power * 0.9 * (hi(v) ? A.powerFactor : 1)) / G - cfg.aero.drag * v * v - cfg.aero.rolling;
-      return Math.max(0.4, Math.min(cfg.tire.traction * (1 + df(v)) * (hi(v) ? A.gripFactor : 1), eng));
+      // 구동 방식: 네 바퀴 굴림은 출발 접지↑, 앞바퀴 굴림은 가속 때 앞이 들려 약간↓ (car.js updateGround와 같은 효과를 대략)
+      const drvK = cfg.drivetrain === 'awd' ? cfg.tire.awdTraction ?? 1.12 : cfg.drivetrain === 'fwd' ? 0.9 : 1;
+      return Math.max(0.4, Math.min(cfg.tire.traction * drvK * (1 + df(v)) * (hi(v) ? A.gripFactor : 1), eng));
     },
     bankGrip: cfg.bankGrip || 0,
+    // 물 위(배): 프로펠러 추진 − 물 저항, 방향타로 도는 옆 한계 (배는 옆으로 미끄러져서 이론값의 절반쯤만)
+    boat: cfg.modes && cfg.modes.boat ? (() => {
+      const b = cfg.modes.boat;
+      return {
+        vMax: Math.min(b.maxSpeed, Math.sqrt(Math.max(1, b.thrust - b.rolling) / b.drag)),
+        aLat: (v) => Math.max(4, 0.5 * v * b.turnRate * (1 - 0.35 * Math.min(1, v / b.maxSpeed))),
+        aAcc: (v) => Math.max(0.3, b.thrust - b.drag * v * v - b.rolling),
+        aBrake: (v) => 0.85 * b.brake + b.drag * v * v + b.rolling,
+      };
+    })() : null,
     aBrake: (v) => 0.85 * Math.min(cfg.brake, cfg.tire.brakeGrip * (1 + df(v))) + cfg.aero.drag * v * v,
   };
 }

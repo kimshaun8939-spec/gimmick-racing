@@ -1,6 +1,8 @@
 // 설정: 홈 화면과 ESC 메뉴가 같이 쓰는 설정 저장소 + 설정 화면(패널) 만들기
 //   - 브라우저(localStorage 'gimmick.settings')에 저장되고, 바꾸면 바로 게임에 적용됨 (onChange로 알림)
-//   - 화면은 소리 / 화면·그래픽 / 주행 / 표시 네 묶음. 마우스 또는 키보드(↑↓ 고르기, ←→ 바꾸기)로 조절
+//   - 화면은 소리 / 화면·그래픽 / 주행 / 레이스 / 표시 묶음. 마우스 또는 키보드(↑↓ 고르기, ←→ 바꾸기)로 조절
+//   - 위쪽 탭: [일반 설정] [조작키] (조작키 = keybinds.js의 createKeybindPanel)
+import { keybinds, createKeybindPanel, codeLabel } from './keybinds.js';
 
 const KEY = 'gimmick.settings';
 
@@ -9,7 +11,7 @@ export const SETTING_DEFS = [
   { group: '소리', key: 'masterVol', label: '전체 소리 크기', desc: '게임의 모든 소리', type: 'slider', def: 1 },
   { group: '소리', key: 'engineVol', label: '엔진 소리', desc: '부릉부릉 엔진음', type: 'slider', def: 1 },
   { group: '소리', key: 'fxVol', label: '효과음', desc: '변신·바람·연석·메뉴 소리', type: 'slider', def: 1 },
-  { group: '소리', key: 'muted', label: '소리 끄기', desc: '게임 중 N 키와 같아요', type: 'toggle', def: false },
+  { group: '소리', key: 'muted', label: '소리 끄기', desc: () => `게임 중 ${keybinds.main('sound')} 키와 같아요`, type: 'toggle', def: false },
 
   { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '노트북이 뜨거워지면 낮춰 보세요', type: 'choice',
     options: [['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'high' },
@@ -22,10 +24,19 @@ export const SETTING_DEFS = [
   { group: '화면·그래픽', key: 'fov', label: '시야 넓이', desc: '카메라가 보는 범위', type: 'choice',
     options: [[-6, '좁게'], [0, '보통'], [6, '넓게']], def: 0 },
 
-  { group: '주행', key: 'gearbox', label: '변속 방식', desc: '게임 중 T 키로도 바꿔요 (수동: X 올림 · Z 내림)', type: 'choice',
+  { group: '주행', key: 'gearbox', label: '변속 방식', desc: () => `게임 중 ${keybinds.main('gearbox')} 키로도 바꿔요 (수동: ${keybinds.main('shiftUp')} 올림 · ${keybinds.main('shiftDown')} 내림)`, type: 'choice',
     options: [['auto', '자동'], ['manual', '수동']], def: 'auto' },
-  { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: '도로 위 추천 길 (L 키)', type: 'toggle', def: true },
+  { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: () => `도로 위 추천 길 (${keybinds.main('racingLine')} 키)`, type: 'toggle', def: true },
   { group: '주행', key: 'autoPause', label: '자동 일시정지', desc: '다른 창을 보면 게임을 멈춰요', type: 'toggle', def: true },
+
+  // 레이스 (main.js·봇·고스트가 settings.values.X ?? 기본값으로 읽음. 키 이름·값은 .debug/agents/contracts.md 약속)
+  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '타임 어택에서 같이 달리는 반투명 차', type: 'choice',
+    options: [['off', '끔'], ['best', '내 최고 기록'], ['bot', '봇 기록']], def: 'best' },
+  { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
+    options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
+  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '', type: 'choice',
+    options: [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']], def: 'normal' },
+  { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
 
   { group: '표시', key: 'unit', label: '속도 단위', desc: '', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
@@ -114,8 +125,38 @@ export function uiSound(kind = 'move') {
  * opts.inGame: 게임 중(ESC 메뉴)이면 "다음 시작부터 적용" 같은 안내를 다르게
  */
 export function createSettingsPanel(opts = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gm-setwrap';
+  wrap.innerHTML = `<div class="gm-set-tabs" role="tablist">
+      <button class="gm-tab on" data-tab="general" data-nav role="tab">⚙️ 일반 설정</button>
+      <button class="gm-tab" data-tab="keys" data-nav role="tab">⌨️ 조작키<span class="badge" hidden>!</span></button>
+    </div>`;
   const root = document.createElement('div');
   root.className = 'gm-settings';
+  wrap.appendChild(root);
+  const keyPanel = createKeybindPanel({ sound: uiSound });
+  keyPanel.el.hidden = true;
+  wrap.appendChild(keyPanel.el);
+  let tab = 'general';
+  function showTab(name) {
+    tab = name === 'keys' ? 'keys' : 'general';
+    root.hidden = tab !== 'general';
+    keyPanel.el.hidden = tab !== 'keys';
+    wrap.querySelectorAll('.gm-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  }
+  wrap.querySelector('.gm-set-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('.gm-tab');
+    if (!b) return;
+    if (b.dataset.tab !== tab) uiSound('toggle');
+    showTab(b.dataset.tab);
+  });
+  // 겹치는 키가 있으면 조작키 탭에 빨간 점
+  const keyBadge = () => (wrap.querySelector('.gm-tab .badge').hidden = !keybinds.ACTIONS.some((a) => keybinds.conflictsOf(a.id).length));
+  keyBadge();
+  const offKeys = keybinds.onChange(() => {
+    keyBadge();
+    for (const { d, row } of rows) if (typeof d.desc === 'function') row.querySelector('.gm-set-label small').textContent = d.desc();
+  });
   const rows = [];
   let group = null, groupEl = null;
   for (const d of SETTING_DEFS) {
@@ -131,7 +172,8 @@ export function createSettingsPanel(opts = {}) {
     row.tabIndex = 0;
     row.dataset.nav = '';
     row.dataset.adjust = d.key;
-    row.innerHTML = `<div class="gm-set-label"><b>${d.label}</b>${d.desc ? `<small>${d.desc}</small>` : ''}</div><div class="gm-set-ctl"></div>`;
+    const desc = typeof d.desc === 'function' ? d.desc() : d.desc; // 함수면 지금 조작키를 넣은 글자
+    row.innerHTML = `<div class="gm-set-label"><b>${d.label}</b>${desc ? `<small>${desc}</small>` : ''}</div><div class="gm-set-ctl"></div>`;
     const ctl = row.querySelector('.gm-set-ctl');
     if (d.type === 'slider') {
       ctl.innerHTML = `<input type="range" min="0" max="100" step="5" tabindex="-1"><output></output>`;
@@ -201,41 +243,66 @@ export function createSettingsPanel(opts = {}) {
     const row = e.target.closest('.gm-set-row');
     if (row) row.focus({ preventScroll: true });
   });
-  return { el: root, adjust, refresh, destroy: off };
+  return {
+    el: wrap,
+    adjust,
+    refresh,
+    showTab,
+    get tab() {
+      return tab;
+    },
+    destroy() {
+      off();
+      offKeys();
+      keyPanel.destroy();
+    },
+  };
 }
 
-/** 조작법 화면 (홈·ESC 메뉴 같이 씀) */
-export function createControlsPage() {
+/** 조작법 화면 (홈·ESC 메뉴 같이 씀). 키 글자는 지금 정한 조작키(keybinds.js)를 따라 바뀜. opts.onEditKeys = "키 바꾸기" 버튼 */
+export function createControlsPage(opts = {}) {
   const el = document.createElement('div');
   el.className = 'gm-controls';
-  const k = (...keys) => keys.map((x) => `<kbd>${x}</kbd>`).join('');
+  const K = (...ids) => ids.map((id) => keybinds.html(id)).join('');
+  const k1 = (id) => keybinds.html(id, 1);
+  // 왼쪽·오른쪽 기본 키 먼저, 그다음 보조 키 (A D ← → 순서)
+  const slotKeys = (...ids) =>
+    [0, 1].flatMap((slot) => ids.map((id) => keybinds.get(id)[slot]).filter(Boolean)).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('') || '<kbd class="none">없음</kbd>';
   const row = (keys, what, sub = '') => `<div class="gm-ctl-row"><div class="gm-keys">${keys}</div><div><b>${what}</b>${sub ? `<small>${sub}</small>` : ''}</div></div>`;
-  el.innerHTML = `
+  function render() {
+    el.innerHTML = `
     <section><h3>기본 운전</h3>
-      ${row(k('W') + k('↑'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
-      ${row(k('S') + k('↓'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
-      ${row(k('A') + k('D') + k('←') + k('→'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
-      ${row(k('Shift') + k('Space'), '드리프트', '꺾으면서 누르기')}
+      ${row(K('throttle'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
+      ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
+      ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
+      ${row(K('drift'), '드리프트', '꺾으면서 누르기')}
+      ${row(K('booster'), '부스터', '3초 동안 더 빠르게 · 브레이크로 바로 꺼짐')}
     </section>
     <section><h3>레이스</h3>
-      ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', '빨간불 5개가 꺼지는 순간 W! 미리 밟으면 시동이 꺼져요')}
-      ${row(k('R'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}
-      ${row(k('Enter'), '처음부터 다시')}
-      ${row(k('Esc'), '메뉴 · 일시정지', '설정, 다시 시작, 홈으로')}
+      ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${k1('throttle')}! 미리 밟으면 시동이 꺼져요`)}
+      ${row(K('respawn'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}
+      ${row(K('restart'), '처음부터 다시')}
+      ${row(K('menu'), '메뉴 · 일시정지', '설정, 다시 시작, 홈으로')}
     </section>
     <section><h3>자동 변신 모드</h3>
       ${row('🚗', '일반', '평소 모드')}
       ${row('🔥', '가속', '150 km/h를 넘고 핸들이 곧으면 자동 · 빠르지만 조금 미끄러워요')}
       ${row('🚤', '배', '물에 닿으면 자동')}
-      ${row('✈️', '비행', '활주로에서 자동 · Space 이륙/상승 · Shift 하강 · A/D 선회')}
+      ${row('✈️', '비행', `활주로에서 자동 · ${k1('climb')} 이륙/상승 · ${k1('dive')} 하강 · ${k1('left')}${k1('right')} 선회`)}
     </section>
     <section><h3>그 밖에</h3>
-      ${row(k('T'), '자동 ↔ 수동 변속', '수동: ' + k('X') + ' 올림 · ' + k('Z') + ' 내림')}
-      ${row(k('L'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
-      ${row(k('N'), '소리 끄기/켜기')}
-      ${row(k('M'), '다음 맵으로')}
+      ${row(K('gearbox'), '자동 ↔ 수동 변속', '수동: ' + k1('shiftUp') + ' 올림 · ' + k1('shiftDown') + ' 내림')}
+      ${row(K('racingLine'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
+      ${row(K('sound'), '소리 끄기/켜기')}
+      ${row(K('map'), '다음 맵으로')}
     </section>
-    <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.</p>`;
+    <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
+      ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.allDefault() ? '' : ' <span class="gm-custom">(내가 바꾼 키로 보여요)</span>'}</p>`;
+    const b = el.querySelector('[data-editkeys]');
+    if (b) b.addEventListener('click', () => opts.onEditKeys());
+  }
+  render();
+  keybinds.onChange(render);
   return el;
 }
 
@@ -265,6 +332,8 @@ export function spatialMove(container, dir) {
     else if (dir === 'left') (main = -dx), (side = Math.abs(dy));
     else (main = dx), (side = Math.abs(dy));
     if (main <= 4) continue;
+    // 옆으로(←→)는 같은 줄에 있는 것만 (조작키 칸에서 ←를 누르면 엉뚱하게 위쪽 탭으로 튀지 않게)
+    if ((dir === 'left' || dir === 'right') && (b.bottom < a.top + 4 || b.top > a.bottom - 4)) continue;
     const score = main + side * 2.2;
     if (score < bestScore) (bestScore = score), (best = e);
   }

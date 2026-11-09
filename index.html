@@ -44,6 +44,60 @@
     #gearMode { opacity: 0.75; }
     #tireState { font-weight: 800; }
     #shiftPerfect { color: #7dff6a; font-weight: 800; opacity: 0; transition: opacity 0.4s; }
+    /* 왼쪽 위 기둥: 랩·시간 패널 + (레이스) 순위 패널 */
+    #leftCol { top: 16px; left: 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+    /* 구간(섹터) 기록: F1 색 (보라 = 전체 최고, 초록 = 내 최고, 노랑 = 느림) */
+    #sectorRow { display: none; gap: 4px; margin-top: 2px; }
+    #sectorRow.on { display: flex; }
+    #sectorRow .sec { flex: 1; min-width: 58px; padding: 2px 5px 3px; border-radius: 6px; background: rgba(255,255,255,0.12); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.15; border-bottom: 3px solid transparent; transition: background 0.25s; }
+    #sectorRow .sec b { display: block; font-size: 10px; opacity: 0.7; }
+    #sectorRow .sec.live { border-bottom-color: #ffffff88; }
+    #sectorRow .sec.purple { background: rgba(180, 92, 255, 0.55); border-bottom-color: #c98bff; }
+    #sectorRow .sec.green { background: rgba(46, 204, 96, 0.5); border-bottom-color: #5cff8a; }
+    #sectorRow .sec.yellow { background: rgba(255, 200, 40, 0.42); border-bottom-color: #ffd23a; }
+    #sectorRow .sec.flash { animation: secFlash 0.9s ease-out; }
+    @keyframes secFlash { 0% { transform: scale(1.12); } 100% { transform: scale(1); } }
+    #ghostDelta { display: none; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    #ghostDelta.on { display: block; }
+    #ghostDelta small { font-size: 11px; font-weight: 600; opacity: 0.75; margin-right: 6px; }
+    /* 레이스 순위: P3/6 + 앞·뒤 차 간격 + 순위표 */
+    #raceBox { display: none; min-width: 180px; padding: 8px 10px; }
+    #raceBox.on { display: block; }
+    #racePos { font-size: 34px; font-weight: 900; line-height: 1; font-family: "Black Han Sans", "Pretendard", sans-serif; letter-spacing: 0.02em; }
+    #racePos small { font-size: 16px; opacity: 0.7; margin-left: 2px; }
+    #racePos.up { animation: posUp 0.8s ease-out; }
+    @keyframes posUp { 0% { color: #7dff6a; transform: scale(1.2); } 100% { color: inherit; transform: scale(1); } }
+    #racePos.down { animation: posDown 0.8s ease-out; }
+    @keyframes posDown { 0% { color: #ff6b5e; } 100% { color: inherit; } }
+    #raceGaps { font-size: 12px; margin: 4px 0 6px; font-variant-numeric: tabular-nums; line-height: 1.4; }
+    #raceGaps .a { color: #ffb3a8; }
+    #raceGaps .b { color: #b8f5c5; }
+    #tower { display: grid; gap: 2px; font-size: 13px; }
+    #tower .tw { display: grid; grid-template-columns: 18px 5px 1fr auto; gap: 6px; align-items: center; padding: 2px 6px 2px 4px; border-radius: 5px; background: rgba(255,255,255,0.06); font-variant-numeric: tabular-nums; }
+    #tower .tw.me { background: rgba(255, 207, 63, 0.3); font-weight: 800; }
+    #tower .tw b { text-align: right; opacity: 0.85; }
+    #tower .tw i { width: 5px; height: 14px; border-radius: 2px; }
+    #tower .tw span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92px; }
+    #tower .tw em { font-style: normal; font-size: 11px; opacity: 0.85; }
+    #tower .tw.done em { color: #ffd23a; }
+    /* 바퀴 끝 요약 (구간 색) */
+    #lapSum { left: 50%; top: calc(22% + 48px); transform: translateX(-50%); display: flex; gap: 6px; align-items: center; font-size: 15px; font-weight: 800; opacity: 0; transition: opacity 0.4s; font-variant-numeric: tabular-nums; }
+    #lapSum .sx { padding: 2px 8px; border-radius: 6px; font-size: 13px; }
+    #lapSum .sx.purple { background: rgba(180, 92, 255, 0.75); }
+    #lapSum .sx.green { background: rgba(46, 204, 96, 0.7); }
+    #lapSum .sx.yellow { background: rgba(230, 180, 30, 0.7); }
+    @media (max-width: 640px) { #tower { display: none; } }
+    /* 결과 화면: 레이스 순위표·구간 기록표 (기본 결과 화면 스타일은 menu.css) */
+    #results .res.wide { width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto; }
+    #results table.stand { margin-top: 12px; font-size: 14px; }
+    #results table.stand tr.hd td, #results table.secs tr.hd td { font-size: 11px; opacity: 0.6; font-weight: 800; }
+    #results table.stand td.nm { text-align: left; white-space: nowrap; }
+    #results table.stand td.nm i { display: inline-block; width: 6px; height: 14px; border-radius: 2px; margin-right: 7px; vertical-align: -2px; }
+    #results table.stand td.nm small { margin-left: 6px; opacity: 0.55; font-size: 11px; }
+    #results table.stand tr.me { background: rgba(255, 207, 63, 0.18); font-weight: 800; }
+    #results table.stand .proj { opacity: 0.6; }
+    #results table.secs { font-size: 13px; margin-top: 4px; }
+    #results table.secs tr.theo td { font-size: 12px; opacity: 0.8; padding-top: 6px; }
     #minimap { right: 16px; top: 16px; }
     #center { inset: 0; display: grid; place-items: center; }
     #startLights { left: 50%; top: 18px; transform: translateX(-50%); display: none; gap: 12px; padding: 10px 16px; background: #111c; border-radius: 14px; box-shadow: 0 4px 16px #0006; }
@@ -102,10 +156,20 @@
   <canvas id="game"></canvas>
   <div id="flash"></div>
 
-  <div id="topLeft" class="hud panel">
-    <div id="lap">LAP 1/3</div>
-    <div id="time">0:00.000</div>
-    <div id="best">최고 랩 --:--.---</div>
+  <div id="leftCol" class="hud">
+    <div id="topLeft" class="panel">
+      <div id="lap">LAP 1/3</div>
+      <div id="time">0:00.000</div>
+      <div id="best">최고 랩 --:--.---</div>
+      <div id="sectorRow"><div class="sec"><b>S1</b><span>-</span></div><div class="sec"><b>S2</b><span>-</span></div><div class="sec"><b>S3</b><span>-</span></div></div>
+      <div id="ghostDelta"></div>
+    </div>
+    <!-- 레이스(봇·온라인)일 때만 보임: 순위, 앞·뒤 간격, 순위표 -->
+    <div id="raceBox" class="panel">
+      <div id="racePos">P-</div>
+      <div id="raceGaps"></div>
+      <div id="tower"></div>
+    </div>
   </div>
 
   <canvas id="minimap" class="hud panel" width="180" height="180"></canvas>
@@ -140,6 +204,7 @@
   <div id="startLights" class="hud"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="center" class="hud"><div id="bigText"></div></div>
   <div id="toast" class="hud"></div>
+  <div id="lapSum" class="hud"></div>
 
   <!-- 완주 결과 (hud.js가 채움) -->
   <div id="results"></div>

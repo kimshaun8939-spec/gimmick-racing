@@ -12,10 +12,36 @@ const FALLBACK_MAPS = [
   { id: 'gp', file: 'data/grandprix.json', title: '구름섬 그랑프리', tags: [], theme: ['#3b2b74', '#0e1030', '#9ad8ff'] },
   { id: 'sea', file: 'data/sea.json', title: '바닷가 코스', tags: [], theme: ['#1f5d7a', '#0b2233', '#7fe3ff'] },
 ];
+// 새 맵 (2026-11-10 밤샘 작업): maps.json에 아직 없으면 이 기본 카드로 보여 줌 (맵 파일이 있을 때만, 홈 화면이 확인)
+const EXTRA_MAPS = [
+  { id: 'neon', file: 'data/neon.json', title: '네온 시티', subtitle: '밤의 네온 도시', desc: '빛나는 고층 빌딩 사이를 달리는 밤의 시가지 코스.', tags: ['🌃 야경', '🏙️ 시가지'], theme: ['#3a1460', '#0a0618', '#ff4fd8'], difficulty: 2, extra: true },
+  { id: 'moon', file: 'data/moon.json', title: '달 중력 기지', subtitle: '가벼운 중력 · 큰 점프', desc: '중력이 약한 달 기지. 점프가 길고 높아요.', tags: ['🌙 낮은 중력', '🚀 점프'], theme: ['#2b2f45', '#07080f', '#d9e2ff'], difficulty: 2, extra: true },
+  { id: 'jungle', file: 'data/jungle.json', title: '정글 유적', subtitle: '숲 속 고대 유적', desc: '울창한 정글과 고대 유적을 지나는 코스.', tags: ['🌴 정글', '🗿 유적'], theme: ['#1d4a2a', '#07160c', '#8dff8a'], difficulty: 3, extra: true },
+];
 let mapsPromise = null;
 export function loadMaps() {
-  if (!mapsPromise) mapsPromise = loadJSON('data/maps.json').then((d) => d.maps).catch(() => FALLBACK_MAPS);
+  if (!mapsPromise)
+    mapsPromise = loadJSON('data/maps.json')
+      .then((d) => d.maps)
+      .catch(() => FALLBACK_MAPS)
+      .then((list) => [...list, ...EXTRA_MAPS.filter((e) => !list.some((m) => m.id === e.id))]);
   return mapsPromise;
+}
+
+/**
+ * 차 등급(클래스): data/cars.json의 classes + 차마다 class. 없으면 빈 목록 (홈 화면이 등급 탭 없이 보여 줌)
+ * @returns {Promise<{ classes: {id,name,desc,color}[], classOf: Record<string,string> }>}
+ */
+let classesPromise = null;
+export function loadCarClasses() {
+  if (!classesPromise)
+    classesPromise = loadJSON('data/cars.json')
+      .then((d) => ({
+        classes: Array.isArray(d.classes) ? d.classes.filter((c) => c && c.id) : [],
+        classOf: Object.fromEntries((d.cars || []).filter((c) => c && c.id).map((c) => [c.id, c.class || null])),
+      }))
+      .catch(() => ({ classes: [], classOf: {} }));
+  return classesPromise;
 }
 
 // 차 목록: carRoster.js (차 담당 에이전트가 만듦). 불러오기 실패하면 기본 차 하나만
@@ -55,13 +81,29 @@ export function setLast(v) {
   } catch {}
 }
 
-/** 게임 주소: ?map=..&car=.. */
-export function raceUrl(map, car) {
+/**
+ * 게임 주소: ?map=..&car=..(&그 밖에)
+ *   extra: { mode: 'race' | 'time', tutorial: 1, room: 'ABCD', ... } (값이 null/undefined/''/false면 안 넣음)
+ */
+export function raceUrl(map, car, extra = {}) {
   const u = new URL(location.href);
   u.search = '';
   u.searchParams.set('map', map);
   if (car) u.searchParams.set('car', car);
+  for (const [k, v] of Object.entries(extra || {})) if (v != null && v !== '' && v !== false) u.searchParams.set(k, String(v));
   return u.toString();
+}
+
+/** 레이스 방식: 주소의 mode 값, 화면 이름 */
+export const RACE_MODES = [
+  { id: 'race', icon: '🏁', name: '봇 레이스', desc: '봇들과 순위 경쟁' },
+  { id: 'time', icon: '⏱️', name: '타임 어택', desc: '혼자 달리며 고스트와 기록 경쟁' },
+  { id: 'net', icon: '🌐', name: '멀티플레이', desc: '친구와 방 코드로 같이 달리기' },
+  { id: 'free', icon: '🧭', name: '자유 연습', desc: '혼자 편하게 (기록은 남아요)' },
+];
+/** 튜토리얼 주소 (그랑프리) */
+export function tutorialUrl(car, extra = {}) {
+  return raceUrl(extra.map || 'gp', car, { tutorial: 1, ...extra, map: undefined });
 }
 /** 홈 화면 주소 (page = 'car' | 'map' 이면 그 화면부터) */
 export function homeUrl(page) {

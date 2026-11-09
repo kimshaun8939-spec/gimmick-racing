@@ -1,7 +1,10 @@
 // 자동차 겉모습. 도형을 조합해 만들고, 나중에 glTF 모델로 바꿀 수 있습니다.
 //
 // 차 종류 (look.style, data/cars.json): f1(기본 F1) / gt(그랜드 투어러) / rally(랠리 해치백) / proto(르망 프로토타입)
-//   / rocket(로켓 드래그스터) / buggy(모래 버기). 차체 모양만 다르고, 아래의 변신 부품(부스터·가속·배·비행)은 모두 같이 씀
+//   / rocket(로켓 드래그스터) / buggy(모래 버기)
+//   2026-11-10 추가: hatch(핫해치) / muscle(머슬카) / hyper(하이퍼카) / kart(카트) / roadster(옛날 로드스터)
+//   / truck(트로피 트럭, look.variant 'pickup'이면 픽업) / ev(전기 콘셉트카)
+//   차체 모양만 다르고, 아래의 변신 부품(부스터·가속·배·비행)은 모두 같이 씀
 //   createCarModel('#e8463a')  ← 예전처럼 색만 주면 F1
 //   createCarModel({ style: 'gt', body: '#1d3a8a', ... })  ← look 객체 (빠진 색은 LOOK_DEFAULTS에서)
 //   돌려주는 것: { root, sync(car, dt, time), dispose(), look, debugPose(p) }
@@ -154,6 +157,14 @@ export const LOOK_DEFAULTS = {
   proto: { style: 'proto', body: '#0f6fd1', accent: '#eef4ff', trim: '#ffd400', rim: '#1d2026', wall: '#ffd400', helmet: '#eef4ff', number: '8', numberBg: '#ffd400', numberFg: '#0b1f3a' },
   rocket: { style: 'rocket', body: '#ff6a13', accent: '#fafafa', trim: '#7b2cff', rim: '#d9dde3', wall: '#fafafa', helmet: '#7b2cff', number: '1', numberBg: '#fafafa', numberFg: '#7b2cff' },
   buggy: { style: 'buggy', body: '#2fb35c', accent: '#f4f4f4', trim: '#1b1c1f', rim: '#e9e9e9', wall: null, helmet: '#ff7a1a', number: '4', numberBg: '#1b1c1f', numberFg: '#ffd23a', tire: 'knobby' },
+  // 2026-11-10 새 차체
+  hatch: { style: 'hatch', body: '#e83b6f', accent: '#ffffff', trim: '#1c1d22', rim: '#ffffff', wall: null, helmet: '#ffffff', number: '22', numberBg: '#ffffff', numberFg: '#e83b6f' },
+  muscle: { style: 'muscle', body: '#16171b', accent: '#e8b931', trim: '#e8b931', rim: '#b9bec7', wall: null, helmet: '#e8b931', number: '69', numberBg: '#e8b931', numberFg: '#16171b' },
+  hyper: { style: 'hyper', body: '#d9dde4', accent: '#101318', trim: '#00c2ff', rim: '#1a1d22', wall: null, helmet: '#101318', number: '16', numberBg: '#101318', numberFg: '#00c2ff' },
+  kart: { style: 'kart', body: '#ffd21f', accent: '#1b6dff', trim: '#16181d', rim: '#f2f2f2', wall: null, helmet: '#1b6dff', number: '11', numberBg: '#ffffff', numberFg: '#1b6dff' },
+  roadster: { style: 'roadster', body: '#1f6f5c', accent: '#f3ecd8', trim: '#d7d9dc', rim: '#d7d9dc', wall: '#f3ecd8', helmet: '#f3ecd8', number: '62', numberBg: '#f3ecd8', numberFg: '#1f6f5c' },
+  truck: { style: 'truck', body: '#ff7a1a', accent: '#1b1d22', trim: '#f2f2f2', rim: '#1b1d22', wall: null, helmet: '#f2f2f2', number: '7', numberBg: '#1b1d22', numberFg: '#ff7a1a', tire: 'knobby', variant: 'trophy' },
+  ev: { style: 'ev', body: '#f2f5f8', accent: '#18e0c8', trim: '#18e0c8', rim: '#20242b', wall: null, helmet: '#18e0c8', number: 'E', numberBg: '#18e0c8', numberFg: '#0d1117' },
 };
 export const CAR_STYLES = Object.keys(LOOK_DEFAULTS);
 
@@ -893,7 +904,675 @@ function buildBuggy({ add, body, M }) {
   };
 }
 
-const BUILDERS = { f1: buildF1, gt: buildGT, rally: buildRally, proto: buildProto, rocket: buildRocket, buggy: buildBuggy };
+// ================================================================== 새 차체 7종 (2026-11-10: 차 등급 15대용)
+//   hatch(핫해치) / muscle(머슬카) / hyper(하이퍼카) / kart(카트) / roadster(옛날 로드스터) / truck(트로피 트럭·픽업, look.variant 'pickup') / ev(전기 콘셉트카)
+//   다른 차와 똑같이 { helmet, fWing, spoiler, drs, A(변신 부품 자리) }를 돌려줌 → 가속·배·비행·부스터 변신이 모두 그대로 붙음
+
+/** 빛나는 재질 (전기차 라이트 바, 하이퍼카 포인트 줄) */
+function glowMat(color, k = 1.3) {
+  return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: k, roughness: 0.3 });
+}
+
+// ------------------------------------------------------------------ 핫해치: 짧고 통통한 5도어, 투톤 지붕, 벌집 그릴 + 빨간 줄, 지붕 스포일러, 가운데 쌍 배기구
+function buildHatch({ add, body, M }) {
+  const { paint, accent, trim, carbon, dark, metal, glass, lamp, tailMat } = M;
+  const W = [
+    [-0.82, 1.38, true, 0.34, 0.28, 0.4],
+    [0.82, 1.38, true, 0.34, 0.28, 0.4],
+    [-0.82, -1.3, false, 0.34, 0.28, 0.4],
+    [0.82, -1.3, false, 0.34, 0.28, 0.4],
+  ];
+  add(loft([R(2.22, 0.55, 0.3, 0.55), R(2.05, 0.78, 0.26, 0.66), R(1.0, 0.8, 0.26, 0.8), R(-1.6, 0.8, 0.27, 0.88), R(-2.0, 0.76, 0.3, 0.9), R(-2.08, 0.68, 0.36, 0.86)], 24), paint, 0, 0, 0);
+  add(loft([R(2.18, 0.7, 0.3, 0.6, 4), R(2.02, 0.86, 0.27, 0.66), R(1.72, 0.88, 0.27, 0.72)], 24), paint, 0, 0, 0);
+  add(loft([R(0.95, 0.88, 0.28, 0.8), R(0.0, 0.9, 0.28, 0.82), R(-0.9, 0.89, 0.28, 0.85)], 24), paint, 0, 0, 0);
+  add(loft([R(-1.62, 0.89, 0.29, 0.88), R(-1.95, 0.87, 0.3, 0.89), R(-2.07, 0.8, 0.34, 0.86)], 24), paint, 0, 0, 0);
+  arches(add, M, W, 0.03, 0.12, 0.12);
+  // 유리 캐빈 + 흰 지붕 (투톤)
+  add(loft([R(0.85, 0.66, 0.8, 0.86, 4), R(0.3, 0.69, 0.83, 1.28, 4), R(-0.5, 0.7, 0.85, 1.36, 4), R(-1.7, 0.68, 0.87, 1.34, 4), R(-1.98, 0.64, 0.87, 1.2, 4)], 24), glass, 0, 0, 0);
+  add(loft([R(0.25, 0.6, 1.27, 1.32, 3), R(-0.4, 0.665, 1.34, 1.39, 3), R(-1.7, 0.66, 1.33, 1.38, 3), R(-1.92, 0.62, 1.24, 1.3, 3)], 24), accent, 0, 0, 0);
+  for (const side of [-1, 1]) {
+    // 기둥 2개 (B·C필러), 문 아래 줄, 백미러
+    add(new THREE.BoxGeometry(0.05, 0.46, 0.12), dark, side * 0.69, 1.08, -0.35).rotation.z = side * -0.06;
+    add(new THREE.BoxGeometry(0.05, 0.42, 0.1), dark, side * 0.68, 1.08, -1.2).rotation.z = side * -0.06;
+    add(new THREE.BoxGeometry(0.02, 0.05, 1.9), trim, side * 0.9, 0.36, 0.0).castShadow = false;
+    add(new THREE.BoxGeometry(0.02, 0.03, 1.9), accent, side * 0.9, 0.42, 0.0).castShadow = false;
+    add(new THREE.BoxGeometry(0.15, 0.09, 0.11), accent, side * 0.78, 0.96, 0.62);
+    // 비스듬한 헤드라이트 + 안개등
+    const hl = add(new THREE.BoxGeometry(0.34, 0.08, 0.05), lamp, side * 0.55, 0.6, 2.13);
+    hl.rotation.set(-0.3, side * 0.35, side * -0.12);
+    hl.castShadow = false;
+    add(new THREE.CircleGeometry(0.06, 14), lamp, side * 0.62, 0.36, 2.23).castShadow = false;
+    // 후미등 (C필러를 따라 세로로 긴 등)
+    add(new THREE.BoxGeometry(0.14, 0.3, 0.04), tailMat, side * 0.7, 0.86, -2.07);
+  }
+  doorNumber(add, M, 0.9, 0.6, -0.15, 0.36);
+  // 벌집 그릴 + 그릴 위 빨간 줄 (핫해치 표시) + 앞 범퍼 공기구멍
+  add(new THREE.BoxGeometry(0.86, 0.16, 0.04), dark, 0, 0.5, 2.21);
+  add(new THREE.BoxGeometry(0.9, 0.025, 0.045), tailMat, 0, 0.6, 2.2).castShadow = false;
+  for (let i = -3; i <= 3; i++) add(new THREE.BoxGeometry(0.012, 0.14, 0.05), carbon, i * 0.12, 0.5, 2.22).castShadow = false;
+  add(new THREE.BoxGeometry(1.2, 0.1, 0.04), dark, 0, 0.32, 2.22);
+  // 보닛 위 작은 볼록 두 줄
+  for (const sx of [-0.26, 0.26]) add(new THREE.BoxGeometry(0.06, 0.02, 0.8), paint, sx, 0.74, 1.55).rotation.x = 0.12;
+  // 뒤: 해치 유리 아래 손잡이 띠, 디퓨저, 가운데 쌍 배기구
+  add(new THREE.BoxGeometry(0.9, 0.05, 0.03), metal, 0, 0.72, -2.09);
+  const diff = add(new THREE.BoxGeometry(1.15, 0.04, 0.28), carbon, 0, 0.3, -1.98);
+  diff.rotation.x = 0.3;
+  for (const x of [-0.12, 0.12]) add(new THREE.CylinderGeometry(0.06, 0.065, 0.2, 14).rotateX(Math.PI / 2), metal, x, 0.32, -2.1);
+  // 앞 립
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(new THREE.BoxGeometry(1.5, 0.03, 0.2), carbon, 0, 0.27, 2.2, fWing);
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.18, 0.02, 0.1), trim, side * 0.66, 0.3, 2.24, fWing);
+  // 지붕 스포일러
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  add(new THREE.BoxGeometry(1.28, 0.05, 0.3), paint, 0, 1.36, -1.98, spoiler).rotation.x = 0.1;
+  const drs = add(new THREE.BoxGeometry(1.28, 0.035, 0.12), carbon, 0, 1.4, -2.13, spoiler);
+  drs.rotation.x = 0.3;
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.03, 0.14, 0.34), carbon, side * 0.64, 1.36, -2.02, spoiler);
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0.3, 1.0, -0.4);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.76, 0.6], r: [0.76, 0.62] },
+      helmet: [0.3, 1.0, -0.4],
+      visor: [1.22, -0.85],
+      armor: { y: 0.84, x: 0.82 },
+      ram: { y: 0.18, z: 1.45 },
+      spines: [[-0.5, 1.42], [-0.9, 1.42], [-1.3, 1.41], [-1.7, 1.4]],
+      booster: { x: 0.84, y0: 0.58, y1: 1.0, z0: -0.5, dz: -1.2 },
+      lift: { y: 1.22, z: -1.95, h: 0.2 },
+      stab: [0.64, 1.36, -2.0],
+      tailFin: [0, 1.38, -0.55],
+      wing: [0.88, 0.6, 0.0],
+      nitro: { x: 0.12, y: 0.32, z: -2.08, dz: -0.4 },
+      vents: [[0.36, 0.73, 1.2], [0.36, 0.71, 1.45], [0.36, 0.69, 1.7]],
+      glow: { y: 0.745, z: 1.5, len: 1.0, rot: 0.12, w: 0.05 },
+      flames: [[-0.12, 0.32, 0.45, -2.22], [0.12, 0.32, 0.45, -2.22]],
+      motor: [0.38, 0.4, -2.12],
+      spark: [0.82, 0.25, -1.75],
+      seams: [0.9, 0.28, 0.0],
+      lean: 0.08,
+      drsRest: 0.3,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ 머슬카: 긴 보닛을 뚫고 나온 슈퍼차저(블로워), 패스트백, 넓은 뒤 펜더, 금색 쌍줄, 사이드 배기관, 덕테일
+function buildMuscle({ add, body, M }) {
+  const { paint, accent, trim, carbon, dark, metal, glass, lamp, tailMat } = M;
+  const W = [
+    [-0.9, 1.7, true, 0.36, 0.3, 0.42],
+    [0.9, 1.7, true, 0.36, 0.3, 0.42],
+    [-0.93, -1.55, false, 0.42, 0.44, 0.45],
+    [0.93, -1.55, false, 0.42, 0.44, 0.45],
+  ];
+  add(loft([R(2.78, 0.62, 0.3, 0.62, 6), R(2.5, 0.72, 0.24, 0.72), R(1.0, 0.74, 0.24, 0.8), R(-1.0, 0.74, 0.25, 0.86), R(-2.3, 0.74, 0.27, 0.9), R(-2.6, 0.66, 0.32, 0.86, 6)], 24), paint, 0, 0, 0);
+  add(loft([R(2.77, 0.86, 0.3, 0.66, 6), R(2.42, 0.97, 0.24, 0.74), R(2.0, 0.97, 0.24, 0.76)], 24), paint, 0, 0, 0);
+  add(loft([R(1.25, 0.95, 0.25, 0.8), R(0.1, 0.97, 0.25, 0.82), R(-0.9, 0.98, 0.25, 0.84)], 24), paint, 0, 0, 0);
+  // 넓게 부푼 뒤 펜더 (코크병 허리)
+  add(loft([R(-1.0, 0.98, 0.26, 0.84), R(-1.6, 1.03, 0.27, 0.9), R(-2.3, 1.04, 0.27, 0.92), R(-2.58, 0.94, 0.32, 0.88, 6)], 24), paint, 0, 0, 0);
+  arches(add, M, W, 0.04, 0.14);
+  // 패스트백 유리 + 지붕
+  add(loft([R(0.75, 0.64, 0.8, 0.86, 4), R(0.15, 0.66, 0.84, 1.22, 4), R(-0.6, 0.64, 0.86, 1.25, 4), R(-1.4, 0.6, 0.88, 1.06, 4), R(-2.1, 0.56, 0.88, 0.93, 4)], 24), glass, 0, 0, 0);
+  add(loft([R(0.1, 0.56, 1.2, 1.245, 3), R(-0.6, 0.6, 1.235, 1.275, 3), R(-1.1, 0.56, 1.15, 1.2, 3)], 24), paint, 0, 0, 0);
+  // 금색 쌍줄 (블로워 양옆으로 보닛 → 지붕 → 트렁크)
+  for (const sx of [-0.4, -0.27, 0.27, 0.4]) {
+    const h = add(new THREE.BoxGeometry(0.07, 0.014, 1.75), accent, sx, 0.76, 1.95);
+    h.rotation.x = 0.05;
+    h.castShadow = false;
+  }
+  for (const sx of [-0.12, 0.12]) {
+    add(new THREE.BoxGeometry(0.12, 0.012, 0.95), accent, sx, 1.27, -0.45).castShadow = false;
+    add(new THREE.BoxGeometry(0.12, 0.012, 0.5), accent, sx, 0.93, -2.3).castShadow = false;
+  }
+  // 슈퍼차저(블로워): 보닛을 뚫고 솟은 은색 상자 + 벨트 + 위 흡입구(나비 판 2개)
+  add(new THREE.BoxGeometry(0.42, 0.2, 0.62), metal, 0, 0.88, 1.35);
+  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.44, 0.015, 0.03), carbon, 0, 0.83 + i * 0.03, 1.66).castShadow = false;
+  add(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 16).rotateX(Math.PI / 2), carbon, 0, 0.86, 1.7);
+  add(new THREE.BoxGeometry(0.5, 0.12, 0.34), carbon, 0, 1.04, 1.4);
+  for (const sx of [-0.12, 0.12]) {
+    add(new THREE.BoxGeometry(0.2, 0.012, 0.26), metal, sx, 1.105, 1.4).castShadow = false;
+    add(new THREE.BoxGeometry(0.03, 0.03, 0.26), trim, sx, 1.12, 1.4).castShadow = false;
+  }
+  for (const side of [-1, 1]) {
+    // 둥근 헤드라이트 4개 + 크롬 테
+    for (const hx of [0.56, 0.78]) {
+      add(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 16).rotateX(Math.PI / 2), metal, side * hx, 0.5, 2.76);
+      add(new THREE.CircleGeometry(0.07, 16), lamp, side * hx, 0.5, 2.79).castShadow = false;
+    }
+    // 사이드 배기관 (문 아래, 크롬)
+    add(new THREE.CylinderGeometry(0.07, 0.07, 1.6, 12).rotateX(Math.PI / 2), metal, side * 1.0, 0.3, 0.15);
+    add(new THREE.CylinderGeometry(0.075, 0.06, 0.12, 12).rotateX(Math.PI / 2), dark, side * 1.0, 0.3, -0.66);
+    // 백미러, 문 아래 금줄
+    add(new THREE.BoxGeometry(0.16, 0.08, 0.12), paint, side * 0.8, 0.95, 0.65);
+    add(new THREE.BoxGeometry(0.02, 0.03, 2.0), trim, side * 0.985, 0.46, 0.2).castShadow = false;
+  }
+  doorNumber(add, M, 1.0, 0.58, 0.1, 0.42);
+  // 앞: 검은 그릴 + 크롬 범퍼
+  add(new THREE.BoxGeometry(1.0, 0.16, 0.04), dark, 0, 0.5, 2.78);
+  add(new THREE.BoxGeometry(1.6, 0.07, 0.08), metal, 0, 0.31, 2.8);
+  // 뒤: 가로로 긴 후미등, 크롬 범퍼
+  add(new THREE.BoxGeometry(1.5, 0.08, 0.04), tailMat, 0, 0.76, -2.6);
+  add(new THREE.BoxGeometry(1.6, 0.07, 0.08), metal, 0, 0.36, -2.62);
+  // 앞 립
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(new THREE.BoxGeometry(1.7, 0.035, 0.22), carbon, 0, 0.22, 2.74, fWing);
+  // 덕테일 (트렁크 끝이 오리 꼬리처럼 들림)
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  const duck = add(new THREE.BoxGeometry(1.5, 0.06, 0.3), paint, 0, 0.94, -2.48, spoiler);
+  duck.rotation.x = -0.35;
+  const drs = add(new THREE.BoxGeometry(1.5, 0.035, 0.1), accent, 0, 1.0, -2.62, spoiler);
+  drs.rotation.x = 0.2;
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0.3, 0.98, -0.45);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.82, 0.6], r: [0.9, 0.72] },
+      helmet: [0.3, 0.98, -0.45],
+      visor: [1.12, -0.85],
+      armor: { y: 0.8, x: 0.86 },
+      ram: { y: 0.12, z: 1.85 },
+      spines: [[-0.2, 1.24], [-0.6, 1.26], [-1.0, 1.2], [-1.45, 1.04]],
+      booster: { x: 0.4, y0: 0.6, y1: 1.08, z0: -0.85, dz: -1.15 },
+      lift: { y: 0.88, z: -2.4, h: 0.25 },
+      stab: [0.76, 0.98, -2.48],
+      tailFin: [0, 1.24, -0.75],
+      wing: [0.95, 0.6, 0.0],
+      nitro: { x: 0.55, y: 0.34, z: -2.6, dz: -0.45 },
+      vents: [[0.62, 0.79, 1.6], [0.62, 0.8, 1.35], [0.62, 0.81, 1.1]],
+      glow: { y: 0.775, z: 2.25, len: 0.8, rot: 0.05, w: 0.05 },
+      flames: [[-0.55, 0.34, 0.5, -2.72], [0.55, 0.34, 0.5, -2.72]],
+      motor: [0.42, 0.38, -2.66],
+      spark: [0.93, 0.25, -2.05],
+      seams: [1.0, 0.22, 0.1],
+      lean: 0.07,
+      drsRest: 0.2,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ 하이퍼카: 아주 낮은 쐐기, 물방울 캐노피, 옆 큰 흡입구, 엔진 덮개 루버, 빛나는 포인트 줄, 높은 백조목 날개, 가운데 배기구 3개
+function buildHyper({ add, body, M, look }) {
+  const { paint, accent, trim, carbon, dark, metal, glass, lamp, tailMat } = M;
+  const neon = glowMat(look.trim, 1.5);
+  const W = [
+    [-0.9, 1.72, true, 0.36, 0.3, 0.4],
+    [0.9, 1.72, true, 0.36, 0.3, 0.4],
+    [-0.93, -1.55, false, 0.39, 0.4, 0.42],
+    [0.93, -1.55, false, 0.39, 0.4, 0.42],
+  ];
+  add(loft([R(2.9, 0.5, 0.16, 0.28, 4), R(2.5, 0.72, 0.15, 0.42), R(1.4, 0.78, 0.15, 0.55), R(0, 0.8, 0.16, 0.62), R(-1.3, 0.8, 0.18, 0.66), R(-2.3, 0.76, 0.2, 0.66), R(-2.62, 0.68, 0.24, 0.6)], 24), paint, 0, 0, 0);
+  add(loft([R(2.84, 0.8, 0.18, 0.34, 4), R(2.35, 0.98, 0.17, 0.6), R(2.0, 0.98, 0.17, 0.63)], 24), paint, 0, 0, 0);
+  add(loft([R(1.25, 0.96, 0.2, 0.58), R(0.2, 0.92, 0.2, 0.58), R(-0.6, 0.94, 0.2, 0.62)], 24), paint, 0, 0, 0);
+  add(loft([R(-1.0, 1.02, 0.2, 0.7), R(-2.25, 1.03, 0.22, 0.73), R(-2.62, 0.92, 0.26, 0.66)], 24), paint, 0, 0, 0);
+  arches(add, M, W, 0.03, 0.12, 0.08);
+  // 아래쪽은 검은색 (투톤) + 빛나는 포인트 줄
+  for (const side of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.04, 0.12, 2.3), accent, side * 0.99, 0.27, -0.2);
+    add(new THREE.BoxGeometry(0.02, 0.02, 2.3), neon, side * 1.012, 0.34, -0.2).castShadow = false;
+    // 옆 큰 흡입구 (문 뒤 → 뒤 펜더 앞)
+    const sc = add(new THREE.BoxGeometry(0.06, 0.26, 0.6), dark, side * 1.0, 0.45, -0.72);
+    sc.rotation.y = side * 0.25;
+    add(new THREE.BoxGeometry(0.02, 0.02, 0.62), neon, side * 1.02, 0.6, -0.72).rotation.y = side * 0.25;
+    // 얇은 LED 헤드라이트 (위로 꺾인 화살표)
+    const hl = add(new THREE.BoxGeometry(0.38, 0.03, 0.06), lamp, side * 0.6, 0.48, 2.5);
+    hl.rotation.set(-0.5, side * 0.45, side * 0.15);
+    hl.castShadow = false;
+    add(new THREE.BoxGeometry(0.14, 0.03, 0.05), neon, side * 0.82, 0.42, 2.38).rotation.y = side * 0.6;
+    // 사이드미러 (가는 기둥 위)
+    add(rodGeometry(new THREE.Vector3(side * 0.72, 0.68, 0.95), new THREE.Vector3(side * 0.85, 0.82, 0.9), 0.015), carbon, 0, 0, 0);
+    add(new THREE.BoxGeometry(0.15, 0.06, 0.1), paint, side * 0.88, 0.84, 0.9);
+  }
+  // 물방울 캐노피 (유리) + 지붕 공기구멍
+  add(loft([R(1.45, 0.3, 0.55, 0.6, 3), R(0.8, 0.5, 0.6, 0.95, 3), R(0, 0.55, 0.62, 1.08, 3), R(-0.8, 0.5, 0.62, 1.02, 3), R(-1.5, 0.38, 0.62, 0.84, 3)], 24), glass, 0, 0, 0);
+  add(loft([R(-0.1, 0.1, 1.06, 1.12, 3), R(-0.6, 0.14, 1.03, 1.16, 3), R(-1.5, 0.12, 0.84, 0.98, 3)]), paint, 0, 0, 0);
+  add(new THREE.BoxGeometry(0.2, 0.08, 0.02), dark, 0, 1.11, -0.1);
+  // 엔진 덮개 루버 (검은 틈)
+  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.9, 0.012, 0.06), dark, 0, 0.665 - i * 0.004, -1.65 - i * 0.14).castShadow = false;
+  doorNumber(add, M, 0.965, 0.44, 0.25, 0.28);
+  // 앞 스플리터 + 가운데 공기 구멍
+  add(new THREE.BoxGeometry(0.7, 0.08, 0.04), dark, 0, 0.27, 2.86);
+  // 뒤: 가로 라이트 바 + 큰 디퓨저 + 가운데 배기구 3개
+  add(new THREE.BoxGeometry(1.75, 0.04, 0.04), tailMat, 0, 0.56, -2.64);
+  add(new THREE.BoxGeometry(1.75, 0.012, 0.045), neon, 0, 0.6, -2.64).castShadow = false;
+  const diff = add(new THREE.BoxGeometry(1.5, 0.03, 0.55), carbon, 0, 0.24, -2.5);
+  diff.rotation.x = 0.45;
+  for (const x of [-0.55, -0.3, 0.3, 0.55]) add(new THREE.BoxGeometry(0.02, 0.22, 0.5), carbon, x, 0.26, -2.48);
+  for (const x of [-0.13, 0, 0.13]) add(new THREE.CylinderGeometry(0.055, 0.06, 0.2, 12).rotateX(Math.PI / 2), metal, x, 0.4, -2.62);
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(new THREE.BoxGeometry(1.95, 0.03, 0.4), carbon, 0, 0.12, 2.76, fWing);
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.03, 0.12, 0.38), trim, side * 0.97, 0.18, 2.76, fWing);
+  // 높은 백조목 뒷날개
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  add(new THREE.BoxGeometry(1.9, 0.05, 0.4), carbon, 0, 1.24, -2.42, spoiler);
+  const drs = add(new THREE.BoxGeometry(1.9, 0.04, 0.2), paint, 0, 1.33, -2.58, spoiler);
+  drs.rotation.x = 0.35;
+  for (const side of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.04, 0.36, 0.62), accent, side * 0.96, 1.2, -2.48, spoiler);
+    add(new THREE.BoxGeometry(0.045, 0.02, 0.62), neon, side * 0.96, 1.39, -2.48, spoiler).castShadow = false;
+    const neck = new THREE.CatmullRomCurve3([new THREE.Vector3(side * 0.35, 0.64, -2.0), new THREE.Vector3(side * 0.35, 1.15, -2.15), new THREE.Vector3(side * 0.35, 1.27, -2.38)]);
+    add(new THREE.TubeGeometry(neck, 10, 0.03, 6, false), carbon, 0, 0, 0, spoiler);
+  }
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0, 0.86, -0.25);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.82, 0.48], r: [0.88, 0.58] },
+      helmet: [0, 0.86, -0.25],
+      visor: [0.98, -0.75],
+      armor: { y: 0.64, x: 0.86 },
+      ram: { y: 0.06, z: 1.85 },
+      spines: [[-0.9, 1.0], [-1.3, 0.95], [-1.7, 0.86], [-2.1, 0.78]],
+      booster: { x: 0.45, y0: 0.45, y1: 0.85, z0: -0.6, dz: -1.25 },
+      lift: { y: 0.66, z: -2.3, h: 0.3 },
+      stab: [0.97, 1.22, -2.48],
+      tailFin: [0, 1.06, -0.95],
+      wing: [0.85, 0.5, 0.0],
+      nitro: { x: 0.3, y: 0.38, z: -2.52, dz: -0.42 },
+      vents: [[0.78, 0.6, -1.3], [0.78, 0.61, -1.55], [0.78, 0.62, -1.8]],
+      glow: { y: 0.43, z: 2.25, len: 1.1, rot: 0.14, w: 0.06 },
+      flames: [[0, 0.4, 0.6, -2.72], [-0.13, 0.4, 0.45, -2.72], [0.13, 0.4, 0.45, -2.72]],
+      motor: [0.4, 0.32, -2.66],
+      spark: [0.93, 0.25, -2.05],
+      seams: [0.95, 0.17, -0.1],
+      lean: 0.035,
+      drsRest: 0.35,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ 카트: 쇠파이프 틀, 앞 페어링, 옆 범퍼, 운전석이 그대로 보임(핸들·몸통), 오른쪽 뒤 엔진 + 배기관
+function buildKart({ add, body, M, look }) {
+  const { paint, accent, trim, carbon, dark, metal, rubber } = M;
+  const W = [
+    [-0.72, 1.0, true, 0.25, 0.2, 0.2],
+    [0.72, 1.0, true, 0.25, 0.2, 0.2],
+    [-0.76, -0.98, false, 0.28, 0.3, 0.2],
+    [0.76, -0.98, false, 0.28, 0.3, 0.2],
+  ];
+  const T = (a, b, r = 0.025, mat = trim) => add(rodGeometry(new THREE.Vector3(...a), new THREE.Vector3(...b), r), mat, 0, 0, 0);
+  // 바닥판 + 쇠파이프 틀
+  add(new THREE.BoxGeometry(0.72, 0.03, 2.1), carbon, 0, 0.1, 0.0);
+  for (const s of [-1, 1]) {
+    T([s * 0.36, 0.12, 1.15], [s * 0.36, 0.12, -1.15]);
+    T([s * 0.36, 0.12, 0.9], [s * 0.6, 0.18, 1.0]); // 앞 차축 쪽
+    T([s * 0.36, 0.12, -0.9], [s * 0.6, 0.2, -0.98]);
+  }
+  T([-0.36, 0.12, 1.15], [0.36, 0.12, 1.15]);
+  T([-0.36, 0.12, -1.15], [0.36, 0.12, -1.15]);
+  T([-0.62, 0.28, -0.98], [0.62, 0.28, -0.98], 0.035, metal); // 뒤 차축
+  // 앞 페어링 (노즈 콘) + 번호판
+  add(loft([R(1.5, 0.32, 0.1, 0.26, 4), R(1.28, 0.46, 0.09, 0.33), R(0.95, 0.42, 0.1, 0.36), R(0.78, 0.3, 0.12, 0.34)], 20), paint, 0, 0, 0);
+  const np = add(new THREE.PlaneGeometry(0.3, 0.26), M.numMat, 0, 0.36, 1.06);
+  np.rotation.x = -0.45;
+  np.castShadow = false;
+  // 옆 범퍼 (사이드 포드)
+  for (const s of [-1, 1]) {
+    const x = s * 0.6;
+    add(loft([R(0.62, 0.08, 0.1, 0.24, 4, x), R(0.35, 0.13, 0.08, 0.3, 4, x), R(-0.3, 0.13, 0.08, 0.3, 4, x), R(-0.62, 0.08, 0.1, 0.24, 4, x)], 16), accent, 0, 0, 0);
+    add(new THREE.BoxGeometry(0.02, 0.05, 0.8), paint, s * 0.735, 0.2, 0.0).castShadow = false;
+  }
+  // 운전석 + 운전자 몸통·팔 + 핸들
+  add(new THREE.BoxGeometry(0.44, 0.5, 0.08), dark, 0, 0.42, -0.5).rotation.x = -0.35;
+  add(new THREE.BoxGeometry(0.44, 0.08, 0.4), dark, 0, 0.2, -0.3);
+  const suit = new THREE.MeshStandardMaterial({ color: look.accent, roughness: 0.6 });
+  add(new THREE.CylinderGeometry(0.17, 0.2, 0.46, 12), suit, 0, 0.52, -0.38).rotation.x = -0.3;
+  for (const s of [-1, 1]) {
+    add(rodGeometry(new THREE.Vector3(s * 0.18, 0.66, -0.3), new THREE.Vector3(s * 0.12, 0.52, 0.18), 0.045), suit, 0, 0, 0);
+    add(rodGeometry(new THREE.Vector3(s * 0.12, 0.22, -0.1), new THREE.Vector3(s * 0.14, 0.2, 0.62), 0.055), suit, 0, 0, 0); // 다리
+  }
+  T([0, 0.18, 0.62], [0, 0.48, 0.24], 0.02, carbon); // 핸들 기둥
+  const sw = add(new THREE.TorusGeometry(0.14, 0.022, 6, 18), carbon, 0, 0.5, 0.22);
+  sw.rotation.x = -0.6;
+  // 오른쪽 뒤 엔진 + 공기 필터 + 배기관 (구부러진 관)
+  add(new THREE.BoxGeometry(0.28, 0.28, 0.3), metal, 0.34, 0.32, -0.72);
+  add(new THREE.CylinderGeometry(0.1, 0.1, 0.18, 14).rotateZ(Math.PI / 2), accent, 0.56, 0.38, -0.62);
+  const ex = new THREE.CatmullRomCurve3([new THREE.Vector3(0.3, 0.42, -0.8), new THREE.Vector3(0.22, 0.48, -1.0), new THREE.Vector3(0.3, 0.42, -1.18), new THREE.Vector3(0.32, 0.38, -1.2)]);
+  add(new THREE.TubeGeometry(ex, 12, 0.04, 8, false), metal, 0, 0, 0);
+  // 앞 범퍼 파이프
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(rodGeometry(new THREE.Vector3(-0.42, 0.16, 1.52), new THREE.Vector3(0.42, 0.16, 1.52), 0.025), trim, 0, 0, 0, fWing);
+  for (const s of [-1, 1]) add(rodGeometry(new THREE.Vector3(s * 0.42, 0.16, 1.52), new THREE.Vector3(s * 0.36, 0.12, 1.15), 0.025), trim, 0, 0, 0, fWing);
+  // 뒤 범퍼 (넓은 판) — 변신 때 뒷날개처럼 움직임
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  add(new THREE.BoxGeometry(1.5, 0.05, 0.16), paint, 0, 0.3, -1.32, spoiler);
+  const drs = add(new THREE.BoxGeometry(1.2, 0.035, 0.1), accent, 0, 0.36, -1.38, spoiler);
+  drs.rotation.x = 0.2;
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.03, 0.12, 0.2), trim, s * 0.75, 0.3, -1.32, spoiler);
+  void rubber;
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0, 0.92, -0.36);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.6, 0.4], r: [0.62, 0.44] },
+      helmet: [0, 0.92, -0.36],
+      visor: [0.85, -0.55],
+      armor: { y: 0.48, x: 0.62 },
+      ram: { y: 0.02, z: 0.95 },
+      spines: [[-0.62, 0.98], [-0.85, 0.86], [-1.05, 0.7], [-1.25, 0.55]],
+      booster: { x: 0.42, y0: 0.3, y1: 0.62, z0: -0.35, dz: -0.95 },
+      lift: { y: 0.3, z: -1.25, h: 0.18 },
+      stab: [0.74, 0.32, -1.32],
+      tailFin: [0, 0.66, -0.85],
+      wing: [0.62, 0.3, 0.0],
+      nitro: { x: 0.32, y: 0.4, z: -1.1, dz: -0.35 },
+      vents: [[0.6, 0.31, 0.3], [0.6, 0.32, 0.05], [0.6, 0.31, -0.2]],
+      glow: { y: 0.37, z: 1.2, len: 0.55, rot: 0.2, w: 0.05 },
+      flames: [[0.32, 0.38, 0.4, -1.25]],
+      motor: [0.32, 0.25, -1.35],
+      spark: [0.76, 0.2, -1.25],
+      seams: [0.38, 0.08, 0.0],
+      lean: 0.05,
+      drsRest: 0.2,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ 레트로 로드스터: 둥근 펜더, 지붕 없는 운전석 + 작은 앞유리, 헤드레스트 혹, 크롬 범퍼, 동그란 등, 원형 번호판
+function buildRoadster({ add, body, M }) {
+  const { paint, accent, trim, carbon, dark, metal, glass, lamp, tailMat } = M;
+  const W = [
+    [-0.84, 1.45, true, 0.34, 0.24, 0.38],
+    [0.84, 1.45, true, 0.34, 0.24, 0.38],
+    [-0.84, -1.3, false, 0.35, 0.26, 0.4],
+    [0.84, -1.3, false, 0.35, 0.26, 0.4],
+  ];
+  add(loft([R(2.32, 0.45, 0.32, 0.52, 3), R(2.1, 0.62, 0.28, 0.66, 3), R(1.0, 0.66, 0.27, 0.74, 3), R(-0.2, 0.68, 0.27, 0.74, 3), R(-1.6, 0.68, 0.28, 0.76, 3), R(-2.1, 0.6, 0.3, 0.72, 3), R(-2.2, 0.45, 0.36, 0.64, 3)], 24), paint, 0, 0, 0);
+  for (const side of [-1, 1]) {
+    const xf = side * 0.74, xr = side * 0.76;
+    // 둥글게 부푼 앞·뒤 펜더
+    add(loft([R(2.22, 0.1, 0.36, 0.58, 3, xf), R(1.9, 0.2, 0.3, 0.76, 3, xf), R(1.45, 0.215, 0.3, 0.8, 3, xf), R(1.0, 0.2, 0.3, 0.74, 3, xf), R(0.6, 0.1, 0.32, 0.6, 3, xf)], 20), paint, 0, 0, 0);
+    add(loft([R(-0.6, 0.1, 0.32, 0.6, 3, xr), R(-0.95, 0.2, 0.3, 0.78, 3, xr), R(-1.3, 0.215, 0.3, 0.82, 3, xr), R(-1.7, 0.2, 0.3, 0.76, 3, xr), R(-2.08, 0.1, 0.34, 0.6, 3, xr)], 20), paint, 0, 0, 0);
+    // 동그란 헤드라이트 (펜더 앞) + 크롬 테
+    add(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 18).rotateX(Math.PI / 2), metal, side * 0.74, 0.62, 2.05);
+    add(new THREE.CircleGeometry(0.09, 18), lamp, side * 0.74, 0.62, 2.095).castShadow = false;
+    // 동그란 후미등
+    add(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 14).rotateX(Math.PI / 2), tailMat, side * 0.72, 0.6, -2.08);
+    // 헤드레스트 혹 (운전석 뒤로 길게)
+    add(loft([R(-0.75, 0.13, 0.72, 0.95, 3, side * 0.3), R(-1.0, 0.14, 0.72, 0.96, 3, side * 0.3), R(-1.85, 0.05, 0.72, 0.78, 3, side * 0.3)], 16), paint, 0, 0, 0);
+    // 문 손잡이 크롬 + 원형 번호판 바탕(흰 원)
+    add(new THREE.BoxGeometry(0.02, 0.025, 0.12), metal, side * 0.69, 0.68, -0.1).castShadow = false;
+    const disc = add(new THREE.CircleGeometry(0.25, 24), accent, side * 0.692, 0.52, 0.2);
+    disc.rotation.y = side * Math.PI / 2;
+    disc.castShadow = false;
+  }
+  doorNumber(add, M, 0.695, 0.52, 0.2, 0.3);
+  // 운전석 (가죽색 좌석 2개) + 테두리
+  add(new THREE.BoxGeometry(1.0, 0.04, 1.0), dark, 0, 0.74, -0.32);
+  const leather = new THREE.MeshStandardMaterial({ color: '#7a3b22', roughness: 0.7 });
+  for (const sx of [-0.3, 0.3]) add(new THREE.BoxGeometry(0.4, 0.4, 0.1), leather, sx, 0.88, -0.72).rotation.x = -0.2;
+  add(new THREE.TorusGeometry(0.15, 0.015, 6, 20), carbon, 0.3, 0.9, 0.18).rotation.x = -0.5; // 나무 핸들
+  // 작은 앞유리 + 크롬 틀
+  const ws = add(new THREE.BoxGeometry(1.0, 0.3, 0.02), glass, 0, 0.9, 0.38);
+  ws.rotation.x = -0.4;
+  T3(add, metal, [-0.5, 0.75, 0.42], [-0.5, 1.03, 0.32]);
+  T3(add, metal, [0.5, 0.75, 0.42], [0.5, 1.03, 0.32]);
+  T3(add, metal, [-0.5, 1.03, 0.32], [0.5, 1.03, 0.32]);
+  // 보닛·트렁크 가운데 흰 줄, 보닛 위 공기구멍
+  add(new THREE.BoxGeometry(0.22, 0.012, 1.7), accent, 0, 0.745, 1.25).castShadow = false;
+  add(new THREE.BoxGeometry(0.22, 0.012, 0.9), accent, 0, 0.755, -1.7).castShadow = false;
+  add(new THREE.BoxGeometry(0.3, 0.05, 0.4), dark, 0.32, 0.75, 1.0);
+  // 앞: 타원 그릴 + 크롬 범퍼
+  const gr = add(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 20).rotateX(Math.PI / 2), dark, 0, 0.47, 2.3);
+  gr.scale.set(1.5, 0.75, 1);
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(rodGeometry(new THREE.Vector3(-0.8, 0.36, 2.25), new THREE.Vector3(0.8, 0.36, 2.25), 0.035), metal, 0, 0, 0, fWing);
+  add(rodGeometry(new THREE.Vector3(-0.8, 0.38, -2.18), new THREE.Vector3(0.8, 0.38, -2.18), 0.035), metal, 0, 0, 0);
+  // 트렁크 끝 작은 덕테일 + 짐받이(크롬)
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  add(new THREE.BoxGeometry(1.1, 0.04, 0.2), paint, 0, 0.76, -2.05, spoiler).rotation.x = -0.25;
+  const drs = add(new THREE.BoxGeometry(0.9, 0.025, 0.25), metal, 0, 0.8, -1.75, spoiler);
+  drs.rotation.x = 0.15;
+  for (const x of [-0.3, 0, 0.3]) add(new THREE.BoxGeometry(0.02, 0.02, 0.3), metal, x, 0.82, -1.75, spoiler);
+  add(new THREE.CylinderGeometry(0.05, 0.055, 0.2, 12).rotateX(Math.PI / 2), metal, -0.4, 0.32, -2.22);
+  add(new THREE.CylinderGeometry(0.05, 0.055, 0.2, 12).rotateX(Math.PI / 2), metal, 0.4, 0.32, -2.22);
+  void trim;
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0.3, 1.02, -0.45);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.74, 0.56], r: [0.74, 0.58] },
+      helmet: [0.3, 1.02, -0.45],
+      visor: [0.98, -0.7],
+      armor: { y: 0.72, x: 0.74 },
+      ram: { y: 0.15, z: 1.5 },
+      spines: [[-0.9, 1.0], [-1.25, 0.96], [-1.6, 0.88], [-1.95, 0.8]],
+      booster: { x: 0.6, y0: 0.5, y1: 0.86, z0: -0.5, dz: -1.2 },
+      lift: { y: 0.72, z: -2.0, h: 0.2 },
+      stab: [0.56, 0.78, -2.05],
+      tailFin: [0, 0.96, -1.1],
+      wing: [0.75, 0.55, 0.0],
+      nitro: { x: 0.4, y: 0.32, z: -2.18, dz: -0.4 },
+      vents: [[0.32, 0.76, 1.0], [0.32, 0.75, 1.25], [0.32, 0.74, 1.5]],
+      glow: { y: 0.755, z: 1.4, len: 1.1, rot: 0.06, w: 0.05 },
+      flames: [[-0.4, 0.32, 0.45, -2.3], [0.4, 0.32, 0.45, -2.3]],
+      motor: [0.36, 0.38, -2.2],
+      spark: [0.84, 0.24, -1.7],
+      seams: [0.76, 0.25, 0.0],
+      lean: 0.09,
+      drsRest: 0.15,
+    },
+  };
+}
+/** 막대 하나 (로드스터 앞유리 틀 등) */
+function T3(add, mat, a, b, r = 0.02) {
+  return add(rodGeometry(new THREE.Vector3(...a), new THREE.Vector3(...b), r), mat, 0, 0, 0);
+}
+
+// ------------------------------------------------------------------ 트럭: 높은 차체, 큰 바퀴, 캐빈 + 짐칸.
+//   trophy(기본, 트로피 트럭): 검은 오버펜더, 지붕 조명 막대, 앞 불바, 짐칸 예비 타이어, 드러난 뒤 쇼크업소버
+//   look.variant 'pickup' (팜 픽업): 크롬 그릴, 둥근 등, 짐칸에 나무 상자, 캐빈 뒤 롤바
+function buildTruck({ add, body, M, look }) {
+  const { paint, accent, trim, carbon, dark, metal, glass, lamp, tailMat, rubber } = M;
+  const pickup = look.variant === 'pickup';
+  const r = pickup ? 0.44 : 0.5, wd = pickup ? 0.34 : 0.42, wx = pickup ? 0.92 : 1.0;
+  const W = [
+    [-wx, 1.7, true, r, wd, 0.3],
+    [wx, 1.7, true, r, wd, 0.3],
+    [-wx, -1.55, false, r, wd, 0.3],
+    [wx, -1.55, false, r, wd, 0.3],
+  ];
+  const y0 = pickup ? 0.5 : 0.58; // 차체 바닥 높이
+  // 프레임 + 보닛·캐빈 아래 몸통
+  add(new THREE.BoxGeometry(0.8, 0.14, 4.7), carbon, 0, y0 - 0.02, 0.05);
+  add(loft([R(2.6, 0.78, y0 + 0.04, y0 + 0.42, 6), R(2.35, 0.86, y0, y0 + 0.56), R(0.9, 0.88, y0, y0 + 0.62), R(-0.66, 0.88, y0, y0 + 0.66)], 24), paint, 0, 0, 0);
+  // 캐빈 유리 + 지붕
+  add(loft([R(0.72, 0.84, y0 + 0.6, y0 + 0.66, 6), R(0.4, 0.84, y0 + 0.64, y0 + 1.16, 6), R(-0.5, 0.84, y0 + 0.64, y0 + 1.2, 6), R(-0.64, 0.84, y0 + 0.64, y0 + 1.14, 6)], 24), glass, 0, 0, 0);
+  add(loft([R(0.38, 0.8, y0 + 1.14, y0 + 1.2, 6), R(-0.62, 0.8, y0 + 1.16, y0 + 1.22, 6)], 24), paint, 0, 0, 0);
+  for (const side of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.05, 0.52, 0.1), paint, side * 0.86, y0 + 0.9, -0.15); // B필러
+    add(new THREE.BoxGeometry(0.16, 0.12, 0.08), pickup ? metal : dark, side * 0.95, y0 + 0.74, 0.62); // 백미러
+  }
+  // 짐칸: 바닥 + 양옆 벽 + 뒷문
+  add(new THREE.BoxGeometry(1.72, 0.05, 1.85), dark, 0, y0 + 0.2, -1.62);
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.06, 0.46, 1.9), paint, side * 0.87, y0 + 0.42, -1.6);
+  add(new THREE.BoxGeometry(1.8, 0.46, 0.06), paint, 0, y0 + 0.42, -2.56);
+  add(new THREE.BoxGeometry(1.2, 0.08, 0.03), accent, 0, y0 + 0.5, -2.6).castShadow = false;
+  doorNumber(add, M, 0.885, y0 + 0.4, 0.1, 0.4);
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.2, 0.14, 0.04), tailMat, side * 0.75, y0 + 0.48, -2.6);
+  // 옆 줄무늬
+  for (const side of [-1, 1]) add(new THREE.BoxGeometry(0.02, 0.08, 4.0), accent, side * 0.895, y0 + 0.22, -0.3).castShadow = false;
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  let drs;
+  const T = (a, b, rr = 0.035, mat = trim, parent = body) => add(rodGeometry(new THREE.Vector3(...a), new THREE.Vector3(...b), rr), mat, 0, 0, 0, parent);
+  if (!pickup) {
+    // 트로피 트럭: 검은 오버펜더, 앞 불바 + 보조등, 지붕 조명 막대, 지붕 흡기구, 짐칸 예비 타이어, 뒤 쇼크업소버
+    arches(add, M, W, 0.03, 0.15, 0.2, carbon);
+    for (const side of [-1, 1]) T([side * 0.75, y0 + 0.1, 2.75], [side * 0.6, y0 + 0.62, 2.62], 0.04, trim, fWing);
+    T([-0.75, y0 + 0.1, 2.75], [0.75, y0 + 0.1, 2.75], 0.045, trim, fWing);
+    T([-0.6, y0 + 0.62, 2.62], [0.6, y0 + 0.62, 2.62], 0.04, trim, fWing);
+    for (const x of [-0.3, 0.3]) {
+      add(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 16).rotateX(Math.PI / 2), carbon, x, y0 + 0.62, 2.7, fWing);
+      add(new THREE.CircleGeometry(0.085, 16), lamp, x, y0 + 0.62, 2.745, fWing).castShadow = false;
+    }
+    add(new THREE.BoxGeometry(1.5, 0.1, 0.12), carbon, 0, y0 + 1.27, 0.32);
+    for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.2, 0.07, 0.02), lamp, -0.6 + i * 0.24, y0 + 1.27, 0.39).castShadow = false;
+    add(new THREE.BoxGeometry(0.4, 0.12, 0.5), dark, 0, y0 + 1.28, -0.2);
+    add(new THREE.BoxGeometry(0.7, 0.04, 0.03), dark, 0, y0 + 0.4, 2.62); // 그릴
+    const spare = new THREE.Group();
+    spare.position.set(0, y0 + 0.62, -1.55);
+    spare.rotation.x = Math.PI / 2;
+    body.add(spare);
+    add(new THREE.TorusGeometry(0.34, 0.14, 10, 22), rubber, 0, 0, 0, spare);
+    add(new THREE.CylinderGeometry(0.22, 0.22, 0.16, 14).rotateX(Math.PI / 2), M.rimMat, 0, 0, 0, spare);
+    for (const side of [-1, 1]) {
+      T([side * 0.55, y0 + 0.2, -1.2], [side * 0.9, y0 - 0.1, -1.55], 0.05, accent);
+      T([side * 0.55, y0 + 0.2, -1.9], [side * 0.9, y0 - 0.1, -1.55], 0.05, accent);
+      // 캐빈 뒤 롤바 → 짐칸 뒤로
+      T([side * 0.75, y0 + 0.66, -0.7], [side * 0.7, y0 + 1.08, -1.2], 0.04, trim, spoiler);
+      T([side * 0.7, y0 + 1.08, -1.2], [side * 0.75, y0 + 0.66, -2.45], 0.04, trim, spoiler);
+    }
+    add(new THREE.BoxGeometry(1.6, 0.05, 0.36), paint, 0, y0 + 1.12, -1.25, spoiler);
+    drs = add(new THREE.BoxGeometry(1.6, 0.035, 0.16), accent, 0, y0 + 1.18, -1.42, spoiler);
+  } else {
+    // 픽업: 차체색 펜더, 크롬 그릴·범퍼, 둥근 헤드라이트, 짐칸 나무 상자, 캐빈 뒤 롤바(조명 2개)
+    arches(add, M, W, 0.03, 0.12, 0.12);
+    add(new THREE.BoxGeometry(1.0, 0.28, 0.05), metal, 0, y0 + 0.3, 2.62, fWing);
+    for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.96, 0.025, 0.06), dark, 0, y0 + 0.2 + i * 0.07, 2.64, fWing).castShadow = false;
+    add(new THREE.BoxGeometry(1.75, 0.12, 0.12), metal, 0, y0 + 0.02, 2.66, fWing);
+    add(new THREE.BoxGeometry(1.75, 0.12, 0.12), metal, 0, y0 + 0.08, -2.62);
+    for (const side of [-1, 1]) {
+      add(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 16).rotateX(Math.PI / 2), metal, side * 0.66, y0 + 0.32, 2.6);
+      add(new THREE.CircleGeometry(0.085, 16), lamp, side * 0.66, y0 + 0.32, 2.635).castShadow = false;
+    }
+    const wood = new THREE.MeshStandardMaterial({ color: '#a8743f', roughness: 0.8 });
+    add(new THREE.BoxGeometry(0.6, 0.4, 0.55), wood, -0.4, y0 + 0.43, -1.25);
+    add(new THREE.BoxGeometry(0.55, 0.3, 0.5), wood, 0.35, y0 + 0.38, -1.95);
+    add(new THREE.BoxGeometry(0.5, 0.25, 0.45), wood, -0.35, y0 + 0.75, -1.3).rotation.y = 0.3;
+    for (const side of [-1, 1]) T([side * 0.82, y0 + 0.62, -0.78], [side * 0.82, y0 + 1.2, -0.78], 0.04, metal, spoiler);
+    add(new THREE.BoxGeometry(1.68, 0.06, 0.08), metal, 0, y0 + 1.2, -0.78, spoiler);
+    drs = add(new THREE.BoxGeometry(1.2, 0.035, 0.14), paint, 0, y0 + 1.24, -0.86, spoiler);
+    for (const x of [-0.4, 0.4]) add(new THREE.CircleGeometry(0.07, 14).rotateY(Math.PI), lamp, x, y0 + 1.2, -0.83, spoiler).castShadow = false;
+  }
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0.35, y0 + 0.9, -0.05);
+  const top = y0 + 1.2;
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [wx - 0.1, r + 0.35], r: [wx - 0.1, r + 0.38] },
+      helmet: [0.35, y0 + 0.9, -0.05],
+      visor: [top + 0.06, -0.4],
+      armor: { y: y0 + 0.62, x: 0.88 },
+      ram: { y: y0 - 0.1, z: 1.95 },
+      spines: [[0.1, top + 0.12], [-0.3, top + 0.12], [-1.2, y0 + 0.75], [-1.9, y0 + 0.75]],
+      booster: { x: 0.55, y0: y0 + 0.35, y1: y0 + 0.8, z0: -0.9, dz: -1.25 },
+      lift: { y: y0 + 0.62, z: -2.2, h: 0.3 },
+      stab: [0.8, y0 + 1.12, -1.25],
+      tailFin: [0, top + 0.05, -0.2],
+      wing: [0.9, y0 + 0.38, 0.0],
+      nitro: { x: 0.6, y: y0 + 0.06, z: -2.55, dz: -0.4 },
+      vents: [[0.42, y0 + 0.57, 1.6], [0.42, y0 + 0.58, 1.35], [0.42, y0 + 0.59, 1.1]],
+      glow: { y: y0 + 0.58, z: 1.8, len: 1.1, rot: 0.08, w: 0.06 },
+      flames: [[-0.6, y0 + 0.06, 0.5, -2.65], [0.6, y0 + 0.06, 0.5, -2.65]],
+      motor: [0.42, y0 + 0.1, -2.6],
+      spark: [wx, 0.3, -2.0],
+      seams: [0.86, y0 - 0.05, 0.0],
+      lean: pickup ? 0.1 : 0.12,
+      drsRest: 0.2,
+    },
+  };
+}
+
+// ------------------------------------------------------------------ 전기 콘셉트카: 물방울 모양 한 덩어리, 덮인 뒷바퀴, 앞뒤 빛나는 라이트 바, 떠 있는 칼날 날개
+function buildEV({ add, body, M, look }) {
+  const { paint, accent, trim, carbon, dark, glass, tailMat } = M;
+  const neon = glowMat(look.accent, 1.6);
+  const W = [
+    [-0.88, 1.65, true, 0.36, 0.3, 0.4],
+    [0.88, 1.65, true, 0.36, 0.3, 0.4],
+    [-0.9, -1.55, false, 0.37, 0.34, 0.4],
+    [0.9, -1.55, false, 0.37, 0.34, 0.4],
+  ];
+  add(loft([R(2.85, 0.5, 0.22, 0.42, 3), R(2.5, 0.85, 0.18, 0.55, 3), R(1.6, 0.98, 0.18, 0.62, 3), R(0.4, 1.0, 0.2, 0.66, 3), R(-1.0, 0.98, 0.22, 0.68, 3), R(-2.0, 0.9, 0.24, 0.66, 3), R(-2.6, 0.62, 0.3, 0.56, 3), R(-2.75, 0.4, 0.36, 0.5, 3)], 28), paint, 0, 0, 0);
+  arches(add, M, W.slice(0, 2), 0.03, 0.1, 0.06);
+  // 뒷바퀴 덮개 (스커트) + 빛나는 줄
+  for (const side of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.05, 0.3, 0.95), paint, side * 0.985, 0.54, -1.55);
+    add(new THREE.BoxGeometry(0.02, 0.02, 3.6), neon, side * 0.99, 0.25, 0.0).castShadow = false;
+  }
+  // 물방울 캐노피 (유리 한 장)
+  add(loft([R(1.5, 0.3, 0.6, 0.64, 3), R(0.9, 0.6, 0.62, 1.0, 3), R(0, 0.66, 0.64, 1.15, 3), R(-1.0, 0.6, 0.66, 1.08, 3), R(-2.0, 0.4, 0.64, 0.86, 3), R(-2.5, 0.2, 0.6, 0.7, 3)], 24), glass, 0, 0, 0);
+  // 지붕 가운데 빛나는 줄 + 충전구
+  add(new THREE.BoxGeometry(0.04, 0.012, 2.6), neon, 0, 1.153, -0.4).castShadow = false;
+  add(new THREE.CircleGeometry(0.05, 14).rotateY(Math.PI / 2), neon, 0.99, 0.5, 1.1).castShadow = false;
+  // 앞뒤 라이트 바
+  add(new THREE.BoxGeometry(1.5, 0.03, 0.04), neon, 0, 0.47, 2.66).castShadow = false;
+  add(new THREE.BoxGeometry(1.1, 0.03, 0.04), tailMat, 0, 0.52, -2.74);
+  add(new THREE.BoxGeometry(1.15, 0.01, 0.045), neon, 0, 0.555, -2.74).castShadow = false;
+  // 아래 검은 띠 (디퓨저 느낌) + 앞 공기 구멍
+  add(new THREE.BoxGeometry(1.3, 0.03, 0.5), carbon, 0, 0.22, -2.4).rotation.x = 0.35;
+  add(new THREE.BoxGeometry(0.9, 0.06, 0.03), dark, 0, 0.3, 2.7);
+  doorNumber(add, M, 0.995, 0.42, 0.1, 0.28);
+  // 앞 스플리터 (얇은 칼날)
+  const fWing = new THREE.Group();
+  body.add(fWing);
+  add(new THREE.BoxGeometry(1.7, 0.025, 0.28), carbon, 0, 0.16, 2.7, fWing);
+  add(new THREE.BoxGeometry(1.7, 0.01, 0.03), neon, 0, 0.175, 2.84, fWing).castShadow = false;
+  // 떠 있는 칼날 뒷날개 (빛나는 기둥 2개)
+  const spoiler = new THREE.Group();
+  body.add(spoiler);
+  add(new THREE.BoxGeometry(1.75, 0.035, 0.3), paint, 0, 0.98, -2.42, spoiler);
+  const drs = add(new THREE.BoxGeometry(1.75, 0.025, 0.14), accent, 0, 1.02, -2.56, spoiler);
+  drs.rotation.x = 0.3;
+  for (const side of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.03, 0.34, 0.08), neon, side * 0.5, 0.82, -2.38, spoiler);
+    add(new THREE.BoxGeometry(0.03, 0.12, 0.34), trim, side * 0.875, 0.98, -2.44, spoiler);
+  }
+  const helmet = makeHelmet(add, body, M);
+  helmet.position.set(0, 0.92, -0.2);
+  return {
+    helmet, fWing, spoiler, drs,
+    A: {
+      wheels: W,
+      tuck: { f: [0.8, 0.5], r: [0.84, 0.56] },
+      helmet: [0, 0.92, -0.2],
+      visor: [1.08, -0.7],
+      armor: { y: 0.66, x: 0.92 },
+      ram: { y: 0.08, z: 1.85 },
+      spines: [[-0.7, 1.12], [-1.1, 1.08], [-1.5, 1.0], [-1.9, 0.9]],
+      booster: { x: 0.45, y0: 0.5, y1: 0.92, z0: -0.6, dz: -1.25 },
+      lift: { y: 0.66, z: -2.35, h: 0.25 },
+      stab: [0.88, 0.98, -2.44],
+      tailFin: [0, 1.12, -0.9],
+      wing: [0.92, 0.48, 0.0],
+      nitro: { x: 0.3, y: 0.36, z: -2.62, dz: -0.42 },
+      vents: [[0.6, 0.63, 1.55], [0.6, 0.645, 1.3], [0.6, 0.655, 1.05]],
+      glow: { y: 0.6, z: 1.95, len: 1.2, rot: 0.12, w: 0.06 },
+      flames: [[0, 0.42, 0.6, -2.82]],
+      motor: [0.38, 0.36, -2.72],
+      spark: [0.9, 0.25, -2.05],
+      seams: [0.98, 0.18, -0.1],
+      lean: 0.04,
+      drsRest: 0.3,
+    },
+  };
+}
+
+const BUILDERS = { f1: buildF1, gt: buildGT, rally: buildRally, proto: buildProto, rocket: buildRocket, buggy: buildBuggy, hatch: buildHatch, muscle: buildMuscle, hyper: buildHyper, kart: buildKart, roadster: buildRoadster, truck: buildTruck, ev: buildEV };
 
 /** 울퉁불퉁한 오프로드 타이어 돌기 (타이어 둘레에 엇갈린 블록) */
 function knobGeometry(r, wd) {

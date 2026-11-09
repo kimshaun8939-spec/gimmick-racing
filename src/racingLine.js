@@ -133,7 +133,11 @@ export function computeRacingLine(samples, limit, length, opts = {}) {
    * 결과 speed[i] = 그 지점에서 낼 수 있는 속도, brake[i] = 1이면 그 지점은 감속 구간
    */
   const bank = opts.bank || null;
+  // opts.water[i] = 물 위 (바닷가 배 구간): 그곳은 car.boat(배 성능)로 속도 계획
+  const water = opts.water || null;
   function profile(car) {
+    const wet = (i) => !!(water && water[i] && car.boat);
+    const M = (i) => (wet(i) ? car.boat : car);
     const v = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const c = Math.abs(curv[i]);
@@ -141,8 +145,9 @@ export function computeRacingLine(samples, limit, length, opts = {}) {
       // 경사(뱅크) 코너: 도로가 코너 안쪽으로 기울면 중력이 차를 안쪽으로 눌러 줘서 더 빨리 돌 수 있음 (반대로 기울면 손해)
       //   opts.bank[i] = 도로 기울기 (라디안, + = 오른쪽이 높음 = 왼쪽 코너에 유리), 곡률 + = 왼쪽
       const bankLat = bank && car.bankGrip ? 9.81 * Math.sin(bank[i]) * Math.sign(curv[i]) * car.bankGrip : 0;
-      let s = car.vMax;
-      for (let r = 0; r < 4; r++) s = Math.min(car.vMax, c > 1e-5 ? Math.sqrt(Math.max(car.aLat(s) * 0.5, car.aLat(s) + bankLat) / c) : car.vMax);
+      const m = M(i), bl = wet(i) ? 0 : bankLat;
+      let s = m.vMax;
+      for (let r = 0; r < 4; r++) s = Math.min(m.vMax, c > 1e-5 ? Math.sqrt(Math.max(m.aLat(s) * 0.5, m.aLat(s) + bl) / c) : m.vMax);
       v[i] = s;
     }
     // 가속 한계 (앞으로), 감속 한계 (뒤로). 고리라서 두 바퀴 돌림
@@ -150,13 +155,13 @@ export function computeRacingLine(samples, limit, length, opts = {}) {
     for (let lap = 0; lap < 2; lap++)
       for (let n = 0; n < N; n++) {
         const i = n, p = W(n - 1);
-        fwd[i] = Math.min(fwd[i], Math.sqrt(fwd[p] * fwd[p] + 2 * car.aAcc(fwd[p]) * seg[p]));
+        fwd[i] = Math.min(fwd[i], Math.sqrt(fwd[p] * fwd[p] + 2 * M(p).aAcc(fwd[p]) * seg[p]));
       }
     const out = Float32Array.from(fwd);
     for (let lap = 0; lap < 2; lap++)
       for (let n = N - 1; n >= 0; n--) {
         const i = n, nx = W(n + 1);
-        out[i] = Math.min(out[i], Math.sqrt(out[nx] * out[nx] + 2 * car.aBrake(out[nx]) * seg[i]));
+        out[i] = Math.min(out[i], Math.sqrt(out[nx] * out[nx] + 2 * M(i).aBrake(out[nx]) * seg[i]));
       }
     const brake = new Uint8Array(N);
     for (let i = 0; i < N; i++) brake[i] = out[i] < fwd[i] - 0.3 ? 1 : 0;

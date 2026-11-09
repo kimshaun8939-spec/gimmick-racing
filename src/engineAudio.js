@@ -354,7 +354,9 @@ export function createEngineAudio(sound = {}) {
 
       // ── 터보: rpm × 페달에 따라 천천히 차오르고, 떼면 빠지기 시작
       // 터보: 원래는 가속 모드에서만. sound.turbo가 있으면 평소에도 그만큼 돎 (랠리카 같은 터보 엔진)
-      const spTarget = !onWater ? clamp(rpmN * 1.1, 0, 1) * load * (accel ? P.turboMax : P.turbo) : 0;
+      // (2026-11-10) 물리에 터보가 있는 차(car.cfg.engine.turbo)는 실제 터보 압력(car.spool)을 따라감 → 밟고 잠깐 뒤에 휘슬이 차오름 (터보 랙이 귀로 들림)
+      const physTurbo = !!(car.cfg && car.cfg.engine && car.cfg.engine.turbo);
+      const spTarget = onWater ? 0 : physTurbo ? clamp(car.spool || 0, 0, 1) * (accel ? P.turboMax : Math.max(P.turbo, 0.6)) : clamp(rpmN * 1.1, 0, 1) * load * (accel ? P.turboMax : P.turbo);
       spool += (spTarget - spool) * Math.min(1, dt * (spTarget > spool ? 1.8 : 2.5));
       const s2 = spool * spool;
       N.whistle.frequency.setTargetAtTime(2200 + 5200 * spool + 500 * rpmN, t, 0.05);
@@ -384,9 +386,9 @@ export function createEngineAudio(sound = {}) {
       }
       if (!silent) {
         // 리미터에 걸리면 가끔 탁탁
-        if (car.limiter && Math.random() < 5 * dt) firePop(0.6);
+        if (car.limiter && Math.random() < 5 * dt * Math.min(1, P.pops)) firePop(0.6); // 팝이 없는 차(전기차 pops 0)는 안 남
         // 풀가속 중 변속하는 순간 '빠앙' 한 방
-        if (shifting && !wasShifting && thr > 0.6 && rpm > 9000 && Math.random() < (accel ? 0.9 : 0.5)) firePop(0.8);
+        if (shifting && !wasShifting && thr > 0.6 && rpm > 9000 && Math.random() < (accel ? 0.9 : 0.5) * Math.min(1, P.pops)) firePop(0.8);
       }
       wasShifting = shifting;
 
