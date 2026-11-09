@@ -1,0 +1,44 @@
+{
+  "_설명": "코스 데이터. points는 위에서 내려다본 (x, z) 중심선이고 scale배 확대됩니다. t는 코스 위치(0=출발선, 1=한 바퀴). side: -1 왼쪽, 1 오른쪽, 0 양쪽",
+  "name": "연습 코스",
+  "laps": 3,
+  "scale": 1.6,
+  "width": 18,
+  "points": [
+    [0, 0], [90, -10], [150, 30], [160, 100], [110, 140], [60, 110],
+    [20, 150], [-60, 160], [-120, 110], [-110, 40], [-60, 20]
+  ],
+  "features": [
+    { "_구역": "① 튜브 터널: 바닥은 장애물 지그재그, 천장엔 부스트" },
+    { "type": "tube", "t0": 0.008, "t1": 0.1, "radius": 6, "height": 14 },
+    { "type": "barrier", "t": 0.025, "offset": -3.75, "width": 10.5 },
+    { "type": "barrier", "t": 0.05, "offset": 3.75, "width": 10.5 },
+    { "type": "barrier", "t": 0.075, "offset": -3.75, "width": 10.5 },
+    { "type": "boostPad", "t": 0.037, "surface": "ceiling", "height": 14 },
+    { "type": "boostPad", "t": 0.058, "surface": "ceiling", "height": 14 },
+    { "type": "boostPad", "t": 0.079, "surface": "ceiling", "height": 14 },
+
+    { "_구역": "② 벽 타기 S자 커브: 바깥쪽 자석 벽을 타면 감속 없이 통과" },
+    { "type": "wall", "t0": 0.355, "t1": 0.425, "side": -1, "radius": 6, "height": 12 },
+    { "type": "wall", "t0": 0.428, "t1": 0.515, "side": 1, "radius": 6, "height": 12 },
+    { "type": "boostPad", "t": 0.39, "surface": "wall", "side": -1, "height": 7.5, "boost": 2.2 },
+    { "type": "boostPad", "t": 0.465, "surface": "wall", "side": 1, "height": 7.5, "boost": 2.2 },
+
+    { "_구역": "③ 용암 협곡: 점프대로 넘거나, 양쪽 벽을 타거나, 변신으로 건너기" },
+    { "type": "boostPad", "t": 0.538 },
+    { "type": "ramp", "t": 0.556, "length": 16, "height": 4.5, "width": 7 },
+    { "type": "wall", "t0": 0.548, "t1": 0.628, "side": 0, "radius": 6, "height": 10 },
+    { "type": "lava", "t0": 0.572, "t1": 0.585 },
+
+    { "_구역": "④ 농장 흙길 지름길: 입구 바리케이드는 스파이크 폼/부스트로 부수거나 윙으로 넘기" },
+    { "type": "shortcut", "t0": 0.66, "t1": 0.94, "width": 11, "ramp": 0.5 }
+  ],
+  "_풍경": "구역별 테마. t0~t1 구간에서 가장 가까운 땅에 테마에 맞는 건물, 나무, 바위가 놓입니다. stands = 관중석 위치",
+  "scenery": [
+    { "theme": "city", "t0": 0.88, "t1": 0.12, "stands": [0.955] },
+    { "theme": "forest", "t0": 0.12, "t1": 0.35 },
+    { "theme": "rocky", "t0": 0.35, "t1": 0.53 },
+    { "theme": "volcano", "t0": 0.53, "t1": 0.66 },
+    { "theme": "farm", "t0": 0.66, "t1": 0.88 }
+  ]
+}

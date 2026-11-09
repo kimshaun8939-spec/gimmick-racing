@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>기믹 레이싱</title>
+  <style>
+    :root {
+      --hud-bg: rgba(12, 16, 26, 0.55);
+      --hud-fg: #f5f7fb;
+      --accent: #ffcf3f;
+      --blue: #4fc3ff;
+      --orange: #ff9a2e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #8fc9f0; font-family: "Pretendard", "Segoe UI", "Malgun Gothic", sans-serif; color: var(--hud-fg); }
+    canvas#game { display: block; width: 100%; height: 100%; }
+    .hud { position: fixed; pointer-events: none; text-shadow: 0 2px 6px rgba(0,0,0,0.45); }
+    .panel { background: var(--hud-bg); border-radius: 12px; padding: 10px 14px; backdrop-filter: blur(4px); }
+    #topLeft { top: 16px; left: 16px; display: grid; gap: 4px; min-width: 180px; }
+    #lap { font-size: 28px; font-weight: 800; }
+    #time { font-size: 22px; font-variant-numeric: tabular-nums; }
+    #best { font-size: 14px; opacity: 0.8; font-variant-numeric: tabular-nums; }
+    #speedBox { right: 16px; bottom: 16px; text-align: right; }
+    #speed { font-size: 56px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    #speed { transition: color 0.3s, text-shadow 0.3s; }
+    #speed.fast { color: #ffe9c4; text-shadow: 0 0 14px rgba(255, 140, 50, 0.65), 0 2px 6px rgba(0,0,0,0.45); }
+    #speed.boost { color: #e6ffe0; text-shadow: 0 0 16px rgba(125, 255, 106, 0.75), 0 2px 6px rgba(0,0,0,0.45); }
+    #speedUnit { font-size: 14px; opacity: 0.8; }
+    #driftBar { margin-top: 8px; width: 180px; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.2); overflow: hidden; margin-left: auto; }
+    #driftFill { height: 100%; width: 0%; background: #fff; transition: background 0.1s; }
+    /* 회전수계 + 기어 */
+    #tachRow { display: flex; align-items: center; gap: 10px; margin-top: 8px; justify-content: flex-end; }
+    #gear { font-size: 34px; font-weight: 900; min-width: 30px; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
+    #gear.shifting { opacity: 0.45; }
+    #tach { position: relative; width: 180px; height: 14px; border-radius: 7px; background: rgba(255,255,255,0.18); overflow: hidden; }
+    #tachFill { position: absolute; inset: 0 auto 0 0; width: 0%; background: linear-gradient(90deg, #7fd6ff, #ffffff 60%, #ffcf3f 85%, #ff4b3a); }
+    #tachRed { position: absolute; top: 0; bottom: 0; right: 0; background: rgba(255, 60, 50, 0.35); border-left: 2px solid #ff4b3a; }
+    #tachGreen { position: absolute; top: 0; bottom: 0; background: rgba(125, 255, 106, 0.45); border: 2px solid #7dff6a; border-radius: 4px; display: none; }
+    #tach.shiftNow { box-shadow: 0 0 12px #7dff6a; }
+    #tach.limiter { animation: limiter 0.08s infinite alternate; }
+    @keyframes limiter { from { box-shadow: 0 0 10px #ff4b3a; } to { box-shadow: none; } }
+    #gearInfo { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; }
+    #gearMode { opacity: 0.75; }
+    #tireState { font-weight: 800; }
+    #shiftPerfect { color: #7dff6a; font-weight: 800; opacity: 0; transition: opacity 0.4s; }
+    #minimap { right: 16px; top: 16px; }
+    #center { inset: 0; display: grid; place-items: center; }
+    #startLights { left: 50%; top: 18px; transform: translateX(-50%); display: none; gap: 12px; padding: 10px 16px; background: #111c; border-radius: 14px; box-shadow: 0 4px 16px #0006; }
+    #startLights i { width: 34px; height: 34px; border-radius: 50%; background: #3a1414; box-shadow: inset 0 -3px 0 #0006; transition: background 0.05s; }
+    #startLights i.on { background: #ff2a1f; box-shadow: 0 0 16px #ff2a1fcc, inset 0 -3px 0 #0004; }
+    #bigText { font-size: 120px; font-weight: 900; color: var(--accent); text-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+    #toast { left: 50%; top: 22%; transform: translateX(-50%); font-size: 32px; font-weight: 800; color: var(--accent); opacity: 0; transition: opacity 0.2s; }
+    #help { left: 16px; bottom: 16px; font-size: 13px; line-height: 1.7; transition: opacity 0.4s; }
+    #help { z-index: 2; }
+    #help.hidden { opacity: 0; }
+    #helpHint { left: 16px; bottom: 16px; font-size: 12px; opacity: 0.7; padding: 6px 10px; }
+    @media (max-width: 1100px) { #help { bottom: 120px; } }
+    #help b { display: inline-block; min-width: 72px; color: var(--accent); }
+    /* 아래 가운데: 주행 모드 1~4 + 부스터 버튼 (키보드 또는 마우스로 누름) */
+    #forms { left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 8px; align-items: stretch; pointer-events: auto; }
+    .mode, #boosterBtn { background: var(--hud-bg); border-radius: 12px; padding: 8px 12px; min-width: 92px; border: 2px solid transparent; cursor: pointer; user-select: none;
+      transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s, transform 0.08s; opacity: 0.65; }
+    .mode:hover, #boosterBtn:hover { opacity: 0.9; }
+    .mode:active, #boosterBtn:active { transform: scale(0.95); }
+    .mode .top, #boosterBtn .top { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 15px; }
+    .mode .key, #boosterBtn .key { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: rgba(255,255,255,0.18); font-size: 13px; }
+    .mode .hint, #boosterBtn .hint { margin-top: 3px; font-size: 11px; opacity: 0.75; }
+    .mode.auto { cursor: default; pointer-events: none; }
+    .mode.pulse { animation: modePulse 0.6s ease-out; }
+    @keyframes modePulse { 0% { transform: scale(1.12); box-shadow: 0 0 24px var(--c); } 100% { transform: scale(1); } }
+    .mode.on { opacity: 1; border-color: var(--c); box-shadow: 0 0 14px var(--c); background: color-mix(in srgb, var(--c) 22%, rgba(10, 14, 24, 0.55)); }
+    #modeNormal { --c: #ffffff; }
+    #modeAccel { --c: #ff7a2e; }
+    #modeBoat { --c: #3fb8ff; }
+    #modeFly { --c: #9ad8ff; }
+    #boosterBtn { --c: #7dff6a; margin-left: 10px; min-width: 120px; opacity: 1; border-color: rgba(125, 255, 106, 0.55); }
+    #boosterBtn .bar { margin-top: 5px; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.18); overflow: hidden; }
+    #boosterBtn .fill { height: 100%; width: 0%; background: var(--c); }
+    #boosterBtn.active { border-color: #fff; box-shadow: 0 0 18px var(--c); background: color-mix(in srgb, var(--c) 35%, rgba(10, 14, 24, 0.55)); }
+    #flightInfo { left: 50%; bottom: 96px; transform: translateX(-50%); font-size: 14px; font-weight: 800; color: #cfeeff; display: none; }
+    #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 35%, var(--flash, #7dff6a) 130%); }
+    @media (max-width: 640px) {
+      #help { display: none; }
+      #speed { font-size: 40px; }
+      #bigText { font-size: 80px; }
+    }
+  </style>
+  <!-- 홈 화면·ESC 메뉴·설정·결과·로딩 화면 스타일 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" />
+  <link rel="stylesheet" href="src/menu.css" />
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="flash"></div>
+
+  <div id="topLeft" class="hud panel">
+    <div id="lap">LAP 1/3</div>
+    <div id="time">0:00.000</div>
+    <div id="best">최고 랩 --:--.---</div>
+  </div>
+
+  <canvas id="minimap" class="hud panel" width="180" height="180"></canvas>
+
+  <div id="speedBox" class="hud panel">
+    <div id="speed">0</div>
+    <div id="speedUnit">km/h</div>
+    <div id="driftBar"><div id="driftFill"></div></div>
+    <div id="tachRow">
+      <div id="tach"><div id="tachFill"></div><div id="tachGreen"></div><div id="tachRed"></div></div>
+      <div id="gear">1</div>
+    </div>
+    <div id="gearInfo"><span id="tireState"></span><span id="shiftPerfect">완벽한 변속!</span><span id="gearMode">자동 · T</span></div>
+  </div>
+
+  <div id="help" class="hud panel">
+    <div><b>W / ↑</b>가속 (꾹 누르면 페달이 서서히 끝까지)</div>
+    <div><b>S / ↓</b>브레이크 · 후진</div>
+    <div><b>A D / ← →</b>방향 (핸들도 서서히 꺾임)</div>
+    <div><b>T</b>자동 ↔ 수동 변속 · <b>X / Z</b>기어 올림 / 내림</div>
+    <div style="opacity:0.8">출발: 빨간불 5개가 꺼지는 순간 W! 미리 밟고 있으면 시동이 꺼져요 (빨리 반응하면 완벽한 출발)</div>
+    <div style="opacity:0.8">저단 풀가속 = 휠스핀, 코너 전엔 브레이크, 미끄러지면 반대로 핸들</div>
+    <div><b>L</b>레이싱 라인 켜기/끄기 (초록 밟기 · 노랑 떼기 · 빨강 브레이크)</div>
+    <div style="opacity:0.8">코너 안쪽 빨간·흰 연석을 빠르게 스치면 에이펙스 보너스 · 잔디에 많이 빠질수록 느려짐</div>
+    <div><b>Shift / Space</b>드리프트 (꺾으면서 누르기)</div>
+    <div><b>E</b>부스터 (무제한, 3초 · 스파이크 장갑으로 변신 · S로 바로 끄기)</div>
+    <div><b>모드</b>자동: 평소 일반 · 150 km/h 넘으면 🔥가속(빠르지만 미끄러움) · 물 = 배 · 활주로 = 비행</div>
+    <div style="opacity:0.8">비행: 빠를 때 Space 이륙 · Space 상승 · Shift 하강 · A/D 선회 · W 추력</div>
+    <div><b>R</b>도로로 복귀 · <b>Enter</b>다시 시작</div>
+    <div><b>Esc</b>메뉴: 일시정지 · 설정 · 차/맵 바꾸기 · 홈으로</div>
+    <div><b>M</b>맵 바꾸기 (레이스 코스 → 구름섬 그랑프리 → 운동장 → 바닷가 → 테스트 맵) · <b>N</b>소리 끄기</div>
+    <div style="margin-top:4px;opacity:0.8">보라색 자석 도로는 벽과 천장도 달릴 수 있어요</div>
+  </div>
+
+  <div id="helpHint" class="hud panel">H 조작법 · Esc 메뉴</div>
+  <button id="menuBtn" title="메뉴 (Esc)">☰ 메뉴 · Esc</button>
+  <div id="fps"></div>
+
+  <div id="sinkWarn" class="hud">🌊 가라앉는 중! 3 = 배 모드</div>
+
+  <div id="forms" class="hud">
+    <!-- 모드는 자동으로 바뀜 (누를 수 없음, 지금 모드만 보여 줌) -->
+    <div class="mode auto" id="modeNormal"><div class="top">🚗 일반</div><div class="hint">기본 주행</div></div>
+    <div class="mode auto" id="modeAccel"><div class="top">🔥 가속</div><div class="hint">150 km/h 넘으면 자동</div></div>
+    <div class="mode auto" id="modeBoat"><div class="top">🚤 배</div><div class="hint">물에 닿으면 자동</div></div>
+    <div class="mode auto" id="modeFly"><div class="top">✈️ 비행</div><div class="hint">활주로에서 자동</div></div>
+    <div id="boosterBtn" data-key="KeyE"><div class="top"><span class="key">E</span>🚀 부스터</div><div class="bar"><div class="fill"></div></div><div class="hint">무제한 · 3초</div></div>
+  </div>
+  <div id="flightInfo" class="hud"></div>
+
+  <div id="startLights" class="hud"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="center" class="hud"><div id="bigText"></div></div>
+  <div id="toast" class="hud"></div>
+
+  <!-- 완주 결과 (hud.js가 채움) -->
+  <div id="results"></div>
+
+  <!-- 로딩 화면 (main.js가 맵·차 이름을 채움) -->
+  <div id="loading"><div class="ld"><div class="logo">기믹 레이싱</div><div class="map" id="ldMap">&nbsp;</div><div class="car" id="ldCar"></div><div class="barx"><i></i></div><div class="tip" id="ldTip"></div></div></div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
