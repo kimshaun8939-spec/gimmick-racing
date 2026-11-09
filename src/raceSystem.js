@@ -111,6 +111,7 @@ export async function createRaceSystem(o) {
     car.draft = 0;
     fastest = null;
     notices.length = 0;
+    for (const key in botCornerBest) delete botCornerBest[key];
     me.marks.fill(NaN);
     me.nextMark = 0;
     return p;
@@ -298,6 +299,7 @@ export async function createRaceSystem(o) {
 
   // --- 레이스 알림 (main.js가 꺼내 감): 최고 랩 ---
   const notices = [];
+  const botCornerBest = {}; // 코너 번호 → 이번 레이스 봇 최고 코너 시간 (결과 화면 코너 분석)
   let fastest = null; // { name, time, isPlayer, color }
   function lapSet(e, lt) {
     if (lt < 5) return;
@@ -336,6 +338,11 @@ export async function createRaceSystem(o) {
       scenery.collideCar(bc);
       if (bc.events.length) {
         if (bc.events.includes('respawn')) b.driver.reset();
+        // 코너 분석(결과 화면): 봇 중 가장 빠른 코너 시간
+        if (racing && !b.finished && bc.events.includes('corner')) {
+          const ci = bc.lastCornerInfo;
+          if (ci && ci.time != null && ci.num != null && !(botCornerBest[ci.num] <= ci.time)) botCornerBest[ci.num] = ci.time;
+        }
         bc.events.length = 0;
       }
       if (racing) {
@@ -454,7 +461,7 @@ export async function createRaceSystem(o) {
   const dots = () => opponents.entries.map((e) => ({ x: e.view.pos.x, z: e.view.pos.z, color: e.color }));
 
   return {
-    bots, me, M, stats, respawnLog, notices, get fastest() {
+    bots, me, M, stats, respawnLog, notices, botCornerBest, get fastest() {
       return fastest;
     },
     active: () => bots.length > 0 || opponents.entries.length > 0, hasGrid: () => bots.length > 0 || gridTotal != null,

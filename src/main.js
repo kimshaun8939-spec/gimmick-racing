@@ -27,6 +27,8 @@ import { createGhost } from './ghost.js';
 import { createSectors } from './sectors.js';
 import { fastTrack } from './fastTrack.js';
 import { champRace, recordRace, champStandings, champUrl } from './championship.js';
+import { createReplay } from './replay.js';
+import { createCornerReport } from './cornerReport.js';
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -163,6 +165,8 @@ const cornerBest = (() => {
     best = JSON.parse(localStorage.getItem(key) || '{}') || {};
   } catch {}
   return {
+    /** 지금까지의 내 최고 (코너 번호 → 초) 복사본: 레이스 시작 때 코너 분석 기준으로 */
+    snapshot: () => ({ ...best }),
     /** 이번 기록 → 내 최고 기록과 차이 (처음이면 null). 더 빠르면 새 기록으로 저장 */
     delta(num, time) {
       if (time == null) return null;
@@ -204,6 +208,31 @@ const raceSys = await createRaceSystem({
 const sectors = createSectors({ mapName, carId });
 const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992 });
 const finishCbs = []; // raceCtl.onFinish
+// 리플레이 (완주 뒤 결과 화면 "▶ 리플레이"): 모든 차를 1초에 15번 기록 → 다시 볼 때는 물리를 멈추고 replay.frame만
+const replay = createReplay({
+  scene, camera, track, car, model, opponents,
+  hooks: {
+    animate(view, dt) {
+      track.animate(elapsed);
+      scenery.animate(elapsed, dt, view); // 그랑프리 우주 차원 등: 보고 있는 차 기준
+      props.animate(elapsed);
+    },
+    onStart() {
+      duckAudio(true); // 엔진·효과음 잠시 끔
+      if (ghost) ghost.hide();
+    },
+    onExit() {
+      duckAudio(false);
+      snapCamera();
+    },
+    worldKey() {
+      // 그랑프리: 우주/구름섬이 바뀌면 TV 카메라 가림 검사 목록을 다시 만듦
+      return scenery.space ? (scenery.space.inSpace ? 1 : 2) : 0;
+    },
+  },
+});
+// 코너 분석 (결과 화면): 코너마다 내 시간·문제 → 봇 최고(없으면 내 예전 최고)와 비교, 개선할 코너 TOP 3
+const cornerRep = createCornerReport(carCfg);
 // 화면 아래 모드/부스터 버튼: 누르면 그 키를 누른 것과 같음
 for (const b of document.querySelectorAll('[data-key]')) {
   b.addEventListener('pointerdown', (ev) => {
@@ -229,6 +258,9 @@ const race = {
 };
 
 function resetRace() {
+  if (replay.active) replay.stop();
+  replay.reset();
+  cornerRep.reset(cornerBest.snapshot());
   let startT = 0.992;
   if (FREE) car.placeAtPos(track.spawn.x, track.spawn.z, track.spawn.yaw);
   else if (raceSys.hasGrid()) startT = raceSys.placeGrid().t; // 봇 레이스·온라인: 2열 출발 그리드
@@ -556,6 +588,7 @@ function handleEvents() {
     // 코너 탈출 판정: "T3 깔끔한 코너 / 연계 ×2" + 내 최고 기록과 차이 (−0.12초 초록, +0.08초 빨강)
     if (e === 'corner') {
       const info = car.lastCornerInfo;
+      if (race.phase === 'racing') cornerRep.add(info);
       lineFx.corner(info, cornerBest.delta(info.num, info.time));
     }
   }
@@ -704,6 +737,7 @@ function nextMapId() {
   return order[(order.indexOf(mapName) + 1) % order.length] || 'gp';
 }
 function showFinish() {
+  replay.markFinish(race.clock); // 리플레이는 완주 4초 뒤까지
   const total = race.lapTimes.reduce((a, b) => a + b, 0);
   const prev = records.get(mapName, carId);
   const prevRace = prev && prev.race;
@@ -737,7 +771,8 @@ function showFinish() {
   hud.showResults(race.lapTimes, race.best, {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, hasNext: true,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
-    champ, assist: !!race.assist, noRestart: !!champ, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
+    champ, assist: !!race.assist, noRestart: !!champ,
+    replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
     onAction(a) {
       if (a === 'restart') {
         if (!ONLINE && !race.champRec) resetRace(); // 온라인·챔피언십(점수 저장 뒤)에서는 다시 하지 않음
@@ -752,6 +787,7 @@ function showFinish() {
         if (MODE) u.searchParams.set('mode', MODE);
         location.href = u.toString();
       }
+      else if (a === 'replay') replay.start();
       else if (a === 'car') goHome('map');
       else if (a === 'home') goHome();
     },
@@ -785,6 +821,15 @@ function frame(now, manual = false) {
   //   온라인에서는 멈추지 않음 (다른 사람은 계속 달림): 내 차만 손을 뗀 채로 굴러감
   const menuHold = menu.isOpen;
   if (menuHold && !ONLINE) {
+    if (!manual) requestAnimationFrame(frame);
+    return;
+  }
+  // 리플레이 중: 물리·시간은 멈추고 기록만 다시 그림 (온라인이면 내 차는 그 자리에 멈춰 있음 = 이미 완주한 뒤)
+  if (replay.active) {
+    elapsed += dt;
+    replay.frame(dt, elapsed);
+    renderer.render(scene, camera);
+    input.endFrame();
     if (!manual) requestAnimationFrame(frame);
     return;
   }
@@ -863,6 +908,7 @@ function frame(now, manual = false) {
     acc -= FIXED_DT;
   }
   handleEvents();
+  replay.sample(race.clock, race.phase); // 리플레이 기록 (1/15초마다)
 
   model.sync(car, dt, elapsed);
   offroadFx.update(car, dt);
@@ -965,7 +1011,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records,
   resetRace,
-  mode: MODE, opponents, raceSys, ghost, sectors, champ: CHAMP, intro,
+  mode: MODE, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작

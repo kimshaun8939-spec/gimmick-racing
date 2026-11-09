@@ -105,6 +105,32 @@
     #results table.stand .proj { opacity: 0.6; }
     #results table.secs { font-size: 13px; margin-top: 4px; }
     #results table.secs tr.theo td { font-size: 12px; opacity: 0.8; padding-top: 6px; }
+    /* 코너 분석 (결과 화면) */
+    #results .cana { margin-top: 12px; text-align: left; font-size: 13px; }
+    #results .cana .hd { font-weight: 900; font-size: 14px; margin-bottom: 6px; }
+    #results .cana .hd small { font-weight: 600; opacity: 0.6; font-size: 11px; margin-left: 4px; }
+    #results .cana .ct { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.06); margin-bottom: 4px; }
+    #results .cana .ct b { min-width: 30px; color: var(--gm-accent, #ffd23a); }
+    #results .cana .ct .lost { color: #ff7a6b; font-weight: 800; white-space: nowrap; }
+    #results .cana .ct .tip { opacity: 0.9; }
+    #results .cana .ct.ok { color: #5cff8a; }
+    #results .cana .cchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    #results .cana .cc { font-size: 11px; padding: 2px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); white-space: nowrap; }
+    #results .cana .cc.slow { background: rgba(255,90,74,0.25); }
+    #results .cana .cc.fast { background: rgba(92,255,138,0.22); }
+    /* 리플레이 (#results 안): 결과 카드는 숨기고 아래에 재생 막대만 */
+    #results.rp { background: none; pointer-events: none; place-items: end center; }
+    #results.rp > .res { display: none; }
+    #rpBar { display: none; }
+    #results.rp #rpBar { display: block; pointer-events: auto; margin: 0 16px 18px; padding: 10px 14px; width: min(760px, calc(100vw - 32px)); box-sizing: border-box; border-radius: 12px; background: rgba(8,12,24,0.78); border: 1px solid rgba(255,255,255,0.14); backdrop-filter: blur(6px); color: #f3f6fb; }
+    #rpBar .rp-top { display: flex; gap: 12px; align-items: center; font-size: 14px; }
+    #rpBar .rp-top .rp-car { font-weight: 800; }
+    #rpBar .rp-top .rp-car i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+    #rpBar .rp-top .rp-time { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.85; }
+    #rpBar .rp-seek { width: 100%; margin: 8px 0; accent-color: #ffd23a; }
+    #rpBar .rp-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+    #rpBar .rp-btns .gm-btn { min-height: 40px; }
+    body.replaying .hud, body.replaying #menuBtn, body.replaying #draftLines, body.replaying #fps { display: none !important; }
     /* 2라운드 (race): 배너·순위 변화·슬립스트림·출발 그리드 소개·시상대·챔피언십 */
     #racePosRow { display: flex; align-items: baseline; gap: 8px; }
     #posFlash { font-size: 18px; font-weight: 900; opacity: 0; }

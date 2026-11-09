@@ -24,6 +24,25 @@ function standRows(rows) {
 }
 
 /** 시상대 (1·2·3위): rows = [{ name, color, carName, sub }] (1위부터) */
+/** 코너 분석 (cornerReport.summary): 개선할 코너 TOP 3 + 한 줄 팁, 코너마다 기준 대비 ± */
+function cornerHtml(c) {
+  if (!c || !c.rows || !c.rows.length) return '';
+  const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
+  const sgn = (d) => (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2);
+  const refName = c.refKind === 'bot' ? '가장 빠른 봇' : c.refKind === 'me' ? '내 예전 최고' : '';
+  const top = c.top.length
+    ? c.top.map((r) => `<div class="ct"><b>T${esc(r.num)}</b>${r.delta != null && r.delta > 0 ? `<span class="lost">${sgn(r.delta)}초</span>` : ''}<span class="tip">${esc(r.tip.text)}</span></div>`).join('')
+    : '<div class="ct ok">모든 코너 깔끔해요! 👍</div>';
+  const chips = c.rows
+    .map((r) => {
+      const cls = r.delta == null ? '' : r.delta > 0.05 ? ' slow' : r.delta < -0.02 ? ' fast' : '';
+      return `<span class="cc${cls}" title="${esc(r.tip.text)}">T${esc(r.num)}${r.delta != null ? ` ${sgn(r.delta)}` : ''}</span>`;
+    })
+    .join('');
+  return `<div class="cana"><div class="hd">🔍 코너 분석${refName ? ` <small>기준: ${refName}${c.lost > 0.05 ? ` · 합계 ${c.lost.toFixed(2)}초 느림` : ''}</small>` : ''}</div>
+    <div class="ctop">${top}</div><div class="cchips">${chips}</div></div>`;
+}
+
 function podiumHtml(rows, cls = '') {
   const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
   if (!rows || rows.length < 2) return '';
@@ -483,9 +502,11 @@ export function createHud(track) {
         ${ch && !ch.final ? champBlock : ''}
         <table class="laps">${lapTimes.map((t, i) => `<tr class="${t === best ? 'best' : ''}"><td>LAP ${i + 1}${t === best ? ' ⭐' : ''}</td><td>${fmtTime(t)}</td></tr>`).join('')}</table>
         ${secHtml}
+        ${cornerHtml(info.corners)}
         <div class="btns">
           ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart">다시 하기 <kbd>Enter</kbd></button>'}
           ${info.hasNext ? `<button class="gm-btn${info.noRestart ? ' primary' : ''}" data-res="next">${escH(info.nextLabel || '다음 맵 ›')}</button>` : ''}
+          ${info.replay ? '<button class="gm-btn" data-res="replay">▶ 리플레이</button>' : ''}
           <button class="gm-btn" data-res="car">차·맵 바꾸기</button>
           <button class="gm-btn" data-res="home">홈으로</button>
         </div></div>`;
