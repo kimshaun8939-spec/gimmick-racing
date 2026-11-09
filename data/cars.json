@@ -128,7 +128,7 @@
         "aero": { "drag": 0.0013, "downforce": 0.35 },
         "tire": { "traction": 14, "lateral": 22, "rearGrip": 0.95, "rearSwing": 0.4, "yawResponse": 10 },
         "drift": { "minSpeed": 10, "grip": 1.7, "slipDrag": 0.45, "baseTurn": 1.3, "steerTurn": 0.75, "highSpeedLat": 34 },
-        "modes": { "boat": { "thrust": 18, "maxSpeed": 38 } },
+        "modes": { "boat": { "thrust": 23, "maxSpeed": 48 } },
         "camera": { "topKmh": 230 }
       }
     }

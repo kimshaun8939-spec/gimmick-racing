@@ -12,12 +12,20 @@ export function createKeyboardInput() {
   const down = new Set();
   const pressed = new Set(); // 이번 프레임에 새로 눌린 키
 
+  // Shift는 키보드·입력기(한글)에 따라 e.code가 비거나 다르게 올 때가 있어서 e.key·e.location으로도 알아봄 (오른쪽 Shift = location 2)
+  const codeOf = (e) => (e.key === 'Shift' && !/^Shift(Left|Right)$/.test(e.code) ? (e.location === 2 ? 'ShiftRight' : 'ShiftLeft') : e.code);
   window.addEventListener('keydown', (e) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-    if (!down.has(e.code)) pressed.add(e.code);
-    down.add(e.code);
+    const code = codeOf(e);
+    if (!down.has(code)) pressed.add(code);
+    down.add(code);
+    // 다른 키를 누를 때마다 Shift 상태를 다시 맞춤 (Shift를 뗀 신호를 놓쳐서 계속 눌린 것으로 남지 않게)
+    if (e.key !== 'Shift' && !e.shiftKey) down.delete('ShiftLeft'), down.delete('ShiftRight');
   });
-  window.addEventListener('keyup', (e) => down.delete(e.code));
+  window.addEventListener('keyup', (e) => {
+    down.delete(codeOf(e));
+    if (e.key === 'Shift' && !e.shiftKey) down.delete('ShiftLeft'), down.delete('ShiftRight'); // 두 Shift 모두 뗌
+  });
   window.addEventListener('blur', () => down.clear());
 
   const any = (...codes) => codes.some((c) => down.has(c));
