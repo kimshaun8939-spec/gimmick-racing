@@ -97,6 +97,15 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
   for (const jp of track.jumps || []) if (jp.lipI != null) for (let k = -8; k <= 0; k++) jumpCap.set(W(jp.lipI + k), jp.botSpeed || 44);
   // 길 폭(라인이 움직일 수 있는 폭)이 좁은 곳 (점프대 앞 등): 나란히 달리지 말고 한 줄로
   const narrowAt = (i) => L.hi[i] - L.lo[i] < 5.5;
+  // 점프 구역: 립 80 m 앞부터 착지 30 m 뒤까지는 한 줄로 (나란히 뛰면 공중·착지에서 부딪혀 코스 밖으로 → 달 B 등급 복귀)
+  let jumpZone = null;
+  for (const jp of track.jumps || []) {
+    if (jp.lipI == null) continue;
+    jumpZone = jumpZone || new Uint8Array(N);
+    let end = (jp.landI != null ? jp.landI : jp.lipI + Math.round(60 / ds)) + Math.round(30 / ds);
+    if (end < jp.lipI) end += N; // 출발선을 넘어가는 점프
+    for (let k = jp.lipI - Math.round(80 / ds); k <= end; k++) jumpZone[W(k)] = 1;
+  }
 
   /** 라인 지점 j에서 옆으로 lane만큼 비킨 목표 점 */
   function target(j, lane) {
@@ -156,6 +165,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     const gapM = 6 + (0.25 - 0.08 * aggr - (pushing ? 0.05 : 0)) * Math.max(0, speed);
     let narrowSoon = false, brakeSoon = false;
     for (let q = 0; q < (60 + speed * 2) / ds && !narrowSoon; q += 4) narrowSoon = narrowAt(W(i0 + q));
+    const jumpSoon = !!jumpZone && !!jumpZone[i0];
+    if (jumpSoon) narrowSoon = true; // 점프 구역: 추월 줄·나란히 줄 없이 라인 가운데로, 뒤차가 양보
     for (let q = 0; q < (20 + speed * 1.2) / ds && !brakeSoon; q += 3) brakeSoon = !!prof.brake[W(i0 + q)] || Math.abs(L.curvature[W(i0 + q)]) > 1 / 110; // 브레이크 구간·급한 코너
     let attack = null; // 바로 앞(35 m 안) 같은 줄의 차 → 슬립스트림을 타다가 부스터·추월
     let side = false; // 바로 옆에 차가 있음 → 빨리 비킴
@@ -180,6 +191,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const dM = o.progM - ctx.me.progM; // + = 앞
       const dLat = o.lat - myLat;
       const closing = speed - o.speed;
+      // 점프 구역에서 옆(6 m 안)에 조금 앞선 차가 있으면 뒤로 빠져 그 차 뒤에 줄 섬 (슬립스트림 타고 따라감)
+      if (jumpSoon && dM > 0 && dM < 8 && Math.abs(dLat) < 6) follow = Math.min(follow, o.speed - 2.5);
       // 얼마나 앞까지 볼지: 빨리 다가갈수록 멀리 (멈춘 차도 미리 피하게)
       const range = clamp(closing * 2.6, 40, 130);
       if (dM > -6 && dM < 6 && Math.abs(dLat) < 3.4) {

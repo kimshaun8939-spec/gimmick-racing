@@ -13,6 +13,7 @@ import { keybinds, actionsFor, LEGACY, codeLabel, actionVisible } from './keybin
 import { pad, padConfig, pollPad } from './gamepad.js';
 import { settings } from './settings.js';
 import { applyAssists } from './assists.js';
+import { touch, touchWanted } from './touch.js';
 
 // 패드 설정 → gamepad.js
 function syncPadConfig() {
@@ -80,6 +81,9 @@ export function createKeyboardInput() {
   const hit = (id) => pressedActs.has(id);
   // 패드 버튼 → 이번 프레임에 눌린 행동
   pad.onAction((id) => pressedActs.add(id));
+  // 터치 버튼 (휴대폰): 화면에 버튼 만들고, 복귀 버튼 → 이번 프레임에 눌린 행동
+  touch.mount();
+  touch.onAction((id) => pressedActs.add(id));
 
   // 키보드 조향 (서서히 꺾기)
   let kSteer = 0, lastT = 0;
@@ -128,15 +132,17 @@ export function createKeyboardInput() {
       const left = held('left') ? 1 : 0;
       const right = held('right') ? 1 : 0;
       const pa = pad.analog();
+      const tc = touch.read();
       const kb = keyboardSteer(right - left);
+      const tSteer = tc.steer * Math.min(1.3, settings.values.steerSens ?? 1);
       const c = {
-        throttle: Math.max(kbHeld('throttle') ? 1 : 0, pa.throttle),
-        brake: Math.max(kbHeld('brake') ? 1 : 0, pa.brake),
-        steer: Math.max(-1, Math.min(1, kb + pa.steer)), // +1 = 오른쪽
-        drift: held('drift'),
+        throttle: Math.max(kbHeld('throttle') ? 1 : 0, pa.throttle, tc.throttle),
+        brake: Math.max(kbHeld('brake') ? 1 : 0, pa.brake, tc.brake),
+        steer: Math.max(-1, Math.min(1, kb + pa.steer + tSteer)), // +1 = 오른쪽
+        drift: held('drift') || tc.drift,
         // 비행 모드: 상승(이륙) / 하강 (기본 Space / Shift)
-        climb: held('climb'),
-        dive: held('dive'),
+        climb: held('climb') || tc.climb,
+        dive: held('dive') || tc.dive,
         // 부스터 (누른 순간 한 번만)
         booster: hit('booster'),
         // 주행 모드: 1 일반 / 2 가속 / 3 배 / 4 비행 (누른 순간 한 번만. 지금은 자동 변신이라 car.json에서 꺼 둠 → 바꾸는 키 없음)
@@ -215,8 +221,11 @@ function decorateLoading() {
   const el = document.createElement('div');
   el.className = 'ld-keys';
   const draw = () =>
-    (el.innerHTML =
-      [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], actionVisible('booster') && [K('booster'), '부스터'], [K('respawn'), '복귀'], ['<kbd>Esc</kbd>', '메뉴']]
+    (el.innerHTML = touchWanted()
+      ? [['<kbd>◀ ▶</kbd>', '조향'], ['<kbd>▲</kbd>', '가속'], ['<kbd>▼</kbd>', '브레이크'], ['<kbd>💨</kbd>', '드리프트'], ['<kbd>↺</kbd>', '복귀']]
+          .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
+          .join('')
+      : [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], actionVisible('booster') && [K('booster'), '부스터'], [K('respawn'), '복귀'], ['<kbd>Esc</kbd>', '메뉴']]
         .filter(Boolean)
         .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
         .join('') + (pad.connected() ? '<span class="pad">🎮 패드 OK</span>' : ''));

@@ -13,15 +13,20 @@ import { keybinds, actionsFor } from './keybinds.js';
 import { pad, padKbd } from './gamepad.js';
 import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
+import { touch, touchWanted } from './touch.js';
 
 const TUT_KEY = 'gimmick.tutorial';
 const DOWN = new THREE.Vector3(0, -1, 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // 지금 정한 키 (<kbd>). 패드를 쓰는 중이면 패드 버튼
-const K = (id) => (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 1));
-const KK = (id) => (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 2));
-/** 조향 글자: 패드면 왼쪽 스틱, 키보드면 왼쪽·오른쪽 키 */
-const STEER = () => (pad.usingPad() ? '<kbd class="pad">L 스틱</kbd>' : `${K('left')}${K('right')}`);
+// 휴대폰(터치 버튼)이면 화면 버튼 이름으로
+const TOUCH_LBL = { throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
+const onTouch = () => !pad.usingPad() && touchWanted();
+const TK = (id) => (onTouch() && TOUCH_LBL[id] ? `<kbd>${TOUCH_LBL[id]}</kbd>` : null);
+const K = (id) => TK(id) || (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 1));
+const KK = (id) => TK(id) || (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 2));
+/** 조향 글자: 패드면 왼쪽 스틱, 터치면 왼쪽 끌기, 키보드면 왼쪽·오른쪽 키 */
+const STEER = () => (pad.usingPad() ? '<kbd class="pad">L 스틱</kbd>' : onTouch() ? '<kbd>◀ 왼쪽 끌기 ▶</kbd>' : `${K('left')}${K('right')}`);
 
 export function startTutorial(game) {
   if (!game || !game.car) return;
@@ -605,7 +610,7 @@ export function startTutorial(game) {
       id: 'respawn', ic: '↩️', chip: '복귀', title: '길을 벗어나면 복귀',
       card: null,
       task: () => `도로 밖에 나왔어요! ${K('respawn')} 를 눌러 도로로 돌아가요.`,
-      goals: [pad.usingPad() && pad.get('respawn') != null ? `${pad.label('respawn')} 버튼으로 복귀` : `${keybinds.main('respawn')} 키로 복귀`],
+      goals: [pad.usingPad() && pad.get('respawn') != null ? `${pad.label('respawn')} 버튼으로 복귀` : onTouch() ? '↺ 복귀 버튼으로 복귀' : `${keybinds.main('respawn')} 키로 복귀`],
       setup(s) {
         // 도로 옆 땅 위 (떨어지지 않는 평평한 곳)를 찾음
         const half = track.width / 2;
@@ -840,6 +845,7 @@ export function startTutorial(game) {
     pause(false);
     window.removeEventListener('keydown', onKey, true);
     pad.setActionFilter(null);
+    if (typeof offTouch === 'function') offTouch();
   }
   function goTo(where) {
     const carId = game.carId || 'f1';
@@ -964,6 +970,10 @@ export function startTutorial(game) {
     if (id === 'map') return setHint('튜토리얼 중에는 맵을 바꿀 수 없어요'), false;
     if (id === 'respawn' && st) st.keyed = true;
     return true;
+  });
+  // 터치 ↺ 복귀 버튼도 기록
+  var offTouch = touch.onAction((id) => {
+    if (!ended && phase !== 'card' && id === 'respawn' && st) st.keyed = true;
   });
 
   root.addEventListener('click', (e) => {

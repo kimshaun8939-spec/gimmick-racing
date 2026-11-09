@@ -708,3 +708,209 @@ kbd.pad.pf3 { background: #8a6a12; border-color: #ffcf3f; color: #fff6d6; }
 .tut-gauge .gh { color: var(--gm-dim); font-variant-numeric: tabular-nums; }
 .tut-tip.tut-pad { font-size: 12.5px; }
 .h-mode.running .opts { display: none; }
+
+/* =====================================================================
+   터치 조작 (휴대폰·태블릿, src/touch.js) · 2026-11-10 5라운드
+   ===================================================================== */
+#touchCtl { position: fixed; inset: 0; z-index: 30; pointer-events: none; display: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; font-family: "Pretendard", "Malgun Gothic", sans-serif; }
+#touchCtl.show { display: block; }
+#touchCtl .tc-btn { position: absolute; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; border: 2px solid rgba(255, 255, 255, 0.28); background: rgba(12, 16, 26, 0.38); color: #fff; border-radius: 50%; display: grid; place-content: center; text-align: center; padding: 0; font: 900 26px/1 "Pretendard", "Malgun Gothic", sans-serif; backdrop-filter: blur(3px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); transition: transform 0.06s, background 0.1s, border-color 0.1s; }
+#touchCtl .tc-btn small { display: block; font-size: 10px; font-weight: 800; opacity: 0.8; margin-top: 3px; letter-spacing: -0.3px; }
+#touchCtl .tc-btn b { font-weight: 900; }
+#touchCtl .tc-btn.on { transform: scale(0.93); background: rgba(255, 255, 255, 0.28); border-color: #fff; }
+/* 오른쪽: 가속 (가장 큼) · 브레이크 · 드리프트 */
+#touchCtl { --s: 1; }
+#touchCtl[data-size="s"] { --s: 0.84; }
+#touchCtl[data-size="l"] { --s: 1.16; }
+#touchCtl .tc-gas { right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); width: calc(104px * var(--s)); height: calc(104px * var(--s)); border-color: rgba(125, 255, 106, 0.65); }
+#touchCtl .tc-gas.on { background: rgba(125, 255, 106, 0.35); border-color: #7dff6a; }
+#touchCtl .tc-brake { right: calc(max(16px, env(safe-area-inset-right)) + 116px * var(--s)); bottom: max(14px, env(safe-area-inset-bottom)); width: calc(82px * var(--s)); height: calc(82px * var(--s)); border-color: rgba(255, 90, 74, 0.65); }
+#touchCtl .tc-brake.on { background: rgba(255, 90, 74, 0.38); border-color: #ff5a4a; }
+#touchCtl .tc-drift { right: calc(max(16px, env(safe-area-inset-right)) + 14px * var(--s)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 116px * var(--s)); width: calc(76px * var(--s)); height: calc(76px * var(--s)); font-size: 22px; border-color: rgba(255, 207, 63, 0.6); }
+#touchCtl .tc-drift.on { background: rgba(255, 207, 63, 0.35); border-color: #ffcf3f; }
+#touchCtl .tc-dive { display: none; right: calc(max(16px, env(safe-area-inset-right)) + 122px * var(--s)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 94px * var(--s)); width: calc(66px * var(--s)); height: calc(66px * var(--s)); font-size: 20px; border-color: rgba(154, 216, 255, 0.6); }
+#touchCtl.fly .tc-dive { display: grid; }
+#touchCtl.fly .tc-drift { border-color: rgba(154, 216, 255, 0.6); }
+/* 작은 버튼: 복귀 · 메뉴 (미니맵 왼쪽) */
+#touchCtl .tc-small { position: absolute; top: max(10px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 122px); display: flex; gap: 8px; }
+body.noMinimap #touchCtl .tc-small { right: max(12px, env(safe-area-inset-right)); }
+#touchCtl .tc-mini { position: relative; width: 50px; height: 50px; border-radius: 14px; font-size: 19px; }
+#touchCtl .tc-mini small { font-size: 9px; margin-top: 1px; }
+/* 왼쪽: 끌기 조향 패드 */
+#touchCtl .tc-zone { position: absolute; left: 0; bottom: 0; width: 44vw; height: 64vh; pointer-events: auto; touch-action: none; }
+#touchCtl .tc-base { position: absolute; left: calc(max(20px, env(safe-area-inset-left)) + 74px); top: calc(100% - 92px); width: 148px; height: 148px; margin: -74px 0 0 -74px; border-radius: 50%; border: 2px dashed rgba(255, 255, 255, 0.3); background: radial-gradient(circle, rgba(12, 16, 26, 0.12), rgba(12, 16, 26, 0.32)); opacity: 0.75; transition: opacity 0.15s; }
+#touchCtl .tc-base.on { opacity: 1; border-style: solid; transition: none; }
+#touchCtl .tc-base .tc-knob { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); border: 2px solid rgba(255, 255, 255, 0.75); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3); }
+#touchCtl .tc-base span { position: absolute; top: 50%; transform: translateY(-50%); font-size: 18px; font-weight: 900; color: rgba(255, 255, 255, 0.55); }
+#touchCtl .tc-base .l { left: 10px; }
+#touchCtl .tc-base .r { right: 10px; }
+/* 왼쪽: 조향 버튼 (설정 '버튼') */
+#touchCtl .tc-steerbtns { display: none; }
+#touchCtl.btnsteer .tc-zone { display: none; }
+#touchCtl.btnsteer .tc-steerbtns { display: block; }
+#touchCtl .tc-left, #touchCtl .tc-right { bottom: max(18px, env(safe-area-inset-bottom)); width: calc(88px * var(--s)); height: calc(88px * var(--s)); border-radius: 22px; font-size: 32px; }
+#touchCtl .tc-left { left: max(16px, env(safe-area-inset-left)); }
+#touchCtl .tc-right { left: calc(max(16px, env(safe-area-inset-left)) + 100px * var(--s)); }
+/* 기울여 조향: 왼쪽 조향은 숨기고 작은 표시만 */
+#touchCtl .tc-tilt { display: none; position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); padding: 6px 12px; border-radius: 16px; background: rgba(12, 16, 26, 0.4); color: #fff; font-size: 12px; font-weight: 800; opacity: 0.75; }
+#touchCtl.tilt .tc-zone, #touchCtl.tilt .tc-steerbtns { display: none; }
+#touchCtl.tilt .tc-tilt { display: block; }
+/* 세로 화면 안내 (레이스 중) */
+#rotateHint { display: none; position: absolute; inset: 0; pointer-events: auto; place-items: center; background: rgba(4, 6, 13, 0.78); backdrop-filter: blur(3px); z-index: 3; }
+#rotateHint .box { text-align: center; color: #fff; padding: 24px; display: grid; gap: 8px; justify-items: center; }
+#rotateHint .ph { font-size: 54px; animation: rotPh 1.8s ease-in-out infinite; }
+#rotateHint b { font-size: 22px; font-weight: 900; }
+#rotateHint small { color: rgba(255, 255, 255, 0.7); font-size: 13px; margin-bottom: 8px; }
+#rotateHint .gm-btn { min-height: 44px; }
+@keyframes rotPh { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) { body:not(.rotate-ok) #touchCtl.show.racing #rotateHint { display: grid; } }
+
+/* 터치 기기에서 HUD 자리 바꾸기 (버튼과 안 겹치게) */
+body.touch-on { touch-action: none; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+body.touch-on #menuBtn { display: none; }
+body.touch-on #forms { display: none; }
+body.touch-on #speedBox { right: auto; left: 50%; transform: translateX(-50%); bottom: max(8px, env(safe-area-inset-bottom)); padding: 6px 12px; text-align: center; }
+body.touch-on #speed { font-size: 34px; }
+body.touch-on #speedUnit { font-size: 11px; }
+body.touch-on #driftBar { display: none; }
+body.touch-on #driftAng { width: 110px; margin-left: auto; margin-right: auto; }
+body.touch-on #speedBox { padding: 4px 12px 6px; min-width: 0; }
+body.touch-on #tachRow { justify-content: center; gap: 6px; margin-top: 4px; }
+body.touch-on #tach { width: 110px; height: 10px; }
+body.touch-on #gear { font-size: 22px; }
+body.touch-on #gearInfo { display: none; }
+body.touch-on #minimap { width: 110px; height: 110px; right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); padding: 4px; }
+body.touch-on #fps { top: 128px; right: 10px; }
+body.touch-on #leftCol { transform: scale(0.74); transform-origin: top left; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); }
+body.touch-on #flightInfo { bottom: 92px; font-size: 12px; }
+body.touch-on #startLights { top: 8px; gap: 8px; padding: 7px 10px; }
+body.touch-on #startLights i { width: 24px; height: 24px; }
+body.touch-on #toast { font-size: 22px; top: 18%; white-space: nowrap; }
+@media (orientation: portrait) {
+  body.touch-on #leftCol { transform: scale(0.62); }
+  body.touch-on #speedBox { bottom: auto; top: 128px; }
+  body.touch-on #startLights { top: 64px; }
+  #touchCtl .tc-zone { width: 41vw; height: 46vh; }
+  #touchCtl .tc-base { width: 124px; height: 124px; margin: -62px 0 0 -62px; left: calc(max(14px, env(safe-area-inset-left)) + 62px); top: calc(100% - 78px); }
+  #touchCtl .tc-small { right: calc(max(10px, env(safe-area-inset-right)) + 118px); gap: 6px; }
+  #touchCtl .tc-mini { width: 46px; height: 46px; }
+}
+@media (max-height: 420px) {
+  body.touch-on #leftCol { transform: scale(0.62); }
+  body.touch-on #tower { display: none; }
+  body.touch-on #speed { font-size: 28px; }
+  body.touch-on #tach { width: 90px; height: 8px; }
+  body.touch-on #gear { font-size: 18px; }
+  body.touch-on #minimap { width: 92px; height: 92px; }
+  #touchCtl .tc-small { right: calc(max(12px, env(safe-area-inset-right)) + 104px); }
+  body.touch-on #fps { top: 108px; }
+}
+
+/* =====================================================================
+   휴대폰 크기 (홈·Esc 메뉴·결과): 손가락으로 누르기 쉽게, 넘치지 않게
+   ===================================================================== */
+@media (pointer: coarse) {
+  .gm-btn, .gm-tab, .h-btn, .pm-list .gm-btn { min-height: 44px; }
+  .gm-choice button, .gm-seg button { min-height: 40px; min-width: 40px; }
+  .gm-switch::after { content: ''; position: absolute; inset: -9px -6px; }
+}
+@media (max-width: 860px) {
+  .pm-wrap { grid-template-columns: minmax(0, 1fr); width: calc(100vw - 20px); }
+  .pm-side, .pm-page, .pm-info { min-width: 0; }
+}
+@media (max-width: 560px) {
+  .gm-set-tabs { display: flex; overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+  .gm-set-tabs::-webkit-scrollbar { display: none; }
+  .gm-tab { flex-shrink: 0; padding: 8px 12px; font-size: 13px; }
+  .pm-page .head { padding: 12px 14px 0; }
+  .pm-page .scroll { padding: 10px 8px 14px; }
+  .pm-head h2 { font-size: 26px; }
+  .gm-set-row { padding: 10px 8px; }
+}
+@media (max-width: 720px) {
+  .h-maps .head, .h-modes .head { flex-wrap: wrap; align-items: flex-start; }
+  .h-maps .head > div:first-child, .h-modes .head > div:first-child { width: 100%; }
+  .h-maps .head h2, .h-modes .head h2 { writing-mode: horizontal-tb; white-space: nowrap; }
+  .h-maps .head .bar, .h-modes .head .bar { display: flex; gap: 8px; width: 100%; }
+  .h-maps .head .bar .gm-btn, .h-modes .head .bar .gm-btn { flex: 1; justify-content: center; text-align: center; }
+  .h-carlist .list .h-cgroup { flex-shrink: 0; width: auto; align-self: center; white-space: nowrap; }
+  .h-carlist .list .h-cgroup small { display: none; }
+}
+@media (pointer: coarse) {
+  #home .head .gm-btn kbd, #home .h-btn kbd, #pauseMenu .pm-list kbd, .tut-pbtns kbd, .tut-btns kbd, #results .gm-btn kbd, .gm-hint { display: none; }
+}
+@media (max-width: 720px) {
+  .h-modesum { display: none; }
+  .h-modes { gap: 10px; }
+  .h-modegrid .h-modecard { min-height: 0; padding: 14px 16px 12px; }
+  .h-modegrid .h-modecard .ic { font-size: 28px; margin-bottom: 0; }
+  .h-modetip { font-size: 13px; padding: 10px 12px; }
+}
+@media (pointer: coarse) {
+  .h-mopt button { width: 38px; height: 38px; }
+  .h-mopt { padding: 4px 4px 4px 10px; }
+}
+/* 결과 화면: 낮은 화면(휴대폰 가로)·좁은 화면(세로)에서 버튼이 항상 보이게 */
+@media (max-height: 560px), (max-width: 560px) {
+  #results .res, #results .res.wide { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; padding: 14px 16px 0; width: min(660px, calc(100vw - 16px)); }
+  #results .btns { position: sticky; bottom: 0; z-index: 2; margin: 10px -16px 0; padding: 10px 12px 12px; background: linear-gradient(rgba(13, 19, 36, 0), rgba(13, 19, 36, 0.97) 28%); }
+  #results .btns .gm-btn { flex: 1 1 0; min-width: 110px; min-height: 44px; }
+}
+@media (max-height: 560px) {
+  #results .flag { display: none; }
+  #results h2 { font-size: 32px; }
+  #results .total { font-size: 30px; margin-top: 8px; }
+  #results .podium { margin-top: 8px; }
+  #results .podium .p1 .blk { height: 52px; }
+  #results .podium .p2 .blk { height: 38px; }
+  #results .podium .p3 .blk { height: 28px; }
+}
+/* Esc 메뉴: 휴대폰 가로 (낮은 화면) → 다시 두 칸, 버튼 목록은 스크롤 */
+@media (max-height: 520px) and (min-width: 600px) {
+  .pm-wrap { grid-template-columns: 250px minmax(0, 1fr); width: calc(100vw - 20px); height: calc(100vh - 16px); height: calc(100dvh - 16px); max-height: none; overflow: hidden; gap: 12px; }
+  .pm-side { gap: 8px; min-height: 0; }
+  .pm-info { display: none; }
+  .pm-head .ic { width: 34px; height: 34px; font-size: 16px; }
+  .pm-head h2 { font-size: 24px; }
+  .pm-list { min-height: 0; gap: 4px; }
+  .pm-list .gm-btn { padding: 8px 14px; min-height: 42px; }
+  .pm-page { min-height: 0; }
+  .pm-welcome .big { font-size: 40px; }
+}
+/* 튜토리얼 카드: 좁은 화면 */
+@media (max-width: 560px) {
+  .tut-card { padding: 14px 16px 16px; }
+  .tut-btns { flex-wrap: wrap; }
+  .tut-btns .sp { display: none; }
+  .tut-btns .gm-btn { flex: 1 1 auto; min-height: 44px; justify-content: center; }
+}
+@media (max-height: 520px) {
+  .tut-card { max-height: calc(100vh - 12px); max-height: calc(100dvh - 12px); padding: 12px 18px 14px; }
+}
+/* 튜토리얼 미션 판: 터치 버튼과 안 겹치게 (휴대폰) */
+@media (orientation: portrait) {
+  body.touch-on .tut-panel { top: 226px; bottom: auto; left: 8px; right: 8px; width: auto; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  body.touch-on .tut-panel { top: 54px; bottom: auto; left: calc(50% - min(170px, 22vw)); width: min(340px, 44vw); right: auto; padding: 8px 12px 8px; }
+  body.touch-on .tut-pb { margin: 4px 0; font-size: 12.5px; line-height: 1.45; }
+  body.touch-on .tut-goals .g { font-size: 12px; }
+  body.touch-on .tut-pbtns { margin-top: 6px; }
+  body.touch-on .tut-pbtns .gm-btn { min-height: 34px; }
+}
+/* 홈: 휴대폰 가로 (낮은 화면) → 위가 잘리지 않게 위에서부터, 머리·바닥 줄 작게 */
+@media (max-height: 520px) {
+  .h-main { justify-content: flex-start; }
+  .h-main > * { flex-shrink: 0; }
+  #home .h-top { padding: 10px 16px; }
+  #home .h-view { top: 64px; bottom: 10px; left: 16px; right: 16px; overflow: auto; }
+  #home .h-foot { display: none; }
+  .h-logo .mark { width: 38px; height: 38px; font-size: 18px; }
+  .h-logo .name { font-size: 22px; }
+  .h-logo .sub { display: none; }
+  .h-hero { display: none; }
+}
+@media (max-height: 520px) {
+  .h-modetip { display: none; }
+  .h-modes h2, .h-maps h2 { font-size: 26px; }
+}

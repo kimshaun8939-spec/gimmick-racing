@@ -5,6 +5,7 @@
 //   - tab: 'pad'인 설정은 게임패드 탭에 보임. hidden: true는 화면에 안 보이는 설정 (홈의 다른 화면에서 바꿈)
 import { keybinds, createKeybindPanel, codeLabel, actionVisible } from './keybinds.js';
 import { pad, createPadPanel } from './gamepad.js';
+import { touchWanted } from './touch.js';
 
 const KEY = 'gimmick.settings';
 
@@ -41,6 +42,15 @@ export const SETTING_DEFS = [
   { group: '조향 · 운전 도움', key: 'steerAssist', label: '조향 도움', desc: '레이싱 라인 쪽으로 핸들을 살짝 돌려 줘요 (초보용)', type: 'choice',
     options: [['off', '끔'], ['light', '약하게'], ['full', '강하게']], def: 'off' },
   { group: '조향 · 운전 도움', key: 'tcs', label: '트랙션 컨트롤', desc: '출발·코너 탈출에서 바퀴가 헛돌면 가속을 줄여 줘요', type: 'toggle', def: false },
+
+  // 터치 (휴대폰·태블릿, src/touch.js)
+  { group: '터치 (휴대폰)', key: 'touchCtl', label: '터치 버튼', desc: '화면 위 조향·가속·브레이크 버튼 (자동 = 터치 화면이면 켬)', type: 'choice',
+    options: [['auto', '자동'], ['on', '켜기'], ['off', '끄기']], def: 'auto' },
+  { group: '터치 (휴대폰)', key: 'touchSteer', label: '터치 조향', desc: '끌기 = 왼쪽 아무 데나 대고 옆으로 끈 만큼 · 버튼 = ◀ ▶', type: 'choice',
+    options: [['pad', '끌기'], ['buttons', '버튼']], def: 'pad' },
+  { group: '터치 (휴대폰)', key: 'touchSize', label: '버튼 크기', desc: '', type: 'choice',
+    options: [['s', '작게'], ['m', '보통'], ['l', '크게']], def: 'm' },
+  { group: '터치 (휴대폰)', key: 'tilt', label: '기울여 조향', desc: '휴대폰을 핸들처럼 좌우로 기울여요 (iPhone은 처음에 허락을 물어요)', type: 'toggle', def: false },
 
   // 게임패드 (게임패드 탭에 보임)
   { group: '게임패드', tab: 'pad', key: 'padDeadzone', label: '스틱 데드존', desc: '가운데에서 이만큼은 무시 (스틱이 저절로 조금 꺾이면 크게)', type: 'choice',
@@ -307,7 +317,15 @@ export function createControlsPage(opts = {}) {
     [0, 1].flatMap((slot) => ids.map((id) => keybinds.get(id)[slot]).filter(Boolean)).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('') || '<kbd class="none">없음</kbd>';
   const row = (keys, what, sub = '') => `<div class="gm-ctl-row"><div class="gm-keys">${keys}</div><div><b>${what}</b>${sub ? `<small>${sub}</small>` : ''}</div></div>`;
   function render() {
-    el.innerHTML = `
+    const touchSec = touchWanted()
+      ? `<section class="gm-touchctl"><h3>📱 터치 (휴대폰)</h3>
+      ${row('<kbd>◀ ●▶</kbd>', '조향', '화면 왼쪽 아무 데나 손가락을 대고 옆으로 끈 만큼 꺾여요 (설정에서 ◀ ▶ 버튼·기울이기로 바꿀 수 있어요)')}
+      ${row('<kbd>▲</kbd><kbd>▼</kbd>', '가속 · 브레이크', '오른쪽 아래 큰 버튼 · 작은 버튼')}
+      ${row('<kbd>💨</kbd>', '드리프트', '비행기일 땐 ⬆ 상승 · ⬇ 하강 버튼이 생겨요')}
+      ${row('<kbd>↺</kbd><kbd>☰</kbd>', '복귀 · 메뉴', '오른쪽 위 작은 버튼')}
+      </section>`
+      : '';
+    el.innerHTML = `${touchSec}
     <section><h3>기본 운전</h3>
       ${row(K('throttle'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
