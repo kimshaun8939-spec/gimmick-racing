@@ -803,6 +803,8 @@ export function buildNeonTrack(data, scene) {
     grandprix: true, neon: true, surf, roadYAt, heightAt: () => 0, fieldAt: () => 10, islands: [], loops: [], bridgeRuns: [], railRuns, railSide, railLimit, railLatOf, deckHalf: DECK, curb: CURB,
     runway: null, apron: null, plank: null, rings: [], skyPath: [], inSkyCorridor: () => false, onAltPath: () => false, altPaths: [], indexAt, S, spanList, runsOf,
     dimension, setWorld, get inSpace() { return curWorld; }, get inGlitch() { return curWorld; }, buildMs, sampleCount: SAMPLES,
+    // 갓길로 나갈 때 튀는 조각 색(초록 잔디 대신 젖은 아스팔트 + 네온 조각), 에이펙스 불빛 기둥 색(주황 대신 네온 하늘색)
+    offroadColors: ['#2b2836', '#3b3648', '#1d1b26', '#ff2f8e'], apexColor: '#2ff3ff',
     gravityAt, ramps, highWall, tube: tubeInfo, tubeK, tubeCore, groundCenter: center, groundSize, bbox: bb,
   };
 }

@@ -332,9 +332,20 @@ export function buildNeonProps(track, scene) {
     const i1 = dim ? Math.round(dim.t0 * N) - mS(40) + N : N - 1;
     for (let i = i0; i <= i1; i++) cityIdx.push(i % N);
   }
+  // 드론 높이 바닥: 고가도로(최고 18 m)보다 늘 위로 (round 4: 고가 교차 아래 접근로 위를 낮게 날던 드론이 카메라 앞을 지나갔음),
+  //   메가타워(튜브) 근처 ±90 m에서는 숨김 (빌딩을 뚫고 지나가지 않게)
+  const droneOK = new Uint8Array(cityIdx.length);
+  {
+    const near = mS(90);
+    for (let j = 0; j < cityIdx.length; j++) {
+      let ok = 1;
+      for (let q = -near; q <= near && ok; q += 2) if (track.tubeK && track.tubeK[(cityIdx[j] + q + N) % N] > 0) ok = 0;
+      droneOK[j] = ok;
+    }
+  }
   const DRONES = 60;
   const drones = [];
-  for (let k = 0; k < DRONES; k++) drones.push({ u: rand() * cityIdx.length, sp: R(9, 22) * (rand() < 0.5 ? 1 : -1), lat: R(12, 30) * (rand() < 0.5 ? 1 : -1), h: R(9, 24), ph: R(0, 6), pkg: rand() < 0.6, col: new THREE.Color(NEON[k % NEON.length]) });
+  for (let k = 0; k < DRONES; k++) drones.push({ u: rand() * cityIdx.length, sp: R(9, 22) * (rand() < 0.5 ? 1 : -1), lat: R(12, 30) * (rand() < 0.5 ? 1 : -1), h: R(8, 22), ph: R(0, 6), pkg: rand() < 0.6, col: new THREE.Color(NEON[k % NEON.length]) });
   const dBody = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 0.22, 1.1), new THREE.MeshStandardMaterial({ color: '#2a2d38', metalness: 0.7, roughness: 0.35, emissive: '#0d0f18' }), DRONES);
   const rotorGeo = (() => {
     const parts = [];
@@ -369,14 +380,15 @@ export function buildNeonProps(track, scene) {
       _a.lerpVectors(sa.pos, sb.pos, f);
       _r.lerpVectors(sa.right, sb.right, f).normalize();
       _a.addScaledVector(_r, d.lat + Math.sin(t * 0.3 + d.ph) * 3);
-      _a.y += d.h + Math.sin(t * 1.7 + d.ph) * 0.6;
+      _a.y = Math.max(_a.y, 18) + d.h + Math.sin(t * 1.7 + d.ph) * 0.6;
+      const vis = droneOK[j] ? 1 : 0.001;
       const yaw = Math.atan2(sa.tan.x, sa.tan.z) + (d.sp < 0 ? Math.PI : 0);
       _q.setFromEuler(_e.set(0.12, yaw, Math.sin(t * 1.1 + d.ph) * 0.06, 'YXZ'));
-      _s.setScalar(1.5);
+      _s.setScalar(1.5 * vis);
       _m.compose(_a, _q, _s);
       dBody.setMatrixAt(k, _m);
       dRotor.setMatrixAt(k, _m);
-      _s.setScalar(d.pkg ? 1.4 : 0.001);
+      _s.setScalar(d.pkg ? 1.4 * vis : 0.001);
       _b.copy(_a);
       _b.y -= 0.6;
       _m.compose(_b, _q, _s);
@@ -384,7 +396,7 @@ export function buildNeonProps(track, scene) {
       const blink = Math.sin(t * 6 + d.ph * 3) > 0.6 ? 1 : 0.25;
       for (const side of [0, 1]) {
         _b.set(side ? 0.9 : -0.9, 0, -0.9).applyQuaternion(_q).add(_a);
-        _s.setScalar(1.6 * (side ? blink : 1.25 - blink));
+        _s.setScalar(1.6 * vis * (side ? blink : 1.25 - blink));
         _m.compose(_b, _q, _s);
         dLight.setMatrixAt(k * 2 + side, _m);
       }

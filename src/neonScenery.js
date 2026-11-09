@@ -575,7 +575,7 @@ export function buildNeonScenery(track, scene) {
       const col = k % 7 === 0 ? pinkC : k % 3 === 0 ? cool : warm;
       heads.push({ x: hd.x, y: hd.y, z: hd.z, ry: yaw, color: '#' + col.getHexString() });
       // 젖은 길에 비친 가로등 줄기 (round 2: 둥근 색 웅덩이 → 길 방향으로 길쭉하고 좁은 반사)
-      const lat = side * (rl - 3.4);
+      const lat = side * Math.min(rl - 3.4, HW - 1.2); // 넓힌 갓길 위가 아니라 도로 위에 (round 4)
       const r = 1.5;
       const di = Math.round(11 / (track.length / N));
       const sA = samples[(i - di + N) % N], sB = samples[(i + di) % N];

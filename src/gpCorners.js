@@ -271,7 +271,7 @@ export function createGpCorners(scene, track, car, scenery) {
       // 기둥(흰/어두운) + 머리 등(주황/분홍 → 성공하면 초록)
       const body = new THREE.InstancedMesh(lightGeo, new THREE.MeshLambertMaterial({ color: wd.space ? '#1a1440' : '#f2f2f2' }), wd.lights.length);
       const head = new THREE.InstancedMesh(capGeo, new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), wd.lights.length);
-      const base = new THREE.Color(wd.space ? '#ff4fd8' : '#ff8a1f');
+      const base = new THREE.Color(track.apexColor || (wd.space ? '#ff4fd8' : '#ff8a1f')); // 맵이 색을 주면 그 색 (달 = 하늘색)
       const m4 = new THREE.Matrix4();
       wd.lights.forEach((l, k) => {
         m4.makeTranslation(l.p.x, l.p.y, l.p.z);

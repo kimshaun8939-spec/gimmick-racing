@@ -60,7 +60,9 @@ export function createOffroadFx(scene) {
     b.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
     b.spin.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20);
     b.s = 0.7 + Math.random() * 0.8;
-    const list = COLORS[kind];
+    // 맵이 코스 밖 색을 주면 그 색 (달 = 회색 돌가루 등), 없으면 풀잎
+    const tr = window.game && window.game.track;
+    const list = kind === 'grass' && tr && tr.offroadColors ? tr.offroadColors : COLORS[kind];
     bits.setColorAt(idx, color.set(list[Math.floor(Math.random() * list.length)]));
   }
 

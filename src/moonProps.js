@@ -112,7 +112,7 @@ export function buildMoonProps(track, scene) {
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   })();
-  const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.6, map: dustTex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.3 }));
+  const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.45, map: dustTex, vertexColors: true, transparent: true, depthWrite: false, opacity: 0.26 }));
   dust.frustumCulled = false;
   group.add(dust);
   let dHead = 0, spawnAcc = 0;

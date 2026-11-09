@@ -434,16 +434,16 @@ export function createEngineAudio(sound = {}) {
       }
       wasShifting = shifting;
 
-      // ── 타이어 비명: 조금 미끄러지면 작게 '쉬익', 많이 미끄러지면 '끼이익' (sound.squeal = 차마다 크기, squealPitch = 음높이)
+      // ── 타이어 비명: 조금 미끄러지면 작게 '쉬익', 많이 미끄러지면 '끼이익' (sound.squeal = 차마다 크기, squealPitch = 음높이, squealVib = 떨림, squealNoise = 쉬익 섞임)
       const slip = clamp(car.tyreSlip || 0, 0, 1);
       const sqK = slip < 0.1 ? 0 : Math.pow((slip - 0.1) / 0.9, 1.3);
       const sqPitch = (P.squealPitch ?? 1) * (780 + 420 * slip + 3 * Math.min(60, spdE));
       N.sq.frequency.setTargetAtTime(sqPitch, t, 0.08);
       N.sqBP.frequency.setTargetAtTime(sqPitch * 1.45, t, 0.08);
-      N.sqVibG.gain.setTargetAtTime(18 + 30 * slip, t, 0.1);
+      N.sqVibG.gain.setTargetAtTime((18 + 30 * slip) * (P.squealVib ?? 1), t, 0.1);
       N.sqG.gain.setTargetAtTime(0.32 * sqK * (P.squeal ?? 1), t, sqK > 0 ? 0.04 : 0.09);
       N.sqNBP.frequency.setTargetAtTime(1800 + 1400 * slip, t, 0.08);
-      N.sqNG.gain.setTargetAtTime(0.1 * Math.min(1, slip * 1.6) * (P.squeal ?? 1), t, 0.06);
+      N.sqNG.gain.setTargetAtTime(0.1 * Math.min(1, slip * 1.6) * (P.squeal ?? 1) * (P.squealNoise ?? 1), t, 0.06);
       const di = car.lastDriftInfo;
       if (di && di.t !== lastDrift) {
         if (lastDrift !== null && di.clean && !silent) chime(di.quality);

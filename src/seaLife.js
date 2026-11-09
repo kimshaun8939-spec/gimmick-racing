@@ -90,13 +90,47 @@ export function buildSeaLife(track, group, animators, rand) {
       if (ok && loops.every((l) => Math.hypot(l.cx - cx, l.cz - cz) > 70)) loops.push({ cx, cz, rx, rz, rot, sp: R(0.12, 0.22) * (rand() < 0.5 ? -1 : 1), ph: R(0, 6.3) });
     }
     const colors = ['#2e6fd8', '#e8463a', '#19b3a6', '#ffcf3f'];
+    // 물결 자국 그림: 가운데 거품 줄 + 양옆으로 벌어지는 V자 줄, 뒤로 갈수록 흐려짐
+    const wakeTex = (() => {
+      const cv = document.createElement('canvas');
+      cv.width = 128;
+      cv.height = 512;
+      const c = cv.getContext('2d');
+      for (let y = 0; y < 512; y++) {
+        const f = y / 511; // 0 = 배 바로 뒤, 1 = 끝
+        const fade = Math.pow(1 - f, 1.3);
+        // 가운데 거품 (뒤로 갈수록 넓고 흐림)
+        const cw = 10 + f * 30;
+        c.fillStyle = `rgba(255,255,255,${(0.95 * fade).toFixed(3)})`;
+        c.fillRect(64 - cw / 2, y, cw, 1);
+        // V자 두 줄
+        const spread = 8 + f * 52, lw = 4 + f * 6;
+        c.fillStyle = `rgba(255,255,255,${(0.8 * fade).toFixed(3)})`;
+        c.fillRect(64 - spread - lw / 2, y, lw, 1);
+        c.fillRect(64 + spread - lw / 2, y, lw, 1);
+      }
+      // 거품 점
+      for (let k = 0; k < 260; k++) {
+        const y = Math.random() * 512, f = y / 511, sp = 8 + f * 52;
+        c.fillStyle = `rgba(255,255,255,${(0.7 * (1 - f)).toFixed(3)})`;
+        c.fillRect(64 + (Math.random() * 2 - 1) * sp, y, 2, 2);
+      }
+      const tx = new THREE.CanvasTexture(cv);
+      tx.colorSpace = THREE.SRGBColorSpace;
+      tx.flipY = false; // 그림 위쪽(진한 곳)이 배 꽁무니 쪽으로
+      return tx;
+    })();
+    // 판 앞(+v) = 배 꽁무니, 뒤로 30 m
+    const wakeGeo = new THREE.PlaneGeometry(16, 42).rotateX(-Math.PI / 2).translate(0, 0, -22.5);
+    const wakeMat = new THREE.MeshBasicMaterial({ map: wakeTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     loops.forEach((l, i) => {
       const m = new THREE.Mesh(motorBoatGeometry(colors[i % colors.length]), vcMat);
       m.castShadow = true;
       group.add(m);
-      // 뒤에 하얀 물결 자국
-      const wake = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 14).rotateX(-Math.PI / 2).translate(0, 0.05, -9), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, depthWrite: false }));
-      m.add(wake);
+      // 뒤에 V자 하얀 물결 자국 (배가 앞으로 살짝 들려 있어서 배에 붙이면 끝이 물속에 묻혔음 → 따로 물 위에 눕힘)
+      const wake = new THREE.Mesh(wakeGeo, wakeMat);
+      wake.renderOrder = 2;
+      group.add(wake);
       animators.push((t) => {
         const a = l.ph + t * l.sp;
         const lx = Math.cos(a) * l.rx, lz = Math.sin(a) * l.rz;
@@ -105,6 +139,8 @@ export function buildSeaLife(track, group, animators, rand) {
         const wx = tx * Math.cos(l.rot) + tz * Math.sin(l.rot), wz = -tx * Math.sin(l.rot) + tz * Math.cos(l.rot);
         m.position.set(l.cx + lx * Math.cos(l.rot) + lz * Math.sin(l.rot), Math.sin(t * 2 + i) * 0.08, l.cz - lx * Math.sin(l.rot) + lz * Math.cos(l.rot));
         m.rotation.set(-0.06, Math.atan2(wx, wz), Math.sin(t * 1.7 + i) * 0.03);
+        wake.position.set(m.position.x, 0.32, m.position.z);
+        wake.rotation.y = m.rotation.y;
       });
     });
   }

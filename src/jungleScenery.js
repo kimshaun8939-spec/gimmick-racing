@@ -13,7 +13,7 @@
 // 큰 물체는 충돌체(원, 높이 범위)가 있어 차가 통과하지 못합니다 (gpScenery.js와 같은 방식).
 import * as THREE from 'three';
 import * as A from './gpAssets.js';
-import { templeGantry, templeStand } from './jungleStart.js';
+import { templeGantry, templeStand, templePit } from './jungleStart.js';
 import { buildTempleGate } from './jungleTrap.js';
 import { waterfall } from './gpSky.js';
 import { buildUnderworld } from './jungleWorld.js';
@@ -650,8 +650,7 @@ export function buildJungleScenery(track, scene) {
   {
     const s = track.sampleAt(tM(-20));
     const p = track.surf(s, HW + CURB + 6, 0, new THREE.Vector3());
-    const pb = A.pitBuilding({ length: 64 });
-    rebrand(pb.obj);
+    const pb = templePit({ length: 64 }); // 사원식 피트 (jungleStart.js)
     add(pb.obj, p.x, p.y - 0.05, p.z, yawOf(s) + Math.PI);
     anim(pb);
     const c = track.surf(s, HW + CURB + 14, 0, new THREE.Vector3());

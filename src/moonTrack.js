@@ -1154,6 +1154,8 @@ export function buildMoonTrack(data, scene) {
     onAltPath: () => false, altPaths: [], runway: null, apron: null, plank: null, rings: [], skyPath: [], inSkyCorridor: () => false,
     indexAt, S, spanList, noise, dimension: null, setWorld() {}, buildMs, sampleCount: SAMPLES,
     // 달 전용
+    // 4차: 메인에게 부탁한 색 (offroadFx 코스 밖 조각 = 회색 레골리스, gpCorners 에이펙스 불빛 = 하늘색). 연결 전에는 안 쓰임
+    offroadColors: ['#8d8a84', '#a39f97', '#6f6c67', '#b7b2a8'], apexColor: '#5ff0ff',
     moon: true, gravityAt, gravityZones: zones, jumps, roll, rollParts, craters, chasms, naturalH, coarseH, terrainBox: bb, strip,
     magnetMat, mS, wrapI,
   };

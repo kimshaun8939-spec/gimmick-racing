@@ -562,6 +562,8 @@ export function buildMoonScenery(track, scene) {
     };
     for (let k = 0; k < 8; k++) {
       const s = track.sampleAt(((k - 3) * 55) / track.length + 1);
+      // 4차: 출발 직선에만 (T1 지나서 코너 바깥 런오프에 서 있던 탑은 운전자 눈앞을 가렸음)
+      if (Math.abs(Math.atan2(s.tan.x * s0.tan.z - s.tan.z * s0.tan.x, s.tan.x * s0.tan.x + s.tan.z * s0.tan.z)) > 0.08) continue;
       for (const sd of [-1, 1]) {
         if (sd === side && Math.abs((k - 3) * 55 + 45) < L / 2 + 8) continue; // 피트 건물 자리
         const p = s.pos.clone().addScaledVector(s.right, sd * (HW + CURB + 9));
@@ -1584,6 +1586,88 @@ export function buildMoonScenery(track, scene) {
       });
       extraStats.launchPad = { x: Math.round(sp.x), z: Math.round(sp.z), side };
     }
+  }
+
+  // ---------------------------------------------------------------- 송전탑 줄 (4차): 마지막 긴 직선·고속 굽이 옆이 텅 비어 보여서, 기지로 전기를 보내는 철탑과 전선
+  //   코스 마지막 30%에서 곧은 구간 옆 45~60 m에 70 m 간격. 꼭대기 빨간 불이 깜빡임. 인스턴스 2개 + 선 1개 + 점 1개
+  {
+    const NS = track.samples.length - 1;
+    const S = (i) => track.samples[((i % NS) + NS) % NS];
+    const step = Math.max(1, Math.round(70 / (track.length / NS)));
+    const spots = [];
+    let side = 1;
+    for (let i = Math.round(NS * 0.78); i < NS - Math.round(60 / (track.length / NS)); i += step) {
+      const s = S(i);
+      if (s.gap || s.roll || s.magnet) continue;
+      let put = null;
+      for (const sd of [side, -side])
+        for (const off of [48, 58]) {
+          if (put) break;
+          const x = s.pos.x + s.right.x * sd * off, z = s.pos.z + s.right.z * sd * off;
+          if (roadDist(x, z) < 40 || !free(x, z, 4) || ground(x, z) < s.pos.y - 8) continue;
+          put = { x, z, y: ground(x, z), yaw: Math.atan2(s.tan.x, s.tan.z) };
+        }
+      if (!put) {
+        if (spots.length) spots.push(null); // 줄 끊김
+        continue;
+      }
+      occupy(put.x, put.z, 4);
+      circle(put.x, put.z, 1.6, put.y - 1, put.y + 30);
+      spots.push(put);
+    }
+    const towers = spots.filter(Boolean);
+    if (towers.length >= 3) {
+      const legGeo = new THREE.CylinderGeometry(0.5, 1.9, 28, 4, 1, true);
+      const armGeo = new THREE.BoxGeometry(9, 0.6, 0.6);
+      const steel = new THREE.MeshStandardMaterial({ color: '#d4d8df', roughness: 0.6, metalness: 0.2, emissive: '#4a4f58', side: THREE.DoubleSide });
+      const legs = new THREE.InstancedMesh(legGeo, steel, towers.length);
+      const arms = new THREE.InstancedMesh(armGeo, steel, towers.length * 2);
+      const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
+      const tips = new Float32Array(towers.length * 3);
+      towers.forEach((t, k) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.yaw + Math.PI / 4);
+        legs.setMatrixAt(k, mtx.compose(p.set(t.x, t.y + 14 - 0.3, t.z), q, one));
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.yaw + Math.PI / 2);
+        arms.setMatrixAt(k * 2, mtx.compose(p.set(t.x, t.y + 24, t.z), q, one));
+        arms.setMatrixAt(k * 2 + 1, mtx.compose(p.set(t.x, t.y + 20, t.z), q, new THREE.Vector3(0.75, 1, 1)));
+        tips[k * 3] = t.x;
+        tips[k * 3 + 1] = t.y + 28.6;
+        tips[k * 3 + 2] = t.z;
+      });
+      legs.castShadow = arms.castShadow = true;
+      group.add(legs, arms);
+      // 전선: 이웃한 탑 사이에 처진 줄 3가닥 (팔 양끝 + 가운데)
+      const seg = [];
+      for (let k = 0; k + 1 < spots.length; k++) {
+        const a = spots[k], b = spots[k + 1];
+        if (!a || !b) continue;
+        const ra = new THREE.Vector3(Math.cos(a.yaw), 0, -Math.sin(a.yaw)), rb = new THREE.Vector3(Math.cos(b.yaw), 0, -Math.sin(b.yaw));
+        for (const [off, h] of [[-4.3, 24], [4.3, 24], [0, 20]]) {
+          const A = new THREE.Vector3(a.x + ra.x * off, a.y + h - 0.4, a.z + ra.z * off), B = new THREE.Vector3(b.x + rb.x * off, b.y + h - 0.4, b.z + rb.z * off);
+          const n = 10, sag = A.distanceTo(B) * 0.045;
+          for (let u = 0; u < n; u++) {
+            const u0 = u / n, u1 = (u + 1) / n;
+            const P0 = A.clone().lerp(B, u0), P1 = A.clone().lerp(B, u1);
+            P0.y -= sag * 4 * u0 * (1 - u0);
+            P1.y -= sag * 4 * u1 * (1 - u1);
+            seg.push(P0.x, P0.y, P0.z, P1.x, P1.y, P1.z);
+          }
+        }
+      }
+      const cg = new THREE.BufferGeometry();
+      cg.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3));
+      group.add(new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ color: '#3c4048' })));
+      const tg = new THREE.BufferGeometry();
+      tg.setAttribute('position', new THREE.BufferAttribute(tips, 3));
+      const tipMat = new THREE.PointsMaterial({ color: '#ff3b30', map: moteTex, size: 3.2, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const tipPts = new THREE.Points(tg, tipMat);
+      tipPts.frustumCulled = false;
+      group.add(tipPts);
+      animators.push((t) => {
+        tipMat.opacity = Math.sin(t * 3) > 0 ? 1 : 0.15;
+      });
+    }
+    extraStats.pylons = towers.length;
   }
 
   // ---------------------------------------------------------------- 차와 충돌

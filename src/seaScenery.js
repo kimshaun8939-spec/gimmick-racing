@@ -268,16 +268,18 @@ export function buildSeaScenery(track, scene) {
     uniforms: { uSunDir: { value: SUN_DIR.clone() } },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
-      void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      // 하늘 공(반지름 4200)이 카메라 먼 거리(3000)보다 커서 화면 모서리가 잘렸음 → 늘 가장 먼 곳 바로 앞에 그림
+      void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w * 0.9999; }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uSunDir; varying vec3 vDir;
       void main() {
         vec3 d = normalize(vDir);
         float h = d.y;
         float sunSide = clamp(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(uSunDir.x, 0.0, uSunDir.z))) * 0.5 + 0.5, 0.0, 1.0);
-        vec3 horizon = mix(vec3(0.95, 0.66, 0.62), vec3(1.0, 0.72, 0.45), sunSide);
-        vec3 mid = mix(vec3(0.66, 0.56, 0.80), vec3(1.0, 0.58, 0.46), sunSide * sunSide);
-        vec3 zen = vec3(0.27, 0.32, 0.64);
+        // 색은 화면에 보이는 색(sRGB) 그대로 적음. 지평선 = 안개색(#f3a77e)과 비슷하게
+        vec3 horizon = mix(vec3(0.95, 0.65, 0.50), vec3(1.0, 0.70, 0.42), sunSide);
+        vec3 mid = mix(vec3(0.90, 0.58, 0.60), vec3(1.0, 0.58, 0.40), sunSide * sunSide);
+        vec3 zen = vec3(0.42, 0.37, 0.64);
         vec3 col;
         if (h >= 0.0) {
           float t = pow(h, 0.6);
@@ -287,8 +289,8 @@ export function buildSeaScenery(track, scene) {
         float s = max(dot(d, uSunDir), 0.0);
         col += vec3(1.0, 0.72, 0.42) * (pow(s, 5.0) * 0.28 + pow(s, 48.0) * 0.6);
         col = mix(col, vec3(1.0, 0.96, 0.82), smoothstep(0.99935, 0.9996, s)); // 해 원반
-        gl_FragColor = vec4(col, 1.0);
-        #include <tonemapping_fragment>
+        // 톤 매핑을 거치면 노을색이 허옇게 바래서, sRGB 색을 직선 색으로 바꿔서 그대로 내보냄
+        gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(2.2)), 1.0);
         #include <colorspace_fragment>
       }`,
     side: THREE.BackSide,
@@ -352,6 +354,94 @@ export function buildSeaScenery(track, scene) {
     instanced(rockGeometry(3), mat, list, { shadow: false, name: 'farIslands' });
   }
 
+  // ---------------------------------------------------------------- 그랑프리 글자 바꾸기
+  // 관중석·피트 건물·출발 게이트는 그랑프리 모델을 빌려 써서 "SKY HARBOR / 구름섬 그랑프리" 글자가 있었음
+  // → 같은 크기의 바닷가 글자 그림으로 바꿈 (재질은 복사해서 바꿈: 그랑프리 원본은 그대로)
+  const fitText = (c, text, maxW, size, weight = 900) => {
+    let fs = size;
+    do c.font = `${weight} ${fs}px "Segoe UI", sans-serif`;
+    while (c.measureText(text).width > maxW && --fs > 8);
+  };
+  const seaTexBySize = {
+    // 관중석 광고 띠
+    '1024x128': () =>
+      canvasTexture(1024, 128, (c, w, h) => {
+        const blocks = [
+          ['#ff6a2c', '#ffffff', 'SUNSET COAST'],
+          ['#ffffff', '#1d5fa8', '노을 해안 서킷'],
+          ['#ffcf3f', '#1d3f6e', 'SEA BREEZE'],
+          ['#19b3a6', '#ffffff', 'BEACH FM 98.5'],
+        ];
+        const bw = w / blocks.length;
+        blocks.forEach(([bg, fg, text], i) => {
+          c.fillStyle = bg;
+          c.fillRect(i * bw, 0, bw, h);
+          c.fillStyle = fg;
+          fitText(c, text, bw * 0.86, 56);
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillText(text, i * bw + bw / 2, h / 2 + 3);
+        });
+      }),
+    // 피트 건물 큰 간판
+    '1024x200': () =>
+      canvasTexture(1024, 200, (c, w, h) => {
+        c.fillStyle = '#1d6fa3';
+        c.fillRect(0, 0, w, h);
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 10;
+        c.strokeRect(14, 14, w - 28, h - 28);
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        fitText(c, 'SUNSET COAST', w * 0.8, 116);
+        c.fillStyle = '#0d3a5c';
+        c.fillText('SUNSET COAST', w / 2 + 5, h * 0.42 + 6);
+        c.fillStyle = '#ffffff';
+        c.fillText('SUNSET COAST', w / 2, h * 0.42);
+        c.fillStyle = '#ffb02e';
+        c.font = '800 40px "Segoe UI", sans-serif';
+        c.fillText('노을 해안 서킷 · PIT LANE', w / 2, h * 0.82);
+      }),
+    // 출발 게이트 다리 (세로 글자)
+    '128x768': () =>
+      canvasTexture(128, 768, (c, w, h) => {
+        c.fillStyle = '#1d6fa3';
+        c.fillRect(0, 0, w, h);
+        c.fillStyle = '#ffffff';
+        c.fillRect(0, 0, 10, h);
+        c.fillRect(w - 10, 0, 10, h);
+        c.save();
+        c.translate(w / 2, h / 2);
+        c.rotate(-Math.PI / 2);
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        fitText(c, 'SUNSET COAST', h * 0.85, 80);
+        c.fillText('SUNSET COAST', 0, 4);
+        c.restore();
+      }),
+  };
+  const seaTexCache = new Map(), seaMatCache = new Map();
+  const rebrand = (obj) =>
+    obj.traverse((o) => {
+      if (!o.isMesh) return;
+      const one = (m) => {
+        const img = m && m.map && m.map.image;
+        const key = img && `${img.width}x${img.height}`;
+        if (!key || !seaTexBySize[key]) return m;
+        if (!seaMatCache.has(m)) {
+          if (!seaTexCache.has(key)) seaTexCache.set(key, seaTexBySize[key]());
+          const nm = m.clone();
+          nm.map = seaTexCache.get(key).clone(); // repeat는 원래 것 그대로
+          nm.map.repeat.copy(m.map.repeat);
+          nm.map.offset.copy(m.map.offset);
+          nm.map.needsUpdate = true;
+          seaMatCache.set(m, nm);
+        }
+        return seaMatCache.get(m);
+      };
+      o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material);
+    });
+
   // ---------------------------------------------------------------- 출발 게이트 (F1 빨간불: 운전자 왼쪽부터)
   {
     const s0 = track.sampleAt(0);
@@ -366,10 +456,25 @@ export function buildSeaScenery(track, scene) {
       c.textAlign = 'center';
       c.textBaseline = 'middle';
       c.font = '900 64px "Segoe UI", sans-serif';
-      c.fillStyle = '#1d3f6e';
-      c.fillText('SUNSET COAST', w * 0.38, h / 2 + 3);
+      // 바닷가 이름만 (그랑프리 글자 없음): 해 + SUNSET COAST + 파도
+      const all = c.measureText('SUNSET COAST').width;
+      const x0 = w / 2 - all / 2;
+      c.textAlign = 'left';
       c.fillStyle = '#ff6a2c';
-      c.fillText('GRAND PRIX', w * 0.75, h / 2 + 3);
+      c.fillText('SUNSET ', x0, h / 2 + 3);
+      c.fillStyle = '#1d3f6e';
+      c.fillText('COAST', x0 + c.measureText('SUNSET ').width, h / 2 + 3);
+      for (const x of [70, w - 70]) {
+        c.fillStyle = '#ffb02e';
+        c.beginPath();
+        c.arc(x, h / 2 + 4, 24, Math.PI, 0);
+        c.fill();
+        c.strokeStyle = '#2ec4ff';
+        c.lineWidth = 6;
+        c.beginPath();
+        for (let k = 0; k <= 24; k++) c.lineTo(x - 40 + k * (80 / 24), h / 2 + 14 + Math.sin(k * 0.8) * 4);
+        c.stroke();
+      }
     });
     g.obj.traverse((o) => {
       if (!o.isMesh) return;
@@ -383,6 +488,7 @@ export function buildSeaScenery(track, scene) {
         }
       });
     });
+    rebrand(g.obj);
     add(g.obj, s0.pos.x, s0.pos.y, s0.pos.z, yawOf(s0));
     anim(g);
     if (g.setLights) {
@@ -559,6 +665,7 @@ export function buildSeaScenery(track, scene) {
     }
     const p0 = track.surf(s, side * (front + push), 0, new THREE.Vector3());
     const st = A.grandstand({ length, roofColor });
+    rebrand(st.obj);
     add(st.obj, p0.x, p0.y - 0.05, p0.z, yawOf(s) + (side > 0 ? Math.PI : 0));
     const hd = st.halfDepth || 7;
     const c = track.surf(s, side * (front + push + hd), 0, new THREE.Vector3());
@@ -578,6 +685,7 @@ export function buildSeaScenery(track, scene) {
     const s = sAt(P.pit ?? 1.35);
     const p0 = track.surf(s, HW + CURB + 6, 0, new THREE.Vector3());
     const pb = A.pitBuilding({ length: 72 });
+    rebrand(pb.obj);
     add(pb.obj, p0.x, p0.y - 0.05, p0.z, yawOf(s) + Math.PI);
     anim(pb);
     const c = track.surf(s, HW + CURB + 14, 0, new THREE.Vector3());
@@ -1016,6 +1124,34 @@ export function buildSeaScenery(track, scene) {
       }
       animators.push((t) => crest.material.map.offset.set(t * 0.3, t * 0.5));
     }
+    // 선착장 물가 거품 띠: 도로가 물속으로 들어가는 선이 칼로 자른 듯 보였음 → 하얀 거품이 찰랑임
+    //   (점무늬 거품은 비스듬히 보면 회색 자갈처럼 보여서, 가운데가 진하고 물결 모양 가장자리인 부드러운 띠로)
+    const slipFoam = canvasTexture(512, 64, (g, w, h) => {
+      g.clearRect(0, 0, w, h);
+      for (let x = 0; x < w; x++) {
+        const edge = 6 * Math.sin(x * 0.09) + 4 * Math.sin(x * 0.23 + 1.3);
+        for (let y = 0; y < h; y++) {
+          const d = Math.abs(y - h / 2 - edge * 0.5) / (h / 2);
+          const a = Math.max(0, 1 - d * d * 1.6) * (0.75 + 0.25 * Math.sin(x * 0.5 + y * 0.3));
+          g.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+    });
+    slipFoam.repeat.set(2, 1);
+    const slipFoamMat = new THREE.MeshBasicMaterial({ map: slipFoam, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const N = track.samples.length;
+    for (const sw of track.slipways || []) {
+      const L = sw.land, Wt = track.samples[(L.i + sw.dir + N) % N];
+      const ly = L.pos.y, f = ly > 0 ? Math.min(1, ly / (ly + 0.14)) : 0;
+      const p = L.pos.clone().lerp(Wt.pos.clone().setY(-0.14), f);
+      const band = new THREE.Mesh(new THREE.PlaneGeometry(W + 6, 2.4).rotateX(-Math.PI / 2), slipFoamMat);
+      band.position.set(p.x, 0.07, p.z);
+      band.rotation.y = Math.atan2(L.tan.x, L.tan.z);
+      band.renderOrder = 1;
+      group.add(band);
+    }
+    animators.push((t) => slipFoam.offset.set(t * 0.04, Math.sin(t * 1.6) * 0.08));
     const spiral = canvasTexture(256, 256, (g, w, h) => {
       g.clearRect(0, 0, w, h);
       g.translate(w / 2, h / 2);

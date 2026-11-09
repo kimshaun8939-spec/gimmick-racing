@@ -313,22 +313,6 @@ export function buildJungleTrack(data, scene) {
     strip(L, (s) => [[HW, 0.02], [HW + kerbAt(s.i, 1), 0.02]], curbMat, { vScale: 4, surface: 'ground' });
   }
 
-  // 돌 포장 갓길: 연석 바깥으로 돌판 + 바깥 끝은 아래로 꺾인 돌 테두리 (땅이 낮아도 떠 보이지 않게)
-  const apronTex = stoneTexture('#a59a80', true);
-  apronTex.repeat.set(1, 1);
-  const apronMat = new THREE.MeshStandardMaterial({ map: apronTex, roughness: 0.95 });
-  for (const [a, b] of runsOf((i) => !!samples[i].apron && samples[i].land)) {
-    const L = spanList(a, b);
-    for (const sd of [-1, 1]) {
-      const prof = (s) => {
-        const k = HW + kerbAt(s.i, sd);
-        const P = [[k, 0.04], [k + APRON, 0.04], [k + APRON + 0.6, -3]];
-        return sd > 0 ? P : P.map(([x, y]) => [-x, y]).reverse();
-      };
-      strip(L, prof, apronMat, { vScale: 6, uScale: 6, surface: 'ground' });
-    }
-  }
-
   // ---------------------------------------------------------------- 다리 (상판, 갓길)
   const DECK = HW + CURB + 2.6; // 상판 반폭 (난간 위치). 정글: gp(1.2)보다 넓은 갓길
   const deckTex = deckTexture();
@@ -672,6 +656,31 @@ export function buildJungleTrack(data, scene) {
     const u = fi - i, v = fj - j;
     return THREE.MathUtils.lerp(THREE.MathUtils.lerp(F[gi(i, j)], F[gi(i + 1, j)], u), THREE.MathUtils.lerp(F[gi(i, j + 1)], F[gi(i + 1, j + 1)], u), v);
   };
+
+  // 돌 포장 갓길: 연석 바깥으로 돌판. 땅이 도로보다 높은 곳은 땅 위로 따라 올라감 (풀이 돌판을 뚫고 나오지 않게),
+  // 바깥 끝은 아래로 꺾인 돌 테두리 (땅이 낮아도 떠 보이지 않게)
+  const apronTex = stoneTexture('#a59a80', true);
+  apronTex.repeat.set(1, 1);
+  const apronMat = new THREE.MeshStandardMaterial({ map: apronTex, roughness: 0.95 });
+  const _ap = new THREE.Vector3();
+  for (const [a, b] of runsOf((i) => !!samples[i].apron && samples[i].land)) {
+    const L = spanList(a, b);
+    for (const sd of [-1, 1]) {
+      const prof = (s) => {
+        const k = HW + kerbAt(s.i, sd);
+        const P = [];
+        for (let q = 0; q <= 4; q++) {
+          const lat = k + (APRON * q) / 4;
+          surf(s, sd * lat, 0, _ap);
+          const h = q ? heightAt(_ap.x, _ap.z) : null;
+          P.push([lat, h === null ? 0.04 : Math.max(0.04, h - _ap.y + 0.1)]);
+        }
+        P.push([k + APRON + 0.6, P[4][1] - 3]);
+        return sd > 0 ? P : P.map(([x, y]) => [-x, y]).reverse();
+      };
+      strip(L, prof, apronMat, { vScale: 6, uScale: 6, surface: 'ground' });
+    }
+  }
 
   // 색: 잔디(노이즈), 도로가, 경사면 바위, 산 꼭대기 눈, 가장자리 흙
   // 정글 바닥: 짙은 초록(노이즈) + 도로가 흙 + 경사면 이끼 바위 + 군데군데 진흙 + 가장자리 붉은 흙

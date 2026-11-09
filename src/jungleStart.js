@@ -527,3 +527,102 @@ export function templeStand({ length = 60, accent = '#e8862a', seed = 1 } = {}) 
     },
   };
 }
+
+// ================================================================ 사원식 피트 건물 (gpAssets.pitBuilding 대신)
+// 앞(도로 쪽) x = 0, +x 로 약 16 m, z = -length/2..length/2. 돌 기둥 사이 차고 + 팀색 천 + 위층 초가 정자 + 끝에 계단 관제탑
+export function templePit({ length = 64, seed = 7 } = {}) {
+  const m = mats();
+  const L = length;
+  const obj = new THREE.Group();
+  obj.name = 'templePit';
+  const n = Math.max(1, Math.round(L / 6.4));
+  const pitch = L / n;
+  const GD = 4.5; // 차고 깊이 (앞 0~GD는 열린 차고)
+  // 1층 돌 몸체 + 차고 바닥
+  put(obj, new THREE.BoxGeometry(16 - GD, 5.2, L), m.stone, GD + (16 - GD) / 2, 2.6, 0);
+  put(obj, new THREE.BoxGeometry(GD, 0.06, L), new THREE.MeshLambertMaterial({ color: '#8a8270' }), GD / 2, 0.03, 0, { cast: false });
+  // 차고 안쪽 어두운 벽 (깊이감)
+  put(obj, new THREE.PlaneGeometry(L, 5), m.panel, GD - 0.01, 2.5, 0, { ry: -Math.PI / 2, cast: false });
+  // 새김 무늬 돌 기둥 + 기둥 머리
+  for (let k = 0; k <= n; k++) {
+    const z = -L / 2 + k * pitch;
+    put(obj, new THREE.BoxGeometry(1.3, 5.2, 1.3), m.glyph, 0.65, 2.6, z);
+    put(obj, new THREE.BoxGeometry(1.7, 0.45, 1.7), m.stoneDark, 0.65, 5.4, z);
+  }
+  // 차고 위 돌보 + 금 띠
+  put(obj, new THREE.BoxGeometry(GD + 0.4, 1.1, L + 1.4), m.stoneDark, GD / 2 - 0.2, 6.15, 0);
+  put(obj, new THREE.BoxGeometry(0.12, 0.22, L + 1.4), m.gold, -0.05, 6.15, 0, { cast: false });
+  // 차고마다 팀색 천 (위에서 늘어뜨림) + 팀 번호판
+  const teams = ['#e8322a', '#2a7de8', '#ffcf3f', '#2fbf4a', '#ff8a1f', '#19b3a6', '#7d4bd8', '#f4f1e6', '#c0392b', '#3ccf6e'];
+  const clothTex = canvasTexture(64, 128, (c, w, h) => {
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(0,0,0,0.18)';
+    for (let y = 10; y < h; y += 22) c.fillRect(0, y, w, 4);
+    c.fillStyle = 'rgba(0,0,0,0.25)';
+    c.beginPath();
+    c.moveTo(0, h);
+    c.lineTo(w / 2, h - 18);
+    c.lineTo(w, h);
+    c.fill();
+  });
+  for (let k = 0; k < n; k++) {
+    const z = -L / 2 + (k + 0.5) * pitch;
+    const cl = put(obj, new THREE.PlaneGeometry(pitch - 2, 1.6), new THREE.MeshLambertMaterial({ map: clothTex, color: teams[k % teams.length], side: THREE.DoubleSide }), -0.32, 4.85, z, { ry: -Math.PI / 2, cast: false });
+    void cl;
+    // 차고 안 타이어 더미·연장 상자 (어두운 색 덩어리)
+    put(obj, new THREE.CylinderGeometry(0.35, 0.35, 1.2, 10), m.panel, GD - 0.8, 0.6, z - 1.2);
+    put(obj, new THREE.BoxGeometry(0.9, 0.8, 1.2), m.wood, GD - 0.8, 0.4, z + 1.2);
+  }
+  // 2층: 기둥 위 초가 정자 (관중·팀이 보는 곳)
+  const roofY = 6.7;
+  put(obj, new THREE.BoxGeometry(15.2, 0.4, L + 1.4), m.stone, 8, roofY + 0.2, 0);
+  for (let k = 0; k <= n; k += 1) {
+    const z = -L / 2 + k * pitch;
+    for (const x of [1.0, 14.5]) put(obj, new THREE.CylinderGeometry(0.2, 0.25, 4.2, 7), m.wood, x, roofY + 2.5, z);
+  }
+  const roofTex = m.thatch.map.clone();
+  roofTex.repeat.set(4, L / 4);
+  roofTex.needsUpdate = true;
+  const roofMat = m.thatch.clone();
+  roofMat.map = roofTex;
+  for (const sx of [-1, 1]) put(obj, new THREE.BoxGeometry(9.2, 0.45, L + 3), roofMat, 7.75 + sx * 3.9, roofY + 5.1, 0, { rz: -sx * 0.32 });
+  // 2층 난간 (낮은 돌담)
+  put(obj, new THREE.BoxGeometry(0.4, 1.0, L + 1.2), m.stoneDark, 0.4, roofY + 0.9, 0);
+  // 위층 관중 몇 명 대신 화분 덤불
+  const rnd = seededRandom(seed);
+  for (let z = -L / 2 + 3; z < L / 2 - 2; z += 5 + rnd() * 3) put(obj, new THREE.IcosahedronGeometry(0.7 + rnd() * 0.4, 0), m.moss, 1.2, roofY + 1.0, z, { cast: false });
+  // 끝: 계단식 관제탑 + 글자판
+  const ctrlTex = canvasTexture(512, 128, (c, w, h) => {
+    c.fillStyle = '#3a3326';
+    c.fillRect(0, 0, w, h);
+    c.strokeStyle = '#f2c94c';
+    c.lineWidth = 6;
+    c.strokeRect(8, 8, w - 16, h - 16);
+    c.fillStyle = '#f2c94c';
+    c.font = 'bold 54px "Trebuchet MS", sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('PIT · 사원 정비소', w / 2, h / 2 + 2);
+  });
+  const tz = L / 2 + 5;
+  for (let k = 0; k < 4; k++) put(obj, new THREE.BoxGeometry(11 - k * 2.2, 3.2, 11 - k * 2.2), k % 2 ? m.stoneDark : m.stone, 8, 1.6 + k * 3.2, tz);
+  put(obj, new THREE.BoxGeometry(3.4, 2.6, 3.4), m.glass || m.jade, 8, 13.9, tz);
+  put(obj, new THREE.ConeGeometry(3.2, 2.6, 4), m.gold, 8, 16.5, tz, { ry: Math.PI / 4 });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshStandardMaterial({ map: ctrlTex, roughness: 0.8 }));
+  sign.rotation.y = -Math.PI / 2;
+  sign.position.set(2.45, 8.0, tz);
+  obj.add(sign);
+  const fires = [];
+  for (const z of [-L / 2 - 0.9, L / 2 + 0.9]) {
+    put(obj, new THREE.CylinderGeometry(0.35, 0.2, 0.5, 8), m.stoneDark, -0.3, 6.95, z);
+    fires.push(...makeFire(obj, -0.3, 7.45, z, 1.0));
+  }
+  bake(obj);
+  return {
+    obj,
+    update(time) {
+      for (const f of fires) f.sp.scale.setScalar(f.base * (0.85 + 0.2 * Math.sin(time * 13 + f.ph)));
+    },
+  };
+}
