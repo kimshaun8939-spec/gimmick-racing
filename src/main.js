@@ -564,8 +564,6 @@ function showFinish() {
 let acc = 0;
 let last = performance.now();
 let elapsed = 0;
-let helpPinned = false;
-const helpEl = document.getElementById('help');
 let fpsFrames = 0, fpsT = performance.now();
 resetRace();
 {
@@ -608,10 +606,7 @@ function frame(now, manual = false) {
     url.searchParams.set('map', next); // map이 없으면 홈 화면이 뜨므로 main도 꼭 적음
     location.href = url.toString();
   }
-  // 조작법: 설정에 따라 (자동: 출발 후 8초 뒤 숨김 / 항상 보기 / 숨김), H로 고정·다시 보기
-  if (input.wasPressed('KeyH')) helpPinned = !helpPinned;
-  const helpMode = settings.values.help;
-  helpEl.classList.toggle('hidden', race.phase === 'finished' ? !helpPinned : helpMode === 'show' ? false : helpMode === 'hide' ? !helpPinned : !helpPinned && race.phase === 'racing' && race.time > (FREE ? 15 : 8));
+  // (왼쪽 아래 조작법 안내·H 키는 없앰: 사용자 요청 2026-11-09)
   if (input.wasPressed('KeyR') && race.phase === 'racing') car.respawn();
   if (input.wasPressed('KeyT')) {
     car.manual = !car.manual;

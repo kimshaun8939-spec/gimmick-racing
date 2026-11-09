@@ -28,8 +28,6 @@ export const SETTING_DEFS = [
   { group: '주행', key: 'autoPause', label: '자동 일시정지', desc: '다른 창을 보면 게임을 멈춰요', type: 'toggle', def: true },
 
   { group: '표시', key: 'unit', label: '속도 단위', desc: '', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
-  { group: '표시', key: 'help', label: '조작법 안내', desc: '왼쪽 아래 조작법 (H 키로 고정)', type: 'choice',
-    options: [['auto', '자동으로 숨김'], ['show', '항상 보기'], ['hide', '숨김']], def: 'auto' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
   { group: '표시', key: 'showFps', label: 'FPS 보기', desc: '1초에 몇 장 그리는지', type: 'toggle', def: false },
 ];
@@ -235,7 +233,6 @@ export function createControlsPage() {
       ${row(k('T'), '자동 ↔ 수동 변속', '수동: ' + k('X') + ' 올림 · ' + k('Z') + ' 내림')}
       ${row(k('L'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
       ${row(k('N'), '소리 끄기/켜기')}
-      ${row(k('H'), '조작법 안내 고정')}
       ${row(k('M'), '다음 맵으로')}
     </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.</p>`;
