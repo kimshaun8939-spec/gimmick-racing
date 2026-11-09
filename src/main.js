@@ -30,8 +30,9 @@ async function loadJSON(url) {
   return res.json();
 }
 
-// 맵 선택: 주소 뒤에 ?map=gp(그랑프리 트랙) / ?map=stadium(운동장) / ?map=sea(바닷가) / ?map=test(테스트 맵). 게임 안에서는 M 키로 차례대로 바꿈
-const MAPS = { main: 'data/track.json', gp: 'data/grandprix.json', stadium: 'data/stadium.json', sea: 'data/sea.json', test: 'data/testmap.json' };
+// 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 M 키로 차례대로 바꿈
+// (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
+const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
@@ -41,7 +42,7 @@ if (!mapParam) {
   await runHome();
   await new Promise(() => {}); // 홈 화면에서는 게임을 만들지 않음
 }
-let mapName = MAPS[mapParam] ? mapParam : 'main';
+let mapName = MAPS[mapParam] ? mapParam : 'gp';
 // 로딩 화면: 맵 이름·차 이름·팁
 const mapsMeta = await loadMaps();
 const mapMeta = () => mapsMeta.find((m) => m.id === mapName) || { title: mapName };
@@ -49,7 +50,7 @@ const LOAD_TIPS = [
   '빨간불 5개가 꺼지는 순간 W! 미리 밟으면 시동이 꺼져요',
   'Esc를 누르면 일시정지하고 설정을 바꿀 수 있어요',
   '코너 안쪽 연석을 빠르게 스치면 에이펙스 보너스!',
-  'E 부스터는 무제한! 3초 동안 더 빨라져요',
+  '바다에 닿으면 자동으로 배로 변신해요',
   'L 키로 레이싱 라인을 켜고 끌 수 있어요 (초록 밟기 · 빨강 브레이크)',
   '길을 벗어나면 R 키로 도로에 돌아와요',
 ];
@@ -72,15 +73,20 @@ try {
 const carId = carCfg.carId || carParam || 'f1';
 const carName = carCfg.carName || carId;
 ld('ldCar', `🏎️ ${carName}`);
-if (carParam) setLast({ map: mapName, car: carId }); // 홈에서 고른 것 기억 (주소에 차가 있을 때만)
+if (carParam) setLast({ map: mapName, car: carId });
+// 부스터를 꺼 두면(car.json booster.enabled false) 화면 아래 부스터 버튼도 숨김
+if (carCfg.booster && carCfg.booster.enabled === false) {
+  const bb = document.getElementById('boosterBtn');
+  if (bb) bb.style.display = 'none';
+} // 홈에서 고른 것 기억 (주소에 차가 있을 때만)
 let trackData;
 try {
   trackData = await loadJSON(MAPS[mapName]);
 } catch (err) {
   // 아직 없는 맵(만드는 중)이면 기본 코스로
   console.warn(err);
-  mapName = 'main';
-  trackData = await loadJSON(MAPS.main);
+  mapName = 'gp';
+  trackData = await loadJSON(MAPS.gp);
 }
 const FREE = !!trackData.pad; // 시험장: 카운트다운, 바퀴 수 없이 자유 주행
 const mapTitle = mapMeta().title || trackData.name || mapName;
@@ -536,7 +542,7 @@ function canSaveRecords() {
 }
 function nextMapId() {
   const order = mapsMeta.map((m) => m.id).filter((id) => MAPS[id]);
-  return order[(order.indexOf(mapName) + 1) % order.length] || 'main';
+  return order[(order.indexOf(mapName) + 1) % order.length] || 'gp';
 }
 function showFinish() {
   const total = race.lapTimes.reduce((a, b) => a + b, 0);

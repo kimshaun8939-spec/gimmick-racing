@@ -11,7 +11,7 @@ import { records, fmtTime } from './records.js';
 import { createCarModel } from './carModel.js';
 
 export const VERSION = 'v0.9 · 2026.11';
-const STAT_NAMES = [['speed', '속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력'], ['boost', '부스터']];
+const STAT_NAMES = [['speed', '속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력']]; // 부스터는 꺼 둠 (car.json booster.enabled)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 /** look(문자열 색 또는 { body, accent, ... }) → 카드 색 견본 */

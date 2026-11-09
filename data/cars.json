@@ -88,8 +88,8 @@
     {
       "id": "rocket",
       "name": "로켓 드래그",
-      "tag": "ROCKET DRAGSTER · 부스터",
-      "desc": "등에 로켓을 단 드래그스터. E 부스터가 훨씬 길고 강하지만, 핸들이 예민하고 뒤가 잘 미끄러져요.",
+      "tag": "ROCKET DRAGSTER · 예민함",
+      "desc": "등에 로켓을 단 드래그스터. 핸들이 아주 예민하고 뒤가 잘 미끄러지는 까다로운 차예요.",
       "stats": { "speed": 3, "accel": 4, "handling": 2, "grip": 2, "boost": 5 },
       "look": { "style": "rocket", "body": "#ff6a13", "accent": "#fafafa", "trim": "#7b2cff", "number": "1" },
       "tune": {

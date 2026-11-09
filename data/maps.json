@@ -2,13 +2,6 @@
   "_설명": "홈 화면 맵 고르기 카드에 쓰는 정보. id = 주소의 ?map= 값, file = 맵 데이터, title/subtitle/desc = 화면 글자, tags = 특징 꼬리표, theme = 카드 색 [배경 위, 배경 아래, 선 색], difficulty = 1~3 (별). 순서 = 화면 순서 = M 키 순서",
   "maps": [
     {
-      "id": "main", "file": "data/track.json",
-      "title": "연습 코스", "subtitle": "기믹 가득 기본 코스",
-      "desc": "벽과 천장을 달리는 보라색 자석 도로, 용암 점프, 지름길까지! 처음이라면 여기서 시작해요.",
-      "tags": ["🧲 자석 도로", "🌋 용암 점프", "🔀 지름길"],
-      "theme": ["#2b3f6b", "#141c33", "#ffcf3f"], "difficulty": 1
-    },
-    {
       "id": "gp", "file": "data/grandprix.json",
       "title": "구름섬 그랑프리", "subtitle": "하늘 섬 + 우주 차원",
       "desc": "구름 위 섬들을 다리로 잇는 긴 그랑프리. 포털을 지나 우주를 달리고, 활주로에서는 비행기로 변신해 고리를 통과해요.",
@@ -16,25 +9,11 @@
       "theme": ["#3b2b74", "#0e1030", "#9ad8ff"], "difficulty": 3
     },
     {
-      "id": "stadium", "file": "data/stadium.json",
-      "title": "운동장 트랙", "subtitle": "넓은 타원 고속 코스",
-      "desc": "긴 직선 두 개와 넓은 코너. 풀가속으로 달리며 최고 속도와 가속 모드를 느껴 보세요.",
-      "tags": ["🏟️ 고속 타원", "🔥 가속 모드"],
-      "theme": ["#7a2e2e", "#26121a", "#ff8a6a"], "difficulty": 1
-    },
-    {
       "id": "sea", "file": "data/sea.json",
       "title": "바닷가 코스", "subtitle": "땅과 바다를 오가는 코스",
       "desc": "해변 도로에서 출발해 등대섬을 돌아오는 코스. 바다에 닿으면 자동으로 배로 변신해요.",
       "tags": ["🌊 물 구간", "🚤 배 변신", "⛰️ 절벽 커브"],
       "theme": ["#1f5d7a", "#0b2233", "#7fe3ff"], "difficulty": 2
-    },
-    {
-      "id": "test", "file": "data/testmap.json",
-      "title": "테스트 맵", "subtitle": "자유 주행장",
-      "desc": "넓은 콘크리트 시험장과 점프대, 바리케이드. 기록 없이 마음껏 차를 시험해 봐요.",
-      "tags": ["🧪 자유 주행", "🦘 점프대", "💥 바리케이드"],
-      "theme": ["#3d4450", "#15181e", "#c8d2e0"], "difficulty": 1, "free": true
     }
   ]
 }

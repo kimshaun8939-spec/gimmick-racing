@@ -9,11 +9,8 @@ async function loadJSON(url) {
 
 // 맵 목록 (maps.json이 없거나 깨져도 게임은 되도록 기본값)
 const FALLBACK_MAPS = [
-  { id: 'main', file: 'data/track.json', title: '연습 코스', tags: [], theme: ['#2b3f6b', '#141c33', '#ffcf3f'] },
   { id: 'gp', file: 'data/grandprix.json', title: '구름섬 그랑프리', tags: [], theme: ['#3b2b74', '#0e1030', '#9ad8ff'] },
-  { id: 'stadium', file: 'data/stadium.json', title: '운동장 트랙', tags: [], theme: ['#7a2e2e', '#26121a', '#ff8a6a'] },
   { id: 'sea', file: 'data/sea.json', title: '바닷가 코스', tags: [], theme: ['#1f5d7a', '#0b2233', '#7fe3ff'] },
-  { id: 'test', file: 'data/testmap.json', title: '테스트 맵', tags: [], theme: ['#3d4450', '#15181e', '#c8d2e0'], free: true },
 ];
 let mapsPromise = null;
 export function loadMaps() {

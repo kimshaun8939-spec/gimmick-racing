@@ -215,10 +215,9 @@ export function createControlsPage() {
   el.innerHTML = `
     <section><h3>기본 운전</h3>
       ${row(k('W') + k('↑'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
-      ${row(k('S') + k('↓'), '브레이크 · 후진', '부스터 중이면 부스터가 바로 꺼져요')}
+      ${row(k('S') + k('↓'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(k('A') + k('D') + k('←') + k('→'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
       ${row(k('Shift') + k('Space'), '드리프트', '꺾으면서 누르기')}
-      ${row(k('E'), '부스터', '3초 동안 더 빠르게 · 무제한')}
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', '빨간불 5개가 꺼지는 순간 W! 미리 밟으면 시동이 꺼져요')}
@@ -239,7 +238,7 @@ export function createControlsPage() {
       ${row(k('H'), '조작법 안내 고정')}
       ${row(k('M'), '다음 맵으로')}
     </section>
-    <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 보라색 자석 도로는 벽과 천장도 달릴 수 있어요.</p>`;
+    <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.</p>`;
   return el;
 }
 
