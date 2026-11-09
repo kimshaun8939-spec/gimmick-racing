@@ -79,7 +79,9 @@
       "autoSwitch": true },
     "_fly": "비행: takeoffSpeed 이상에서 Space로 이륙(m/s). thrust 추력, drag 공기 저항(최고 속도 ≈ √(thrust/drag)), climbDecel 오르막 손해, bankMax 최대 기울기(rad), turnRate 최대 선회(rad/s), pitchMax 최대 기수 각도, minSpeed 이보다 느리면 실속, maxAltitude 최고 높이(m), crashSpeed 이보다 세게 내리꽂으면 쿵",
     "fly": { "takeoffSpeed": 26, "minSpeed": 16, "maxSpeed": 55, "thrust": 16, "drag": 0.0053, "brake": 10, "climbDecel": 9,
-      "bankMax": 0.75, "bankRate": 4, "turnRate": 1.0, "pitchMax": 0.6, "pitchRate": 2.5, "maxAltitude": 160, "stallFall": 14, "crashSpeed": 22, "autoSwitch": true }
+      "bankMax": 0.75, "bankRate": 4, "turnRate": 1.0, "pitchMax": 0.6, "pitchRate": 2.5, "maxAltitude": 160, "stallFall": 14, "crashSpeed": 22, "autoSwitch": true,
+      "_zoneRadius": "비행 구역 (사용자 요청 2026-11-09): 활주로 시작 → 고리 → 착륙장 착지점을 잇는 선에서 옆으로 zoneRadius m 밖에서는 강제 착륙 (Space 상승 안 됨, 기수 forceDive rad 아래로, 속도는 이륙 속도까지 줄고, 아래로 forceSinkRate m/s²씩 최대 forceSinkMax m/s 더 떨어짐). 착지하면 바로 원래 모드, 구역 밖 땅에서는 이륙 안 됨. 0이면 끔",
+      "zoneRadius": 50, "forceDive": 0.5, "forceSinkRate": 15, "forceSinkMax": 30 }
   },
   "camera": {
     "_설명": "속도감 카메라. 속도 비율 = fxFromKmh(0) → topKmh(1) km/h. fovBase 서 있을 때 시야각(도), fovSpeed 최고 속도에서 더 넓어지는 각도, fovBooster 부스터 때 더, fovRate 바뀌는 빠르기. followLead 0~1: 빠를 때 카메라가 뒤로 처지는 것을 얼마나 없앨지 (0 = 예전처럼 209 km/h에서 7 m 뒤로 처짐, 1 = 안 처짐). speedBack/speedUp 최고 속도에서 카메라 거리·높이 변화(m, 음수 = 가깝게·낮게). accelPull 가속도(m/s²)마다 뒤로 밀리는 거리(m), accelPullMax/brakePullMax 최대. lookAhead 빠를 때 더 멀리 보는 거리(m), lookSlip 미끄러질 때 가는 쪽을 보는 비율. buzz 최고 속도 근처 노면 잔진동 크기(m, buzzFromKmh부터)",

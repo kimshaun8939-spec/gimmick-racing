@@ -181,7 +181,8 @@ export class Car {
     this.sink = 0;
     this.forwardSpeed = 0;
     this.flying = false;
-    this.pitch = this.bank = this.stallFall = 0;
+    this.pitch = this.bank = this.stallFall = this.forceSink = 0;
+    this.forceLanding = false;
   }
 
   /** 월드 좌표 (x, z)에 yaw 방향(라디안, 0 = +z)으로 차를 놓습니다. (테스트 맵의 자유 공간용) */
@@ -507,7 +508,7 @@ export class Car {
     const spike = this.form === 'spike';
     let f = this.speed;
     // 비행 모드: 충분히 빠를 때 Space로 이륙
-    if (this.mode === 'fly' && c.climb && this.up.y > 0.7 && f >= cfg.modes.fly.takeoffSpeed && this.surface !== 'water') {
+    if (this.mode === 'fly' && c.climb && this.up.y > 0.7 && f >= cfg.modes.fly.takeoffSpeed && this.surface !== 'water' && this.flightAllowed()) {
       this.takeOff();
       return;
     }
@@ -782,6 +783,11 @@ export class Car {
         this.autoFlyFrom = this.mode;
         this.setMode('fly');
         this.events.push('autoFly');
+      }
+      // 비행 구역(활주로 → 고리 → 착륙장) 밖의 땅이면 바로 원래 모드로 (다시 이륙해서 끝까지 날아가는 것 막기)
+      if (this.mode === 'fly' && zone === 0 && !this.flightAllowed()) {
+        this.setMode(this.autoFlyFrom || 'normal');
+        this.autoFlyFrom = null;
       }
       // 활주로 가장자리에서 잠깐 벗어난 것으로는 돌아가지 않게, 0.5초 이상 활주로 밖에서 땅을 달릴 때 원래 모드로
       this.offRunway = zone === 0 && !this.flying ? (this.offRunway || 0) + dt : 0;
@@ -1063,6 +1069,24 @@ export class Car {
     return d > 16 && off > 2.2 && along > 0.85 ? 2 : 1;
   }
 
+  /**
+   * 여기서 날아도 되는지: 비행 구역 = 활주로 시작 → 고리들 → 착륙장 착지점을 잇는 선에서 옆으로 modes.fly.zoneRadius m 안
+   *   (사용자 요청 2026-11-09: 비행 모드로 결승선까지 날아가는 게 사기 → 구역 밖에서는 무조건 땅으로)
+   *   활주로가 없는 맵은 항상 true. 높이는 안 봄 (고리 사이에서 낮게 날아도 괜찮게)
+   */
+  flightAllowed() {
+    const tr = this.track, R = this.cfg.modes.fly.zoneRadius;
+    if (!tr.runway || !tr.skyPath || !tr.skyPath.length || !R) return true;
+    const pts = (this._flyPts ||= [tr.runway.start.pos, ...tr.skyPath]);
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const abx = b.x - a.x, abz = b.z - a.z;
+      const u = THREE.MathUtils.clamp(((this.pos.x - a.x) * abx + (this.pos.z - a.z) * abz) / (abx * abx + abz * abz || 1), 0, 1);
+      if (Math.hypot(this.pos.x - (a.x + abx * u), this.pos.z - (a.z + abz * u)) < R) return true;
+    }
+    return false;
+  }
+
   /** 땅에서 날아오름 */
   takeOff() {
     this.flying = true;
@@ -1082,7 +1106,8 @@ export class Car {
   updateFlight(dt, c) {
     const cfg = this.cfg, F = cfg.modes.fly, e = cfg.engine;
     this.airTime = 0; // 날고 있는 동안은 "공중에 너무 오래" 복귀 없음
-    let s = this.vel.length();
+    // 강제 착륙으로 더해 둔 아래 속도는 빼고 잼 (안 빼면 매 스텝 속도가 불어남)
+    let s = this.forceSink ? Math.hypot(this.vel.x, this.vel.y + this.forceSink, this.vel.z) : this.vel.length();
     const boosting = this.boostTime > 0;
     const maxS = F.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
     // 속도: 추력 - 공기 저항 - 브레이크 - 오르막 손해(내리막이면 이득)
@@ -1096,8 +1121,15 @@ export class Car {
     const turn = F.turnRate * (this.bank / F.bankMax) * THREE.MathUtils.clamp(s / F.minSpeed, 0.3, 1);
     let heading = Math.atan2(this.fwd.x, this.fwd.z) - turn * dt;
 
+    // 비행 구역 밖: 강제 착륙 (Space 상승 무시, 기수를 내리고 속도를 줄이며 점점 더 빨리 내려감)
+    const forced = !this.flightAllowed();
+    if (forced && !this.forceLanding) this.events.push('forceLand');
+    this.forceLanding = forced;
+    this.forceSink = forced ? Math.min(F.forceSinkMax ?? 30, (this.forceSink || 0) + (F.forceSinkRate ?? 15) * dt) : 0;
+    if (forced && s > F.takeoffSpeed) s = Math.max(F.takeoffSpeed, s - F.brake * dt);
     // 기수: Space 위, Shift 아래, 둘 다 안 누르면 수평으로
-    let pT = (c.climb ? F.pitchMax : 0) - (c.dive ? F.pitchMax : 0);
+    let pT = (c.climb && !forced ? F.pitchMax : 0) - (c.dive ? F.pitchMax : 0);
+    if (forced) pT = Math.min(pT, -(F.forceDive ?? 0.5));
     const stall = s < F.minSpeed;
     if (stall) pT = Math.min(pT, -0.45); // 실속: 기수가 떨어짐
     if (this.pos.y > F.maxAltitude) pT = Math.min(pT, -0.15); // 너무 높음
@@ -1113,7 +1145,7 @@ export class Car {
     const up0 = new THREE.Vector3().crossVectors(right0, this.fwd).normalize();
     this.up.copy(up0).multiplyScalar(Math.cos(this.bank)).addScaledVector(right0, Math.sin(this.bank)).normalize();
     this.vel.copy(this.fwd).multiplyScalar(s);
-    this.vel.y -= this.stallFall;
+    this.vel.y -= this.stallFall + (this.forceSink || 0);
 
     this.speed = s;
     this.slip = 0;
@@ -1200,6 +1232,12 @@ export class Car {
           }
           this.flying = false;
           this.pitch = this.bank = this.stallFall = 0;
+          if (this.forceLanding && this.mode === 'fly') {
+            this.setMode(this.autoFlyFrom || 'normal');
+            this.autoFlyFrom = null;
+          }
+          this.forceLanding = false;
+          this.forceSink = 0;
           // 날개 기울기를 풀고 바닥에 맞춤
           this.up.copy(WORLD_UP);
           this.fwd.setY(0).normalize();

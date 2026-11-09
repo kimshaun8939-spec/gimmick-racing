@@ -373,6 +373,7 @@ function handleEvents() {
       hud.shake(0.12);
     }
     if (e === 'takeoff') hud.toast('✈️ 이륙! Space 상승 · Shift 하강');
+    if (e === 'forceLand') hud.toast('🛬 비행 구역 끝! 땅으로 내려가요');
     if (e === 'smash') hud.shake(0.1);
     if (e === 'explode') {
       hud.shake(0.4);
