@@ -56,7 +56,7 @@ export function createPauseMenu(o) {
       i.free ? null : ['바퀴', i.lapText],
       ['시간', fmtTime(i.time)],
       i.free ? null : ['이번 최고 랩', fmtTime(i.best)],
-      i.free ? null : ['내 기록', i.record ? fmtTime(i.record) : '없음'],
+      i.free ? null : ['내 최고 기록', i.record ? fmtTime(i.record) : '없음'],
     ]
       .filter(Boolean)
       .map(([a, b]) => `<div class="r"><span>${a}</span><span>${String(b).replace(/</g, '&lt;')}</span></div>`)

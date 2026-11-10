@@ -1,9 +1,10 @@
 // 고스트 (반투명 차, 부딪히지 않음) — 설정 ghost: 'off' | 'best' | 'bot'
 //
-//   'best' = 이 맵 + 이 차로 달린 내 최고 랩을 그대로 다시 보여 줌 (바퀴가 시작될 때마다 처음부터)
-//            첫 바퀴(출발 신호부터 = 서 있다가 반응해서 출발)와 나머지 바퀴(달리면서 출발선 통과)는 따로 저장
-//            → 첫 바퀴 고스트는 불이 꺼진 순간부터 시간이 흐르고, 고스트가 그때 실제로 반응한 만큼 기다렸다 출발
-//            초당 20번 위치·방향을 적어 두고, 새 최고 랩이면 브라우저(localStorage)에 압축해서 저장
+//   'best' = 이 맵 + 이 차로 달린 내 최고 완주(레이스 전체, 여러 바퀴면 모든 바퀴)를 그대로 다시 보여 줌
+//            (사용자 요청 2026-11-10: 바퀴가 바뀌어도 고스트가 처음으로 돌아가지 않고 이어서 달림, 최고 = 모든 바퀴 합)
+//            불이 꺼진 순간부터 시간이 흐르고, 고스트가 그때 실제로 반응한 만큼 기다렸다 출발
+//            초당 20번 위치·방향을 적어 두고, 완주 시간이 내 최고 고스트보다 빠르면 브라우저(localStorage)에 압축해서 저장
+//            예전 바퀴별 고스트(첫 바퀴 '.start' + 달리는 바퀴)만 있으면 둘을 이어 붙여 레이스 전체 고스트로 씀
 //            (records.js와 같은 규칙: 자동 운전 테스트·game.paused 중에는 저장 안 함)
 //   'bot'  = "기본 봇" 고스트: 레이싱 라인을 속도 계획대로 달리는 차 (출발부터 끝까지 한 번에, 계산은 순식간)
 //   화면 왼쪽 위에 고스트와의 시간 차이 (−0.42 초록 = 내가 빠름, +0.31 빨강 = 느림)
@@ -14,8 +15,9 @@ import { lineCarModel } from './car.js';
 
 const HZ = 20;
 const STRIDE = 12; // 샘플 하나: 위치 x,y,z (Int32, cm) + 방향 쿼터니언 4개 + 속도 + 모드 (Int16) → Int16 12칸 = 24바이트
-const KEY = (map, car) => `gimmick.ghost.${map}.${car}`; // 달리는 바퀴 (2바퀴째부터)
-const KEY_START = (map, car) => `gimmick.ghost.${map}.${car}.start`; // 첫 바퀴 (출발 신호부터)
+const KEY = (map, car) => `gimmick.ghost.${map}.${car}`; // (예전) 달리는 바퀴 (2바퀴째부터)
+const KEY_START = (map, car) => `gimmick.ghost.${map}.${car}.start`; // (예전) 첫 바퀴 (출발 신호부터)
+const KEY_RUN = (map, car) => `gimmick.ghost.${map}.${car}.run`; // 레이스 전체 (출발 신호부터 결승까지)
 const INDEX_KEY = 'gimmick.ghost.index';
 const MAX_SAVED = 12; // 저장해 두는 고스트 수 (오래된 것부터 지움)
 const MODES = ['normal', 'accel', 'boat', 'fly'];
@@ -164,11 +166,41 @@ export function createGhost(o) {
     for (let i = 0; i < tr.n; i++) if (tr.spd[i] > 0.5) return Math.max(0, (i - 1) / HZ);
     return null;
   }
+  const LAPS = Math.max(1, o.laps || 1);
+  const RM = LAPS * M; // 레이스 전체 진행 지점 수 (바퀴마다 M개)
   let best = loadSlot(KEY(o.mapName, o.carId));
   let bestStart = loadSlot(KEY_START(o.mapName, o.carId));
   // 1바퀴짜리 맵(그랑프리)은 예전에 저장한 최고 랩도 첫 바퀴(출발 신호부터)였음
   if (o.laps === 1 && !bestStart && best) bestStart = best;
-  let curLap = 1; // 지금 몇 바퀴째인지 (main.js가 lapStart(n)으로 알려 줌)
+  /** 레이스 전체 고스트 { total, segs: [{ tr, off }], marks, react, relative: 'race' } */
+  function loadRun() {
+    try {
+      const raw = localStorage.getItem(KEY_RUN(o.mapName, o.carId));
+      if (!raw) return null;
+      const j = JSON.parse(raw);
+      if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS) return null;
+      const tr = decode(fromB64(j.data));
+      const marks = Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000)));
+      return { total: j.total, segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
+    } catch (err) {
+      console.warn('고스트 불러오기 실패', err);
+      return null;
+    }
+  }
+  /** 예전 바퀴별 고스트를 이어 붙임: 첫 바퀴(출발) + 달리는 바퀴 × (바퀴 수 − 1) */
+  function stitched() {
+    if (!bestStart || (LAPS > 1 && !best)) return null;
+    const segs = [], marks = new Float32Array(RM + 1).fill(NaN);
+    let off = 0;
+    for (let l = 0; l < LAPS; l++) {
+      const g = l === 0 ? bestStart : best;
+      segs.push({ tr: g.tr, off });
+      for (let k = 0; k <= M; k++) if (isFinite(g.marks[k])) marks[l * M + k] = off + g.marks[k];
+      off += g.lap;
+    }
+    return { total: off, segs, marks, react: bestStart.react, relative: 'race', stitched: true };
+  }
+  let run = loadRun() || stitched();
 
   // --- 기본 봇 고스트 (라인 + 속도 계획으로 바로 계산) ---
   let bot = null;
@@ -237,24 +269,27 @@ export function createGhost(o) {
 
   // --- 지금 바퀴 기록 (플레이어) ---
   let rec = emptyTrace();
-  let recMarks = new Float32Array(M + 1).fill(NaN);
+  let recMarks = new Float32Array(RM + 1).fill(NaN);
   let recNext = 0;
   let recT = 0;
   const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _x = new THREE.Vector3();
 
   function active() {
-    if (kind === 'best') {
-      // 첫 바퀴는 첫 바퀴 기록끼리 (서 있다가 출발), 그다음 바퀴는 달리는 바퀴 기록끼리 비교
-      const g = curLap <= 1 ? bestStart : best;
-      return g ? { tr: g.tr, marks: g.marks, relative: 'lap' } : null;
-    }
+    if (kind === 'best') return run; // 레이스 전체 (바퀴가 바뀌어도 이어서)
     if (kind === 'bot') return (bot ||= buildBot());
     return null;
   }
 
   /** 시각 t(초)의 고스트 위치 → view */
   function place(g, t) {
-    const tr = g.tr;
+    let tr = g.tr;
+    if (g.segs) {
+      // 이어 붙인 고스트: 시각 t가 들어가는 조각 (마지막 조각은 끝까지)
+      let sg = g.segs[0];
+      for (const x of g.segs) if (t >= x.off) sg = x;
+      tr = sg.tr;
+      t -= sg.off;
+    }
     const fi = t * HZ;
     if (fi < 0 || fi > tr.n - 1) return false;
     const i = Math.min(tr.n - 2, Math.floor(fi)), f = fi - i;
@@ -286,30 +321,29 @@ export function createGhost(o) {
       if (kind === 'off') model.root.visible = false;
     },
     /** 저장된 최고 랩 고스트가 있는지 */
-    hasBest: () => !!(best || bestStart),
-    /** 첫 바퀴 고스트의 반응 속도 (초, 불이 꺼진 뒤 움직이기 시작할 때까지). 없으면 null */
+    hasBest: () => !!run,
+    /** 고스트의 반응 속도 (초, 불이 꺼진 뒤 움직이기 시작할 때까지). 없으면 null */
     get startReaction() {
-      return kind === 'best' && bestStart ? bestStart.react : null;
+      return kind === 'best' && run ? run.react : null;
     },
-    /** 바퀴 시작: 기록을 새로 (lapNo = 몇 바퀴째, 1 = 출발 신호부터) */
-    lapStart(lapNo = 1) {
-      curLap = lapNo;
+    /** 레이스 시작: 기록을 새로 (출발 신호부터 결승까지 한 번에 기록) */
+    lapStart() {
       rec = emptyTrace();
-      recMarks = new Float32Array(M + 1).fill(NaN);
+      recMarks = new Float32Array(RM + 1).fill(NaN);
       recNext = 0;
       recT = 0;
     },
     /**
      * 매 물리 스텝: 내 차 기록 (20 Hz) + 진행 지점 시각
-     * lapTime = 이번 바퀴 시간, lapFrac = 이번 바퀴 진행 (0~1, 출발 전 그리드는 음수)
+     * raceTime = 불이 꺼진 뒤 시간, raceProg = 레이스 진행 (바퀴 수, 0~laps, 출발 전 그리드는 음수)
      */
-    record(lapTime, car, lapFrac) {
-      const k1 = Math.floor(lapFrac * M);
-      while (recNext <= k1 && recNext <= M) {
-        if (recNext >= 0) recMarks[recNext] = lapTime;
+    record(raceTime, car, raceProg) {
+      const k1 = Math.floor(raceProg * M);
+      while (recNext <= k1 && recNext <= RM) {
+        if (recNext >= 0) recMarks[recNext] = raceTime;
         recNext++;
       }
-      if (lapTime + 1e-6 < recT) return;
+      if (raceTime + 1e-6 < recT) return;
       recT += 1 / HZ;
       _x.crossVectors(car.up, car.fwd).normalize();
       _m.makeBasis(_x, car.up, car.fwd);
@@ -320,21 +354,26 @@ export function createGhost(o) {
       rec.mode.push(Math.max(0, MODES.indexOf(car.mode || 'normal')) | (car.form === 'spike' ? 8 : 0));
       rec.n++;
     },
-    /** 바퀴 끝: 최고 랩이면 고스트로 저장. 저장했으면 true */
-    lapDone(lapTime, canSave, lapNo = curLap) {
-      // 한 바퀴를 거의 다 지나며 기록한 경우만 (순간이동·테스트로 끝난 바퀴는 저장 안 함)
-      if (!canSave || rec.n < 20 || recNext < M * 0.9) return false;
-      const first = lapNo <= 1; // 첫 바퀴 = 출발 신호부터 (반응 시간 포함)
-      const prev = first ? bestStart : best;
-      if (prev && prev.lap <= lapTime) return false;
-      for (let k = 0; k <= M; k++) if (!isFinite(recMarks[k])) recMarks[k] = k === M ? lapTime : recMarks[Math.max(0, k - 1)];
-      const tr = decode(encode(rec)); // 저장되는 것과 똑같이 (압축 정밀도)
-      const react = first ? reactionOf(tr) : null;
-      const g = { lap: lapTime, tr, marks: recMarks.slice(), react };
-      if (first) bestStart = g;
-      else best = g;
-      const json = JSON.stringify({ v: 1, len: lenKey, lap: +lapTime.toFixed(3), date: Date.now(), react, data: toB64(encode(rec)), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
-      saveStored((first ? KEY_START : KEY)(o.mapName, o.carId), json);
+    /** 완주: 레이스 전체가 내 최고 고스트보다 빠르면 저장. 저장했으면 true */
+    raceDone(total, canSave) {
+      // 레이스를 거의 다 지나며 기록한 경우만 (순간이동·테스트로 끝난 레이스는 저장 안 함)
+      if (!canSave || rec.n < 20 || recNext < RM * 0.9) return false;
+      // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
+      if (run && !run.stitched && run.total <= total) return false;
+      for (let k = 0; k <= RM; k++) if (!isFinite(recMarks[k])) recMarks[k] = k === RM ? total : recMarks[Math.max(0, k - 1)];
+      const enc = encode(rec);
+      const tr = decode(enc); // 저장되는 것과 똑같이 (압축 정밀도)
+      const react = reactionOf(tr);
+      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race' };
+      const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
+      saveStored(KEY_RUN(o.mapName, o.carId), json);
+      // 예전 바퀴별 고스트는 이제 필요 없음 (저장 공간 아끼기)
+      for (const k of [KEY(o.mapName, o.carId), KEY_START(o.mapName, o.carId)]) {
+        try {
+          localStorage.removeItem(k);
+        } catch {}
+      }
+      best = bestStart = null;
       return true;
     },
     /**
@@ -344,20 +383,15 @@ export function createGhost(o) {
     delta(lapFrac, lapTime, raceProg, raceTime) {
       const g = active();
       if (!g) return null;
-      if (g.relative === 'race') {
-        const k = Math.floor(raceProg * M);
-        if (k < 1 || k >= g.marks.length || !isFinite(g.marks[k])) return null;
-        // 내 시각: 지금 위치의 바로 그 지점을 지난 시각 대신 지금 시각을 씀 (지점 간격 20 m, 0.1초 이하 차이)
-        return raceTime - g.marks[k];
-      }
-      const k = Math.min(recNext - 1, M);
+      // 마지막으로 지난 진행 지점에서 내 시각 − 고스트 시각 (레이스 전체 기준, 바퀴가 바뀌어도 이어서)
+      const k = Math.min(recNext - 1, RM, g.marks.length - 1);
       if (k < 1 || !isFinite(g.marks[k]) || !isFinite(recMarks[k])) return null;
       return recMarks[k] - g.marks[k];
     },
     /** 매 화면: 고스트 위치 (lapTime = 이번 바퀴 시간, raceTime = 출발 뒤 시간) */
     update(dt, elapsed, lapTime, raceTime, camera, show) {
       const g = show ? active() : null;
-      if (!g || !place(g, g.relative === 'race' ? raceTime : lapTime)) {
+      if (!g || !place(g, raceTime)) {
         model.root.visible = false;
         return;
       }
@@ -377,6 +411,6 @@ export function createGhost(o) {
     /** 테스트용 */
     view,
     model,
-    _debug: () => ({ rec: rec.n, lap: curLap, best: best && { lap: best.lap, n: best.tr.n }, start: bestStart && { lap: bestStart.lap, n: bestStart.tr.n, react: bestStart.react }, bot: bot && { n: bot.tr.n, total: bot.total } }),
+    _debug: () => ({ rec: rec.n, recNext, RM, run: run && { total: run.total, segs: run.segs.length, n: run.segs.reduce((a, x) => a + x.tr.n, 0), react: run.react, stitched: !!run.stitched }, bot: bot && { n: bot.tr.n, total: bot.total } }),
   };
 }

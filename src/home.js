@@ -304,15 +304,16 @@ export async function runHome() {
   function refreshRecords() {
     grid.querySelectorAll('.h-map').forEach((card) => {
       const id = card.dataset.map;
+      // 최고 기록 = 완주 기록 (여러 바퀴 맵은 모든 바퀴 합) (사용자 요청 2026-11-10)
       const mine = records.get(id, carId);
-      const best = records.bestOfMap(id);
+      const best = records.bestRaceOfMap(id);
       const el = card.querySelector('.rec');
       const bestRec = best ? records.get(id, best.car) : null;
       if (mapInfo[id].free) el.textContent = '';
-      else if (mine && mine.lap) el.innerHTML = `🏆 ${fmtTime(mine.lap)}${mine.lapAssist ? ASSIST_TAG : ''}`;
-      else if (best) el.innerHTML = `🏆 ${fmtTime(best.lap)} (${esc(carOf(best.car).name)})${bestRec && bestRec.lapAssist ? ASSIST_TAG : ''}`;
+      else if (mine && mine.race) el.innerHTML = `🏆 ${fmtTime(mine.race)}${mine.raceAssist ? ASSIST_TAG : ''}`;
+      else if (best) el.innerHTML = `🏆 ${fmtTime(best.race)} (${esc(carOf(best.car).name)})${bestRec && bestRec.raceAssist ? ASSIST_TAG : ''}`;
       else el.textContent = '기록 없음';
-      el.title = '내 최고 랩 (지금 고른 차)';
+      el.title = '내 최고 기록 (완주 시간, 지금 고른 차)';
     });
   }
 
@@ -343,8 +344,8 @@ export async function runHome() {
         const lap = entries.filter(([, v]) => v.lap).sort((a, b) => a[1].lap - b[1].lap)[0];
         const race = entries.filter(([, v]) => v.race).sort((a, b) => a[1].race - b[1].race)[0];
         const perCar = cars
-          .filter((c) => r[c.id] && r[c.id].lap)
-          .map((c) => `${esc(c.name)} ${fmtTime(r[c.id].lap)}${r[c.id].lapAssist ? ASSIST_TAG : ''}`)
+          .filter((c) => r[c.id] && r[c.id].race)
+          .map((c) => `${esc(c.name)} ${fmtTime(r[c.id].race)}${r[c.id].raceAssist ? ASSIST_TAG : ''}`)
           .join(' · ');
         // 구간마다 (어느 차든) 최고 → 이론상 최고 랩 = 합
         const best3 = [0, 1, 2].map((i) => Math.min(...Object.values(sec[m.id] || {}).map((v) => (v && v[i]) || Infinity)));
@@ -352,14 +353,14 @@ export async function runHome() {
           ? `<span class="h-sec">${best3.map((v, i) => `<i>S${i + 1} ${v.toFixed(2)}</i>`).join('')}</span><br><small class="none">이론상 ${fmtTime(best3[0] + best3[1] + best3[2])}</small>`
           : '<span class="none">—</span>';
         return `<tr><td class="m"><b>${esc(m.title)}</b><small>${mapInfo[m.id].laps}바퀴</small></td>
-          <td>${lap ? `<span class="gold">${fmtTime(lap[1].lap)}</span>${lap[1].lapAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(lap[0]).name)}</small>` : '<span class="none">—</span>'}</td>
-          <td>${race ? `${fmtTime(race[1].race)}${race[1].raceAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(race[0]).name)}</small>` : '<span class="none">—</span>'}</td>
+          <td>${race ? `<span class="gold">${fmtTime(race[1].race)}</span>${race[1].raceAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(race[0]).name)}</small>` : '<span class="none">—</span>'}</td>
+          <td>${lap ? `${fmtTime(lap[1].lap)}${lap[1].lapAssist ? ASSIST_TAG : ''}<br><small class="none">${esc(carOf(lap[0]).name)}</small>` : '<span class="none">—</span>'}</td>
           <td>${secHtml}</td>
           <td><small class="none">${perCar || '아직 달리지 않았어요'}</small></td></tr>`;
       })
       .join('');
     const box = views.records.querySelector('.scroll');
-    box.innerHTML = `<table class="h-rec"><thead><tr><th>맵</th><th>최고 랩</th><th>최고 완주</th><th>최고 구간</th><th>차마다 최고 랩</th></tr></thead><tbody>${rows}</tbody></table>
+    box.innerHTML = `<table class="h-rec"><thead><tr><th>맵</th><th>최고 기록 (완주)</th><th>최고 랩</th><th>최고 구간</th><th>차마다 최고 기록</th></tr></thead><tbody>${rows}</tbody></table>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;color:var(--gm-dim);font-size:12px">
         <span>기록은 이 브라우저에만 저장돼요 · ${ASSIST_TAG} = 운전 도움(브레이크·조향·트랙션)을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>`;
   }
@@ -422,7 +423,7 @@ export async function runHome() {
         <canvas width="360" height="170"></canvas>
         <div class="i"><small>맵</small><b data-s="mt"></b><span data-s="mm"></span></div>
         <div class="i"><small>차</small><b data-s="ct"></b><span data-s="cm"></span></div>
-        <div class="i"><small>내 최고 랩 (이 차)</small><b data-s="rb"></b><span data-s="rm"></span></div>
+        <div class="i"><small>내 최고 기록 (이 차)</small><b data-s="rb"></b><span data-s="rm"></span></div>
         <div class="b"><button class="gm-btn small" data-go="map" data-nav>🗺️ 맵</button><button class="gm-btn small" data-go="car" data-nav>🏎️ 차</button></div>
       </div>
     </div>`;
@@ -460,8 +461,8 @@ export async function runHome() {
     const k = classOfId(c.class);
     set('cm', [k ? k.name : '', c.tag || ''].filter(Boolean).join(' · '));
     const mine = records.get(mapId, carId);
-    box.querySelector('[data-s="rb"]').innerHTML = mine && mine.lap ? `${fmtTime(mine.lap)}${mine.lapAssist ? ASSIST_TAG : ''}` : '—';
-    set('rm', mine && mine.race ? `완주 ${fmtTime(mine.race)}` : '아직 기록 없음');
+    box.querySelector('[data-s="rb"]').innerHTML = mine && mine.race ? `${fmtTime(mine.race)}${mine.raceAssist ? ASSIST_TAG : ''}` : '—';
+    set('rm', mine && mine.lap ? `최고 랩 ${fmtTime(mine.lap)}` : '아직 기록 없음');
   }
   function refreshModes() {
     views.mode.querySelectorAll('.h-mode').forEach((b) => b.classList.toggle('sel', b.dataset.mode === raceMode));

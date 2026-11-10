@@ -272,7 +272,7 @@ function resetRace() {
   Object.assign(race, { lightsT: 0, lightsOutAt: 3.4 + 0.7 + Math.random() * 1.6, lights: 0, reaction: null, reactArmed: false });
   Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false, assist: assistOn() });
   sectors.reset();
-  if (ghost) ghost.lapStart(1); // 첫 바퀴 = 출발 신호부터
+  if (ghost) ghost.lapStart(1); // 레이스 전체 기록 새로 (출발 신호부터 결승까지 한 번에)
   hud.hideResults();
   snapCamera();
   startIntro();
@@ -370,8 +370,7 @@ function updateLaps() {
     if (isBest) race.best = lapTime;
     // 구간 기록 (S3 닫기) · 고스트 (최고 랩이면 저장) · 레이스 순위표의 내 최고 랩
     const splits = sectors.lapDone(lapTime, race.time, canSaveRecords());
-    if (ghost && ghost.lapDone(lapTime, canSaveRecords(), race.lap) && settings.values.ghost === 'best' && MODE !== 'race') race.ghostSaved = true;
-    if (ghost) ghost.lapStart(race.lap + 1); // 다음 바퀴 (달리면서 출발선 통과)
+    // (고스트는 바퀴마다가 아니라 완주할 때 레이스 전체로 저장: showFinish)
     raceSys.playerLap(lapTime);
     if (settings.values.sectors ?? true) hud.lapSummary(race.lapTimes.length, lapTime, splits);
     // 내 기록 (맵 + 차마다, 브라우저에 저장). 자동 운전 테스트(game.paused) 중에는 저장 안 함
@@ -415,7 +414,7 @@ function trackStep() {
   const lapT = race.time - race.lapStart;
   const frac = playerProgress() - (race.lap - 1);
   sectors.step(frac, lapT, race.time);
-  if (ghost) ghost.record(lapT, car, frac);
+  if (ghost) ghost.record(race.time, car, playerProgress()); // 레이스 전체 (바퀴가 바뀌어도 이어서)
 }
 
 // --- 카메라: 차의 위쪽 방향을 따라 함께 회전 (벽, 천장에서도 차 뒤에 붙어 있음) ---
@@ -682,7 +681,7 @@ const menu = createPauseMenu({
   getInfo: () => ({
     map: mapTitle, car: carName, free: FREE,
     lapText: `${Math.min(race.lap, totalLaps)} / ${totalLaps}`,
-    time: race.time, best: race.best, record: (records.get(mapName, carId) || {}).lap,
+    time: race.time, best: race.best, record: (records.get(mapName, carId) || {}).race,
     phase: race.phase, lapTimes: race.lapTimes,
   }),
   onOpen() {
@@ -728,6 +727,12 @@ function assistOn() {
   const v = settings.values;
   return (v.brakeAssist || 'off') !== 'off' || (v.steerAssist || 'off') !== 'off';
 }
+// 내 최고 기록 (이 맵 + 이 차의 완주 시간, 여러 바퀴면 합). 완주할 때만 바뀌므로 기억해 둠
+let myRecordCache = null;
+function myRecord() {
+  if (myRecordCache === null) myRecordCache = (records.get(mapName, carId) || {}).race || 0;
+  return myRecordCache || null;
+}
 function canSaveRecords() {
   // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
   return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
@@ -742,6 +747,9 @@ function showFinish() {
   const prev = records.get(mapName, carId);
   const prevRace = prev && prev.race;
   const newRace = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist) : false;
+  myRecordCache = null;
+  // 고스트: 레이스 전체(모든 바퀴)가 내 최고 완주보다 빠르면 저장
+  if (ghost) ghost.raceDone(total, canSaveRecords());
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
@@ -969,6 +977,7 @@ function frame(now, manual = false) {
     laps: trackData.laps,
     time: race.time,
     best: race.best,
+    record: myRecord(), // 내 최고 기록 (완주 시간 = 모든 바퀴 합)
     speed: Math.abs(car.forwardSpeed) * 3.6,
     driftTime: car.drifting ? car.driftTime : 0,
     driftLevel: car.driftLevel,

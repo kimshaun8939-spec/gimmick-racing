@@ -202,7 +202,9 @@ export function createHud(track) {
     update(s) {
       el.lap.textContent = s.label || `LAP ${s.lap}/${s.laps}`;
       el.time.textContent = fmtTime(s.time);
-      el.best.textContent = `최고 랩 ${fmtTime(s.best)}`;
+      // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
+      const bestTxt = s.record ? `최고 기록 ${fmtTime(s.record)}` : `최고 랩 ${fmtTime(s.best)}`;
+      if (bestTxt !== el.best._t) el.best.textContent = el.best._t = bestTxt;
       el.speed.textContent = Math.round(spd(s.speed));
       // 속도감: 200 km/h 넘으면 숫자가 따뜻하게 빛나고, 부스터 중에는 초록빛
       const fastNow = s.speed >= 200;
@@ -464,10 +466,15 @@ export function createHud(track) {
       const total = lapTimes.reduce((a, b) => a + b, 0);
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
-      if (info.newRace) badges.push('<span class="badge">🏆 새 완주 기록!</span>');
-      if (info.newLap) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
+      // 최고 기록 = 완주 시간 (여러 바퀴면 모든 바퀴 합)으로 판단 (사용자 요청 2026-11-10)
+      const diff = info.prevRace ? total - info.prevRace : 0;
+      const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
+      if (info.newRace) badges.push('<span class="badge">🏆 새 최고 기록!</span>');
+      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">예전 최고 ${fmtTime(info.prevRace)} → ${diffTxt}</span>`);
+      if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)} (${diffTxt})</span>`);
+      if (info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
+      else if (info.newLap && !info.newRace) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
       if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜고 달린 기록">🛟 도움 켬</span>');
-      if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">내 기록 ${fmtTime(info.prevRace)} (${total - info.prevRace >= 0 ? '+' : '−'}${Math.abs(total - info.prevRace).toFixed(3)}초)</span>`);
       // 레이스(봇·온라인): 순위 결과표, 구간 기록표
       const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
       const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>` : '';

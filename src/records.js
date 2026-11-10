@@ -29,6 +29,13 @@ export const records = {
     for (const [car, v] of Object.entries(r)) if (v.lap && (!best || v.lap < best.lap)) best = { lap: v.lap, car };
     return best;
   },
+  /** 이 맵에서 가장 빠른 완주 기록 (어느 차든, 여러 바퀴면 합) → { race, car } */
+  bestRaceOfMap(map) {
+    const r = readAll()[map] || {};
+    let best = null;
+    for (const [car, v] of Object.entries(r)) if (v.race && (!best || v.race < best.race)) best = { race: v.race, car };
+    return best;
+  },
   /** 한 바퀴 기록 저장. 새 최고 기록이면 true */
   saveLap(map, car, lap, assist = false) {
     const all = readAll();
