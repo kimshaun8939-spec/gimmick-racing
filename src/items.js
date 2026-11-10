@@ -35,6 +35,19 @@ export const CFG = {
 export function createItems(o) {
   const { scene, track, car, raceSys, hud } = o;
   const keyLabel = o.keyLabel || (() => 'E');
+  // 온라인 아이템전: 내 차만 상자를 먹고(봇은 아이템 없음), 다른 사람에게 주는 효과는 작은 메시지로 보냄 (아래 '온라인' 부분)
+  const online = !!o.online;
+  const opps = o.opponents || null;
+  const remotes = () => (online && opps ? opps.entries.filter((e) => e.remote) : []);
+  let myPid = '', netSend = null, oilSeq = 0;
+  const pidOf = (e) => (e && e.remote ? String(e.id).replace(/^net:/, '') : myPid);
+  const send = (m) => {
+    if (online && netSend) {
+      try {
+        netSend({ t: 'item', ...m });
+      } catch {}
+    }
+  };
   const L = track.length;
   const samples = track.samples || [];
   const NS = samples.length;
@@ -195,7 +208,11 @@ export function createItems(o) {
   // ---------- 선수 상태 ----------
   const states = new Map();
   function racers() {
-    return [raceSys.me, ...raceSys.bots];
+    return online ? [raceSys.me] : [raceSys.me, ...raceSys.bots];
+  }
+  /** 순위 계산용: 온라인이면 다른 사람·봇도 포함 */
+  function everyone() {
+    return online ? [raceSys.me, ...remotes(), ...raceSys.bots] : racers();
   }
   const carOf = (e) => e.car || e.view;
   function st(e) {
@@ -212,12 +229,12 @@ export function createItems(o) {
   }
   function rankOf(e) {
     let r = 1;
-    for (const x of racers()) if (x !== e && x.progress > e.progress) r++;
+    for (const x of everyone()) if (x !== e && x.progress > e.progress) r++;
     return r;
   }
   /** 순위에 따라 아이템 뽑기: 앞쪽 = 방어막·기름, 뒤쪽 = 부스터·로켓·전기 충격 */
   function roll(e) {
-    const all = racers();
+    const all = everyone();
     const n = all.length, rank = rankOf(e);
     const r = n > 1 ? (rank - 1) / (n - 1) : 0.5;
     const w = {
@@ -225,7 +242,7 @@ export function createItems(o) {
       oil: n > 1 ? 3 - 2.4 * r : 0,
       boost: 1 + 2.6 * r,
       rocket: rank > 1 ? 0.3 + 2.7 * r : 0,
-      shock: n > 2 && r >= 0.5 ? 1.6 * r : 0,
+      shock: n > (online ? 1 : 2) && r >= 0.5 ? 1.6 * r : 0,
     };
     let sum = 0;
     for (const k of KINDS) sum += w[k];
@@ -260,12 +277,17 @@ export function createItems(o) {
     if (hud && hud.toast) hud.toast(text);
   }
   /** 맞음: 방어막이 있으면 막음. k = 남는 속도 비율 */
+  let lastBlocked = false;
   function hit(e, k, text) {
+    if (e.remote) return false; // 온라인 상대: 맞았는지는 그 사람 컴퓨터가 정함
     const s = st(e), c = carOf(e);
+    lastBlocked = false;
     if (e.finished || s.immuneT > 0) return false;
     if (s.shieldT > 0) {
       s.shieldT = 0;
       s.immuneT = 0.8;
+      lastBlocked = true;
+      send({ k: 'fx', fx: 'block' });
       if (isMe(e)) {
         say('🛡 방어막이 막았어요!');
         sfx('block');
@@ -300,13 +322,14 @@ export function createItems(o) {
     if (me) hudDirty = true;
     if (kind === 'boost') {
       c.itemBoostT = CFG.boostSec;
+      if (me) send({ k: 'fx', fx: 'boost' });
       if (me) {
         sfx('boost');
         if (hud.flash) hud.flash('#ffb040', 0.4);
       }
     } else if (kind === 'shield') {
       s.shieldT = CFG.shieldSec;
-      if (me) sfx('shield');
+      if (me) sfx('shield'), send({ k: 'fx', fx: 'shield' });
     } else if (kind === 'oil') {
       let slot = oils.find((x) => x.t <= 0) || oils.reduce((a, b) => (a.t < b.t ? a : b));
       slot.t = CFG.oilSec;
@@ -316,12 +339,14 @@ export function createItems(o) {
       slot.mesh.position.copy(slot.pos).addScaledVector(c.up, 0.06);
       slot.mesh.quaternion.setFromUnitVectors(UP, c.up);
       slot.mesh.visible = visible;
+      slot.id = myPid + ':' + ++oilSeq;
+      if (me) send({ k: 'oil', oid: slot.id, p: slot.pos.toArray().map(r2), u: c.up.toArray().map(r2) });
       if (me) sfx('drop');
     } else if (kind === 'rocket') {
       const r = rockets.find((x) => !x.on);
       // 바로 앞 차를 겨냥
       let tgt = null, best = CFG.rocketRange / L;
-      for (const x of racers()) {
+      for (const x of online ? remotes() : racers()) {
         if (x === e || x.finished) continue;
         const d = x.progress - e.progress;
         if (d > 0 && d < best) (best = d), (tgt = x);
@@ -329,13 +354,21 @@ export function createItems(o) {
       Object.assign(r, { on: true, owner: e, target: tgt, d: e.progress * L + 5, lat: latOf(e), v: Math.max(CFG.rocketMin, Math.abs(c.speed) + CFG.rocketSpeed), life: tgt ? CFG.rocketLife : 2.5 });
       r.mesh.position.copy(c.pos);
       r.mesh.visible = visible;
+      if (me) send({ k: 'rocket', to: tgt ? pidOf(tgt) : null, d: r2(r.d), lat: r2(r.lat), v: r2(r.v) });
       if (me) sfx('rocket');
       if (tgt && isMe(tgt)) sfx('warn');
     } else if (kind === 'shock') {
       let n = 0;
-      for (const x of racers()) {
+      if (me) send({ k: 'shock', pr: e.progress });
+      for (const x of online ? remotes() : racers()) {
         if (x === e || x.finished || x.progress <= e.progress) continue;
         const xs = st(x);
+        if (x.remote) {
+          // 온라인 상대: 느려지는 것은 그 사람 컴퓨터가 함. 여기서는 번쩍이는 모습만
+          xs.shockT = carOf(x).itemSlowT = CFG.shockSec;
+          n++;
+          continue;
+        }
         if (xs.shieldT > 0) {
           xs.shieldT = 0;
           if (isMe(x)) say('🛡 방어막이 전기 충격을 막았어요!'), (hudDirty = true);
@@ -358,6 +391,7 @@ export function createItems(o) {
     }
     return true;
   }
+  const r2 = (x) => Math.round(x * 100) / 100;
   function latOf(e) {
     const c = carOf(e);
     const s = samples[wrapI(Math.round((((e.progress % 1) + 1) % 1) * NS))];
@@ -438,6 +472,16 @@ export function createItems(o) {
         }
       }
     }
+    // 온라인 상대: 보이는 효과 시간만 줄임
+    for (const e of remotes()) {
+      const s = states.get(e);
+      if (!s) continue;
+      const c = carOf(e);
+      if (s.shieldT > 0) s.shieldT -= dt;
+      if (s.shockT > 0) s.shockT -= dt;
+      if (c.itemBoostT > 0) c.itemBoostT -= dt;
+      if (c.itemSlowT > 0) c.itemSlowT -= dt;
+    }
     // 기름
     for (const oil of oils) {
       if (oil.t <= 0) continue;
@@ -453,9 +497,12 @@ export function createItems(o) {
         const dx = p.x - oil.pos.x, dz = p.z - oil.pos.z;
         if (dx * dx + dz * dz < (CFG.oilR + 0.9) ** 2 && Math.abs(p.y - oil.pos.y) < 1.6 && c.grounded) {
           const blocked = st(e).shieldT > 0;
-          if (hit(e, CFG.oilSlow, '🛢 기름을 밟았어요! 미끌') || blocked) {
+          const got = hit(e, CFG.oilSlow, '🛢 기름을 밟았어요! 미끌');
+          if (got || blocked) {
             oil.t = 0;
             oil.mesh.visible = false;
+            if (oil.id) send({ k: 'oilgone', oid: oil.id });
+            if (oil.owner && oil.owner.remote) send({ k: 'hit', by: pidOf(oil.owner), what: 'oil', blocked: !got });
           }
           break;
         }
@@ -475,8 +522,9 @@ export function createItems(o) {
         pointAt(r.d, r.lat, _v2);
         if (r.d >= td - 4) {
           if (_v2.distanceToSquared(tp) < 100) {
-            hit(t, CFG.rocketSlow, `🎯 ${r.owner.name}의 로켓에 맞았어요!`);
-            if (isMe(r.owner)) say(`🎯 ${t.name} 명중!`), sfx('hit');
+            const got = hit(t, CFG.rocketSlow, `🎯 ${r.owner.name}의 로켓에 맞았어요!`);
+            if (isMe(t) && r.owner.remote && (got || lastBlocked)) send({ k: 'hit', by: pidOf(r.owner), what: 'rocket', blocked: !got });
+            if (isMe(r.owner) && !t.remote) say(`🎯 ${t.name} 명중!`), sfx('hit'); // (온라인 상대는 '맞았다'는 답이 오면 알림)
             r.life = 0;
           } else if (r.d > td + 14) r.life = 0; // 지름길·비행 중이라 놓침
         }
@@ -585,7 +633,9 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
   function update(dt, elapsed) {
     if (!visible) return;
     drawBoxes(elapsed);
-    for (const e of racers()) {
+    const shownNow = online ? [raceSys.me, ...remotes()] : racers();
+    if (online) for (const [e, s] of states) if (!shownNow.includes(e)) s.aura.visible = s.flame.visible = false; // 나간 사람
+    for (const e of shownNow) {
       const s = states.get(e);
       if (!s) continue;
       const c = carOf(e);
@@ -688,7 +738,70 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
     } catch {}
   }
 
+  // ---------- 온라인: 다른 사람이 쓴 아이템 받기 (netRace.js가 넘겨 줌) ----------
+  function netRecv(m, from) {
+    if (!online || !m || from === myPid) return;
+    const ent = remotes().find((e) => pidOf(e) === from) || null;
+    const who = ent || { remote: true, id: 'net:' + from, name: m.n || '상대', progress: 0, view: { pos: new THREE.Vector3(), up: UP, fwd: UP } };
+    const me = raceSys.me;
+    if (m.k === 'fx') {
+      if (!ent) return;
+      if (m.fx === 'boost') carOf(ent).itemBoostT = CFG.boostSec;
+      else if (m.fx === 'shield') st(ent).shieldT = CFG.shieldSec;
+      else if (m.fx === 'block') st(ent).shieldT = 0;
+    } else if (m.k === 'oil' && Array.isArray(m.p)) {
+      const slot = oils.find((x) => x.t <= 0) || oils.reduce((a, b) => (a.t < b.t ? a : b));
+      slot.t = CFG.oilSec;
+      slot.owner = who;
+      slot.ownerT = 0;
+      slot.id = m.oid;
+      slot.pos.fromArray(m.p);
+      _v.fromArray(m.u || [0, 1, 0]).normalize();
+      slot.mesh.position.copy(slot.pos).addScaledVector(_v, 0.06);
+      slot.mesh.quaternion.setFromUnitVectors(UP, _v);
+      slot.mesh.visible = visible;
+    } else if (m.k === 'oilgone') {
+      for (const oil of oils) if (oil.id === m.oid && oil.t > 0) (oil.t = 0), (oil.mesh.visible = false);
+    } else if (m.k === 'rocket') {
+      const r = rockets.find((x) => !x.on);
+      if (!r) return;
+      const tgt = m.to === myPid ? me : remotes().find((e) => pidOf(e) === m.to) || null;
+      Object.assign(r, { on: true, owner: who, target: tgt, d: +m.d || 0, lat: +m.lat || 0, v: Math.max(CFG.rocketMin, +m.v || 0), life: tgt ? CFG.rocketLife : 2.5 });
+      pointAt(r.d, r.lat, r.mesh.position);
+      r.mesh.visible = visible;
+      if (tgt === me) sfx('warn');
+    } else if (m.k === 'shock') {
+      if (me.finished || !(me.progress > m.pr)) return;
+      const s = st(me);
+      if (s.shieldT > 0) {
+        s.shieldT = 0;
+        hudDirty = true;
+        say('🛡 방어막이 전기 충격을 막았어요!');
+        send({ k: 'fx', fx: 'block' });
+        return;
+      }
+      carOf(me).itemSlowT = CFG.shockSec;
+      s.shockT = CFG.shockSec;
+      say(`⚡ ${who.name}의 전기 충격! 잠깐 느려져요`);
+      sfx('shock');
+      if (hud.flash) hud.flash('#fff25a', 0.5);
+    } else if (m.k === 'hit') {
+      if (ent && !m.blocked) st(ent).hitFxT = 0.6;
+      if (m.by !== myPid) return;
+      if (m.what === 'oil') say(m.blocked ? `🛡 ${who.name}의 방어막이 기름을 막았어요` : `🛢 ${who.name} 님이 내 기름을 밟았어요!`);
+      else say(m.blocked ? `🛡 ${who.name}의 방어막에 막혔어요` : `🎯 ${who.name} 명중!`);
+      if (!m.blocked) sfx('hit');
+    }
+  }
+
   return {
+    online,
+    /** 온라인: netRace.js가 내 아이디와 보내는 함수를 알려 줌 */
+    netInit(pid, sendFn) {
+      myPid = pid;
+      netSend = sendFn;
+    },
+    netRecv,
     cfg: CFG, rows, oils, rockets, states,
     step, update, usePlayer, reset, setVisible,
     setMuted(m) {

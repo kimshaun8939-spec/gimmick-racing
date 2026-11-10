@@ -125,6 +125,23 @@ export async function startNetRace(game, params) {
       });
   }
 
+  // ---------------------------------------------------------------- 아이템전 (온라인): 아이템 효과를 작은 메시지로 주고받음 (items.js netInit/netRecv)
+  if (game.items && game.items.netInit) {
+    game.items.netInit(pid, (msg) => {
+      msg.id = pid;
+      msg.n = name;
+      if (isHost) net.hub && net.hub.broadcast(msg);
+      else if (net.link && net.link.open !== false) net.link.send(msg);
+    });
+  }
+  function itemMsg(m, from) {
+    try {
+      if (game.items && game.items.netRecv && from !== pid) game.items.netRecv(m, from);
+    } catch (e) {
+      console.warn('[net] 아이템', e);
+    }
+  }
+
   // ---------------------------------------------------------------- 내 상태 보내기
   const r2 = (x) => Math.round(x * 100) / 100;
   const r3 = (x) => Math.round(x * 1000) / 1000;
@@ -262,6 +279,7 @@ export async function startNetRace(game, params) {
           },
           onMessage(p, msg) {
             if (msg.t === 'fin') addResult({ ...msg, id: p });
+            else if (msg.t === 'item') net.hub.broadcast({ ...msg, id: p }, p), itemMsg(msg, p); // 아이템: 다른 사람에게 전달 + 나도 받음
             else if (msg.t === 'emote') net.hub.broadcast({ ...msg, id: p }), ui.emote(net.players.get(p), msg.e);
           },
           onLeave(p) {
@@ -303,6 +321,7 @@ export async function startNetRace(game, params) {
           else if (m.t === 'left') dropPlayer(m.id);
           else if (m.t === 'reject') ui.status(m.reason, true);
           else if (m.t === 'emote') ui.emote(net.players.get(m.id), m.e);
+          else if (m.t === 'item') itemMsg(m, m.id);
         },
         onFast(m) {
           if (m.t === 's' && m.id !== pid) applyState(m.id, m);

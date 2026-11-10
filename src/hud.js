@@ -514,18 +514,22 @@ export function createHud(track) {
           : null;
       const champBlock = ch ? champHtml(ch) : '';
       el.results.innerHTML = `<div class="res${standHtml || ch ? ' wide' : ''}${ch && ch.final ? ' final' : ''}">
+        <div class="res-head">
         <div class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</div><h2>${title}</h2>
         <div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}</div>
-        ${podRows ? podiumHtml(podRows, ch && ch.final ? 'season' : '') : ''}
         <div class="total">${fmtTime(total)}</div>
-        <div>${badges.join('')}</div>
+        <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>
+        </div>
+        <div class="res-scroll">
+        ${podRows ? podiumHtml(podRows, ch && ch.final ? 'season' : '') : ''}
         ${ch && ch.final ? champBlock : ''}
         ${standHtml}
         ${ch && !ch.final ? champBlock : ''}
         <table class="laps">${lapTimes.map((t, i) => `<tr class="${t === best ? 'best' : ''}"><td>LAP ${i + 1}${t === best ? ' ⭐' : ''}</td><td>${fmtTime(t)}</td></tr>`).join('')}</table>
         ${secHtml}
         ${cornerHtml(info.corners)}
+        </div>
         <div class="btns">
           <div class="ra-main">
             ${info.noRestart ? '' : '<button class="gm-btn primary big" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}

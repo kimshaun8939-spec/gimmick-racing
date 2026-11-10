@@ -5,6 +5,7 @@
 //   방장이 "출발"을 누르면 모두 ?map=..&car=..&room=CODE&host=1|0&name=..&mode=race 로 이동 → netRace.js가 이어받음
 // 연결 방식 설명은 net.js 위쪽 주석 참고
 import { createHub, joinHub, probePeer, racePeerId, lobbyPeerId, makeCode, normCode, validCode, myPid, getNick, setNick, randomNick, cleanNick, saveRoomInfo, inviteUrl, loadPeerLib, NET_VERSION } from './net.js';
+import { isCarUnlocked, carUnlockLevel } from './unlocks.js'; // 잠긴 차는 못 고름 (🔒 Lv.N)
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 칸의 진짜 차 사진 (홈 화면과 같은 사진, 저장돼 있으면 바로)
 import { loadMaps, loadRoster, sampleOutline, drawTrackThumb, getLast, setLast } from './gameData.js';
 
@@ -123,11 +124,34 @@ export async function openLobby(opts = {}) {
     const url = thumbUrl(id);
     return url ? `<img src="${url}" alt="" draggable="false" data-pic="${esc(id)}">` : `<span class="ph" data-pic="${esc(id)}"></span>`;
   };
+  // 잠긴 차 (unlocks.js): 흐리게 + "🔒 Lv.N", 눌러도 안 골라짐
+  const unlocked = (id) => {
+    try {
+      return isCarUnlocked(id) !== false;
+    } catch {
+      return true;
+    }
+  };
+  const lockLv = (id) => {
+    try {
+      return carUnlockLevel(id) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  if (!unlocked(carId)) {
+    const ok = carsShown.find((c) => unlocked(c.id)) || cars.find((c) => c.id === 'f1');
+    if (ok) carId = ok.id;
+  }
   function renderCarChips(box) {
     box.innerHTML = carsShown
       .map((c) => {
         const k = classOf(c.class);
         const tag = String(c.tag || '').split('·').pop().trim();
+        if (!unlocked(c.id)) {
+          const lv = lockLv(c.id);
+          return `<button class="lb-car locked" data-lockcar="${esc(c.id)}" aria-disabled="true" title="${lv ? `레벨 ${lv}부터 탈 수 있어요` : '아직 잠겨 있어요'}" style="--cc:${esc((k && k.color) || '#ffcf3f')};opacity:.5;cursor:not-allowed"><span class="pic" style="filter:grayscale(1) brightness(.6)">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}</span><b>${esc(c.name)}</b><small style="color:#ffd27a">🔒 ${lv ? 'Lv.' + lv : '잠김'}</small></button>`;
+        }
         return `<button class="lb-car${c.id === carId ? ' on' : ''}" data-car="${esc(c.id)}" title="${esc(c.desc || c.tag || '')}" style="--cc:${esc((k && k.color) || '#ffcf3f')}"><span class="pic">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span></span><b>${esc(c.name)}</b><small>${esc(tag)}</small></button>`;
       })
       .join('');
@@ -151,8 +175,14 @@ export async function openLobby(opts = {}) {
   });
   thumbJob.done.catch((e) => console.warn('차 사진', e));
   el.addEventListener('click', (e) => {
+    const lockedChip = e.target.closest('[data-lockcar]');
+    if (lockedChip) {
+      const lv = lockLv(lockedChip.dataset.lockcar);
+      toastIn(lv ? `🔒 레벨 ${lv}부터 탈 수 있어요` : '🔒 아직 잠긴 차예요');
+      return;
+    }
     const chip = e.target.closest('[data-car]');
-    if (chip) {
+    if (chip && unlocked(chip.dataset.car)) {
       carId = chip.dataset.car;
       setLast({ car: carId });
       el.querySelectorAll('[data-car]').forEach((b) => b.classList.toggle('on', b.dataset.car === carId));
@@ -179,6 +209,7 @@ export async function openLobby(opts = {}) {
     else if (a === 'go') session && session.go();
     else if (a === 'leave') leaveRoom();
     else if (a === 'bots') session && session.setBots(+act.dataset.n);
+    else if (a === 'mode') session && session.setMode && session.setMode(act.dataset.m);
     else if (a === 'rename') renameMe();
     else if (a === 'kick') session && session.kick(act.dataset.pid);
   });
@@ -270,6 +301,10 @@ export async function openLobby(opts = {}) {
   async function hostSession(code, signal) {
     const players = new Map(); // pid → 선수 정보
     let bots = 0;
+    let mode = 'race'; // 'race' 스피드전 / 'item' 아이템전 (방장이 고름, 마지막 선택 기억)
+    try {
+      if (localStorage.getItem('gimmick.lobbyMode') === 'item') mode = 'item';
+    } catch {}
     const chat = [];
     let going = false;
     const meInfo = () => ({ pid, name: nick, car: carId, carName: carOf(carId).name, look: carOf(carId).look, ready: true, host: true, ping: 0 });
@@ -281,9 +316,10 @@ export async function openLobby(opts = {}) {
       players: () => [...players.values()],
       map: () => mapId,
       bots: () => bots,
+      mode: () => mode,
       chat,
     };
-    const state = () => ({ t: 'state', players: s.players(), map: mapId, bots, code });
+    const state = () => ({ t: 'state', players: s.players(), map: mapId, bots, mode, code });
     const push = () => {
       hub.broadcast(state());
       renderRoom();
@@ -354,6 +390,16 @@ export async function openLobby(opts = {}) {
         bots = Math.max(0, Math.min(7, n | 0));
         push();
       },
+      setMode(m) {
+        const next = m === 'item' ? 'item' : 'race';
+        if (next === mode) return;
+        mode = next;
+        try {
+          localStorage.setItem('gimmick.lobbyMode', mode);
+        } catch {}
+        sys(mode === 'item' ? '레이스 방식: 🎁 아이템전' : '레이스 방식: 🏁 스피드전');
+        push();
+      },
       kick(p) {
         const pl = players.get(p);
         if (!pl || pl.host) return;
@@ -380,7 +426,7 @@ export async function openLobby(opts = {}) {
         try {
           botLevel = (JSON.parse(localStorage.getItem('gimmick.settings') || '{}') || {}).botLevel || 'normal';
         } catch {}
-        const msg = { t: 'go', map: mapId, bots, botLevel, players: list, code };
+        const msg = { t: 'go', map: mapId, bots, botLevel, mode, players: list, code };
         hub.broadcast(msg);
         launch(msg, true);
         setTimeout(() => hub.close(), 2600); // 참가자가 'go'를 받을 시간을 주고 정리
@@ -406,6 +452,7 @@ export async function openLobby(opts = {}) {
       players: () => st.players,
       map: () => st.map,
       bots: () => st.bots,
+      mode: () => (st.mode === 'item' ? 'item' : 'race'),
       chat,
     };
     let rejected = null;
@@ -490,7 +537,7 @@ export async function openLobby(opts = {}) {
           <div class="share-row"><button class="gm-btn small" data-act="share" id="lbShare">📤 공유</button><small>링크를 받은 친구는 누르기만 하면 이 방으로 와요</small></div>
         </section>
         <section class="lb-card lb-players"><h3>선수 <span id="lbCount"></span></h3><div class="list" id="lbPlayers"></div></section>
-        <section class="lb-card lb-maps"><h3 id="lbMapTitle">맵</h3><div class="grid" id="lbMaps"></div><div class="lb-bots" id="lbBots"></div></section>
+        <section class="lb-card lb-maps"><h3 id="lbMapTitle">맵</h3><div class="grid" id="lbMaps"></div><div class="lb-bots" id="lbMode"></div><div class="lb-bots" id="lbBots"></div></section>
         <section class="lb-card lb-mycar"><h3>내 차 <button class="gm-btn small" data-act="rename">✏️ 이름 바꾸기</button></h3><div class="lb-cars" id="lbCars2"></div></section>
         <section class="lb-card lb-chat"><h3>채팅</h3><div class="log" id="lbChat"></div><form id="lbChatForm"><input id="lbChatIn" maxlength="80" placeholder="메시지 입력 후 Enter" autocomplete="off"><button class="gm-btn small">보내기</button></form></section>
         <div class="lb-bar"><button class="gm-btn danger" data-act="leave">← 방 나가기</button><span class="status" id="lbStatus"></span><button class="gm-btn primary" id="lbMain"></button></div>
@@ -551,6 +598,16 @@ export async function openLobby(opts = {}) {
     const mm = mapOf(mid);
     const laps = mapPts[mid] ? ` · ${mapPts[mid].laps}바퀴` : '';
     $('#lbMapTitle').innerHTML = `맵 <span class="sub">${esc(mm.title)}${laps}${s.isHost ? '' : ' · 방장이 골라요'}</span>`;
+    // 레이스 방식: 방장이 고르고 참가자는 보기만
+    const rmode = s.mode ? s.mode() : 'race';
+    const MODES = [['race', '🏁 스피드전'], ['item', '🎁 아이템전']];
+    const modeBox = $('#lbMode');
+    if (modeBox)
+      modeBox.innerHTML = `<span>🎮 레이스 방식</span>${
+        s.isHost
+          ? `<div class="gm-seg">${MODES.map(([m, t]) => `<button data-act="mode" data-m="${m}" class="${m === rmode ? 'on' : ''}">${t}</button>`).join('')}</div>`
+          : `<b>${rmode === 'item' ? '🎁 아이템전' : '🏁 스피드전'}</b>`
+      }`;
     const bots = s.bots();
     $('#lbBots').innerHTML = `<span>🤖 컴퓨터 차</span>${
       s.isHost
@@ -610,7 +667,7 @@ export async function openLobby(opts = {}) {
     q.set('room', session.code);
     q.set('host', asHost ? '1' : '0');
     q.set('name', nick);
-    q.set('mode', 'race');
+    q.set('mode', msg.mode === 'item' ? 'item' : 'race'); // 아이템전이면 mode=item (main.js·items.js)
     q.set('bots', String(msg.bots || 0));
     if (msg.bots && msg.botLevel) q.set('botLevel', msg.botLevel);
     if (me && me.slot != null) q.set('slot', String(me.slot));

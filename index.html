@@ -203,7 +203,7 @@
     #results .res { position: relative; }
     #results .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; }
     #results .confetti i { position: absolute; top: -12px; width: 8px; height: 13px; border-radius: 2px; opacity: 0; animation: confetti 3s ease-in forwards; }
-    @keyframes confetti { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0.9; transform: translate(var(--dx), 640px) rotate(var(--rot)); } }
+    @keyframes confetti { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), 640px) rotate(var(--rot)); } }
     #minimap { right: 16px; top: 16px; }
     #center { inset: 0; display: grid; place-items: center; }
     #startLights { left: 50%; top: 18px; transform: translateX(-50%); display: none; gap: 12px; padding: 10px 16px; background: #111c; border-radius: 14px; box-shadow: 0 4px 16px #0006; }

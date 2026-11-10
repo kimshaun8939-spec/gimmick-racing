@@ -50,8 +50,8 @@ const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
 // 레이스 방식: ?mode=race (AI 봇과 레이스) / ?mode=time (혼자 타임 어택 + 고스트) / 없음 = 예전처럼 혼자 달리기 (테스트가 그대로 돌게)
-// 아이템전 (?mode=item): 봇 레이스와 똑같이 진행 + 아이템 (src/items.js). 온라인에서는 안 함. 기록·고스트·순위표는 저장 안 함
-const ITEM = params.get('mode') === 'item' && !params.get('room');
+// 아이템전 (?mode=item): 봇 레이스와 똑같이 진행 + 아이템 (src/items.js). 온라인 방(?room=)에서도 됨 (사람끼리 아이템, 봇은 아이템 없음). 기록·고스트·순위표는 저장 안 함
+const ITEM = params.get('mode') === 'item';
 const MODE = ITEM ? 'race' : ['race', 'time'].includes(params.get('mode')) ? params.get('mode') : null;
 // 온라인 레이스 (?room=코드): 봇 수·실력은 주소(&bots=N&botLevel=..)로 → 모든 사람이 같은 봇 (방 코드로 같은 씨앗)
 const ONLINE = !!params.get('room');
@@ -221,7 +221,7 @@ const sectors = createSectors({ mapName, carId });
 let items = null;
 if (ITEM && !FREE) {
   try {
-    items = createItems({ scene, track, car, raceSys, hud, keyLabel });
+    items = createItems({ scene, track, car, raceSys, hud, keyLabel, online: ONLINE, opponents });
   } catch (err) {
     console.warn('아이템전 만들기 실패', err);
   }

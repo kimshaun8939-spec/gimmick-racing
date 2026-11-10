@@ -16,6 +16,7 @@ import { online } from './online.js';
 import { createCarModel } from './carModel.js';
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 카드의 진짜 차 사진
 import { profile } from './profile.js'; // 드라이버 카드 (레벨·라이선스·XP)
+import * as unlocks from './unlocks.js'; // 레벨 잠금(차)·색 고르기 (차고)
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 
 export const VERSION = 'v0.9 · 2026.11';
@@ -53,6 +54,23 @@ export async function runHome() {
   const DEFAULT_CAR = roster.DEFAULT_CAR_ID || cars[0].id;
   let carId = cars.find((c) => c.id === (params.get('car') || last.car)) ? params.get('car') || last.car : DEFAULT_CAR;
   if (!cars.find((c) => c.id === carId)) carId = cars[0].id;
+  // 차고 (2026-11-10): 레벨 잠금 + 색 고르기. 새 UI 스타일은 src/garage.css (index.html 기준 경로)
+  if (!document.querySelector('link[data-garage]')) {
+    const ln = document.createElement('link');
+    ln.rel = 'stylesheet';
+    ln.href = 'src/garage.css';
+    ln.dataset.garage = '1';
+    document.head.appendChild(ln);
+  }
+  unlocks.registerCars(cars);
+  const myLevel = unlocks.currentLevel();
+  const isOpen = (id) => unlocks.isCarUnlocked(id);
+  for (const c of cars) {
+    c.look0 = c.look; // 원래 색
+    if (c.look && typeof c.look === 'object') c.look = unlocks.applyPaint(c.look0, c.id); // 내가 고른 색
+  }
+  if (!isOpen(carId)) carId = isOpen(DEFAULT_CAR) ? DEFAULT_CAR : (cars.find((c) => isOpen(c.id)) || cars[0]).id; // 기억해 둔 차가 잠겨 있으면 기본 차
+  let openCarId = carId; // 마지막으로 고른 '열린' 차 (잠긴 차를 구경하다 나가면 이 차로 돌아옴)
   const carOf = (id) => cars.find((c) => c.id === id) || cars[0];
 
   // 맵 데이터(코스 모양·길이·바퀴 수)를 같이 불러옴. maps.json에 없는 새 맵(extra)은 파일이 있을 때만 보여 줌
@@ -171,6 +189,9 @@ export async function runHome() {
         <div class="tg"></div><h2></h2><p class="desc"></p>
         <div class="h-stats"></div>
         <div class="h-perks"></div>
+        <div class="gx-locknote" hidden></div>
+        <div class="gx-paint"><div class="gx-ptitle">🎨 색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
+        <div class="gx-nextline"></div>
         <div class="btns"><button class="gm-btn" data-go="main" data-nav>뒤로</button><button class="gm-btn primary" data-act="pickCar" data-nav>이 차로 맵 고르기 ›</button></div>
       </div>
     </div>`;
@@ -216,7 +237,9 @@ export async function runHome() {
         // 카드: 차 사진(없으면 반짝이는 자리) + 등급 글자 + ✓ / 이름 + 특기
         const url = thumbUrl(c.id);
         const [en, ko] = splitTag(c.tag);
-        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span></span><span class="nm"><b>${esc(c.name)}</b><small>${esc(ko || en)}</small></span>`;
+        const locked = !isOpen(c.id);
+        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? `<span class="gx-lock">🔒 Lv.${c.unlockLevel}</span>` : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? `레벨 ${c.unlockLevel}에 열려요` : ko || en)}</small></span>`;
+        btn.classList.toggle('gx-locked', locked);
         btn.classList.toggle('sel', c.id === carId);
         btn.addEventListener('click', () => selectCar(c.id, true));
         btn.addEventListener('dblclick', () => show('map')); // 두 번 누르면 바로 맵 고르기
@@ -251,7 +274,11 @@ export async function runHome() {
   function putThumb(id, url) {
     if (id === carId) setTimeout(heroThumb, 0);
     for (const pic of carList.querySelectorAll(`.h-carcard[data-car="${id}"] .pic`)) {
-      if (pic.querySelector('img')) continue;
+      const old = pic.querySelector('img');
+      if (old) {
+        if (old.getAttribute('src') !== url) old.src = url; // 색을 바꾸면 사진도 바뀜
+        continue;
+      }
       const im = new Image();
       im.alt = '';
       im.draggable = false;
@@ -331,8 +358,60 @@ export async function runHome() {
     views.car.querySelectorAll('#hForms button').forEach((x) => x.classList.toggle('on', x.dataset.mode === 'normal'));
     preview.setCar(c);
     refreshSummary();
-    setLast({ car: id });
+    const open = isOpen(id);
+    if (open) {
+      openCarId = id;
+      setLast({ car: id });
+    }
+    showGarage(c, open);
   }
+  /** 차 정보 칸의 잠금 안내 + 색 고르기 줄 */
+  function showGarage(c, open = isOpen(c.id)) {
+    const info = views.car.querySelector('.h-carinfo');
+    const note = info.querySelector('.gx-locknote');
+    note.hidden = open;
+    if (!open) note.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열려요</b><span>지금 Lv.${myLevel} · 레이스를 완주하면 경험치가 올라요</span>`;
+    const pick = info.querySelector('[data-act="pickCar"]');
+    pick.classList.toggle('gx-off', !open);
+    pick.textContent = open ? '이 차로 맵 고르기 ›' : `🔒 Lv.${c.unlockLevel}에 열려요`;
+    const box = info.querySelector('.gx-paint');
+    const canPaint = open && c.look0 && typeof c.look0 === 'object';
+    box.hidden = !canPaint;
+    if (canPaint) {
+      const cur = unlocks.getPaint(c.id);
+      box.querySelector('.gx-ptitle small').textContent = unlocks.paintOf(cur).name;
+      box.querySelector('.gx-swatches').innerHTML = unlocks.PAINTS.map((p) => {
+        const ok = unlocks.isPaintUnlocked(p.id);
+        const body = p.body || c.look0.body || '#e8463a', acc = p.accent || c.look0.accent || '#f3f4f6';
+        return `<button type="button" class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>🔒</i><small>Lv.${p.level}</small>`}</button>`;
+      }).join('');
+    }
+    const nx = unlocks.nextUnlock(myLevel);
+    const line = info.querySelector('.gx-nextline');
+    line.hidden = !nx || !open; // 잠긴 차는 위 안내가 대신 말해 줌
+    if (nx) line.textContent = `다음 해금 · Lv.${nx.level} ${nx.text}`;
+  }
+  /** 색 고르기: 저장하고 미리보기·사진을 새 색으로 */
+  function pickPaint(pid) {
+    const c = carOf(carId);
+    const p = unlocks.paintOf(pid);
+    if (!unlocks.isPaintUnlocked(p.id)) {
+      uiSound('back');
+      return toast(`🔒 '${p.name}' 색은 레벨 ${p.level}에 열려요 (지금 Lv.${myLevel})`);
+    }
+    unlocks.setPaint(c.id, p.id);
+    c.look = unlocks.applyPaint(c.look0, c.id);
+    uiSound('toggle');
+    const mode = views.car.querySelector('#hForms button.on');
+    preview.setCar(c);
+    if (mode && mode.dataset.mode !== 'normal') preview.setMode(mode.dataset.mode);
+    showGarage(c);
+    loadCarThumbs([c], { onThumb: putThumb }); // 사진 다시 찍기
+  }
+  views.car.addEventListener('click', (e) => {
+    const sw = e.target.closest('.gx-sw');
+    if (sw) pickPaint(Number(sw.dataset.paint));
+  });
   function stepCar(dir) {
     const list = visibleCars().length ? visibleCars() : cars;
     const i = list.findIndex((c) => c.id === carId);
@@ -493,6 +572,14 @@ export async function runHome() {
   /** 화면 바꾸기. sub: 설정 화면의 탭 ('general' | 'keys') */
   function show(name, focus = true, sub) {
     if (!views[name]) name = 'main';
+    if (name !== 'car' && !isOpen(carId)) {
+      // 잠긴 차로는 못 나감: 맵 고르기로 가려 하면 막고, 다른 화면이면 마지막으로 고른 열린 차로 되돌림
+      if (name === 'map' && view === 'car') {
+        uiSound('back');
+        return toast(`🔒 ${carOf(carId).name}: 레벨 ${carOf(carId).unlockLevel}에 열려요 (지금 Lv.${myLevel})`);
+      }
+      selectCar(openCarId);
+    }
     if (view !== name) uiSound(name === 'main' ? 'back' : 'select');
     if (name === 'mode' && view !== 'mode') modeFrom = view === 'map' ? 'map' : 'main';
     view = name;
@@ -576,6 +663,37 @@ export async function runHome() {
     box.querySelector('.hx-xp i').style.width = `${Math.round((p.pct || 0) * 100)}%`;
     box.querySelector('.hx-xp').title = `다음 레벨까지 ${p.have} / ${p.need} XP`;
     box.querySelector('.st').textContent = `레이스 ${p.races || 0} · 우승 ${p.wins || 0}`;
+    const nx = unlocks.nextUnlock(p.level);
+    if (nx) box.title = `다음 해금: Lv.${nx.level} ${nx.text}\n(누르면 이름 바꾸기)`;
+  }
+  /** 지난번보다 레벨이 올랐으면 한 번만 축하 창 (새로 열린 차·색) */
+  function showLevelNews() {
+    let n = null;
+    try {
+      n = unlocks.takeLevelNews();
+    } catch {}
+    if (!n) return;
+    const items = [...n.cars.map((x) => `<li><i>🚗</i>${esc(x)}</li>`), ...n.paints.map((x) => `<li><i>🎨</i>${esc(x)} 색</li>`)];
+    const nx = unlocks.nextUnlock(n.to);
+    const el = document.createElement('div');
+    el.className = 'gx-news';
+    el.innerHTML = `<div class="gx-newsbox"><div class="gx-burst">🎉</div><h3>Lv.${n.to} 달성!</h3>
+      ${items.length ? `<p>새로 열렸어요</p><ul>${items.join('')}</ul>` : '<p>계속 달리면 새 차와 색이 열려요</p>'}
+      ${nx ? `<div class="gx-nx">다음 해금 · Lv.${nx.level} ${esc(nx.text)}</div>` : ''}
+      <div class="gx-newsbtns">${n.cars.length || n.paints.length ? '<button class="gm-btn primary" data-gx="car">차고 보러 가기</button>' : ''}<button class="gm-btn" data-gx="ok">확인</button></div></div>`;
+    const close = () => el.remove();
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-gx]');
+      if (!b && e.target !== el) return;
+      close();
+      if (b && b.dataset.gx === 'car') show('car');
+    });
+    home.appendChild(el);
+    setTimeout(() => {
+      const b = el.querySelector('.gm-btn');
+      if (b) b.focus({ preventScroll: true });
+    }, 50);
+    setTimeout(close, 20000);
   }
   /** 소리 버튼 그림 (설정의 '소리 끄기'와 같은 값) */
   function showMute() {
@@ -994,6 +1112,7 @@ export async function runHome() {
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
+  setTimeout(showLevelNews, 700);
   setTimeout(startThumbs, 1500); // 메인 화면에 있어도 미리 찍어 둠 (다음부터는 저장된 사진을 바로 씀)
   const ld = document.getElementById('loading');
   if (ld) {

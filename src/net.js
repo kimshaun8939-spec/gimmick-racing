@@ -479,6 +479,7 @@ class LocalPeer extends Emitter {
     }
     if (m.to !== this.id) return;
     if (m.k === 'c') {
+      if (this._claim) return; // (시험용 통신) 아직 여는 중이면 받지 않음 → 상대가 잠시 뒤 다시 시도 (예전엔 받는 쪽 준비 전에 연결돼 영영 안 이어지는 때가 있었음)
       const c = new LocalConn(this, m.from, m.cid, m.label);
       c.open = true;
       this.conns.set(m.cid, c);

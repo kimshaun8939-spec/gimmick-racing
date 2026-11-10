@@ -1,0 +1,52 @@
+/* 차고: 레벨 잠금·색 고르기·레벨 업 알림 (2026-11-10). home.js가 불러옴. menu.css의 색 변수(--gm-*)를 같이 씀 */
+
+/* 잠긴 차 카드: 사진을 어둡게 + 자물쇠 딱지 */
+.h-carcard.gx-locked .pic img { filter: grayscale(0.85) brightness(0.42) !important; }
+.h-carcard.gx-locked .nm b { color: var(--gm-dim, #95a2bb); }
+.h-carcard.gx-locked .nm small { color: #ffcf3f; opacity: 0.85; }
+.h-carcard .gx-lock { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 900; line-height: 1; white-space: nowrap; color: #fff; background: rgba(8, 12, 24, 0.78); border: 1px solid rgba(255, 255, 255, 0.28); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); }
+.h-carcard.gx-locked .chk { display: none; }
+
+/* 정보 칸: 잠금 안내 */
+.gx-locknote { margin: 10px 0 2px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(180deg, rgba(255, 207, 63, 0.14), rgba(255, 207, 63, 0.05)); border: 1px solid rgba(255, 207, 63, 0.4); }
+.gx-locknote[hidden] { display: none; }
+.gx-locknote b { display: block; font-size: 15px; color: #ffcf3f; }
+.gx-locknote span { display: block; margin-top: 3px; font-size: 12px; color: var(--gm-dim, #95a2bb); }
+.gm-btn.gx-off { opacity: 0.6; filter: saturate(0.4); }
+
+/* 색 고르기 줄 */
+.gx-paint { margin: 10px 0 2px; }
+.gx-paint[hidden] { display: none; }
+.gx-ptitle { font-size: 12px; font-weight: 800; letter-spacing: 0.04em; color: var(--gm-dim, #95a2bb); margin-bottom: 7px; }
+.gx-ptitle small { margin-left: 6px; font-size: 12px; color: var(--gm-text, #f3f6fb); font-weight: 800; }
+.gx-swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.gx-sw { position: relative; width: 30px; height: 30px; padding: 0; border-radius: 50%; cursor: pointer; appearance: none; border: 2px solid rgba(255, 255, 255, 0.22); background: linear-gradient(135deg, var(--pb) 0 58%, var(--pa) 58% 100%); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; outline: none; }
+.gx-sw:hover, .gx-sw:focus-visible { transform: scale(1.14); border-color: #fff; }
+.gx-sw.on { border-color: var(--gm-accent, #ffcf3f); box-shadow: 0 0 0 2px #0b1020, 0 0 0 4px var(--gm-accent, #ffcf3f); }
+.gx-sw.lock { filter: saturate(0.35) brightness(0.6); cursor: not-allowed; }
+.gx-sw.lock i { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 12px; }
+.gx-sw.lock small { position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%); font-size: 9px; font-weight: 800; color: #cfd6e6; white-space: nowrap; }
+.gx-swatches:has(.lock) { padding-bottom: 12px; }
+.gx-nextline { margin: 8px 0 0; font-size: 12px; color: #ffcf3f; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gx-nextline[hidden] { display: none; }
+
+/* 레벨 업 알림 창 */
+.gx-news { position: absolute; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(4, 7, 16, 0.62); backdrop-filter: blur(4px); animation: gxFade 0.25s ease-out; }
+.gx-newsbox { width: min(420px, 100%); max-height: 90%; overflow: auto; padding: 22px 24px 18px; border-radius: 20px; text-align: center; color: var(--gm-text, #f3f6fb); background: linear-gradient(180deg, rgba(34, 44, 78, 0.97), rgba(13, 19, 36, 0.97)); border: 1px solid rgba(255, 207, 63, 0.5); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(255, 207, 63, 0.18); animation: gxPop 0.4s cubic-bezier(0.2, 1.3, 0.3, 1); }
+.gx-burst { font-size: 44px; line-height: 1; animation: gxBounce 0.9s ease-out; }
+.gx-newsbox h3 { margin: 8px 0 4px; font-family: var(--gm-title, sans-serif); font-size: 30px; font-weight: 400; color: #ffcf3f; letter-spacing: 0.02em; }
+.gx-newsbox p { margin: 0 0 8px; font-size: 13px; color: var(--gm-dim, #95a2bb); }
+.gx-newsbox ul { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.gx-newsbox li { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-radius: 11px; font-weight: 800; font-size: 15px; text-align: left; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); }
+.gx-newsbox li i { font-style: normal; font-size: 18px; }
+.gx-nx { margin: 4px 0 12px; font-size: 12px; color: #ffcf3f; opacity: 0.9; }
+.gx-newsbtns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+@keyframes gxFade { from { opacity: 0; } }
+@keyframes gxPop { from { opacity: 0; transform: scale(0.85) translateY(12px); } }
+@keyframes gxBounce { 0% { transform: scale(0.3) rotate(-20deg); } 55% { transform: scale(1.25) rotate(8deg); } 100% { transform: none; } }
+
+@media (max-height: 520px) {
+  .gx-sw { width: 24px; height: 24px; }
+  .gx-nextline, .gx-ptitle { display: none; }
+  .gx-paint, .gx-locknote { margin-top: 6px; }
+}

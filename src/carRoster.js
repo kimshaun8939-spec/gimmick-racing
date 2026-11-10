@@ -7,6 +7,8 @@
 //   const cfg = await loadCarConfig('muscle'); // 게임용 전체 설정 (car.json + tune, cfg.look, cfg.carId)
 //   const model = createCarModel(cfg.look);
 
+import { registerCars, applyPaint } from './unlocks.js'; // 레벨 잠금·색 고르기
+
 export const DEFAULT_CAR_ID = 'f1';
 
 const BASE_URL = new URL('../data/car.json', import.meta.url);
@@ -27,7 +29,10 @@ function loadBase() {
 }
 
 function loadRoster() {
-  if (!rosterPromise) rosterPromise = loadJSON(ROSTER_URL).catch((e) => ((rosterPromise = null), Promise.reject(e)));
+  if (!rosterPromise)
+    rosterPromise = loadJSON(ROSTER_URL)
+      .then((r) => (registerCars(r.cars), r))
+      .catch((e) => ((rosterPromise = null), Promise.reject(e)));
   return rosterPromise;
 }
 
@@ -58,7 +63,8 @@ function findCar(roster, id) {
 /** 홈 화면용 차 목록 (성능 값 tune은 빼고). class = 차 등급 id (listClasses 참고) */
 export async function listCars() {
   const roster = await loadRoster();
-  return (roster.cars || []).map(({ id, name, tag, desc, stats, look, class: cls }) => ({
+  return (roster.cars || []).map(({ id, name, tag, desc, stats, look, class: cls, unlockLevel }) => ({
+    unlockLevel: Math.max(0, Number(unlockLevel) || 0), // 이 레벨부터 고를 수 있음 (0 = 처음부터)
     id,
     name,
     tag,
@@ -83,8 +89,15 @@ export async function carsInClass(classId) {
   return (same.length ? same : all).map((c) => c.id);
 }
 
-/** 차 하나의 전체 설정: car.json + 그 차의 tune. 모르는 id면 기본 차 */
-export async function loadCarConfig(id) {
+let playerLoaded = false;
+/**
+ * 차 하나의 전체 설정: car.json + 그 차의 tune. 모르는 id면 기본 차
+ * 색(페인트): 이 페이지에서 맨 처음 부르는 것(= main.js의 내 차)에만 내가 고른 색을 입힘. 봇·고스트는 원래 색
+ *   opts.paint: true = 꼭 입힘, false = 안 입힘
+ */
+export async function loadCarConfig(id, opts = {}) {
+  const first = !playerLoaded;
+  playerLoaded = true;
   const [base, roster] = await Promise.all([loadBase(), loadRoster().catch(() => ({ cars: [] }))]);
   const entry = findCar(roster, id);
   const cfg = deepMerge(base, (entry && entry.tune) || {});
@@ -92,5 +105,10 @@ export async function loadCarConfig(id) {
   cfg.carName = entry ? entry.name : '';
   cfg.carClass = (entry && entry.class) || null;
   cfg.look = clone(entry && entry.look) || { style: 'f1', body: '#e8463a' };
+  if (opts.paint === true || (first && opts.paint !== false)) {
+    try {
+      cfg.look = applyPaint(cfg.look, cfg.carId);
+    } catch {}
+  }
   return cfg;
 }

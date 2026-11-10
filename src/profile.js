@@ -16,12 +16,30 @@ const TIERS = [
 ];
 const needFor = (lv) => 200 + (lv - 1) * 80; // 이 레벨에서 다음 레벨까지 필요한 XP
 
+/** 프로필이 아직 없을 때 한 번만: 예전에 세운 기록(맵+차마다 완주 1개 = 120 XP, 최대 1500)으로 XP를 미리 줌 */
+function seedFromRecords() {
+  let n = 0;
+  try {
+    const rec = JSON.parse(localStorage.getItem('gimmick.records') || '{}') || {};
+    for (const cars of Object.values(rec)) {
+      if (!cars || typeof cars !== 'object') continue;
+      for (const r of Object.values(cars)) if (r && r.race > 0) n++;
+    }
+  } catch {}
+  return Math.min(1500, n * 120);
+}
 function load() {
   try {
-    const j = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (j && typeof j.xp === 'number') return { xp: j.xp, races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0 };
+    const raw = localStorage.getItem(KEY);
+    const j = JSON.parse(raw || 'null');
+    if (j && typeof j.xp === 'number') return { xp: j.xp, races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0, seeded: true };
+    if (raw == null) {
+      const p = { xp: seedFromRecords(), races: 0, wins: 0, podiums: 0, seeded: true };
+      localStorage.setItem(KEY, JSON.stringify(p)); // 다시는 안 하게 바로 저장
+      return p;
+    }
   } catch {}
-  return { xp: 0, races: 0, wins: 0, podiums: 0 };
+  return { xp: 0, races: 0, wins: 0, podiums: 0, seeded: true };
 }
 function save(p) {
   try {
@@ -70,7 +88,7 @@ export const profile = {
   },
   reset() {
     try {
-      localStorage.removeItem(KEY);
+      localStorage.setItem(KEY, JSON.stringify({ xp: 0, races: 0, wins: 0, podiums: 0, seeded: true })); // 지우면 예전 기록 XP를 또 받으므로 0으로 저장
     } catch {}
   },
 };
