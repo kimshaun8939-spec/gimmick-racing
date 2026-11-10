@@ -28,7 +28,7 @@
         "aero": { "drag": 0.00114, "downforce": 1.51 },
         "engine": { "power": 366 },
         "steerLat": 19.0,
-        "modes": { "boat": { "thrust": 20.1, "maxSpeed": 44.3 } }
+        "modes": { "boat": { "thrust": 25.6, "maxSpeed": 54.0 } }
       }
     },
     {
@@ -267,7 +267,7 @@
         "feel": { "roll": 0.8, "pitch": 0.8, "spring": 45, "damp": 0.4 },
         "tire": { "traction": 14, "brakeGrip": 20, "lateral": 23.7, "rearGrip": 1.2, "rearSwing": 0.3, "yawResponse": 7.5, "liftOff": 0.35, "powerSlide": 0.3, "tuckMax": 0.22 },
         "drift": { "minSpeed": 11, "grip": 1.9, "baseTurn": 1.2, "holdAngle": [0.3, 0.9], "spinAngle": 1.3 },
-        "modes": { "boat": { "thrust": 31.4, "maxSpeed": 58.4, "turnRate": 1.25 } },
+        "modes": { "boat": { "thrust": 40.2, "maxSpeed": 71.2, "turnRate": 1.25 } },
         "camera": { "topKmh": 240 }
       }
     },
@@ -293,7 +293,7 @@
         "feel": { "roll": 1.0, "pitch": 1.0, "spring": 50, "damp": 0.4 },
         "tire": { "traction": 14, "lateral": 24.1, "rearGrip": 1.1, "rearSwing": 0.36, "yawResponse": 10, "powerSlide": 0.45, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.3 },
         "drift": { "minSpeed": 10, "grip": 1.7, "slipDrag": 0.45, "baseTurn": 1.3, "steerTurn": 0.75, "highSpeedLat": 34, "holdAngle": [0.3, 0.95], "spinAngle": 1.35, "exitKeep": 0.6, "exitAngle": 0.75 },
-        "modes": { "boat": { "thrust": 21.5, "maxSpeed": 46.4 } },
+        "modes": { "boat": { "thrust": 27.4, "maxSpeed": 56.6 } },
         "camera": { "topKmh": 230 }
       }
     },
@@ -399,7 +399,7 @@
         "drift": { "holdAngle": [0.3, 0.85], "spinAngle": 1.25 },
         "feel": { "roll": 0.8, "pitch": 0.8, "spring": 45, "damp": 0.4 },
         "tire": { "traction": 13, "brakeGrip": 21, "lateral": 22.1, "rearGrip": 1.3, "rearSwing": 0.25, "yawResponse": 7.5, "powerSlide": 0.45, "liftOff": 0.35, "tuckMax": 0.25 },
-        "modes": { "boat": { "thrust": 28.9, "maxSpeed": 55.1 } },
+        "modes": { "boat": { "thrust": 37.0, "maxSpeed": 67.2 } },
         "camera": { "topKmh": 230 }
       }
     }

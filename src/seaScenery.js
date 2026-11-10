@@ -980,7 +980,8 @@ export function buildSeaScenery(track, scene) {
 
   // ---------------------------------------------------------------- 물길: 부표 (양쪽 20 m마다, 빨강·흰색 번갈아) + 슬라럼 표지
   const buoyList = [];
-  for (const [a, b] of track.waterRuns) {
+  // (2026-11-10) data.laneBuoys가 있으면 물길 양옆 부표 줄은 seaGates.js가 만듦 (부딪히면 튕겨 나가고, 밖은 거친 물)
+  for (const [a, b] of track.data.laneBuoys ? [] : track.waterRuns) {
     const list = track.spanList(a, b);
     let last = -99, n = 0;
     for (const s of list) {

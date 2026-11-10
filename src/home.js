@@ -14,6 +14,7 @@ import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutori
 import { records, fmtTime } from './records.js';
 import { online } from './online.js';
 import { createCarModel } from './carModel.js';
+import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 카드의 진짜 차 사진
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 
 export const VERSION = 'v0.9 · 2026.11';
@@ -22,12 +23,13 @@ const ASSIST_TAG = '<span class="h-assist" title="운전 도움을 켜고 낸 �
 const STAT_NAMES = [['speed', '속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력']]; // 부스터는 꺼 둠 (car.json booster.enabled)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-/** look(문자열 색 또는 { body, accent, ... }) → 카드 색 견본 */
-function lookColors(look) {
-  if (!look) return ['#e8463a', '#ffffff'];
-  if (typeof look === 'string') return [look, '#ffffff'];
-  return [look.body || look.color || look.paint || '#e8463a', look.accent || look.stripe || look.trim || look.secondary || '#ffffff'];
-}
+/** 차 특기 (cars.json stats의 숨은 값) → 정보 칸 아래 작은 딱지 */
+const PERKS = [['offroad', 3, '🌿 잔디에 강해요'], ['boat', 3, '🚤 배가 빨라요'], ['fly', 3, '✈️ 비행을 잘해요'], ['drift', 4, '🌀 드리프트 쉬워요']];
+/** 'LE MANS PROTO · 접지력' → ['LE MANS PROTO', '접지력'] */
+const splitTag = (tag) => {
+  const [en, ...ko] = String(tag || '').split('·');
+  return [en.trim(), ko.join('·').trim()];
+};
 
 const TUT_KEY = 'gimmick.tutorial'; // 튜토리얼: 'asked'(권해 봄) | 'done'(끝까지 함)
 
@@ -114,6 +116,12 @@ export async function runHome() {
 
   // ------------------------------------------------------------------ 3D 차 미리보기
   const preview = createPreview(home);
+  // 차 고르기 뒤쪽 큰 글자 (차 종류 영어 이름, 3D 차보다 뒤에 깔림)
+  const carMarkBox = document.createElement('div');
+  carMarkBox.className = 'h-carmark';
+  carMarkBox.innerHTML = '<b></b>';
+  home.insertBefore(carMarkBox, home.querySelector('canvas.h-car') || home.querySelector('.h-top'));
+  const carMark = carMarkBox.querySelector('b');
 
   // ------------------------------------------------------------------ 메인 메뉴
   views.main.innerHTML = `
@@ -139,6 +147,7 @@ export async function runHome() {
     <div class="h-car">
       <div class="h-panel h-carlist"><div class="h-title">차고 · ${cars.length}대${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div><div class="list"></div></div>
       <div class="h-carstage">
+        <div class="h-drag">↔ 끌어서 돌려 보기</div>
         <button class="gm-btn h-arrow" data-act="prevCar" aria-label="이전 차">‹</button>
         <div class="gm-seg" id="hForms" title="자동 변신 모습 미리 보기">
           <button data-mode="normal" class="on">🚗 일반</button><button data-mode="accel">🔥 가속</button><button data-mode="boat">🚤 배</button><button data-mode="fly">✈️ 비행</button>
@@ -146,8 +155,10 @@ export async function runHome() {
         <button class="gm-btn h-arrow" data-act="nextCar" aria-label="다음 차">›</button>
       </div>
       <div class="h-panel h-carinfo">
-        <div class="h-classchip"></div><div class="tg"></div><h2></h2><p class="desc"></p>
+        <div class="ihead"><div class="h-classchip"></div><span class="num"></span></div>
+        <div class="tg"></div><h2></h2><p class="desc"></p>
         <div class="h-stats"></div>
+        <div class="h-perks"></div>
         <div class="btns"><button class="gm-btn" data-go="main" data-nav>뒤로</button><button class="gm-btn primary" data-act="pickCar" data-nav>이 차로 맵 고르기 ›</button></div>
       </div>
     </div>`;
@@ -183,22 +194,68 @@ export async function runHome() {
         carList.appendChild(h);
       }
       for (const c of list) {
-        const [a, b] = lookColors(c.look);
         const k = classOfId(c.class);
         const btn = document.createElement('button');
         btn.className = 'gm-btn h-carcard';
         btn.dataset.nav = '';
         btn.dataset.car = c.id;
+        btn.title = c.tag || c.name;
         if (k) btn.style.setProperty('--cc', k.color || '#ffcf3f');
-        btn.innerHTML = `<span class="sw" style="background:linear-gradient(135deg, ${esc(a)} 55%, ${esc(b)} 56%)"></span><span><b>${esc(c.name)}</b><small>${esc(c.tag || '')}</small></span><span class="chk">✓</span>`;
+        // 카드: 차 사진(없으면 반짝이는 자리) + 등급 글자 + ✓ / 이름 + 특기
+        const url = thumbUrl(c.id);
+        const [en, ko] = splitTag(c.tag);
+        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span></span><span class="nm"><b>${esc(c.name)}</b><small>${esc(ko || en)}</small></span>`;
         btn.classList.toggle('sel', c.id === carId);
         btn.addEventListener('click', () => selectCar(c.id, true));
+        btn.addEventListener('dblclick', () => show('map')); // 두 번 누르면 바로 맵 고르기
         btn.addEventListener('focus', () => selectCar(c.id));
         carList.appendChild(btn);
       }
     }
   }
-  const visibleCars = () => cars.filter((c) => inTab(c, classFilter));
+  // 화면에 보이는 순서 그대로 (전체 탭은 C→B→A 묶음 순서라 cars.json 순서와 다름) → ←→가 바로 옆 카드로
+  const visibleCars = () => {
+    const shown = [...carList.querySelectorAll('.h-carcard')].map((b) => carOf(b.dataset.car));
+    return shown.length ? shown : cars.filter((c) => inTab(c, classFilter));
+  };
+  /** 카드가 보이게 목록만 스크롤 (scrollIntoView는 홈 화면 전체까지 밀어 올려 로고가 잘렸음) */
+  function scrollCard(card, center) {
+    const box = card.closest('.list'); // 목록 칸만 스크롤됨
+    if (!box) return;
+    const row = box;
+    const cr = card.getBoundingClientRect(), br = box.getBoundingClientRect();
+    const topPad = 8;
+    if (row.scrollWidth > row.clientWidth + 2 && getComputedStyle(row).flexDirection === 'row') {
+      // 휴대폰 세로: 가로로 흐르는 목록
+      const rr = row.getBoundingClientRect();
+      if (center || cr.left < rr.left || cr.right > rr.right) row.scrollLeft += cr.left - rr.left - (center ? (rr.width - cr.width) / 2 : 8);
+      return;
+    }
+    if (center) box.scrollTop += cr.top - br.top - (br.height - cr.height) / 2;
+    else if (cr.top < br.top + topPad) box.scrollTop += cr.top - br.top - topPad;
+    else if (cr.bottom > br.bottom - 8) box.scrollTop += cr.bottom - br.bottom + 8;
+  }
+  /** 차 사진이 준비되면 카드에 끼움 (부드럽게 나타남) */
+  function putThumb(id, url) {
+    for (const pic of carList.querySelectorAll(`.h-carcard[data-car="${id}"] .pic`)) {
+      if (pic.querySelector('img')) continue;
+      const im = new Image();
+      im.alt = '';
+      im.draggable = false;
+      im.className = 'in';
+      im.src = url;
+      const ph = pic.querySelector('.ph');
+      if (ph) ph.remove();
+      pic.prepend(im);
+    }
+  }
+  // 사진 찍기는 차 고르기 화면을 처음 열 때 (아니면 홈이 뜬 뒤 잠시 쉬었다가) 시작. 고른 차부터
+  let thumbJob = null;
+  const startThumbs = () => {
+    if (thumbJob) return;
+    thumbJob = loadCarThumbs(cars, { first: carId, onThumb: putThumb });
+    thumbJob.done.then((st) => window.home && (window.home.thumbStats = st)).catch((e) => console.warn('차 사진', e));
+  };
   function setClassTab(id, sound = false) {
     if (!classTabs.some((k) => k.id === id)) id = 'all';
     classFilter = id;
@@ -209,7 +266,7 @@ export async function runHome() {
     const vis = visibleCars();
     if (vis.length && !vis.some((c) => c.id === carId)) selectCar(vis[0].id);
     const card = carList.querySelector('.h-carcard.sel');
-    if (card && view === 'car') card.scrollIntoView({ block: 'nearest' });
+    if (card && view === 'car') scrollCard(card, false);
   }
   function stepClass(dir) {
     if (!classTabs.length) return;
@@ -237,16 +294,27 @@ export async function runHome() {
     const k = classOfId(c.class);
     const chip = info.querySelector('.h-classchip');
     chip.style.display = k ? '' : 'none';
-    if (k) {
-      chip.style.setProperty('--cc', k.color || '#ffcf3f');
-      chip.innerHTML = `<i></i><b>${esc(k.name)}</b>${k.desc ? `<span>${esc(k.desc)}</span>` : ''}`;
-    }
+    const cc = (k && k.color) || '#ffcf3f';
+    info.style.setProperty('--cc', cc); // 정보 칸 막대·테두리 = 등급 색
+    home.style.setProperty('--carc', cc); // 뒤쪽 큰 글자·빛 번짐 = 등급 색
+    if (k) chip.innerHTML = `<i></i><b>${esc(k.name)}</b>${k.desc ? `<span>${esc(k.desc)}</span>` : ''}`;
+    const num = c.look && typeof c.look === 'object' && c.look.number != null ? String(c.look.number) : '';
+    info.querySelector('.num').textContent = num ? `#${num}` : '';
     info.querySelector('h2').textContent = c.name;
     info.querySelector('.desc').textContent = c.desc || '';
     info.querySelector('.h-stats').innerHTML = STAT_NAMES.map(([k, label]) => {
       const v = Math.max(0, Math.min(5, Math.round((c.stats && c.stats[k]) || 0)));
-      return `<div class="h-stat"><span>${label}</span><span class="bar">${[0, 1, 2, 3, 4].map((i) => `<i class="${i < v ? 'on' : ''}" style="animation-delay:${i * 0.05}s"></i>`).join('')}</span><span class="v">${v}</span></div>`;
+      return `<div class="h-stat${v >= 5 ? ' top' : ''}"><span>${label}</span><span class="bar">${[0, 1, 2, 3, 4].map((i) => `<i class="${i < v ? 'on' : ''}" style="animation-delay:${i * 0.05}s"></i>`).join('')}</span><span class="v">${v}</span></div>`;
     }).join('');
+    const perks = PERKS.filter(([key, min]) => ((c.stats && c.stats[key]) || 0) >= min);
+    const perkEl = info.querySelector('.h-perks');
+    perkEl.innerHTML = perks.map(([, , t]) => `<span>${t}</span>`).join('');
+    perkEl.hidden = !perks.length;
+    carMark.textContent = splitTag(c.tag)[0] || c.name;
+    carMarkBox.classList.remove('in');
+    void carMarkBox.offsetWidth; // 글자가 바뀔 때마다 다시 스르륵
+    carMarkBox.classList.add('in');
+    if (thumbJob) thumbJob.prioritize(id);
     views.car.querySelectorAll('#hForms button').forEach((x) => x.classList.toggle('on', x.dataset.mode === 'normal'));
     preview.setCar(c);
     refreshSummary();
@@ -426,6 +494,7 @@ export async function runHome() {
       renderOnline();
     }
     if (name === 'map') refreshRecords();
+    if (name === 'car') startThumbs();
     refreshSummary();
     if (focus) {
       const target =
@@ -437,7 +506,7 @@ export async function runHome() {
         : name === 'settings' && sub === 'pad' ? views.settings.querySelector('.gm-tab[data-tab="pad"]')
         : views[name].querySelector('.gm-set-row, [data-nav]');
       if (target) target.focus({ preventScroll: true });
-      if (target && name === 'car') target.scrollIntoView({ block: 'center' }); // 고른 차가 목록 아래쪽이어도 보이게
+      if (target && name === 'car') scrollCard(target, true); // 고른 차가 목록 아래쪽이어도 보이게
     }
   }
   function refreshSummary() {
@@ -852,6 +921,7 @@ export async function runHome() {
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
+  setTimeout(startThumbs, 1500); // 메인 화면에 있어도 미리 찍어 둠 (다음부터는 저장된 사진을 바로 씀)
   const ld = document.getElementById('loading');
   if (ld) {
     ld.classList.add('out');

@@ -1,6 +1,7 @@
 // AI 봇 운전사: 레이싱 라인 + 속도 계획을 따라 달림 (진짜 차 물리 Car를 조작 명령으로만 움직임 → 사람과 같은 규칙)
 //
-//   조향: 앞 (6 + 속도×0.35) m 라인 점을 향하고, 조금 앞 라인의 곡률만큼 미리 꺾음 (.debug/lineLap.js와 같은 방법)
+//   조향 (땅): 원하는 회전 속도 = 라인 곡률×속도 + 방향 오차 + 옆 오차 → 이 차가 핸들 1로 도는 회전 속도로 나눔 (2026-11-10 hard2)
+//   조향 (공중·비행·배): 앞 (6 + 속도×0.35) m 라인 점을 향하고, 조금 앞 라인의 곡률만큼 미리 꺾음 (.debug/lineLap.js와 같은 방법)
 //   속도: 0.25초 앞 지점의 계획 속도 × 실력(pace). 넘으면 브레이크
 //   추월: 앞차가 같은 줄에 있고 내가 더 빠르면 옆 줄(왼쪽/오른쪽 중 넓은 쪽)로 비켜서 지나감. 자리가 없으면 따라감
 //   나란히: 옆에 붙은 차가 있으면 조금 떨어짐
@@ -12,21 +13,34 @@ export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사
 
 /** 실력 단계 (설정 botLevel) */
 export const BOT_LEVELS = {
-  // 실력 3단계 (2026-11-10 다시 맞춤). 기준 = 라인 봇(.debug/lineLap.js, 거의 완벽하게 달림)보다 혼자 달린 랩이 몇 % 느린지
-  //   쉬움: 약 +35~40% → 처음 하는 사람(벽에 박고 가끔 복귀, +25~35%)도 이길 수 있음
-  //   보통: 약 +14~18% → 처음 하는 사람은 이기기 어려움
-  //   어려움: 약 +3~5% → 잘하는 사람(키보드, +3~5%)과 비슷
-  //   실측 (쉬움/보통/어려움, 실수 끔): 네온 f1 +36/+15/+4% · 네온 hatch +41/+20/+7% · 그랑프리 hatch +32/+16/+6% · 그랑프리 f1 +23/+6/+3% · 달 kart +23/+9/+3%
-  //   (맵·차마다 차이가 있음: 공중에 떠 있는 시간이 긴 맵·힘이 센 차는 덜 느려짐 → 쉬움은 따라잡기 효과가 메워 줌. 자세히는 race.md '실력 3단계')
-  // pace = 코너·브레이크 속도 배수, topK = 직선 최고 속도 배수, thrK = 액셀 최대, brakeK = 브레이크 시작 여유,
-  // lateP = 실수 중 '늦은 브레이크' 비율 (뒤엉켜 박기 쉬움), mistakeEvery = 실수 간격(초)
+  // 실력 3단계 (2026-11-10 오후 'hard2' 다시 맞춤). 기준 = 진짜 사람 기록
+  //   사용자(잘하는 사람) 블루 프로토: 그랑프리 1바퀴 184.0초, 달 2바퀴 134.7초 → 예전 어려움 봇(220초·166초)을 21초 차로 이김
+  //   원인: 봇 조향 방식이 나빴음. 20 m 앞 점을 향해 꺾는 방식은 빠른 코너에서 핸들이 늦게 풀려 안쪽 잔디로 파고들었음
+  //     (예전 라인 봇도 그랑프리 1바퀴 중 36초를 잔디 위에서 보냄). 그래서 '라인 봇 = 거의 완벽'이라는 예전 기준이 틀렸음
+  //   → 조향을 '원하는 회전 속도' 방식으로 바꿈 (아래 controls의 조향). 같은 차·같은 계획으로 그랑프리 216.7 → 188.9초, 달 156.6 → 142.4초
+  //   쉬움: 처음 하는 사람(벽에 박고 가끔 복귀)도 이김 + 따라잡기로 늦춰 줌
+  //   보통: 처음 하는 사람은 이기기 어려움 (예전 라인 봇과 비슷한 빠르기)
+  //   어려움: 잘하는 사람과 비슷 (가장 빠른 봇이 사람 기록 ±2~3%)
+  //   실측 (혼자 달림, 블루 프로토, 초): 그랑프리 쉬움 263 / 보통 219 / 어려움 187 (사람 184)
+  //                                    달 2바퀴 쉬움 197 / 보통 168 / 어려움 141 (사람 134.7)
+  //     예전: 그랑프리 266 / 235 / 220, 달 어려움 166
+  //   8대 레이스, 사람 기록 흉내(.debug/hard2_test.js ghostRace): 그랑프리 사람 184초 → 어려움 1등 봇 185.5초 (4대가 190초 안)
+  //     달 사람 134.7초 → 어려움 1등 봇 141~143초 (사람이 아직 4~6% 빠름: 무리 속 손해 + 사람이 계획보다 빠름)
+  //     처음 하는 사람(예전 라인 봇 +13%, 그랑프리 245초) → 보통 봇 7대 모두 225~233초로 앞섬 / 265초 사람 → 쉬움 1등 봇 266초 (사람이 이김)
+  //   다른 맵 (혼자, 어려움/보통/쉬움): 네온 f1 135/156/189 · 바닷가 gt 145/166/198 · 정글 proto 136/160/192 · 그랑프리 hatch 206/245/293
+  // pace = 코너·브레이크 속도 배수(계획 속도 기준, 1.03 위로는 차 한계라 거의 안 빨라짐), topK = 직선 최고 속도 배수, thrK = 액셀 최대,
+  // brakeK = 브레이크 시작 여유, lateP = 실수 중 '늦은 브레이크' 비율 (뒤엉켜 박기 쉬움), mistakeEvery = 실수 간격(초)
+  // jumpK = 점프대 앞 속도 제한(44 m/s) 배수 (어려움은 1.3 = 57 m/s: 조향이 좋아져 착지 뒤 코너를 돎, 달 2바퀴 약 4초 빨라짐. 1.5는 무리에서 제니스 하이퍼가 첫 점프 뒤 t 0.23에서 가끔 밖으로)
+  // firm = 사람 옆에서 자리 지키기 (0 = 늘 양보, 1 = 내가 나란히·앞이면 안 물러남). 봇끼리는 예전처럼 양보
+  // playerPush = 플레이어와 부딪힐 때 플레이어가 받는 몫 (0.5 = 반반, 0.57 = 봇이 조금 무거운 것처럼)
   // catchUp = 따라잡기 효과 (raceSystem.js catchUp, 기준 = 가장 앞선 사람):
   //   쉬움 {aheadM, releaseM, slowMul}: 사람보다 aheadM m 넘게 앞선 봇은 slowMul배로 늦춤(코너·직선 모두), releaseM m 안으로 오면 원래대로. 빨라지게는 절대 안 함
-  //   어려움 {sec, upMul, downMul}: 사람이 sec초 넘게 앞서면 upMul배(라인 봇 속도는 안 넘음), 봇이 sec초 넘게 앞서면 downMul배
+  //   어려움 {sec, upMul, upDraft, downMul, secDown}: 사람이 sec초 넘게 앞서면 upMul배 + 보이지 않는 슬립스트림 upDraft(공기 저항 −30%×upDraft),
+  //     봇이 secDown초 넘게 앞서면 downMul배
   //   보통: 없음
-  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 } },
-  normal: { pace: 0.82, topK: 0.84, thrK: 0.86, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95 },
-  hard: { pace: 0.94, topK: 0.96, thrK: 0.92, paceVar: 0.015, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 85, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, catchUp: { sec: 3, upMul: 1.02, downMul: 0.98 } },
+  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 } },
+  normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 0.45, playerPush: 0.53 },
+  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.02, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 } },
 };
 
 /** 같은 씨앗이면 같은 난수 (봇마다 다른 성격) */
@@ -105,16 +119,21 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
   // 점프대(달 기지 등 track.jumps[].lipI): 너무 빨리 뛰면 착지 뒤 코너(T12 헤어핀)에서 못 서고 밖으로 나감 → 립에서 최고 44 m/s (158 km/h, 넘는 데는 126 km/h면 충분)
   const jumpCap = new Map();
   for (const jp of track.jumps || []) if (jp.lipI != null) for (let k = -8; k <= 0; k++) jumpCap.set(W(jp.lipI + k), jp.botSpeed || 44);
+  // 어려움은 jumpK배 (조향이 좋아져 더 빨리 뛰어도 착지 뒤 코너를 돎). 단 앞뒤에 차가 붙어 있으면 예전 제한 (빨리 뛰다 공중·착지에서 부딪히면 코스 밖으로)
+  const jumpK = level.jumpK || 1;
   // 길 폭(라인이 움직일 수 있는 폭)이 좁은 곳 (점프대 앞 등): 나란히 달리지 말고 한 줄로
   const narrowAt = (i) => L.hi[i] - L.lo[i] < 5.5;
   // 점프 구역: 립 80 m 앞부터 착지 30 m 뒤까지는 한 줄로 (나란히 뛰면 공중·착지에서 부딪혀 코스 밖으로 → 달 B 등급 복귀)
-  let jumpZone = null;
+  let jumpZone = null, jumpCalm = null;
   for (const jp of track.jumps || []) {
     if (jp.lipI == null) continue;
     jumpZone = jumpZone || new Uint8Array(N);
     let end = (jp.landI != null ? jp.landI : jp.lipI + Math.round(60 / ds)) + Math.round(30 / ds);
     if (end < jp.lipI) end += N; // 출발선을 넘어가는 점프
     for (let k = jp.lipI - Math.round(80 / ds); k <= end; k++) jumpZone[W(k)] = 1;
+    // 착지 뒤 200 m까지: 따라잡기로 빨라지지 않음 (달 첫 점프 뒤 빠른 굽이 t 0.23에서 무리 지어 빨리 들어가다 밖으로 나갔음)
+    jumpCalm = jumpCalm || new Uint8Array(N);
+    for (let k = jp.lipI - Math.round(80 / ds); k <= end + Math.round(170 / ds); k++) jumpCalm[W(k)] = 1;
   }
 
   /** 라인 지점 j에서 옆으로 lane만큼 비킨 목표 점 */
@@ -178,11 +197,15 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     let narrowSoon = false, brakeSoon = false;
     for (let q = 0; q < (60 + speed * 2) / ds && !narrowSoon; q += 4) narrowSoon = narrowAt(W(i0 + q));
     const jumpSoon = !!jumpZone && !!jumpZone[i0];
+    let jumpTraffic = false; // 점프 구역에서 앞 60 m ~ 뒤 15 m 안에 다른 차
+    let packAhead = false; // 바로 앞 30 m 안 같은 줄 근처에 차
+    const firmOK = !risky && !jumpSoon && !narrowSoon && ctx.since > 12;
     if (jumpSoon) narrowSoon = true; // 점프 구역: 추월 줄·나란히 줄 없이 라인 가운데로, 뒤차가 양보
     for (let q = 0; q < (20 + speed * 1.2) / ds && !brakeSoon; q += 3) brakeSoon = !!prof.brake[W(i0 + q)] || Math.abs(L.curvature[W(i0 + q)]) > 1 / 110; // 브레이크 구간·급한 코너
     let attack = null; // 바로 앞(35 m 안) 같은 줄의 차 → 슬립스트림을 타다가 부스터·추월
     let side = false; // 바로 옆에 차가 있음 → 빨리 비킴
     let lateBrake = 0; // 확실히 빠를 때만: 브레이크를 조금 늦게 (추월 마무리)
+    let hold = 0; // 사람 옆에서 자리 지키기 (0~1, firm)
     let shove = 0; // 바로 옆 차와 너무 가까울 때 핸들을 직접 살짝 반대로 (줄 목표만으로는 20 m 앞을 겨냥해서 늦게 벌어짐)
     // 다음 코너의 안쪽 (라인 기준 옆 방향 부호, + = 오른쪽). 곡률 +면 왼쪽으로 도는 코너 → 안쪽은 −
     let inSide = 0;
@@ -203,6 +226,12 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const dM = o.progM - ctx.me.progM; // + = 앞
       const dLat = o.lat - myLat;
       const closing = speed - o.speed;
+      // 사람(플레이어·온라인 상대) 옆에서 자리 지키기 0~1 (실력 firm × 성격). 봇끼리는 0 = 예전처럼 양보 (봇끼리 접촉이 늘지 않게)
+      //   예전엔 사람이 옆으로 밀고 들어오면 봇이 늘 물러나서 몸싸움에서 사람이 항상 이겼음
+      //   출발 직후 12초(한 덩어리)·점프·저중력·좁은 길에서는 안 버팀 (거기서 버티면 코스 밖으로 튕겨 복귀만 늘어남)
+      const firm = o.human && firmOK ? (level.firm || 0) * (0.6 + 0.4 * aggr) : 0;
+      if (jumpSoon && dM > -15 && dM < 60) jumpTraffic = true;
+      if (dM > 2 && dM < 30 && Math.abs(dLat) < 3.5) packAhead = true;
       // 점프 구역에서 옆(6 m 안)에 조금 앞선 차가 있으면 뒤로 빠져 그 차 뒤에 줄 섬 (슬립스트림 타고 따라감)
       if (jumpSoon && dM > 0 && dM < 8 && Math.abs(dLat) < 6) follow = Math.min(follow, o.speed - 2.5);
       // 얼마나 앞까지 볼지: 빨리 다가갈수록 멀리 (멈춘 차도 미리 피하게)
@@ -213,8 +242,10 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
         const want = o.lat + (dLat > 0 ? -3.6 : 3.6);
         if (want > L.lo[i0] + 0.2 && want < L.hi[i0] - 0.2) {
           const tl = clamp(want - L.offset[i0], -9, 9);
-          if (Math.abs(tl - st.lane) > 0.3 && (sideTL === null || Math.abs(tl - st.lane) > Math.abs(sideTL - st.lane))) sideTL = tl;
-        } else if (dM > -1.5) follow = Math.min(follow, o.speed - 2.5);
+          // 자리 지키는 봇(firm > 0.5)이 사람과 나란히·앞이면 비켜설 줄로 옮기지 않음 (밀어도 내 줄)
+          const keep = firm > 0.5 && dM < 1;
+          if (!keep && Math.abs(tl - st.lane) > 0.3 && (sideTL === null || Math.abs(tl - st.lane) > Math.abs(sideTL - st.lane))) sideTL = tl;
+        } else if (dM > -1.5 + 3.5 * firm) follow = Math.min(follow, o.speed - 2.5); // 자리 없음: 내가 확실히 앞이 아니면 물러남 (firm이면 상대가 확실히 앞일 때만)
         st.laneHold = Math.max(st.laneHold, 0.8);
         side = true;
         busy = true;
@@ -225,10 +256,11 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
           const away = dLat > 0 ? -1 : 1;
           //   (라인 한계 lo~hi보다 0.8 m 더: 연석까지는 써도 됨)
           const room = myLat + away * 1.2 > L.lo[i0] - 0.8 && myLat + away * 1.2 < L.hi[i0] + 0.8;
-          if (room) shove += away * Math.min(0.3, tight * 0.45);
-          if ((!room && dM > -2) || (tight > 0.6 && dM > 0.3)) follow = Math.min(follow, o.speed - 3 - 5 * tight); // 뒤쪽 차가 물러남
+          if (room) shove += away * Math.min(0.3, tight * 0.45) * (dM < 1 ? 1 - firm : 1); // 나란히·앞서 있으면 firm만큼 덜 비킴
+          if (dM < 1) hold = Math.max(hold, firm); // 사람이 옆에서 밀면 내 줄로 더 세게 돌아옴 (아래 조향의 옆 오차 힘 ×(1+3×hold))
+          if ((!room && dM > -2 + 4.2 * firm) || (tight > 0.6 && dM > 0.3 + 2.2 * firm)) follow = Math.min(follow, o.speed - (3 + 5 * tight) * (1 - 0.6 * firm)); // 뒤쪽 차가 물러남
         }
-        if (dM > 1.5 && Math.abs(dLat) < 1.9) follow = Math.min(follow, o.speed - 1); // 앞쪽 반쯤 겹침: 박지 않게
+        if (dM > 1.5 + firm && Math.abs(dLat) < 1.9) follow = Math.min(follow, o.speed - 1); // 앞쪽 반쯤 겹침: 박지 않게 (firm이면 사람이 반 차 넘게 앞일 때만)
         // 앞이 좁아지면(점프대 앞 등) 뒤쪽 차가 양보해서 한 줄로
         else if (dM > 0.5 && narrowSoon) follow = Math.min(follow, o.speed - 2);
         else if (brakeSoon) {
@@ -238,14 +270,14 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
           const iAmInside = inSide !== 0 && (myLat - o.lat) * inSide > 0;
           if (inSide !== 0 && iAmInside && dM < 3) {
             if (speed - o.speed > 0.5 || dM < 0) lateBrake = Math.max(lateBrake, aggr);
-          } else if (inSide !== 0 && !iAmInside && dM > -3) follow = Math.min(follow, o.speed - 2);
+          } else if (inSide !== 0 && !iAmInside && dM > -3 + 4.5 * firm) follow = Math.min(follow, o.speed - 2); // 바깥 차 양보 (firm이면 사람이 확실히 앞일 때만)
           else if (inSide === 0 && dM > 0.5) follow = Math.min(follow, o.speed - 2);
         }
       } else if (dM >= 6 && dM < range && Math.abs(dLat) < 2.7) {
         if (dM < 35 && Math.abs(dLat) < 2.2 && !attack) attack = { dM, o };
         // 추월 줄로 빠지는 건 가까워졌을 때만 (그 전에는 바로 뒤에서 슬립스트림을 탐)
         // 슬립스트림을 타고 있고 앞이 직선이면: 성격만큼 일찍 옆으로 빠져 나란히 (빨아들인 속도로 옆에 붙음)
-        const draftPull = (car.draft || 0) > 0.25 && !brakeSoon && closing > -0.5 && dM < 16 + aggr * 12;
+        const draftPull = (st.realDraft ?? car.draft ?? 0) > 0.25 && !brakeSoon && closing > -0.5 && dM < 16 + aggr * 12;
         if (((closing > 0.3 && dM < 14 + closing * 3) || dM < gapM + 5 || draftPull) && !narrowSoon) {
           // 추월할 줄: 앞차 왼쪽/오른쪽 3.2 m (그 차가 있는 지점의 라인 한계 lo~hi 안)
           //   지금 나랑 가까운 쪽 + 다음 코너 안쪽이면 가산점 (과감한 봇일수록 안쪽을 고름)
@@ -291,25 +323,47 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     if (st.mistake === 'wide') lane += -Math.sign(L.curvature[W(i0 + Math.round(30 / ds))] || 1) * 2.4;
 
     // --- 조향 ---
-    const look = Math.round((6 + v * 0.35) / ds);
-    const j = W(i0 + look);
-    const [tx, tz] = target(j, lane);
-    let dx = tx - car.pos.x, dz = tz - car.pos.z;
-    const l = Math.hypot(dx, dz) || 1;
-    dx /= l;
-    dz /= l;
     const fx = car.fwd.x, fz = car.fwd.z, fl = Math.hypot(fx, fz) || 1;
-    const cross = (fx * dz - fz * dx) / fl, dot = (fx * dx + fz * dz) / fl;
-    const jf = W(i0 + Math.round((v * 0.18) / ds));
-    const ff = (-L.curvature[jf] * v * v) / 24;
+    const angTo = (dx, dz) => Math.atan2((fx * dz - fz * dx) / fl, (fx * dx + fz * dz) / fl); // + = 오른쪽으로 돌아야 함
     const noise = level.noise * (Math.sin(st.t * 1.7 + st.phase) + 0.5 * Math.sin(st.t * 4.3 + st.phase * 2));
-    c.steer = clamp(ff + 2 * Math.atan2(cross, dot) + noise + clamp(shove, -0.35, 0.35), -1, 1);
+    let steerCmd;
+    if (car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && speed > 3) {
+      // 땅 위 (2026-11-10 hard2): '원하는 회전 속도' 방식. 라인 곡률 × 속도 + 방향 오차 + 옆 오차 → 이 차가 지금 핸들 1로 도는 회전 속도로 나눔
+      //   예전 방식(20 m 앞 점을 향해 꺾기 + 곡률/24)은 빠른 코너에서 핸들이 늦게 풀려 안쪽 잔디로 파고들었음
+      //   (그랑프리 proto 라인 봇 2바퀴 중 잔디 위 36초, 216.7초 → 이 방식 188.9초·잔디 0.5초, 달 156.6 → 142.4초)
+      const cfg = car.cfg;
+      const a = W(i0 + Math.round(3 / ds));
+      const [ax, az] = target(W(a - 1), lane), [bx, bz] = target(W(a + 1), lane);
+      const hd = angTo(bx - ax, bz - az);
+      const want = clamp(L.offset[i0] + lane, L.lo[i0] + 0.2, L.hi[i0] - 0.2);
+      const latErr = clamp(myLat - want, -6, 6);
+      const kf = W(i0 + Math.round((v * 0.15) / ds));
+      // 밀리는 중(hold)이면 옆으로 밀려나는 속도도 바로 되받음 (밀린 뒤에야 돌아오면 늦음)
+      const latVel = st.prevLat != null ? clamp((myLat - st.prevLat) / Math.max(1e-3, dt), -8, 8) : 0;
+      const yawDes = -L.curvature[kf] * v + 3 * hd - 0.15 * (1 + 3 * hold) * latErr - 0.3 * hold * latVel;
+      const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
+      const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)));
+      const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v)); // 핸들 1일 때 회전 속도 (car.js와 같은 식)
+      steerCmd = yawDes / Math.max(0.05, perSteer);
+    } else {
+      // 공중·비행·배: 예전 방식 (앞 점 향하기 + 곡률)
+      const look = Math.round((6 + v * 0.35) / ds);
+      const [tx, tz] = target(W(i0 + look), lane);
+      const jf = W(i0 + Math.round((v * 0.18) / ds));
+      steerCmd = (-L.curvature[jf] * v * v) / 24 + 2 * angTo(tx - car.pos.x, tz - car.pos.z);
+    }
+    c.steer = clamp(steerCmd + noise + clamp(shove, -0.35, 0.35), -1, 1);
+    st.prevLat = myLat;
     if (!car.grounded && car.mode !== 'fly') c.steer = 0; // 점프 중에는 핸들을 곧게 (공중에서 꺾으면 차 머리가 돌아간 채 착지해서 미끄러짐)
 
     // --- 속도 ---
     const leadT = st.mistake === 'late' ? level.lead * 0.35 : level.lead;
     const lead = W(i0 + Math.round((v * leadT) / ds));
-    const k = pace * st.paceMul * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
+    st.calm = !!((jumpCalm && jumpCalm[i0]) || gHere < 0.95); // 점프 근처·저중력: 따라잡기로 빨라지지 않음 (raceSystem의 보이지 않는 슬립스트림도 끔)
+    const pm = st.calm ? Math.min(1, st.paceMul) : st.paceMul;
+    // 출발 뒤 25초(첫 코너들, 한 덩어리): 바로 앞에 차가 있으면 코너 속도를 조금 낮춤 (빨라진 어려움 봇이 달 T1 출구에서 뒤엉켜 여러 대 복귀했음)
+    const openK = ctx.since < 25 && packAhead && level.pace > 0.95 ? 0.95 : 1;
+    const k = pace * pm * openK * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
     // 목표 속도: 앞쪽 지점들의 계획 속도 × 실력에서, 거기까지 브레이크로 줄일 수 있는 속도 (계획보다 빠를 때도 제때 제동)
     //   부스터 중에는 직선(계획이 최고 속도) 지점은 제한 없음 → 직선에서 부스터를 브레이크로 끄지 않음
     const boosting = car.form === 'spike';
@@ -322,12 +376,12 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const free = boosting && prof.speed[iq] >= vTop * 0.97 && !prof.brake[iq];
       if (free) continue;
       let vq = prof.speed[iq] * k;
-      if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq));
+      if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq) * (jumpTraffic ? 1 : jumpK));
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
       if (allow < tgt) tgt = allow;
     }
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
-    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * st.paceMul);
+    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm);
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
     else if (st.paceMul < 0.999 && !boosting) tgt = Math.min(tgt, vTop * st.paceMul);
     // 앞이 막혀 2초 넘게 거의 멈춰 있으면: 1.5초 동안은 앞차를 신경 쓰지 않고 밀고 나감 (영원히 기다리지 않게)
@@ -356,7 +410,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, pass: +st.passT.toFixed(1) };
+    st.dbg = { follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1) };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {
@@ -389,6 +443,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     reset(grid = false) {
       st.lane = st.laneTarget = 0;
       st.mistake = null;
+      st.prevLat = null;
       st.started = !grid; // 그리드에 새로 서면 출발 때 칸 줄을 지킴
     },
   };

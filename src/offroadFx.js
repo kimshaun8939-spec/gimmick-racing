@@ -98,8 +98,11 @@ export function createOffroadFx(scene) {
           const wheel = tmp.copy(car.pos).addScaledVector(right, sgn * 0.86).addScaledVector(car.fwd, -1.6).setY(car.pos.y + 0.15);
           const origin = wheel.clone();
           const side = right.clone().multiplyScalar(sgn);
-          for (let n = 0; n < Math.floor(bitAcc / 2); n++) spawnBit(origin, back, side, kind, speedK);
-          if (puffAcc >= 2) spawnPuff(origin, back, kind);
+          // 맵이 배 물보라를 따로 그리면(바닷가 seaGates.js: track.boatSpray) 물 위 네모 조각·뭉게 연기는 안 뿌림 (얼음 조각·구름처럼 보였음, 2026-11-10)
+          const tr = window.game && window.game.track;
+          const own = sailing && tr && tr.boatSpray;
+          if (!own) for (let n = 0; n < Math.floor(bitAcc / 2); n++) spawnBit(origin, back, side, kind, speedK);
+          if (puffAcc >= 2 && !own) spawnPuff(origin, back, kind);
         }
         bitAcc %= 2;
         if (puffAcc >= 2) puffAcc %= 2;

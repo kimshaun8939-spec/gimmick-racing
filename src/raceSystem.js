@@ -16,6 +16,7 @@ import { fastTrack } from './fastTrack.js';
 const CAR_R = 1.05; // 차끼리 충돌: 차 하나 = 앞뒤 원 2개 (반지름)
 const CAR_OFF = 1.3; // 원 중심이 차 가운데에서 앞뒤로 떨어진 거리
 const RESTITUTION = 0.25;
+const SIDE_SCRUB = 0.0003; // 옆으로 비빌 때 닿은 스텝마다 두 차가 잃는 앞 속도 비율 (100스텝 ≈ 0.8초 = 3%)
 
 export async function createRaceSystem(o) {
   const { track, car, scenery, opponents, laps, carId } = o;
@@ -104,6 +105,7 @@ export async function createRaceSystem(o) {
       b.driver.reset(true);
       b.driver.state.paceMul = 1; // 따라잡기 효과도 새로
       b.driver.state.cuOn = false;
+      b.cuDraft = 0;
       Object.assign(b, { lastT: s.t, progress: s.t > 0.5 ? s.t - 1 : s.t, lapsDone: 0, lapStart: 0, lap: 1, finished: false, finishTime: null, bestLap: null, lapTimes: [], slowT: 0, offT: 0, wrongT: 0, chkT: 0, chkProg: s.t - 1, grace: 0, respawns: 0 });
       b.marks.fill(NaN);
       b.nextMark = 0;
@@ -231,6 +233,29 @@ export async function createRaceSystem(o) {
         }
       }
     if (best <= 0) return;
+    // 옆으로 나란히 닿을 때 (hard2): 앞뒤 원끼리 닿으면 밀어내는 방향에 앞뒤 성분이 많이 섞여서
+    //   조금 앞선 차는 앞으로 튕겨 빨라지고 뒤 차는 브레이크가 걸렸음 (옆으로 밀고 들어온 쪽이 늘 이김: 1.5초 밀기에 +15 / −15 km/h) → 앞뒤 성분을 덜어냄 (앞뒤로 1.8 m 안이면 전부)
+    let sideHit = false;
+    if (!bStatic && Math.abs(a.fwd.x * b.fwd.x + a.fwd.z * b.fwd.z) > 0.8) {
+      const fl = Math.hypot(a.fwd.x, a.fwd.z) || 1, fx = a.fwd.x / fl, fz = a.fwd.z / fl;
+      const along = Math.abs((b.pos.x - a.pos.x) * fx + (b.pos.z - a.pos.z) * fz); // a 기준 b가 앞뒤로 떨어진 거리
+      if (along < 2.6) {
+        // 나란히 (뒤에서 박는 경우 = 앞뒤 2.6 m 넘게 떨어짐은 그대로)
+        sideHit = true;
+        const an = _n.x * fx + _n.z * fz;
+        const k = Math.min(1, (2.6 - along) / 0.8);
+        _n.x -= fx * an * k;
+        _n.z -= fz * an * k;
+        if (Math.hypot(_n.x, _n.z) < 0.2) {
+          // 거의 겹쳐 있음: a의 옆 방향으로 (b가 있는 반대쪽)
+          const sd = (a.pos.x - b.pos.x) * -fz + (a.pos.z - b.pos.z) * fx >= 0 ? 1 : -1;
+          _n.set(-fz * sd, 0, fx * sd);
+        }
+        const nl = Math.hypot(_n.x, _n.z) || 1;
+        _n.x /= nl;
+        _n.z /= nl;
+      }
+    }
     stats.contacts++;
     if (a === car || b === car) stats.player = (stats.player || 0) + 1; // 플레이어 차가 낀 접촉
     if (stats.time < 8) stats.start = (stats.start || 0) + 1; // 출발 8초 안 (한 덩어리로 출발할 때)
@@ -240,20 +265,39 @@ export async function createRaceSystem(o) {
       stats.pair = [a, b];
     }
     // 겹친 만큼 밀어냄 (반반, 움직이지 않는 상대면 내 차만)
-    const share = bStatic ? 1 : 0.5;
+    //   플레이어 대 봇 (hard2): 플레이어가 level.playerPush만큼 (어려움 0.57 = 봇이 조금 더 무거운 것처럼). 예전엔 반반 + 봇이 늘 양보해서 사람이 몸싸움에 항상 이김
+    const pp = level.playerPush ?? 0.5;
+    const share = bStatic ? 1 : a === car ? pp : b === car ? 1 - pp : 0.5; // a가 받는 몫 (b는 1 − share)
     a.pos.addScaledVector(_n, best * share);
-    if (!bStatic) b.pos.addScaledVector(_n, -best * share);
+    if (!bStatic) b.pos.addScaledVector(_n, -best * (1 - share));
     velOf(a, _va);
     if (bStatic) _vb.copy(b.fwd).multiplyScalar(b.speed || 0);
     else velOf(b, _vb);
     const rel = _va.dot(_n) - _vb.dot(_n);
     if (rel >= 0) return;
-    const j = (-(1 + RESTITUTION) * rel) * share;
-    _va.addScaledVector(_n, j);
+    const jAll = -(1 + RESTITUTION) * rel; // 두 차 속도 변화의 합 (같은 무게면 반반)
+    const sa0 = a.speed, sb0 = b.speed || 0;
+    _va.addScaledVector(_n, jAll * share);
     setVel(a, _va);
     if (!bStatic) {
-      _vb.addScaledVector(_n, -j);
+      _vb.addScaledVector(_n, -jAll * (1 - share));
       setVel(b, _vb);
+    }
+    // 옆으로 비비기: 밀어내기는 옆으로만, 앞 속도는 두 차 모두 같은 비율로 조금씩만 잃음
+    //   (예전엔 옆으로 파고드는 차가 부딪힐 때마다 상대의 앞 속도를 가져감: 1.5초 밀기에 +16 / −16 km/h. 늘 들이받는 사람이 이김)
+    if (sideHit) {
+      const keep = 1 - SIDE_SCRUB;
+      a.speed = sa0 * keep;
+      a.vel.copy(a.moveDir || a.fwd).multiplyScalar(a.speed);
+      if (!bStatic) {
+        b.speed = sb0 * keep;
+        b.vel.copy(b.moveDir || b.fwd).multiplyScalar(b.speed);
+      }
+    }
+    // 테스트용: 충돌로 플레이어·봇 앞 속도가 얼마나 바뀌었나 (m/s 합)
+    if (a === car || b === car) {
+      stats.pDv = (stats.pDv || 0) + (a === car ? a.speed - sa0 : b.speed - sb0);
+      if (!bStatic) stats.bDv = (stats.bDv || 0) + (a === car ? b.speed - sb0 : a.speed - sa0);
     }
     // 세게 부딪히면 흔들림 + 빙글빙글 돌지 않게 자세 잡기 (벽 충돌과 같은 처리)
     if (rel < -6) {
@@ -332,7 +376,7 @@ export async function createRaceSystem(o) {
         const others = [];
         for (const e of all()) {
           if (e === b || (e.finished && !b.finished && !e.isPlayer)) continue; // 완주하고 천천히 도는 봇은 피하지 않음 (부딪힘도 없음)
-          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed });
+          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human: e === me || !!e.remote });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
@@ -364,7 +408,11 @@ export async function createRaceSystem(o) {
     }
     // 슬립스트림
     updateDraft(me, dt, racing);
-    for (const b of bots) updateDraft(b, dt, racing);
+    for (const b of bots) {
+      updateDraft(b, dt, racing);
+      b.driver.state.realDraft = b.draft; // 봇 운전사는 진짜 슬립스트림만 봄 (추월 판단)
+      if (b.cuDraft > 0 && racing && !b.driver.state.calm) b.car.draft = Math.max(b.draft, b.cuDraft); // 따라잡기(어려움), 점프 근처·저중력에서는 안 함
+    }
     // 간격 기록
     if (racing) {
       mark(me, time);
@@ -390,7 +438,7 @@ export async function createRaceSystem(o) {
   }
   /**
    * 쉬움: 사람보다 aheadM m 넘게 앞선 봇은 slowMul로 늦춤 → releaseM m 안으로 들어오면 원래대로 (빨라지게는 안 함)
-   * 어려움: 사람이 sec초 넘게 앞서면 최대 upMul(단, 라인 봇 속도 = pace 1을 넘지 않게), 봇이 sec초 넘게 앞서면 downMul
+   * 어려움: 사람이 sec초 넘게 앞서면 upMul + 보이지 않는 슬립스트림 upDraft, 봇이 secDown초 넘게 앞서면 downMul
    * 보통: 없음 (항상 1)
    */
   function catchUp(time, racing) {
@@ -398,7 +446,7 @@ export async function createRaceSystem(o) {
     const lead = racing && cu ? leadHuman() : null;
     for (const b of bots) {
       const st = b.driver.state;
-      let want = 1;
+      let want = 1, draft = 0;
       if (lead && !b.finished) {
         if (cu.aheadM) {
           const d = (b.progress - lead.progress) * L; // + = 봇이 앞
@@ -408,12 +456,18 @@ export async function createRaceSystem(o) {
         } else if (cu.sec) {
           const g = b.progress >= lead.progress ? gapBetween(b, lead, time) : gapBetween(lead, b, time);
           const sec = g.laps ? 99 : g.sec || 0; // 뒤차가 몇 초 뒤인지
-          if (b.progress < lead.progress && sec > cu.sec) want = Math.max(1, Math.min(cu.upMul, 1 / Math.max(0.5, b.driver.pace))); // 빨라져도 라인 봇(pace 1)보다는 안 빠르게
-          else if (b.progress > lead.progress && sec > cu.sec) want = cu.downMul;
+          // hard2: 라인 봇 상한(1/pace)은 없앰 (사람이 라인 봇보다 12~15% 빨랐음). 대신 차 물리 한계 안에서만:
+          //   코너 속도 배수 upMul + 공기 저항을 줄여 주는 '보이지 않는 슬립스트림' upDraft (car.draft와 같은 효과, 최고 +4%×upDraft)
+          if (b.progress < lead.progress && sec > cu.sec) {
+            want = cu.upMul;
+            draft = cu.upDraft || 0;
+          } else if (b.progress > lead.progress && sec > (cu.secDown ?? cu.sec)) want = cu.downMul;
         }
       }
       st.paceMul += (want - st.paceMul) * 0.3;
       if (Math.abs(st.paceMul - want) < 0.002) st.paceMul = want;
+      b.cuDraft = (b.cuDraft || 0) + (draft - (b.cuDraft || 0)) * 0.3;
+      if (b.cuDraft < 0.01) b.cuDraft = 0;
     }
   }
 

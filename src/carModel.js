@@ -758,21 +758,22 @@ function buildRocket({ add, body, M }) {
   add(new THREE.BoxGeometry(0.4, 0.06, 0.04), tailMat, 0, 0.47, -2.53);
   const diff = add(new THREE.BoxGeometry(0.8, 0.03, 0.35), carbon, 0, 0.27, -2.4);
   diff.rotation.x = 0.35;
-  // 높은 뒷날개 (탑퓨얼 드래그스터처럼 기둥 4개 위)
+  // 뒷날개 (탑퓨얼 드래그스터처럼 기둥 4개 위). 2026-11-10 사용자 요청: 예전엔 1.72 m 높이라 뒤 카메라에서 앞을 가렸음
+  //   → 0.6 m 낮추고(1.12 m) 끝판·번호판을 작게 (카메라 눈높이 아래로)
   const spoiler = new THREE.Group();
   body.add(spoiler);
-  const main = add(new THREE.BoxGeometry(2.0, 0.05, 0.5), carbon, 0, 1.72, -2.45, spoiler);
+  const main = add(new THREE.BoxGeometry(1.9, 0.05, 0.46), carbon, 0, 1.12, -2.45, spoiler);
   main.rotation.x = 0.12;
-  const drs = add(new THREE.BoxGeometry(2.0, 0.04, 0.26), paint, 0, 1.84, -2.68, spoiler);
+  const drs = add(new THREE.BoxGeometry(1.9, 0.04, 0.24), paint, 0, 1.22, -2.66, spoiler);
   drs.rotation.x = 0.5;
   for (const side of [-1, 1]) {
-    add(new THREE.BoxGeometry(0.04, 0.56, 0.86), paint, side * 1.0, 1.7, -2.5, spoiler);
-    add(new THREE.BoxGeometry(0.045, 0.06, 0.86), accent, side * 1.0, 1.99, -2.5, spoiler).castShadow = false;
-    for (const [z0, z1] of [[-1.95, -2.32], [-2.4, -2.58]]) add(rodGeometry(new THREE.Vector3(side * 0.3, 0.62, z0), new THREE.Vector3(side * 0.45, 1.7, z1), 0.025), metal, 0, 0, 0, spoiler);
+    add(new THREE.BoxGeometry(0.04, 0.36, 0.78), paint, side * 0.95, 1.12, -2.5, spoiler);
+    add(new THREE.BoxGeometry(0.045, 0.05, 0.78), accent, side * 0.95, 1.31, -2.5, spoiler).castShadow = false;
+    for (const [z0, z1] of [[-1.95, -2.32], [-2.4, -2.58]]) add(rodGeometry(new THREE.Vector3(side * 0.3, 0.62, z0), new THREE.Vector3(side * 0.42, 1.1, z1), 0.025), metal, 0, 0, 0, spoiler);
   }
-  const plateL = add(new THREE.PlaneGeometry(0.5, 0.5), M.numMat, 1.025, 1.72, -2.5, spoiler);
+  const plateL = add(new THREE.PlaneGeometry(0.32, 0.32), M.numMat, 0.975, 1.12, -2.5, spoiler);
   plateL.rotation.y = Math.PI / 2;
-  const plateR = add(new THREE.PlaneGeometry(0.5, 0.5), M.numMat, -1.025, 1.72, -2.5, spoiler);
+  const plateR = add(new THREE.PlaneGeometry(0.32, 0.32), M.numMat, -0.975, 1.12, -2.5, spoiler);
   plateR.rotation.y = -Math.PI / 2;
   const helmet = makeHelmet(add, body, M);
   helmet.position.set(0, 0.82, -0.3);
@@ -788,7 +789,7 @@ function buildRocket({ add, body, M }) {
       spines: [[-0.85, 1.3], [-1.25, 1.31], [-1.65, 1.31], [-2.05, 1.3]],
       booster: { x: 0.54, y0: 0.42, y1: 0.66, z0: -0.45, dz: -1.2 },
       lift: { y: 0.66, z: -2.15, h: 0.2 },
-      stab: [1.0, 1.72, -2.5],
+      stab: [0.95, 1.12, -2.5],
       tailFin: [0, 1.28, -0.75],
       wing: [0.42, 0.52, 0.25],
       nitro: { x: 0.2, y: 0.36, z: -2.2, dz: -0.35 },
@@ -1899,6 +1900,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const m = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.9, 8, 1, true).translate(0, 0.45, 0), sprayMat);
     m.position.set(side * 0.7, 0.05, 2.0);
     m.rotation.set(-0.6, 0, -side * 0.9);
+    m.userData.side = side;
     body.add(m);
     return m;
   });
@@ -2077,6 +2079,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   let lastForm = null;
   let accelP = 0; // 가속 모드 변신 진행도 0~1
   let boatP = 0; // 배 모드 변신 진행도 0~1
+  let chopPh = 0, boatRoll = 0; // 배: 물결 타기 위상, 안쪽으로 눕는 정도 (2026-11-10)
   let flyP = 0; // 비행 모드 변신 진행도 0~1
   let gearP = 0; // 착륙 장치 접힘 0~1 (날고 있을 때 1)
   let trailK = 0; // 비행운 세기 0~1
@@ -2316,9 +2319,17 @@ export function createCarModel(lookOrColor = '#e8463a') {
       const float = boatP * waterK;
       const plane = Math.min(1, spd / 30);
       const calm = 1 - 0.6 * plane;
-      const heave = (Math.sin(time * 2.1) * 0.035 + Math.sin(time * 3.4 + 1.3) * 0.018) * calm + 0.07 * plane;
-      const modePitch = float * (Math.sin(time * 1.7 + 0.4) * 0.025 * calm - 0.075 * plane) + sink * 0.28;
-      const modeRoll = float * (Math.sin(time * 1.3) * 0.035 + Math.sin(time * 2.3 + 2.0) * 0.012) * calm;
+      // 물결 타기 (2026-11-10, 사용자 요청 "배가 심심해"): 빠를수록 선체가 물결 위에서 통 튀었다가 철썩 내려앉음 (뱃머리가 먼저 들림)
+      //   + 도는 쪽으로 몸을 눕혀 돎 (자동차와 반대), 카빙(드리프트 키)이면 더 깊게
+      const fast = clamp01((spd - 15) / 30);
+      if (!instant) chopPh += dt * (2.0 + 2.8 * fast);
+      const hop = float * Math.pow(Math.max(0, Math.sin(chopPh)), 3) * (0.04 + 0.17 * fast) * (0.65 + 0.35 * Math.sin(chopPh * 0.31 + 1.7));
+      const cv = car.boatCarve || 0;
+      const rollT = float * THREE.MathUtils.clamp(((car.yawRate || 0) * Math.min(spd, 40)) / 22, -1, 1) * (0.13 + 0.12 * cv);
+      boatRoll = instant ? rollT : THREE.MathUtils.lerp(boatRoll, rollT, 1 - Math.exp(-5 * dt));
+      const heave = (Math.sin(time * 2.1) * 0.035 + Math.sin(time * 3.4 + 1.3) * 0.018) * calm + 0.09 * plane + hop;
+      const modePitch = float * (Math.sin(time * 1.7 + 0.4) * 0.025 * calm - 0.085 * plane - 0.55 * hop - 0.04 * (car.surgeT > 0 ? 1 : 0)) + sink * 0.28;
+      const modeRoll = float * (Math.sin(time * 1.3) * 0.035 + Math.sin(time * 2.3 + 2.0) * 0.012) * calm + boatRoll;
       const offY = float * heave + boatP * (1 - waterK) * 0.13 - 1.4 * sink;
       root.position.copy(car.pos).addScaledVector(car.up, offY);
 
@@ -2341,7 +2352,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       const feel = (car.cfg && car.cfg.feel) || {};
       const hasG = typeof car.latG === 'number';
       const rollK = A.lean * (feel.roll ?? 1), pitchK = (A.pitch ?? A.lean * 0.7) * (feel.pitch ?? 1);
-      const targetLean = !car.grounded || car.flying ? 0
+      const targetLean = !car.grounded || car.flying || float > 0.5 ? 0 // 물 위의 배는 위의 boatRoll로 안쪽으로 눕힘
         : hasG ? THREE.MathUtils.clamp(car.latG / 17, -1.4, 1.4) * rollK * (car.drifting ? 1.3 : 1)
         : car.steerVisual * Math.min(1, Math.abs(car.forwardSpeed) / 30) * A.lean * (car.drifting ? 1.8 : 1);
       const targetPitch = !car.grounded || car.flying ? THREE.MathUtils.clamp(-car.vel.dot(car.up) * 0.015, -0.3, 0.3)
@@ -2479,7 +2490,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
       sprayMat.opacity = 0.5 * float;
       for (const s of sprays) {
         s.visible = showSpray;
-        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane) * (0.85 + Math.random() * 0.3));
+        // 카빙하면 바깥쪽(도는 반대쪽) 물보라가 크게 솟음 (s.userData.side: +1 = 왼쪽)
+        const outer = Math.sign(car.yawRate || 0) === s.userData.side ? 1 : 0.35;
+        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane + 0.6 * cv * outer) * (0.85 + Math.random() * 0.3));
       }
       const wakeK = float * Math.min(1, spd / 15 + push * 0.3);
       wake.visible = wakeK > 0.02;

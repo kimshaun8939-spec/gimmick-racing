@@ -228,6 +228,17 @@ export class Car {
     this.flying = false;
     this.pitch = this.bank = this.stallFall = this.forceSink = 0;
     this.forceLanding = false;
+    this.surgeT = this.surgeK = this.boatCarve = 0; // 배: 물살 가속 남은 시간·세기, 카빙 정도 (0~1)
+  }
+
+  /**
+   * 배 물살 가속 (2026-11-10): 부표 게이트·급류(seaGates.js)가 부름. sec초 동안 세기 k만큼 (modes.boat.surge)
+   *   이미 더 센 가속 중이면 시간만 늘림
+   */
+  boatSurge(sec, k = 1) {
+    if (!(sec > 0)) return;
+    this.surgeK = this.surgeT > 0 ? Math.max(this.surgeK, k) : k;
+    this.surgeT = Math.max(this.surgeT || 0, sec);
   }
 
   /** 월드 좌표 (x, z)에 yaw 방향(라디안, 0 = +z)으로 차를 놓습니다. (테스트 맵의 자유 공간용) */
@@ -370,7 +381,8 @@ export class Car {
     this.brk = approach(this.brk, c.brake, c.brake > this.brk ? ic.brakeRise : ic.brakeFall, dt);
     // 같은 방향으로 더 꺾을 때는 천천히, 풀거나 반대로 꺾을 때는 빠르게 (빠를수록 더 천천히 꺾임)
     const more = c.steer !== 0 && Math.sign(c.steer) === Math.sign(this.steerIn || c.steer) && Math.abs(c.steer) > Math.abs(this.steerIn);
-    const fast = Math.min(1, Math.abs(this.speed) / this.cfg.maxSpeed);
+    // (배로 물 위에서는 빨라도 핸들이 느려지지 않음: 부표 게이트 사이를 빠르게 좌우로 누빌 수 있게, 2026-11-10)
+    const fast = this.mode === 'boat' && this.surface === 'water' ? 0 : Math.min(1, Math.abs(this.speed) / this.cfg.maxSpeed);
     this.steerIn = approach(this.steerIn, c.steer, more ? ic.steerRise * (1 - (ic.steerRiseHighSpeed ?? 0.35) * fast) : ic.steerReturn, dt);
   }
 
@@ -996,6 +1008,7 @@ export class Car {
       this.autoBoatFrom = null;
     }
     if (this.mode !== 'boat') this.autoBoatFrom = null; // 직접 다른 모드를 고르면 자동 복귀 취소
+    if (this.surface !== 'water') this.surgeT = this.boatCarve = 0; // 물살 가속·카빙은 물 위에서만
     // 활주로(그랑프리 비행 루트)에 들어서면 자동으로 비행 모드, 내려앉아 활주로 밖이면 원래 모드로
     if (this.track.runway && cfg.modes.fly.autoSwitch) {
       const zone = (this.rwZoneLast = this.runwayZone());
@@ -1232,9 +1245,19 @@ export class Car {
     const cfg = this.cfg, b = cfg.modes.boat, e = cfg.engine;
     let f = this.speed;
     const boosting = this.boostTime > 0;
-    const maxF = b.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
+    let maxF = b.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
+    let thrust = b.thrust;
+    // 물살 가속 (부표 게이트·급류): 잠깐 최고 속도·추진력이 올라감
+    const SG = b.surge;
+    if (this.surgeT > 0 && SG) {
+      this.surgeT -= dt;
+      const k = this.surgeK * Math.min(1, this.surgeT / 0.4 + 0.25); // 끝날 때 부드럽게
+      maxF *= 1 + SG.speed * k;
+      thrust += SG.thrust * k;
+      if (this.thr <= 0) f += SG.thrust * 0.5 * k * dt; // 페달을 떼도 물살이 조금 밀어 줌
+    } else this.surgeT = 0;
     // 추진: W 앞으로, S 브레이크 → 멈추면 뒤로
-    if (this.thr > 0 && f > -0.5) f += this.thr * b.thrust * dt;
+    if (this.thr > 0 && f > -0.5) f += this.thr * thrust * dt;
     if (this.brk > 0) {
       if (f > 0.5) f -= b.brake * this.brk * dt;
       else if (f > -b.maxReverse) f -= b.reverse * this.brk * dt;
@@ -1246,16 +1269,23 @@ export class Car {
     if (f > maxF) f = THREE.MathUtils.lerp(f, maxF, 1 - Math.exp(-2 * dt));
     const v = Math.abs(f);
 
+    // 카빙 (2026-11-10): 드리프트 키 + 핸들 → 물을 깎으며 확 돎 (대신 속도를 조금 잃고 옆으로 더 미끄러짐)
+    const CV = b.carve;
+    const carving = !!(CV && c && c.drift && v > CV.minSpeed && Math.abs(this.steerIn) > 0.25 && f > 0);
+    if (carving && this.boatCarve < 0.05) this.events.push('boatCarve');
+    this.boatCarve = THREE.MathUtils.lerp(this.boatCarve || 0, carving ? 1 : 0, 1 - Math.exp(-(carving ? 7 : 4) * dt));
+    const cv = CV ? this.boatCarve : 0;
     // 방향타: 움직일 때만 돌고, 빠를수록 조금 덜 돎
     const rudder = THREE.MathUtils.clamp(v / 6, 0, 1) * (1 - 0.35 * Math.min(1, v / b.maxSpeed));
-    const want = this.steerIn * b.turnRate * rudder * Math.sign(f || 1);
-    this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-4 * dt));
+    const want = this.steerIn * b.turnRate * rudder * Math.sign(f || 1) * (1 + ((CV ? CV.turn : 1) - 1) * cv);
+    this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-((b.yawResponse ?? 4) + 3 * cv) * dt));
     const dYaw = -this.yawRate * dt;
     this.fwd.applyAxisAngle(this.up, dYaw);
     this.slip -= dYaw; // 배는 옆으로 잘 미끄러짐 (천천히 진행 방향을 따라감)
-    this.slip *= Math.exp(-b.grip * dt);
+    this.slip *= Math.exp(-b.grip * (1 + ((CV ? CV.grip : 1) - 1) * cv) * dt);
     this.slip = THREE.MathUtils.clamp(this.slip, -1.2, 1.2);
     f -= f * Math.abs(Math.sin(this.slip)) * 0.8 * dt;
+    if (cv > 0) f -= f * CV.drag * cv * dt;
     if (this.drifting) this.endDrift(false);
 
     // 엔진: 프로펠러 부하라 속도보다 가속 페달을 더 따라감
@@ -1265,7 +1295,7 @@ export class Car {
     this.limiter = false;
     this.wheelspin = this.understeer = 0;
     this.sliding = THREE.MathUtils.clamp((Math.abs(this.slip) - 0.25) / 0.4, 0, 1);
-    this.load = THREE.MathUtils.lerp(this.load, this.thr * 0.6, 1 - Math.exp(-3 * dt)); // 뱃머리가 들림
+    this.load = THREE.MathUtils.lerp(this.load, this.thr * 0.6 + (this.surgeT > 0 ? 0.3 : 0), 1 - Math.exp(-3 * dt)); // 뱃머리가 들림
     this.speed = f;
   }
 
