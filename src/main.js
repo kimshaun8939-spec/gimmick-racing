@@ -29,6 +29,7 @@ import { fastTrack } from './fastTrack.js';
 import { champRace, recordRace, champStandings, champUrl } from './championship.js';
 import { createReplay } from './replay.js';
 import { createCornerReport } from './cornerReport.js';
+import { online } from './online.js';
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -207,6 +208,19 @@ const raceSys = await createRaceSystem({
 });
 const sectors = createSectors({ mapName, carId });
 const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992 });
+// 온라인 순위표에서 고른 다른 사람 고스트: ?ghost=<사람 id>&ghostCar=<차>&ghostName=<이름> (같은 맵)
+const FRIEND_GHOST = ghost && params.get('ghost') && online.enabled ? { id: params.get('ghost'), car: params.get('ghostCar') || carId, name: params.get('ghostName') || '친구' } : null;
+if (FRIEND_GHOST) {
+  Promise.all([online.ghost(mapName, FRIEND_GHOST.car, FRIEND_GHOST.id), import('./carRoster.js').then((m) => m.loadCarConfig(FRIEND_GHOST.car))])
+    .then(([json, cfg]) => {
+      if (json && ghost.useFriend(json, cfg.look, FRIEND_GHOST.name)) hud.toast(`👻 ${FRIEND_GHOST.name} 고스트와 달려요`);
+      else hud.toast('고스트를 불러오지 못했어요');
+    })
+    .catch((err) => {
+      console.warn('친구 고스트', err);
+      hud.toast('고스트를 불러오지 못했어요 (인터넷 확인)');
+    });
+}
 const finishCbs = []; // raceCtl.onFinish
 // 리플레이 (완주 뒤 결과 화면 "▶ 리플레이"): 모든 차를 1초에 15번 기록 → 다시 볼 때는 물리를 멈추고 replay.frame만
 const replay = createReplay({
@@ -750,6 +764,8 @@ function showFinish() {
   myRecordCache = null;
   // 고스트: 레이스 전체(모든 바퀴)가 내 최고 완주보다 빠르면 저장
   if (ghost) ghost.raceDone(total, canSaveRecords());
+  // 온라인 순위표에 올리기 (서버 설정이 있을 때, 내 온라인 기록보다 빠를 때만 서버가 바꿈)
+  const uploadOnline = !FREE && online.enabled && canSaveRecords();
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
@@ -800,6 +816,22 @@ function showFinish() {
       else if (a === 'home') goHome();
     },
   });
+  if (uploadOnline) {
+    hud.setOnline('🌐 온라인 순위표에 올리는 중…');
+    const bestLap = Math.min(...race.lapTimes);
+    online
+      .submit({ map: mapName, car: carId, total, laps: race.lapTimes, bestLap, assist: !!race.assist, ghost: ghost ? ghost.lastRunJson : null })
+      .then((r) => {
+        if (!r) return hud.setOnline('');
+        if (r.needNick) return hud.setOnline('🌐 홈에서 이름을 정하면 온라인 순위표에 올라가요');
+        const where = `<b>${r.rank}위</b> / ${r.players}명`;
+        hud.setOnline(r.saved ? `🌐 온라인 순위표에 올렸어요 · 이 맵 ${where}` : `🌐 온라인 내 최고 ${fmtTime(r.best)} · 이 맵 ${where}`);
+      })
+      .catch((err) => {
+        console.warn('온라인 순위표', err);
+        hud.setOnline('🌐 온라인 순위표에 못 올렸어요 (인터넷 확인)');
+      });
+  }
 }
 
 // --- 게임 루프 ---
@@ -1008,7 +1040,7 @@ function frame(now, manual = false) {
     draft: race.phase === 'racing' ? car.draft || 0 : 0,
     sectors: showSectors ? sectors.hud(race.phase === 'countdown' ? 0 : race.time - race.lapStart) : null,
     ghostDelta: ghost && ghost.kind !== 'off' && race.phase === 'racing' ? ghost.delta(playerProgress() - (race.lap - 1), race.time - race.lapStart, playerProgress(), race.time) : null,
-    ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : '내 최고',
+    ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : ghost && ghost.kind === 'friend' ? ghost.friendName : '내 최고',
   });
   engineAudio.update(car);
 

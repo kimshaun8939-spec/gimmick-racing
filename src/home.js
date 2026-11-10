@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { settings, SETTING_DEFS, createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutorialUrl, RACE_MODES, sampleOutline, outlineLength, drawTrackThumb } from './gameData.js';
 import { records, fmtTime } from './records.js';
+import { online } from './online.js';
 import { createCarModel } from './carModel.js';
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 
@@ -126,7 +127,7 @@ export async function runHome() {
         </div>
         <button class="gm-btn h-item" data-go="car" data-nav><span class="ic">🏎️</span><span class="t"><b>차 고르기</b><small data-f="car"></small></span><span class="arrow">›</span></button>
         <button class="gm-btn h-item" data-go="map" data-nav><span class="ic">🗺️</span><span class="t"><b>맵 고르기</b><small data-f="map"></small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="records" data-nav><span class="ic">🏆</span><span class="t"><b>내 기록</b><small>맵마다 가장 빠른 랩</small></span><span class="arrow">›</span></button>
+        <button class="gm-btn h-item" data-go="records" data-nav><span class="ic">🏆</span><span class="t"><b>내 기록</b><small>${online.enabled ? '🌐 온라인 순위표 · 맵마다 최고 기록' : '맵마다 최고 기록'}</small></span><span class="arrow">›</span></button>
         <button class="gm-btn h-item" data-go="settings" data-nav><span class="ic">⚙️</span><span class="t"><b>설정</b><small>소리 · 그래픽 · 운전 도움 · 조작키</small></span><span class="arrow">›</span></button>
         <button class="gm-btn h-item" data-go="controls" data-nav><span class="ic">🎮</span><span class="t"><b>조작법</b><small>키보드 · 게임패드 안내</small></span><span class="arrow">›</span></button>
       </div>
@@ -360,9 +361,49 @@ export async function runHome() {
       })
       .join('');
     const box = views.records.querySelector('.scroll');
-    box.innerHTML = `<table class="h-rec"><thead><tr><th>맵</th><th>최고 기록 (완주)</th><th>최고 랩</th><th>최고 구간</th><th>차마다 최고 기록</th></tr></thead><tbody>${rows}</tbody></table>
+    box.innerHTML = `${online.enabled ? '<div class="h-online"></div><h3 class="h-subt">💾 이 브라우저의 내 기록</h3>' : ''}<table class="h-rec"><thead><tr><th>맵</th><th>최고 기록 (완주)</th><th>최고 랩</th><th>최고 구간</th><th>차마다 최고 기록</th></tr></thead><tbody>${rows}</tbody></table>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;color:var(--gm-dim);font-size:12px">
-        <span>기록은 이 브라우저에만 저장돼요 · ${ASSIST_TAG} = 운전 도움(브레이크·조향·트랙션)을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>`;
+        <span>${online.enabled ? '완주하면 온라인 순위표에도 자동으로 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움(브레이크·조향·트랙션)을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>`;
+  }
+
+  // ------------------------------------------------------------------ 온라인 순위표 (내 기록 화면 위쪽)
+  //   맵마다 사람별 가장 빠른 완주 기록 (어느 차든) / 지금 고른 차만. 줄마다 "👻 같이 달리기" = 그 사람 고스트와 타임 어택
+  let olMap = null, olCarOnly = false, olSeq = 0;
+  async function renderOnline() {
+    const box = views.records.querySelector('.h-online');
+    if (!box) return;
+    if (!olMap || !maps.some((m) => m.id === olMap && !mapInfo[m.id].free)) olMap = (maps.find((m) => m.id === mapId && !mapInfo[m.id].free) || maps.find((m) => !mapInfo[m.id].free) || maps[0]).id;
+    const me = online.me();
+    const code = online.myCode();
+    const tabs = maps.filter((m) => !mapInfo[m.id].free).map((m) => `<button class="gm-btn small${m.id === olMap ? ' on' : ''}" data-act="olMap" data-map="${m.id}" data-nav>${esc(m.title)}</button>`).join('');
+    box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>로그인 없이 이름으로 · 완주하면 자동으로 올라감</small></h3>
+      <div class="h-oltabs">${tabs}<button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
+      <div class="h-olboard"><div class="none">불러오는 중…</div></div>
+      <div class="h-olme">${me ? `👤 <b>${esc(me.nick)}</b> 으로 올리는 중` : '👤 아직 올린 기록이 없어요 (완주하면 홈의 이름으로 올라가요)'}
+        ${code ? '<button class="gm-btn small" data-act="olCopy" data-nav title="다른 컴퓨터·브라우저에서 같은 이름으로 이어 하기">🔑 내 코드 복사</button>' : ''}
+        <span class="h-olcode"><input type="text" spellcheck="false" autocomplete="off" placeholder="다른 기기의 코드 (GR-…)" aria-label="내 코드 넣기"><button class="gm-btn small" data-act="olUse" data-nav>코드로 이어 하기</button></span></div>`;
+    const seq = ++olSeq;
+    const board = box.querySelector('.h-olboard');
+    try {
+      const rows = await online.board(olMap, olCarOnly ? carId : null, 50);
+      if (seq !== olSeq) return;
+      if (!rows.length) {
+        board.innerHTML = '<div class="none">아직 아무도 기록이 없어요. 첫 번째가 되어 보세요!</div>';
+        return;
+      }
+      const lapsN = mapInfo[olMap].laps;
+      board.innerHTML = `<table class="h-rec h-olt"><thead><tr><th>순위</th><th>이름</th><th>차</th><th>기록${lapsN > 1 ? ` (${lapsN}바퀴)` : ''}</th><th>최고 랩</th><th></th></tr></thead><tbody>${rows
+        .map((r, i) => {
+          const mine = me && r.player_id === me.id;
+          return `<tr class="${mine ? 'me' : ''}"><td class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td><b>${esc(r.nickname)}</b>${mine ? ' <small class="none">(나)</small>' : ''}</td><td><small>${esc(carOf(r.car).name || r.car)}</small></td>
+            <td><span class="${i === 0 ? 'gold' : ''}">${fmtTime(r.total)}</span>${r.assist ? ASSIST_TAG : ''}</td><td><small class="none">${r.best_lap ? fmtTime(r.best_lap) : '—'}</small></td>
+            <td><button class="gm-btn small" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav title="이 사람의 고스트와 같은 차로 타임 어택">👻 같이 달리기</button></td></tr>`;
+        })
+        .join('')}</tbody></table>`;
+    } catch (err) {
+      console.warn('온라인 순위표', err);
+      if (seq === olSeq) board.innerHTML = '<div class="none">순위표를 불러오지 못했어요 (인터넷 확인)</div>';
+    }
   }
 
   // ------------------------------------------------------------------ 화면 바꾸기
@@ -380,7 +421,10 @@ export async function runHome() {
     home.classList.toggle('dim', !['main', 'car'].includes(name));
     home.classList.toggle('calm', name !== 'main');
     preview.setView(name);
-    if (name === 'records') renderRecords();
+    if (name === 'records') {
+      renderRecords();
+      renderOnline();
+    }
     if (name === 'map') refreshRecords();
     refreshSummary();
     if (focus) {
@@ -676,6 +720,39 @@ export async function runHome() {
       const r = await welcomeDialog({ first: false });
       if (r) showName();
     }
+    else if (act === 'olMap') {
+      olMap = b.dataset.map;
+      renderOnline();
+    }
+    else if (act === 'olCar') {
+      olCarOnly = !olCarOnly;
+      renderOnline();
+    }
+    else if (act === 'olGhost') {
+      const nick = b.dataset.nick, car = b.dataset.car;
+      setLast({ map: olMap, car, mode: 'time' });
+      launch(raceUrl(olMap, car, { mode: 'time', ghost: b.dataset.pid, ghostCar: car, ghostName: nick }), mapOf(olMap).title, `👻 ${nick} 고스트와 · ${carOf(car).name}`);
+    }
+    else if (act === 'olCopy') {
+      const code = online.myCode();
+      try {
+        await navigator.clipboard.writeText(code);
+        toast('🔑 내 코드를 복사했어요 · 다른 기기의 "코드로 이어 하기"에 붙여 넣으세요');
+      } catch {
+        window.prompt('내 코드 (다른 기기에 붙여 넣기)', code);
+      }
+    }
+    else if (act === 'olUse') {
+      const inp = views.records.querySelector('.h-olcode input');
+      try {
+        const nick = await online.useCode(inp.value);
+        toast(`👤 ${nick} 으로 이어서 올려요`);
+        showName();
+        renderOnline();
+      } catch (err) {
+        toast(`🔑 ${err.message || '코드를 확인하지 못했어요'}`);
+      }
+    }
     else if (act === 'clearRec') {
       if (await confirmDialog('기록을 지울까요?', '모든 맵의 최고 기록·구간 기록·고스트가 사라지고 되돌릴 수 없어요.', '지우기')) {
         records.clear();
@@ -773,7 +850,7 @@ export async function runHome() {
   refreshModes();
   const startView = params.get('menu');
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
-  else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : 'main');
+  else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
   const ld = document.getElementById('loading');
   if (ld) {

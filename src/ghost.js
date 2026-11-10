@@ -114,8 +114,14 @@ export function createGhost(o) {
   const lenKey = Math.round(L);
   let kind = 'off';
 
-  // --- 모델 (반투명) ---
-  const model = createCarModel(o.look || '#9fd8ff');
+  // --- 모델 (반투명) --- 친구 고스트는 그 친구 차 모양 + 주황빛 (makeModel로 다시 만듦)
+  let model = null, ghostMats = [];
+  function makeModel(look, glow = '#3d9bff') {
+    if (model) {
+      scene.remove(model.root);
+      if (model.dispose) model.dispose();
+    }
+    model = createCarModel(look || '#9fd8ff');
   const matMap = new Map();
   model.root.traverse((obj) => {
     if (!obj.isMesh) return;
@@ -130,7 +136,7 @@ export function createGhost(o) {
         c.opacity = c.userData.baseOpacity;
         // 파르스름하게 빛나는 유령 느낌 (어두운 맵에서도 보이게)
         if (c.emissive) {
-          c.emissive.set('#3d9bff');
+          c.emissive.set(glow);
           c.emissiveIntensity = 0.55;
         } else if (c.color) c.color.lerp(new THREE.Color('#9fd0ff'), 0.5);
         matMap.set(m, c);
@@ -140,11 +146,14 @@ export function createGhost(o) {
     obj.material = Array.isArray(obj.material) ? obj.material.map(conv) : conv(obj.material);
     obj.renderOrder = 3;
   });
-  const ghostMats = [...matMap.values()];
+  ghostMats = [...matMap.values()];
   model.root.visible = false;
   scene.add(model.root);
-  const view = fakeCar();
+  fade = 1;
+  }
   let fade = 1;
+  makeModel(o.look);
+  const view = fakeCar();
 
   // --- 저장된 최고 랩 고스트 ---
   // best = 달리는 바퀴(2바퀴째부터) 최고, bestStart = 첫 바퀴(출발 신호부터) 최고. 둘 다 { lap, tr, marks, react }
@@ -172,21 +181,25 @@ export function createGhost(o) {
   let bestStart = loadSlot(KEY_START(o.mapName, o.carId));
   // 1바퀴짜리 맵(그랑프리)은 예전에 저장한 최고 랩도 첫 바퀴(출발 신호부터)였음
   if (o.laps === 1 && !bestStart && best) bestStart = best;
-  /** 레이스 전체 고스트 { total, segs: [{ tr, off }], marks, react, relative: 'race' } */
+  /** 레이스 전체 고스트 JSON(v 2) → { total, segs: [{ tr, off }], marks, react, relative: 'race' } (맵 길이·바퀴 수가 다르면 null) */
+  function parseRun(raw) {
+    if (!raw) return null;
+    const j = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS) return null;
+    const tr = decode(fromB64(j.data));
+    const marks = Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000)));
+    return { total: j.total, segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
+  }
   function loadRun() {
     try {
-      const raw = localStorage.getItem(KEY_RUN(o.mapName, o.carId));
-      if (!raw) return null;
-      const j = JSON.parse(raw);
-      if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS) return null;
-      const tr = decode(fromB64(j.data));
-      const marks = Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000)));
-      return { total: j.total, segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
+      return parseRun(localStorage.getItem(KEY_RUN(o.mapName, o.carId)));
     } catch (err) {
       console.warn('고스트 불러오기 실패', err);
       return null;
     }
   }
+  let friend = null; // 온라인 순위표에서 고른 다른 사람 고스트 (kind 'friend')
+  let lastRunJson = null; // 방금 끝난 레이스의 고스트 JSON (온라인 순위표에 올릴 것)
   /** 예전 바퀴별 고스트를 이어 붙임: 첫 바퀴(출발) + 달리는 바퀴 × (바퀴 수 − 1) */
   function stitched() {
     if (!bestStart || (LAPS > 1 && !best)) return null;
@@ -276,6 +289,7 @@ export function createGhost(o) {
 
   function active() {
     if (kind === 'best') return run; // 레이스 전체 (바퀴가 바뀌어도 이어서)
+    if (kind === 'friend') return friend;
     if (kind === 'bot') return (bot ||= buildBot());
     return null;
   }
@@ -317,14 +331,37 @@ export function createGhost(o) {
     },
     M,
     setKind(k) {
-      kind = k === 'best' || k === 'bot' ? k : 'off';
+      if (friend && k !== 'off') k = 'friend'; // 친구 고스트를 골라 들어왔으면 설정보다 먼저
+      kind = k === 'best' || k === 'bot' || k === 'friend' ? k : 'off';
       if (kind === 'off') model.root.visible = false;
     },
     /** 저장된 최고 랩 고스트가 있는지 */
     hasBest: () => !!run,
     /** 고스트의 반응 속도 (초, 불이 꺼진 뒤 움직이기 시작할 때까지). 없으면 null */
     get startReaction() {
-      return kind === 'best' && run ? run.react : null;
+      const g = kind === 'best' ? run : kind === 'friend' ? friend : null;
+      return g ? g.react : null;
+    },
+    /** 친구(온라인) 고스트 쓰기: json = 서버의 고스트, look = 그 차 모양, name = 이름. 맞지 않는 맵이면 false */
+    useFriend(json, look, name) {
+      try {
+        friend = parseRun(json);
+      } catch (err) {
+        console.warn('친구 고스트 불러오기 실패', err);
+        friend = null;
+      }
+      if (!friend) return false;
+      friend.name = name || '친구';
+      makeModel(look, '#ff9a3d');
+      kind = 'friend';
+      return true;
+    },
+    get friendName() {
+      return friend ? friend.name : null;
+    },
+    /** 방금 완주한 레이스의 고스트 JSON (온라인에 올릴 것, 기록이 모자라면 null) */
+    get lastRunJson() {
+      return lastRunJson;
     },
     /** 레이스 시작: 기록을 새로 (출발 신호부터 결승까지 한 번에 기록) */
     lapStart() {
@@ -356,16 +393,18 @@ export function createGhost(o) {
     },
     /** 완주: 레이스 전체가 내 최고 고스트보다 빠르면 저장. 저장했으면 true */
     raceDone(total, canSave) {
+      lastRunJson = null;
       // 레이스를 거의 다 지나며 기록한 경우만 (순간이동·테스트로 끝난 레이스는 저장 안 함)
       if (!canSave || rec.n < 20 || recNext < RM * 0.9) return false;
-      // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
-      if (run && !run.stitched && run.total <= total) return false;
       for (let k = 0; k <= RM; k++) if (!isFinite(recMarks[k])) recMarks[k] = k === RM ? total : recMarks[Math.max(0, k - 1)];
       const enc = encode(rec);
       const tr = decode(enc); // 저장되는 것과 똑같이 (압축 정밀도)
       const react = reactionOf(tr);
-      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race' };
       const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
+      lastRunJson = json;
+      // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
+      if (run && !run.stitched && run.total <= total) return false;
+      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race' };
       saveStored(KEY_RUN(o.mapName, o.carId), json);
       // 예전 바퀴별 고스트는 이제 필요 없음 (저장 공간 아끼기)
       for (const k of [KEY(o.mapName, o.carId), KEY_START(o.mapName, o.carId)]) {
@@ -410,7 +449,9 @@ export function createGhost(o) {
     },
     /** 테스트용 */
     view,
-    model,
+    get model() {
+      return model;
+    },
     _debug: () => ({ rec: rec.n, recNext, RM, run: run && { total: run.total, segs: run.segs.length, n: run.segs.reduce((a, x) => a + x.tr.n, 0), react: run.react, stitched: !!run.stitched }, bot: bot && { n: bot.tr.n, total: bot.total } }),
   };
 }

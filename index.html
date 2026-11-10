@@ -97,6 +97,8 @@
     /* 결과 화면: 레이스 순위표·구간 기록표 (기본 결과 화면 스타일은 menu.css) */
     #results .res.wide { width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 24px); overflow-y: auto; }
     #results table.stand { margin-top: 12px; font-size: 14px; }
+    #results .online { margin-top: 8px; font-size: 13px; color: #9fd8ff; }
+    #results .online:empty { display: none; }
     #results table.stand tr.hd td, #results table.secs tr.hd td { font-size: 11px; opacity: 0.6; font-weight: 800; }
     #results table.stand td.nm { text-align: left; white-space: nowrap; }
     #results table.stand td.nm i { display: inline-block; width: 6px; height: 14px; border-radius: 2px; margin-right: 7px; vertical-align: -2px; }

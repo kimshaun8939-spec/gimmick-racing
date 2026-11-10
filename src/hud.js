@@ -458,6 +458,14 @@ export function createHud(track) {
       unit = u === 'mph' ? 'mph' : 'kmh';
       if (el.speedUnit) el.speedUnit.textContent = unitName();
     },
+    /** 결과 화면의 온라인 순위표 한 줄 (html, 빈 문자열이면 숨김) */
+    setOnline(html) {
+      const o = el.results.querySelector('[data-online]');
+      if (o) {
+        o.innerHTML = html || '';
+        o.style.display = html ? '' : 'none';
+      }
+    },
     /**
      * 완주 결과 화면
      * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next | home | car)
@@ -504,6 +512,7 @@ export function createHud(track) {
         ${podRows ? podiumHtml(podRows, ch && ch.final ? 'season' : '') : ''}
         <div class="total">${fmtTime(total)}</div>
         <div>${badges.join('')}</div>
+        <div class="online" data-online></div>
         ${ch && ch.final ? champBlock : ''}
         ${standHtml}
         ${ch && !ch.final ? champBlock : ''}

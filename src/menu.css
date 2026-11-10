@@ -914,3 +914,18 @@ body.touch-on #toast { font-size: 22px; top: 18%; white-space: nowrap; }
   .h-modetip { display: none; }
   .h-modes h2, .h-maps h2 { font-size: 26px; }
 }
+
+/* 온라인 순위표 (내 기록 화면 위쪽) */
+.h-subt { margin: 6px 0 10px; font-size: 16px; }
+.h-subt small { margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--gm-dim); }
+.h-online { margin-bottom: 22px; }
+.h-oltabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.h-oltabs .gm-btn.on { outline: 2px solid var(--gm-accent, #ffcf3f); }
+.h-oltabs .h-olcar { margin-left: auto; }
+.h-olboard { max-height: 46vh; overflow-y: auto; }
+.h-olboard .none { padding: 14px 4px; }
+.h-olt td.rk { width: 44px; font-weight: 800; }
+.h-olt tr.me { background: rgba(255, 207, 63, 0.14); }
+.h-olme { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--gm-dim); }
+.h-olcode { display: inline-flex; gap: 6px; margin-left: auto; }
+.h-olcode input { width: 230px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--gm-line2); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; }
