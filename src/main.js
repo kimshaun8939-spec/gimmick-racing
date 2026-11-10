@@ -152,10 +152,14 @@ resize();
 // 맵 전용 모듈: 맵 json에 "module": "neonMap" 처럼 적으면 src/neonMap.js의 buildTrack/buildScenery/buildProps를 씀 (없는 함수는 기본 것)
 const mapMod = trackData.module ? await import(`./${trackData.module}.js`) : null;
 const sceneBeforeMap = new Set(scene.children); // 트랙·풍경이 새로 넣은 것만 묶어 그리기 대상 (staticBatch.js)
+performance.mark('load:start');
 const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : buildTrack(trackData, scene);
+performance.mark('load:track');
 const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : buildScenery(track, scene);
 const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
+performance.mark('load:scenery');
 const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : buildProps(track, scene);
+performance.mark('load:props');
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
@@ -204,11 +208,13 @@ const keyLabel = (id, def) => {
     return def;
   }
 };
+performance.mark('load:mid');
 const hud = createHud(track);
 // --- 챔피언십 (?champ=1): 시즌 내내 같은 봇 (championship.js) ---
 const CHAMP = MODE === 'race' && !ITEM && !ONLINE && !FREE && params.get('champ') ? champRace(mapName) : null;
 // --- 상대 차·레이스 진행·고스트·구간 기록 ---
 const opponents = createOpponents(scene); // 봇 + 온라인 상대 (game.opponents)
+performance.mark('load:hud');
 const raceSys = await createRaceSystem({
   track, car, scenery, opponents, laps: trackData.laps, carId, carName, color: lookColor(carCfg.look),
   botCount: FREE ? 0 : ONLINE ? parseInt(params.get('bots'), 10) || 0 : CHAMP ? CHAMP.state.bots : MODE === 'race' ? settings.values.bots ?? 5 : 0,
@@ -226,6 +232,7 @@ if (ITEM && !FREE) {
     console.warn('아이템전 만들기 실패', err);
   }
 }
+performance.mark('load:race');
 const carList = rosterMod ? await rosterMod.listCars().catch(() => []) : []; // 다른 차 고스트·기록 이름용
 const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
 const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList });
