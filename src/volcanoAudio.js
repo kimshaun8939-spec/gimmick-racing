@@ -46,9 +46,10 @@ export function createVolcanoAudio() {
     bubbleBuf = ctx.createBuffer(1, sr * 3, sr);
     {
       const d = bubbleBuf.getChannelData(0);
-      for (let n = 0; n < 70; n++) {
+      // 사용자 요청 2026-11-10 "물방울 소리가 너무 요란": 뽁 소리 수 70→30, 크기 약 1/4, 음높이도 낮게
+      for (let n = 0; n < 30; n++) {
         const at = Math.floor(Math.random() * (d.length - sr * 0.2));
-        const f0 = 90 + Math.random() * 260, dur = 0.04 + Math.random() * 0.12, len = Math.floor(sr * dur), amp = 0.25 + Math.random() * 0.6;
+        const f0 = 70 + Math.random() * 150, dur = 0.05 + Math.random() * 0.12, len = Math.floor(sr * dur), amp = 0.06 + Math.random() * 0.15;
         let ph = 0;
         for (let i = 0; i < len; i++) {
           const k = i / len;
