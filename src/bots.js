@@ -46,46 +46,20 @@ export const BOT_LEVELS = {
   hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.02, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50 } },
 };
 
-// 고수(master, 2026-11-10 사용자 요청 "어려움보다 잘하는, 내 랩타임보다 더 잘하는 AI"): 운전은 어려움과 똑같고,
-//   '페이스 지킴이'(raceSystem.js masterKeeper)가 내 최고 완주 기록보다 spread(2~4%, 봇마다 다르게) 빠른 시간표를 따라가게 도와줌
-//   (무리 속에서는 서로 막혀서 1~2% 잃음 → 실제 결과는 대략 내 기록보다 1~3% 빠름)
-//   시간표보다 늦으면 늦은 만큼(gain초 늦으면 최대) + 계속 늦으면 0.5초마다 integ×늦은 초씩 쌓아서 도움 h(0~1):
-//     코너 속도 +paceMax·h, 타이어 접지(옆·앞뒤·브레이크)와 핸들 회전 +gripMax·h, 엔진 힘 +powerMax·h, 보이지 않는 슬립스트림 draftMax·h (공기 저항 −30%·최고 속도 +4%까지)
-//     → 코너 속도(+7%)는 접지(+24% = 코너 한계 +11%)보다 덜 올려서 어려움과 같은 여유를 남김. 최고 속도는 차 최고의 +4%까지만
+// 마스터(master, 2026-11-10 사용자 요청: 처음엔 "내 기록보다 빠르게" → 고침 "내 기록과 상관없이 그냥 어렵게, 이름은 마스터"):
+//   운전은 어려움과 똑같고, 봇마다 고정된 도움 h(help 범위 안, 봇마다 다르게)를 늘 받음 = 내 기록을 안 봄
+//   도움 h(0~1): 코너 속도 +paceMax·h, 타이어 접지(옆·앞뒤·브레이크)와 핸들 회전 +gripMax·h, 엔진 힘 +powerMax·h,
+//     보이지 않는 슬립스트림 draftMax·h (공기 저항 −30%·최고 속도 +4%까지)
 //     + saturBrake: 핸들을 끝까지 꺾어도 모자라면 바로 속도를 줄임 (화산 T7·H1 출구에서 벽에 박혔던 것)
-//   시간표보다 ease초 넘게 앞서면 도움 없이 easeMul배로 살짝 늦춤 (어려움 봇의 downMul과 같음)
 //   점프 근처(봇 st.calm)에서는 코너 속도·힘 도움 없음 (접지 도움만). 저중력 구역은 calmGrav: false라 도움 그대로
-//   기록이 없으면(또는 온라인인데 방장이 &botTarget=을 안 줬으면) 늘 noTargetHelp만큼 도움 = 어려움보다 확실히 빠름
-//   사람이 humanSec초 넘게 앞서면 그만큼도 '늦음'으로 봄 (내 기록보다 빨리 달리는 날에도 따라옴)
+//   사람이 humanSec초 넘게 앞서면 늦은 만큼(gain초면 최대 1) 도움을 더 올림 (어려움 봇의 catchUp 같은 것)
+//   출발 덩어리(처음 3초)는 startHelp까지만
 BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
-  master: { spread: [0.02, 0.04], gain: 1.5, integ: 0.04, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, ease: 2, easeMul: 0.97, noTargetHelp: 0.45, humanSec: 1.5, classK: 0.05, calmGrav: false, saturBrake: 8 },
+  master: { help: [0.85, 1], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 8 },
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
-
-/**
- * 고수 봇 목표 기록 (내 최고 완주 기록). records = records.all() = { 맵: { 차: { race, laps } } }
- *   같은 등급 차로 낸 기록 중 가장 빠른 것. 같은 등급 기록이 없으면 맵 최고 기록에 등급 차이만큼(등급마다 약 classK = 5%) 더하거나 뺌
- * @returns { sec, car, laps, adjusted } 또는 null
- */
-export function masterTarget(records, map, carId, cars = [], laps = null) {
-  const r = (records && records[map]) || {};
-  const classOf = (id) => ((cars || []).find((c) => c.id === id) || {}).class || null;
-  const RANK = { A: 0, B: 1, C: 2 };
-  const myC = classOf(carId);
-  let same = null, any = null;
-  for (const [car, v] of Object.entries(r)) {
-    if (!v || !(v.race > 0) || (laps && v.laps && v.laps !== laps)) continue;
-    if (!any || v.race < any.race) any = { race: v.race, car };
-    if ((!myC || classOf(car) === myC) && (!same || v.race < same.race)) same = { race: v.race, car };
-  }
-  if (same) return { sec: same.race, car: same.car, laps, adjusted: false };
-  if (!any) return null;
-  const k = BOT_LEVELS.master.master.classK;
-  const d = (RANK[myC] ?? 0) - (RANK[classOf(any.car)] ?? 0); // + = 내 등급이 더 느림
-  return { sec: any.race * (1 + k * d), car: any.car, laps, adjusted: d !== 0 };
-}
 
 /** 같은 씨앗이면 같은 난수 (봇마다 다른 성격) */
 export function rng(seed) {
@@ -624,7 +598,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)));
       const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v)); // 핸들 1일 때 회전 속도 (car.js와 같은 식)
       steerCmd = yawDes / Math.max(0.05, perSteer);
-      // 핸들을 끝까지 꺾어도 모자란 정도 (고수 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
+      // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
     } else {
       // 공중·비행·배: 예전 방식 (앞 점 향하기 + 곡률)
@@ -641,7 +615,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     const leadT = st.mistake === 'late' ? level.lead * 0.35 : level.lead;
     const lead = W(i0 + Math.round((v * leadT) / ds));
     st.calm = !!((jumpCalm && jumpCalm[i0]) || gHere < 0.95); // 점프 근처·저중력: 따라잡기로 빨라지지 않음 (raceSystem의 보이지 않는 슬립스트림도 끔)
-    // 고수(level.master.calmGrav = false): 저중력 구역에서는 도움을 그대로 (점프 근처만 조심). 접지 도움도 같이 커져서 코너는 버팀
+    // 마스터(level.master.calmGrav = false): 저중력 구역에서는 도움을 그대로 (점프 근처만 조심). 접지 도움도 같이 커져서 코너는 버팀
     if (level.master && level.master.calmGrav === false) st.calm = !!(jumpCalm && jumpCalm[i0]);
     const pm = st.calm ? Math.min(1, st.paceMul) : st.paceMul;
     // 출발 뒤 25초(첫 코너들, 한 덩어리): 바로 앞에 차가 있으면 코너 속도를 조금 낮춤 (빨라진 어려움 봇이 달 T1 출구에서 뒤엉켜 여러 대 복귀했음)
@@ -663,7 +637,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
       if (allow < tgt) tgt = allow;
     }
-    // 고수(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
+    // 마스터(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
     if (level.master && level.master.saturBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - level.master.saturBrake * st.satur);
     st.satur = 0;

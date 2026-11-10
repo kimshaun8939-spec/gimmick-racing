@@ -67,7 +67,7 @@ export function startChamp(o = {}) {
     seed: (Math.random() * 1e9) | 0, // 모든 경기에 같은 봇 (이름·차·성격)
     classId: o.classId || null,
     carId,
-    level: ['easy', 'normal', 'hard', 'master'].includes(o.level) ? o.level : set.botLevel || 'normal', // master = 경기마다 그 맵 내 최고 기록 기준
+    level: ['easy', 'normal', 'hard', 'master'].includes(o.level) ? o.level : set.botLevel || 'normal', // master = 마스터 (어려움보다 빠름)
     bots,
     maps,
     results: [], // 경기마다 { map, rows: [{ id, name, color, carName, pos, points, total, isPlayer }] }

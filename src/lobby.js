@@ -5,7 +5,6 @@
 //   방장이 "출발"을 누르면 모두 ?map=..&car=..&room=CODE&host=1|0&name=..&mode=race 로 이동 → netRace.js가 이어받음
 // 연결 방식 설명은 net.js 위쪽 주석 참고
 import { createHub, joinHub, probePeer, racePeerId, lobbyPeerId, makeCode, normCode, validCode, myPid, getNick, setNick, randomNick, cleanNick, saveRoomInfo, inviteUrl, loadPeerLib, NET_VERSION } from './net.js';
-import { records } from './records.js'; // 고수 봇 목표 = 방장 최고 기록
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 칸의 진짜 차 사진 (홈 화면과 같은 사진, 저장돼 있으면 바로)
 import { loadMaps, loadRoster, sampleOutline, drawTrackThumb, getLast, setLast } from './gameData.js';
 
@@ -382,12 +381,6 @@ export async function openLobby(opts = {}) {
           botLevel = (JSON.parse(localStorage.getItem('gimmick.settings') || '{}') || {}).botLevel || 'normal';
         } catch {}
         const msg = { t: 'go', map: mapId, bots, botLevel, players: list, code };
-        // 고수 봇: 방장의 이 맵 최고 완주 기록을 목표로 (모든 사람에게 같은 봇이 되게 주소로 넘김)
-        if (botLevel === 'master') {
-          const b = records.bestRaceOfMap(mapId);
-          const sec = b && (b.time ?? b.total ?? b.race ?? (typeof b === 'number' ? b : null));
-          if (sec > 20) msg.botTarget = +sec.toFixed(3);
-        }
         hub.broadcast(msg);
         launch(msg, true);
         setTimeout(() => hub.close(), 2600); // 참가자가 'go'를 받을 시간을 주고 정리
@@ -620,7 +613,6 @@ export async function openLobby(opts = {}) {
     q.set('mode', 'race');
     q.set('bots', String(msg.bots || 0));
     if (msg.bots && msg.botLevel) q.set('botLevel', msg.botLevel);
-    if (msg.bots && msg.botTarget) q.set('botTarget', String(msg.botTarget));
     if (me && me.slot != null) q.set('slot', String(me.slot));
     if (new URLSearchParams(location.search).get('net') === 'local') q.set('net', 'local');
     setLast({ map: msg.map, car: (me && me.car) || carId });

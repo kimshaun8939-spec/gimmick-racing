@@ -302,7 +302,7 @@ function resetRace() {
 
 // --- 출발 그리드 소개: 불이 켜지기 전에 카메라가 그리드 앞에서부터 차들을 한 대씩 훑고 내 차 뒤로 돌아옴 ---
 //   봇 레이스에서 페이지를 처음 열었을 때만 (다시 시작 Enter에는 없음). 아무 키나 누르면 건너뜀. ?intro=0이면 끔
-const LEVEL_NAME = { easy: '쉬움', normal: '중간', hard: '어려움', master: '고수' };
+const LEVEL_NAME = { easy: '쉬움', normal: '중간', hard: '어려움', master: '마스터' };
 const intro = { on: false, played: false, t: 0, dur: 0, keys: [], cards: [] };
 const _ka = new THREE.Vector3(), _kb = new THREE.Vector3(), _kla = new THREE.Vector3(), _klb = new THREE.Vector3();
 function startIntro() {
