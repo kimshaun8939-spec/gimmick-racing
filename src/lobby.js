@@ -5,6 +5,7 @@
 //   방장이 "출발"을 누르면 모두 ?map=..&car=..&room=CODE&host=1|0&name=..&mode=race 로 이동 → netRace.js가 이어받음
 // 연결 방식 설명은 net.js 위쪽 주석 참고
 import { createHub, joinHub, probePeer, racePeerId, lobbyPeerId, makeCode, normCode, validCode, myPid, getNick, setNick, randomNick, cleanNick, saveRoomInfo, inviteUrl, loadPeerLib, NET_VERSION } from './net.js';
+import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 칸의 진짜 차 사진 (홈 화면과 같은 사진, 저장돼 있으면 바로)
 import { loadMaps, loadRoster, sampleOutline, drawTrackThumb, getLast, setLast } from './gameData.js';
 
 const MAX_PLAYERS = 8;
@@ -32,6 +33,14 @@ export async function openLobby(opts = {}) {
   } catch {}
   if (!cars.length) cars = [{ id: 'f1', name: '레드 포뮬러', tag: 'FORMULA', look: '#e8463a' }];
   const carOf = (id) => cars.find((c) => c.id === id) || cars[0];
+  let classes = [];
+  try {
+    classes = roster.listClasses ? await roster.listClasses() : [];
+  } catch {}
+  const classOf = (id) => classes.find((k) => k.id === id) || null;
+  // 보여 줄 순서: A 레전드 → B 스포츠 → C 루키 (등급 없으면 원래 순서)
+  const rank = (c) => { const i = classes.findIndex((k) => k.id === c.class); return i < 0 ? -1 : classes.length - i; };
+  const carsShown = cars.slice().sort((a, b) => rank(b) - rank(a));
   const mapOf = (id) => maps.find((m) => m.id === id) || maps[0];
   const last = getLast();
   let carId = carOf(opts.car || last.car).id;
@@ -109,16 +118,38 @@ export async function openLobby(opts = {}) {
   codeIn.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), startJoin(codeIn.value)));
   if (opts.join) codeIn.value = normCode(opts.join);
 
+  // 차 사진 (2026-11-10 사용자 요청 "내 차도 좀 더 괜찮게"): 색 동그라미 대신 홈 화면과 같은 진짜 차 사진 카드
+  const picHtml = (id) => {
+    const url = thumbUrl(id);
+    return url ? `<img src="${url}" alt="" draggable="false" data-pic="${esc(id)}">` : `<span class="ph" data-pic="${esc(id)}"></span>`;
+  };
   function renderCarChips(box) {
-    box.innerHTML = cars
+    box.innerHTML = carsShown
       .map((c) => {
-        const [a, b] = lookColors(c.look);
-        const st = (c.look && c.look.style) || 'f1';
-        return `<button class="lb-chip${c.id === carId ? ' on' : ''}" data-car="${esc(c.id)}" title="${esc(c.desc || '')}"><i style="background:linear-gradient(135deg,${esc(a)} 55%,${esc(b)} 56%)"></i><span>${STYLE_ICON[st] || '🏎️'} ${esc(c.name)}</span></button>`;
+        const k = classOf(c.class);
+        const tag = String(c.tag || '').split('·').pop().trim();
+        return `<button class="lb-car${c.id === carId ? ' on' : ''}" data-car="${esc(c.id)}" title="${esc(c.desc || c.tag || '')}" style="--cc:${esc((k && k.color) || '#ffcf3f')}"><span class="pic">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span></span><b>${esc(c.name)}</b><small>${esc(tag)}</small></button>`;
       })
       .join('');
   }
   renderCarChips($('#lbCars'));
+  // 사진이 준비되면 자리(반짝이는 칸)를 사진으로 바꿈
+  const thumbJob = loadCarThumbs(cars, {
+    first: carId,
+    onThumb: (id, url) => {
+      el.querySelectorAll(`[data-pic="${CSS.escape(id)}"]`).forEach((n) => {
+        if (n.tagName === 'IMG') return void (n.src = url);
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.draggable = false;
+        img.dataset.pic = id;
+        img.className = 'in';
+        n.replaceWith(img);
+      });
+    },
+  });
+  thumbJob.done.catch((e) => console.warn('차 사진', e));
   el.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-car]');
     if (chip) {
@@ -499,7 +530,7 @@ export async function openLobby(opts = {}) {
           const ping = p.host ? '' : p.ping ? `${p.ping} ms` : '…';
           const pingCls = p.host ? '' : p.ping > 180 ? 'bad' : p.ping > 90 ? 'mid' : 'good';
           return `<div class="lb-pl${me ? ' me' : ''}" style="animation-delay:${i * 0.04}s">
-            <i class="sw" style="background:linear-gradient(135deg,${esc(a)} 55%,${esc(b)} 56%)"></i>
+            <span class="sw" style="--a:${esc(a)};--b:${esc(b)}">${picHtml(p.car)}</span>
             <div class="who"><b>${p.host ? '👑 ' : ''}${esc(p.name)}${me ? ' <em>(나)</em>' : ''}</b><small>${esc(p.carName || p.car)}</small></div>
             <span class="ping ${pingCls}">${ping}</span>
             <span class="rd ${p.ready ? 'on' : ''}">${p.host ? '방장' : p.ready ? '준비 완료' : '준비 중'}</span>
@@ -615,6 +646,7 @@ export async function openLobby(opts = {}) {
     close();
   }
   function close() {
+    thumbJob.cancel();
     if (session) session.leave();
     session = null;
     if (abort) abort.abort();
@@ -768,9 +800,30 @@ function injectCss() {
 #lobby .share-row { display: flex; gap: 10px; align-items: center; color: var(--gm-dim, #95a2bb); font-size: 12px; }
 #lobby .lb-players { grid-area: players; display: flex; flex-direction: column; }
 #lobby .lb-players .list { display: grid; gap: 8px; align-content: start; }
-#lobby .lb-pl { display: grid; grid-template-columns: 34px 1fr auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--gm-line, rgba(255,255,255,.09)); animation: lbUp .25s ease-out both; }
+#lobby .lb-pl { display: grid; grid-template-columns: 76px 1fr auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid var(--gm-line, rgba(255,255,255,.09)); animation: lbUp .25s ease-out both; }
 #lobby .lb-pl.me { border-color: rgba(255, 207, 63, .45); background: rgba(255, 207, 63, .07); }
-#lobby .lb-pl .sw { width: 34px; height: 34px; border-radius: 10px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.22); transform: skewX(-8deg); }
+#lobby .lb-pl .sw { width: 76px; height: 48px; border-radius: 12px; position: relative; overflow: hidden; flex: none; background: radial-gradient(ellipse 70% 60% at 50% 70%, color-mix(in srgb, var(--a) 45%, transparent), transparent 75%), linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.01)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+#lobby .lb-pl .sw img, #lobby .lb-pl .sw .ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+#lobby .lb-pl .sw .ph { background: linear-gradient(135deg, var(--a) 55%, var(--b) 56%); border-radius: 50%; inset: 12px 26px; width: auto; height: auto; opacity: .7; }
+/* 내 차 고르기: 사진 카드 */
+#lobby .lb-cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
+#lobby .lb-car { appearance: none; position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 1px; padding: 0 0 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,.12); background: linear-gradient(170deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; transition: transform .15s, border-color .15s, box-shadow .15s, background .15s; }
+#lobby .lb-car .pic { position: relative; display: block; height: 74px; background: radial-gradient(ellipse 65% 55% at 50% 68%, color-mix(in srgb, var(--cc) 34%, transparent), transparent 72%); }
+#lobby .lb-car .pic img { position: absolute; inset: 2px 4px 0; width: calc(100% - 8px); height: calc(100% - 2px); object-fit: contain; transition: transform .2s; filter: drop-shadow(0 6px 8px rgba(0,0,0,.35)); }
+#lobby .lb-car .pic img.in { animation: lbPicIn .35s ease-out; }
+@keyframes lbPicIn { from { opacity: 0; transform: translateY(4px) scale(.96); } }
+#lobby .lb-car .pic .ph, #lobby .lb-pl .sw .ph.sh { position: absolute; inset: 18px 22px; border-radius: 10px; background: linear-gradient(100deg, rgba(255,255,255,.04) 30%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.04) 70%); background-size: 300% 100%; animation: lbShim 1.2s linear infinite; }
+@keyframes lbShim { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+#lobby .lb-car .cl { position: absolute; left: 7px; top: 7px; width: 19px; height: 19px; border-radius: 6px; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 900; color: #10131c; background: var(--cc); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+#lobby .lb-car .chk { position: absolute; right: 7px; top: 7px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; color: #10131c; background: var(--gm-accent, #ffcf3f); opacity: 0; transform: scale(.5); transition: .15s; }
+#lobby .lb-car b { padding: 0 10px; font-size: 13.5px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lobby .lb-car small { padding: 0 10px; font-size: 11px; font-weight: 700; color: color-mix(in srgb, var(--cc) 70%, #cfd6e6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lobby .lb-car:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--cc) 60%, transparent); }
+#lobby .lb-car:hover .pic img { transform: scale(1.06); }
+#lobby .lb-car.on { border-color: var(--gm-accent, #ffcf3f); background: linear-gradient(170deg, rgba(255,207,63,.16), rgba(255,207,63,.03)); box-shadow: 0 0 0 2px rgba(255,207,63,.35), 0 8px 22px rgba(0,0,0,.3); }
+#lobby .lb-car.on .chk { opacity: 1; transform: none; }
+#lobby .lb-car:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@media (max-width: 520px) { #lobby .lb-cars { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; } #lobby .lb-car .pic { height: 60px; } }
 #lobby .lb-pl .who b { display: block; font-size: 15px; }
 #lobby .lb-pl .who em { font-style: normal; color: var(--gm-accent, #ffcf3f); font-size: 12px; }
 #lobby .lb-pl .who small { color: var(--gm-dim, #95a2bb); font-size: 12px; font-weight: 700; }

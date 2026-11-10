@@ -615,7 +615,7 @@ export function createSeaGates(track, scene) {
     }
     // --- 거친 물: 부표 줄 밖은 느려짐
     const edge = HW + (LB ? LB.out ?? 1.6 : 99);
-    const rough = LB && car.grounded && ti.sample && ti.sample.water && Math.abs(ti.lateral) > edge + 0.6;
+    const rough = LB && (LB.roughDrag ?? 0.15) > 0 && car.grounded && ti.sample && ti.sample.water && Math.abs(ti.lateral) > edge + 0.6;
     if (rough) {
       car.speed -= car.speed * (LB.roughDrag ?? 0.15) * dt;
       totals.roughT += dt;
