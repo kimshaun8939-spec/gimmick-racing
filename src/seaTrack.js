@@ -561,27 +561,45 @@ export function buildSeaTrack(data, scene) {
   const bridgeNear = makeHash((s) => !!s.bridge);
   const waterNear = makeHash((s) => s.water);
   const ROAD_BLEND = 34; // 도로 옆 지형이 도로 높이에서 자연 지형으로 바뀌는 거리 (m)
+  // 2026-11-10 턱 없애기: 도로가 자연 지형보다 많이 높으면(언덕 위 도로) 34 m 안에 15~25 m를 내려가 35~50° 비탈이 됐음
+  //   (코스 밖으로 떨어지면 다시 못 올라옴) → 도로보다 낮은 쪽 비탈을 ROAD_SLOPE(약 22°)까지로 제한.
+  //   땅이 계속 이어지는 곳만: 자연 지형이 바닷속인 곳은 예전 그대로 (물에 빠지면 배가 되니 괜찮음)
+  const ROAD_SLOPE = 0.4;
+  const ROAD_REACH = 100; // 비탈을 이어 붙이는 최대 거리 (도로 끝에서 m)
 
   /** 지형 높이 (도로·다리·물길 반영) */
   function terrainH(x, z) {
     const nat = natural(x, z);
-    let nd = Infinity, ns = null, under = Infinity;
-    landNear(x, z, HW + ROAD_BLEND + 6, (s) => {
+    let nd = Infinity, ns = null, under = Infinity, underFar = Infinity;
+    landNear(x, z, HW + CURB + ROAD_REACH + 2, (s) => {
       const dx = x - s.pos.x, dz = z - s.pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < nd) (nd = d), (ns = s);
       if (d < HW + CURB + 2.5) {
+        // 2026-11-10 턱 없애기: 앞뒤 샘플 높이를 그대로 쓰면 오르막·내리막에서 땅이 도로보다 깊게 파여 턱이 생겼음
+        //   → 그 샘플의 기울기로 이 점 바로 위 도로 높이를 계산
         const l = (x - s.pos.x) * s.right.x + (z - s.pos.z) * s.right.z;
-        under = Math.min(under, roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB)));
+        const along = (x - s.pos.x) * s.tan.x + (z - s.pos.z) * s.tan.z;
+        const grade = s.tan3.y / Math.max(0.3, Math.hypot(s.tan3.x, s.tan3.z));
+        const ry = roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB)) + along * grade;
+        // 이 점 바로 옆(앞뒤 1.2 m 안) 샘플만 씀: 멀리 떨어진 샘플의 기울기로 이으면 오목한 곳(내리막→오르막)에서 또 낮아짐
+        if (Math.abs(along) < 1.2) under = Math.min(under, ry);
+        else underFar = Math.min(underFar, ry);
       }
     });
+    if (under === Infinity) under = underFar;
     let H = nat;
-    if (ns && nd < HW + CURB + 1) H = under - 0.3;
+    // 도로 밑은 0.3 m 아래, 연석 바깥쪽 끝으로 갈수록 0.12 m까지 (2026-11-10: 경사 코너 바깥 연석 끝에 0.5 m 턱이 생겼음)
+    if (ns && nd < HW + CURB + 1) H = under - THREE.MathUtils.lerp(0.3, 0.12, smooth(HW - 1, HW + CURB, nd));
     else if (ns) {
       const l = (x - ns.pos.x) * ns.right.x + (z - ns.pos.z) * ns.right.z;
       const edgeY = roadYAt(ns, Math.sign(l) * (HW + CURB)) - 0.15;
       const k = smooth(HW + CURB + 1, HW + CURB + ROAD_BLEND, nd);
       H = edgeY * (1 - k) + nat * k;
+      // 비탈 아래 한계선: 도로 끝 2 m는 거의 평평, 8 m에 걸쳐 서서히 기울어 ROAD_SLOPE로 (격자 6 m라 도로 바로 옆이 기울면 연석 끝에 턱이 보였음)
+      const run = Math.max(0, nd - (HW + CURB + 1) - 2);
+      const low = edgeY - 0.05 - (run < 8 ? (ROAD_SLOPE * run * run) / 16 : ROAD_SLOPE * (run - 4));
+      if (H < low) H = THREE.MathUtils.lerp(H, low, smooth(-0.3, 1.2, nat) * (1 - smooth(HW + CURB + ROAD_REACH - 10, HW + CURB + ROAD_REACH, nd)));
       if (under < Infinity) H = Math.min(H, under - 0.1);
     }
     // 다리 아래: 상판보다 낮게
@@ -590,7 +608,11 @@ export function buildSeaTrack(data, scene) {
       const d = Math.hypot(dx, dz);
       if (d > DECK + 16) return;
       const l = dx * s.right.x + dz * s.right.z;
-      const cap = roadYAt(s, THREE.MathUtils.clamp(l, -DECK, DECK)) - 2.2 + Math.max(0, d - DECK - 0.5) * 0.5;
+      // 2026-11-10 턱 없애기: 이 점 바로 옆(앞뒤 1.2 m 안)의 다리 샘플만 씀 (다리 끝 너머 땅 도로 옆까지 파이지 않게)
+      const along = dx * s.tan.x + dz * s.tan.z;
+      if (Math.abs(along) > 1.2) return;
+      const grade = s.tan3.y / Math.max(0.3, Math.hypot(s.tan3.x, s.tan3.z));
+      const cap = roadYAt(s, THREE.MathUtils.clamp(l, -DECK, DECK)) + along * grade - 2.2 + Math.max(0, d - DECK - 0.5) * 0.5;
       if (cap < H) H = cap;
     });
     // 물길: 물 아래로 파냄 (배가 모래톱에 걸리지 않게)
@@ -789,6 +811,12 @@ export function buildSeaTrack(data, scene) {
           const y = groundY(p.x, p.z);
           if (y === null || y < 0.3 || y < s.pos.y - 3.2) edge = true; // 바다 또는 낭떠러지
         }
+        // 2026-11-10: 도로 옆 비탈을 완만하게 바꾼 뒤로 바다 절벽이 도로에서 16~24 m쯤 떨어진 곳 → 그래도 높은 절벽이면 레일
+        for (const l of [HW + 16, HW + 24]) {
+          surf(s, side * l, 0, p);
+          const y = groundY(p.x, p.z);
+          if ((y === null || y < 0.3) && s.pos.y > 6) edge = true;
+        }
         need[i] = edge ? 1 : 0;
       }
     }
@@ -886,7 +914,20 @@ export function buildSeaTrack(data, scene) {
     for (const [a, b] of runsOf((i) => runoffW[n][i] > 0.05)) {
       const L = spanList(a - 1, b + 1);
       const inner = (s) => HW + kerbAt(s.i, side), outer = (s) => inner(s) + runoffW[n][wrapI(s.i)];
-      strip(L, (s) => (side < 0 ? [[-outer(s), -0.12], [-inner(s), 0.0]] : [[inner(s), 0.0], [outer(s), -0.12]]), runoffMat, { vScale: 12, surface: 'ground' });
+      // 2026-11-10 턱 없애기: 바깥 끝이 도로 면 높이(−0.12)로 떠 있어 비탈길 옆에서는 땅보다 0.5 m 높은 턱이 됐음
+      //   → 안쪽 끝만 연석 높이, 나머지 점은 그 자리 땅 높이 + 5 cm를 따라감
+      const _rp = new THREE.Vector3();
+      const prof = (s) => {
+        const P = [];
+        for (let q = 0; q <= 4; q++) {
+          const lat = inner(s) + ((outer(s) - inner(s)) * q) / 4;
+          surf(s, side * lat, 0, _rp);
+          const gy = q ? groundY(_rp.x, _rp.z) : null;
+          P.push([side * lat, q === 0 ? 0.0 : gy === null ? -0.12 * (q / 4) : gy - _rp.y + 0.05]);
+        }
+        return side < 0 ? P.reverse() : P;
+      };
+      strip(L, prof, runoffMat, { vScale: 12, surface: 'ground' });
     }
   }
   if (posts.length) {
@@ -1165,5 +1206,6 @@ export function buildSeaTrack(data, scene) {
       Object.defineProperty(this, '__seaRay', { value: ray, writable: true, configurable: true });
     },
   });
+  api.debugTerrain = (x, z) => ({ nat: natural(x, z), H: terrainH(x, z) }); // 테스트용 (.debug/lip_scan2.js)
   return api;
 }

@@ -272,7 +272,7 @@ function resetRace() {
   Object.assign(race, { lightsT: 0, lightsOutAt: 3.4 + 0.7 + Math.random() * 1.6, lights: 0, reaction: null, reactArmed: false });
   Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false, assist: assistOn() });
   sectors.reset();
-  if (ghost) ghost.lapStart();
+  if (ghost) ghost.lapStart(1); // 첫 바퀴 = 출발 신호부터
   hud.hideResults();
   snapCamera();
   startIntro();
@@ -280,7 +280,7 @@ function resetRace() {
 
 // --- 출발 그리드 소개: 불이 켜지기 전에 카메라가 그리드 앞에서부터 차들을 한 대씩 훑고 내 차 뒤로 돌아옴 ---
 //   봇 레이스에서 페이지를 처음 열었을 때만 (다시 시작 Enter에는 없음). 아무 키나 누르면 건너뜀. ?intro=0이면 끔
-const LEVEL_NAME = { easy: '쉬움', normal: '보통', hard: '어려움' };
+const LEVEL_NAME = { easy: '쉬움', normal: '중간', hard: '어려움' };
 const intro = { on: false, played: false, t: 0, dur: 0, keys: [], cards: [] };
 const _ka = new THREE.Vector3(), _kb = new THREE.Vector3(), _kla = new THREE.Vector3(), _klb = new THREE.Vector3();
 function startIntro() {
@@ -370,8 +370,8 @@ function updateLaps() {
     if (isBest) race.best = lapTime;
     // 구간 기록 (S3 닫기) · 고스트 (최고 랩이면 저장) · 레이스 순위표의 내 최고 랩
     const splits = sectors.lapDone(lapTime, race.time, canSaveRecords());
-    if (ghost && ghost.lapDone(lapTime, canSaveRecords()) && settings.values.ghost === 'best' && MODE !== 'race') race.ghostSaved = true;
-    if (ghost) ghost.lapStart();
+    if (ghost && ghost.lapDone(lapTime, canSaveRecords(), race.lap) && settings.values.ghost === 'best' && MODE !== 'race') race.ghostSaved = true;
+    if (ghost) ghost.lapStart(race.lap + 1); // 다음 바퀴 (달리면서 출발선 통과)
     raceSys.playerLap(lapTime);
     if (settings.values.sectors ?? true) hud.lapSummary(race.lapTimes.length, lapTime, splits);
     // 내 기록 (맵 + 차마다, 브라우저에 저장). 자동 운전 테스트(game.paused) 중에는 저장 안 함
@@ -887,7 +887,10 @@ function frame(now, manual = false) {
     race.reactArmed = false;
     race.reaction = race.time;
     car.reactionLaunch(race.time);
-    if (race.time > (car.cfg.engine.perfectReaction ?? 0.3)) hud.toast(`반응 ${race.time.toFixed(2)}초`);
+    // 첫 바퀴 고스트가 있으면 그 반응 속도도 같이 (고스트도 불이 꺼진 순간부터 자기 반응만큼 기다렸다 출발)
+    const gr = ghost && ghost.kind === 'best' ? ghost.startReaction : null;
+    const grTxt = gr != null ? ` · 고스트 ${gr.toFixed(2)}초` : '';
+    if (race.time > (car.cfg.engine.perfectReaction ?? 0.3) || grTxt) hud.toast(`반응 ${race.time.toFixed(2)}초${grTxt}`);
   }
   hud.startLights(race.phase === 'countdown' && !intro.on ? race.lights : -1);
 

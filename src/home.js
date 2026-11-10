@@ -473,7 +473,10 @@ export async function runHome() {
     });
     refreshChamp();
     const m = RACE_MODES.find((x) => x.id === raceMode);
-    views.mode.querySelector('.h-modetip').textContent = MODE_TIPS[raceMode] || '';
+    // 봇 실력 설명 (사용자 요청: 쉬움 = 처음 해도 이김, 중간 = 처음엔 어려움, 어려움 = 잘하는 사람과 비슷)
+    const LEVEL_TIP = { easy: '봇 쉬움: 처음 해도 이길 수 있어요', normal: '봇 중간: 처음 하는 사람은 이기기 어려워요', hard: '봇 어려움: 잘하는 사람과 비슷한 실력이에요' };
+    const lvTip = raceMode === 'race' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] : '';
+    views.mode.querySelector('.h-modetip').textContent = [MODE_TIPS[raceMode] || '', lvTip].filter(Boolean).join(' · ');
     views.mode.querySelector('[data-act="start"]').innerHTML =
       raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>'
       : raceMode === 'champ' ? (champState() ? '▶ 시즌 이어 하기 <kbd>Enter</kbd>' : '🏆 시즌 시작 <kbd>Enter</kbd>')

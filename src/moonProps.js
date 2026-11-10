@@ -133,10 +133,40 @@ export function buildMoonProps(track, scene) {
   //   → 봇(수평면에서 겨냥하는 운전)이나 핸들을 크게 꺾은 사람이 벽에 긁히지 않음. 플레이어·봇 모든 차에 똑같이
   const GUIDE = { rate: 7, center: 0.09, maxBias: 0.35 };
   const gD = new THREE.Vector3(), gC = new THREE.Vector3();
+  // 루프 출구 가이드 (2026-11-10 3차): 루프를 나오면 옆으로 비켜 가던 길(jog)이 S자로 휨 (출구 20 m 안에 16°, 57 m까지 29°)
+  //   예전엔 가이드가 루프 끝에서 뚝 끊겨 차 머리가 곧게 나온 채로 남음 → 플레이어가 바로 핸들과 싸워야 했음
+  //   → 출구부터 jog 끝(+15 m)까지 차 머리를 '조금 앞 도로 방향'으로 부드럽게 맞춤
+  //   처음엔 루프 안보다 약하게(rate), 끝 45%에서 서서히 0으로 → 갑자기 꺾이거나 도는 일 없음. 핸들을 꺾으면 그 쪽으로 감
+  const RL = track.roll, NS = track.samples.length - 1, DS = track.length / NS;
+  const EXIT = { n: RL ? RL.jog + Math.round(15 / DS) : 0, rate: 4.5, look: 0.3, fadeFrom: 0.55 };
+  const gT = new THREE.Vector3();
+  function exitGuide(c, dt, ti) {
+    if (!RL || !EXIT.n) return;
+    const k = (((ti.index - RL.b) % NS) + NS) % NS; // 루프 끝에서 몇 샘플 지났나
+    if (k <= 0 || k > EXIT.n) return;
+    const u = k / EXIT.n;
+    const w = u < EXIT.fadeFrom ? 1 : 1 - THREE.MathUtils.smoothstep(u, EXIT.fadeFrom, 1);
+    if (w <= 0) return;
+    // 바라볼 방향: 약 0.3초 앞 레이싱 라인이 가는 방향 (라인이 없으면 도로 방향), 차 바닥 면에 눕혀서
+    //   (도로 가운데 방향으로 하면 라인을 따라 바깥으로 나가려는 차(봇·사람)와 싸웠음)
+    const j = (ti.index + Math.round(Math.max(6, c.speed * EXIT.look) / DS)) % NS;
+    const L = track.racingLine;
+    if (L && L.offset) {
+      const j2 = (j + Math.round(8 / DS)) % NS, A = track.samples[j], B = track.samples[j2];
+      const oa = L.offset[j % L.N] || 0, ob = L.offset[j2 % L.N] || 0;
+      gT.set(B.pos.x + B.right.x * ob - A.pos.x - A.right.x * oa, B.pos.y - A.pos.y, B.pos.z + B.right.z * ob - A.pos.z - A.right.z * oa);
+    } else gT.copy(track.samples[j].tan3 || track.samples[j].tan);
+    gT.addScaledVector(c.up, -gT.dot(c.up));
+    if (gT.lengthSq() < 1e-6) return;
+    gT.normalize();
+    const a = Math.atan2(gC.crossVectors(c.fwd, gT).dot(c.up), c.fwd.dot(gT));
+    c.fwd.applyAxisAngle(c.up, a * (1 - Math.exp(-EXIT.rate * w * dt)));
+  }
   function loopGuide(c, dt) {
     const ti = c.trackInfo;
     if (!ti || !c.grounded || c.flying || c.speed < 2) return;
     const s = ti.sample;
+    if (s && !s.roll) return exitGuide(c, dt, ti);
     if (!s || !s.roll) return;
     const bias = THREE.MathUtils.clamp(-ti.lateral * GUIDE.center, -GUIDE.maxBias, GUIDE.maxBias);
     gD.copy(s.tan3).addScaledVector(s.right, bias);

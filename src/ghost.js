@@ -1,6 +1,8 @@
 // 고스트 (반투명 차, 부딪히지 않음) — 설정 ghost: 'off' | 'best' | 'bot'
 //
 //   'best' = 이 맵 + 이 차로 달린 내 최고 랩을 그대로 다시 보여 줌 (바퀴가 시작될 때마다 처음부터)
+//            첫 바퀴(출발 신호부터 = 서 있다가 반응해서 출발)와 나머지 바퀴(달리면서 출발선 통과)는 따로 저장
+//            → 첫 바퀴 고스트는 불이 꺼진 순간부터 시간이 흐르고, 고스트가 그때 실제로 반응한 만큼 기다렸다 출발
 //            초당 20번 위치·방향을 적어 두고, 새 최고 랩이면 브라우저(localStorage)에 압축해서 저장
 //            (records.js와 같은 규칙: 자동 운전 테스트·game.paused 중에는 저장 안 함)
 //   'bot'  = "기본 봇" 고스트: 레이싱 라인을 속도 계획대로 달리는 차 (출발부터 끝까지 한 번에, 계산은 순식간)
@@ -12,7 +14,8 @@ import { lineCarModel } from './car.js';
 
 const HZ = 20;
 const STRIDE = 12; // 샘플 하나: 위치 x,y,z (Int32, cm) + 방향 쿼터니언 4개 + 속도 + 모드 (Int16) → Int16 12칸 = 24바이트
-const KEY = (map, car) => `gimmick.ghost.${map}.${car}`;
+const KEY = (map, car) => `gimmick.ghost.${map}.${car}`; // 달리는 바퀴 (2바퀴째부터)
+const KEY_START = (map, car) => `gimmick.ghost.${map}.${car}.start`; // 첫 바퀴 (출발 신호부터)
 const INDEX_KEY = 'gimmick.ghost.index';
 const MAX_SAVED = 12; // 저장해 두는 고스트 수 (오래된 것부터 지움)
 const MODES = ['normal', 'accel', 'boat', 'fly'];
@@ -142,18 +145,30 @@ export function createGhost(o) {
   let fade = 1;
 
   // --- 저장된 최고 랩 고스트 ---
-  let best = null; // { lap, tr, marks: Float32Array(M+1) }
-  try {
-    const raw = localStorage.getItem(KEY(o.mapName, o.carId));
-    if (raw) {
+  // best = 달리는 바퀴(2바퀴째부터) 최고, bestStart = 첫 바퀴(출발 신호부터) 최고. 둘 다 { lap, tr, marks, react }
+  function loadSlot(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
       const j = JSON.parse(raw);
-      if (j.v === 1 && j.len === lenKey) {
-        best = { lap: j.lap, tr: decode(fromB64(j.data)), marks: Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000))) };
-      }
+      if (j.v !== 1 || j.len !== lenKey) return null;
+      const tr = decode(fromB64(j.data));
+      return { lap: j.lap, tr, marks: Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000))), react: j.react ?? reactionOf(tr) };
+    } catch (err) {
+      console.warn('고스트 불러오기 실패', err);
+      return null;
     }
-  } catch (err) {
-    console.warn('고스트 불러오기 실패', err);
   }
+  /** 첫 바퀴 기록에서 처음 움직이기 시작한 시각 (= 고스트의 반응 속도, 초) */
+  function reactionOf(tr) {
+    for (let i = 0; i < tr.n; i++) if (tr.spd[i] > 0.5) return Math.max(0, (i - 1) / HZ);
+    return null;
+  }
+  let best = loadSlot(KEY(o.mapName, o.carId));
+  let bestStart = loadSlot(KEY_START(o.mapName, o.carId));
+  // 1바퀴짜리 맵(그랑프리)은 예전에 저장한 최고 랩도 첫 바퀴(출발 신호부터)였음
+  if (o.laps === 1 && !bestStart && best) bestStart = best;
+  let curLap = 1; // 지금 몇 바퀴째인지 (main.js가 lapStart(n)으로 알려 줌)
 
   // --- 기본 봇 고스트 (라인 + 속도 계획으로 바로 계산) ---
   let bot = null;
@@ -228,7 +243,11 @@ export function createGhost(o) {
   const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _x = new THREE.Vector3();
 
   function active() {
-    if (kind === 'best') return best ? { tr: best.tr, marks: best.marks, relative: 'lap' } : null;
+    if (kind === 'best') {
+      // 첫 바퀴는 첫 바퀴 기록끼리 (서 있다가 출발), 그다음 바퀴는 달리는 바퀴 기록끼리 비교
+      const g = curLap <= 1 ? bestStart : best;
+      return g ? { tr: g.tr, marks: g.marks, relative: 'lap' } : null;
+    }
     if (kind === 'bot') return (bot ||= buildBot());
     return null;
   }
@@ -267,9 +286,14 @@ export function createGhost(o) {
       if (kind === 'off') model.root.visible = false;
     },
     /** 저장된 최고 랩 고스트가 있는지 */
-    hasBest: () => !!best,
-    /** 바퀴 시작: 기록을 새로 */
-    lapStart() {
+    hasBest: () => !!(best || bestStart),
+    /** 첫 바퀴 고스트의 반응 속도 (초, 불이 꺼진 뒤 움직이기 시작할 때까지). 없으면 null */
+    get startReaction() {
+      return kind === 'best' && bestStart ? bestStart.react : null;
+    },
+    /** 바퀴 시작: 기록을 새로 (lapNo = 몇 바퀴째, 1 = 출발 신호부터) */
+    lapStart(lapNo = 1) {
+      curLap = lapNo;
       rec = emptyTrace();
       recMarks = new Float32Array(M + 1).fill(NaN);
       recNext = 0;
@@ -297,15 +321,20 @@ export function createGhost(o) {
       rec.n++;
     },
     /** 바퀴 끝: 최고 랩이면 고스트로 저장. 저장했으면 true */
-    lapDone(lapTime, canSave) {
+    lapDone(lapTime, canSave, lapNo = curLap) {
       // 한 바퀴를 거의 다 지나며 기록한 경우만 (순간이동·테스트로 끝난 바퀴는 저장 안 함)
       if (!canSave || rec.n < 20 || recNext < M * 0.9) return false;
-      if (best && best.lap <= lapTime) return false;
+      const first = lapNo <= 1; // 첫 바퀴 = 출발 신호부터 (반응 시간 포함)
+      const prev = first ? bestStart : best;
+      if (prev && prev.lap <= lapTime) return false;
       for (let k = 0; k <= M; k++) if (!isFinite(recMarks[k])) recMarks[k] = k === M ? lapTime : recMarks[Math.max(0, k - 1)];
       const tr = decode(encode(rec)); // 저장되는 것과 똑같이 (압축 정밀도)
-      best = { lap: lapTime, tr, marks: recMarks.slice() };
-      const json = JSON.stringify({ v: 1, len: lenKey, lap: +lapTime.toFixed(3), date: Date.now(), data: toB64(encode(rec)), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
-      saveStored(KEY(o.mapName, o.carId), json);
+      const react = first ? reactionOf(tr) : null;
+      const g = { lap: lapTime, tr, marks: recMarks.slice(), react };
+      if (first) bestStart = g;
+      else best = g;
+      const json = JSON.stringify({ v: 1, len: lenKey, lap: +lapTime.toFixed(3), date: Date.now(), react, data: toB64(encode(rec)), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
+      saveStored((first ? KEY_START : KEY)(o.mapName, o.carId), json);
       return true;
     },
     /**
@@ -348,6 +377,6 @@ export function createGhost(o) {
     /** 테스트용 */
     view,
     model,
-    _debug: () => ({ rec: rec.n, best: best && { lap: best.lap, n: best.tr.n }, bot: bot && { n: bot.tr.n, total: bot.total } }),
+    _debug: () => ({ rec: rec.n, lap: curLap, best: best && { lap: best.lap, n: best.tr.n }, start: bestStart && { lap: bestStart.lap, n: bestStart.tr.n, react: bestStart.react }, bot: bot && { n: bot.tr.n, total: bot.total } }),
   };
 }

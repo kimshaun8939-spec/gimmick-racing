@@ -760,6 +760,51 @@ export function buildMoonTrack(data, scene) {
     return { mid, along, across, halfLen: len / 2 - 0.6, halfW: j.chasmHalfWidth || 70, floor: j.floor ?? -48, round: !!j.round };
   });
 
+  // ---------------------------------------------------------------- 갓길 경사판 (2026-11-10 턱 없애기)
+  //   예전: 도로 옆 땅이 도로보다 0.5~1.5 m 낮게 꺼져서(골짜기·경사 코너) 코스 밖으로 나간 차가 연석 턱에 걸려 못 돌아왔음
+  //   → 연석 끝에서 바깥으로 완만하게 내려가는 회색 갓길 판(5 m, 0.25 m 내려감)을 깔고, 그 끝은 땅속으로 비스듬히 묻음
+  //   레일(가드레일)이 있는 쪽, 점프 협곡 가까이, 자석 도로는 깔지 않음 (원래 막힌 곳)
+  const SKW = 5; // 갓길 판 폭 (연석 끝에서 바깥으로, 수평 m)
+  const skirtOK = [new Uint8Array(SAMPLES), new Uint8Array(SAMPLES)];
+  {
+    const nearGap = new Uint8Array(SAMPLES);
+    const g = mS(12);
+    for (let i = 0; i < SAMPLES; i++) if (samples[i].gap || samples[i].roll || samples[i].magnet) for (let k = -g; k <= g; k++) nearGap[wrapI(i + k)] = 1;
+    for (let n = 0; n < 2; n++) for (let i = 0; i < SAMPLES; i++) skirtOK[n][i] = !nearGap[i] && !railSide[n][i] ? 1 : 0;
+  }
+  const skirtAt = (i, side) => skirtOK[side < 0 ? 0 : 1][wrapI(i)] === 1;
+  {
+    const tex = canvasTexture(128, 128, (g2, w, h) => {
+      g2.fillStyle = '#7b7873';
+      g2.fillRect(0, 0, w, h);
+      const r = seededRandom(77);
+      for (let k = 0; k < 900; k++) {
+        const v = 95 + Math.floor(r() * 50);
+        g2.fillStyle = `rgba(${v},${v - 2},${v - 6},0.55)`;
+        g2.fillRect(r() * w, r() * h, 1 + r() * 2, 1 + r() * 2);
+      }
+    });
+    const skirtMat = new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide });
+    const OUT = [[0, 0], [1.5, -0.06], [3.5, -0.16], [SKW, -0.25], [SKW + 2.2, -1.6]]; // (연석 끝에서 수평 거리, 세로 높이)
+    const v = new THREE.Vector3();
+    // 도로 면 좌표(l, h)로 바꿈: 수평 옆 Lw, 높이 Yw (샘플 위치 기준)
+    const toBanked = (s, Lw, Yw) => {
+      v.copy(s.right).multiplyScalar(Lw).addScaledVector(UP, Yw);
+      return [v.dot(s.rightB), v.dot(s.up)];
+    };
+    for (const sd of [-1, 1]) {
+      for (const [a, b] of runsOf((i) => skirtAt(i, sd))) {
+        const prof = (s) => {
+          const e = surf(s, sd * (HW + kerbAt(s.i, sd)), 0.02).sub(s.pos);
+          const eL = e.dot(s.right), eY = e.y;
+          const pts = OUT.map(([d, dy]) => toBanked(s, eL + sd * d, eY + dy));
+          return sd < 0 ? pts.reverse() : pts;
+        };
+        for (const m of strip(spanList(a, b), prof, skirtMat, { vScale: 10, uScale: 6, surface: 'ground' })) m.name = 'moonSkirt';
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- 지형 높이
   // 도로 샘플 해시 (가까운 도로 찾기). 점프 사이·코르크스크루 가운데는 '도로 밑 땅'을 맞추지 않음
   const HASH = 20;
@@ -854,23 +899,33 @@ export function buildMoonTrack(data, scene) {
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < nd) (nd = d), (ns = s);
       if (d < HW + CURB + 3) {
+        // 앞뒤 4 m 안의 샘플만 + 오르내리는 기울기만큼 보정 (2026-11-10)
+        //   예전엔 반지름 13.6 m 안에서 가장 낮은 도로 높이를 써서, 비탈·골짜기에서는 도로 옆 땅이 1~1.5 m 꺼져 턱이 생겼음
+        const along = dx * s.tan.x + dz * s.tan.z;
+        if (Math.abs(along) > 4) return;
         const l = dx * s.right.x + dz * s.right.z;
-        const y = s.roll ? (s.base || s.pos).y : roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB));
+        const gr = s.roll ? 0 : s.tan3.y / (Math.hypot(s.tan3.x, s.tan3.z) || 1);
+        const y = (s.roll ? (s.base || s.pos).y : roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB))) + gr * along;
         under = Math.min(under, y);
       }
     });
     const nat = naturalH(x, z);
     let H;
-    if (ns && nd < HW + CURB + 1) H = under - 0.3;
+    if (ns && nd < HW + CURB + 1 && under < Infinity) H = under - 0.3; // under가 없으면(앞뒤 4 m 안 샘플 없음) 아래 가장자리 계산으로 (NaN 방지)
     else {
-      let edgeY = nat, k = 1;
+      let edgeY = nat, k = 1, sink = 0;
       if (ns) {
         const p = ns.base || ns.pos;
         const l = (x - p.x) * ns.right.x + (z - p.z) * ns.right.z;
-        edgeY = (ns.roll ? p.y : roadYAt(ns, Math.sign(l) * (HW + CURB))) - 0.15;
-        k = smooth(HW + CURB + 1, HW + 42, nd);
+        const along = (x - p.x) * ns.tan.x + (z - p.z) * ns.tan.z;
+        const gr = ns.roll ? 0 : ns.tan3.y / (Math.hypot(ns.tan3.x, ns.tan3.z) || 1);
+        edgeY = (ns.roll ? p.y : roadYAt(ns, Math.sign(l) * (HW + CURB))) + gr * along - 0.15;
+        // 갓길 판이 있는 곳: 판 밑 땅은 0.45 m 더 낮게 (판과 땅이 겹쳐 깜빡이지 않게), 판 끝 지나서 땅이 원래 높이로 올라와 판을 덮음
+        const sk = skirtAt(ns.i, l);
+        if (sk) sink = 0.45 * (1 - smooth(HW + CURB + SKW + 0.5, HW + CURB + SKW + 5, nd));
+        k = smooth(HW + CURB + 1 + (sk ? SKW : 0), HW + 42, nd);
       }
-      H = edgeY * (1 - k) + nat * k;
+      H = edgeY * (1 - k) + nat * k - sink;
       if (under < Infinity) H = Math.min(H, under - 0.1);
     }
     // 점프 사이·코르크스크루 아래: 도로보다 충분히 낮게

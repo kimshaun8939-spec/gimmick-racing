@@ -450,7 +450,7 @@ export function buildJungleTrack(data, scene) {
   /** 지형 높이 (섬 밖이어도 계산은 함) */
   function terrainH(x, z) {
     // 주변 도로 높이의 가중 평균 → 자연스러운 기본 높이
-    let sw = 0, sy = 0, nd = Infinity, ns = null, under = Infinity;
+    let sw = 0, sy = 0, nd = Infinity, ns = null, under = Infinity, underFar = Infinity;
     landNear(x, z, 120, (s) => {
       const dx = x - s.pos.x, dz = z - s.pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
@@ -461,10 +461,18 @@ export function buildJungleTrack(data, scene) {
       if (d < nd) (nd = d), (ns = s);
       if (d < HW + CURB + 2.5) {
         // 도로 밑: 겹치는 모든 도로 면보다 낮게 (헤어핀 안쪽처럼 여러 도로가 가까운 곳)
+        // 2026-11-10 턱 없애기: 앞뒤로 떨어진 샘플의 높이를 그대로 쓰면 오르막·내리막에서 땅이 도로보다
+        //   0.6~1.4 m 낮게 파여 도로 가장자리에 "못 올라오는 턱"이 생겼음 → 그 샘플의 기울기로 이 점 바로 위 도로 높이를 계산
         const l = (x - s.pos.x) * s.right.x + (z - s.pos.z) * s.right.z;
-        under = Math.min(under, roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB)));
+        const along = (x - s.pos.x) * s.tan.x + (z - s.pos.z) * s.tan.z;
+        const grade = s.tan3.y / Math.max(0.3, Math.hypot(s.tan3.x, s.tan3.z));
+        const ry = roadYAt(s, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB)) + along * grade;
+        // 이 점 바로 옆(앞뒤 1.2 m 안) 샘플만 씀: 멀리 떨어진 샘플의 기울기로 이으면 오목한 곳(내리막→오르막)에서 또 낮아짐
+        if (Math.abs(along) < 1.2) under = Math.min(under, ry);
+        else underFar = Math.min(underFar, ry);
       }
     });
+    if (under === Infinity) under = underFar;
     const base = sw > 0 ? sy / sw : 0;
     let H;
     if (ns && nd < HW + CURB + 1) {
@@ -491,10 +499,16 @@ export function buildJungleTrack(data, scene) {
       const d = Math.hypot(dx, dz);
       if (d > DECK + 16) return;
       const l = dx * s.right.x + dz * s.right.z;
-      const cap = roadYAt(s, THREE.MathUtils.clamp(l, -DECK, DECK)) - 0.5 + Math.max(0, d - DECK - 0.5) * 0.6;
+      // 2026-11-10 턱 없애기: 이 점 바로 옆(앞뒤 1.2 m 안)의 다리 샘플만 씀. 예전엔 다리 끝 너머 땅 도로 옆까지
+      //   낮은 다리 높이로 눌러서, 다리에서 나온 직후 코너 안쪽(레일 없는 쪽)에 0.6~1.3 m 턱이 생겼음
+      const along = dx * s.tan.x + dz * s.tan.z;
+      if (Math.abs(along) > 1.2) return;
+      const grade = s.tan3.y / Math.max(0.3, Math.hypot(s.tan3.x, s.tan3.z));
+      const cap = roadYAt(s, THREE.MathUtils.clamp(l, -DECK, DECK)) + along * grade - 0.5 + Math.max(0, d - DECK - 0.5) * 0.6;
       if (cap < H) H = cap;
     });
     // 활주로, 착륙장, 판자길 주변은 평평하게
+    let flatK = 1; // 0 = 평평하게 할 길 바로 옆 (섬 가장자리 처짐도 안 함)
     for (const z0 of flatZones) {
       if (!z0.box) {
         z0.box = new THREE.Box2().setFromPoints(z0.samples.map((q) => new THREE.Vector2(q.pos.x, q.pos.z)));
@@ -507,10 +521,19 @@ export function buildJungleTrack(data, scene) {
         if (d < bd) (bd = d), (bs = s);
       }
       const d = Math.sqrt(bd);
+      flatK = Math.min(flatK, smooth(z0.half + 2, z0.half + 12, d));
+      if (z0.raise) {
+        // 2026-11-10 턱 없애기: 판자길은 싱크홀 가장자리보다 0.5~1.5 m 높아서 옆에서 다시 못 올라왔음
+        //   → 판자 옆 땅을 판자 높이(0.2 m 아래)까지 올리고 바깥으로 12 m에 걸쳐 원래 땅으로 (구멍 위는 땅이 없으니 그대로)
+        //   본 도로 밑은 계속 도로보다 낮게
+        if (d < z0.half + 14) H = THREE.MathUtils.lerp(bs.pos.y - 0.2, H, smooth(z0.half + 2, z0.half + 14, d));
+        if (under < Infinity) H = Math.min(H, under - (nd < HW + CURB + 1 ? 0.3 : 0.1));
+        continue;
+      }
       if (d < z0.half + 2) H = Math.min(H, bs.pos.y - 0.3);
       else if (d < z0.half + 14) H = Math.min(H, THREE.MathUtils.lerp(bs.pos.y - 0.1, H, smooth(z0.half + 2, z0.half + 14, d)));
     }
-    return { H, nd: ns ? nd : Infinity };
+    return { H, nd: ns ? nd : Infinity, flatK };
   }
 
   // ---------------------------------------------------------------- 하늘 협곡 비행 루트 (지형보다 먼저: 평평하게 할 곳)
@@ -588,9 +611,30 @@ export function buildJungleTrack(data, scene) {
     for (let k = mid; k >= 0; k--) if (roadD(L[k].pos) < HW - 1) { k0 = k; break; }
     for (let k = mid; k < L.length; k++) if (roadD(L[k].pos) < HW - 1) { k1 = k; break; }
     L = L.slice(k0, k1 + 1);
+    // 2026-11-10 턱 없애기: 잘린 판자 끝이 본 도로보다 최대 1 m 높게 떠서 도로↔판자 사이에 턱이 있었음
+    //   → 양 끝 높이를 그 자리 도로 높이에 맞추고 10 m에 걸쳐 원래 판자 높이로
+    //   판자가 도로 옆을 나란히 지나는 곳(출구 쪽)도 있어서, 도로 가장자리에서 12 m 안이면 그만큼 도로 높이 쪽으로 내림
+    const roadNear = (p) => {
+      let b = Infinity, bs = null;
+      for (let i = 0; i < SAMPLES; i++) {
+        const d = (samples[i].pos.x - p.x) ** 2 + (samples[i].pos.z - p.z) ** 2;
+        if (d < b) (b = d), (bs = samples[i]);
+      }
+      const l = (p.x - bs.pos.x) * bs.right.x + (p.z - bs.pos.z) * bs.right.z;
+      const along = (p.x - bs.pos.x) * bs.tan.x + (p.z - bs.pos.z) * bs.tan.z;
+      return { y: roadYAt(bs, THREE.MathUtils.clamp(l, -HW - CURB, HW + CURB)) + (along * bs.tan3.y) / Math.max(0.3, Math.hypot(bs.tan3.x, bs.tan3.z)), d: Math.abs(l) };
+    };
+    if (L.length > 4) {
+      const d0 = L[0].dist, d1 = L[L.length - 1].dist;
+      for (const q of L) {
+        const r = roadNear(q.pos);
+        const w = Math.min(smooth(HW + CURB, HW + CURB + 12, r.d - sc.width / 2), smooth(0, 10, q.dist - d0), smooth(0, 10, d1 - q.dist));
+        q.pos.y = THREE.MathUtils.lerp(r.y, q.pos.y, w);
+      }
+    }
     plank = { samples: L, half: sc.width / 2, length: len, data: sc };
     altPaths.push(plank);
-    flatZones.push({ samples: L, half: sc.width / 2 });
+    flatZones.push({ samples: L, half: sc.width / 2, raise: true }); // raise: 옆 땅을 판자 높이까지 올림 (턱 없애기)
   }
 
   // ---------------------------------------------------------------- 지형 메시 (격자 + 마칭 스퀘어: 섬 가장자리가 매끈하게)
@@ -634,8 +678,9 @@ export function buildJungleTrack(data, scene) {
       const f = field(x, z);
       F[gi(i, j)] = f;
       if (f > -CELL * 2) {
-        const { H, nd } = terrainH(x, z);
-        HG[gi(i, j)] = H - (f < 7 && nd > HW + 4 ? (7 - Math.max(0, f)) * 0.3 : 0); // 가장자리는 둥글게 처짐
+        const { H, nd, flatK } = terrainH(x, z);
+        // 가장자리는 둥글게 처짐. 2026-11-10: 판자길·착륙장 바로 옆은 안 처짐 (싱크홀 가장자리에서 판자 옆이 0.5~2 m 턱이 됐음)
+        HG[gi(i, j)] = H - (f < 7 && nd > HW + 4 ? (7 - Math.max(0, f)) * 0.3 * flatK : 0);
         ND[gi(i, j)] = nd;
       }
     }
@@ -673,7 +718,8 @@ export function buildJungleTrack(data, scene) {
           const lat = k + (APRON * q) / 4;
           surf(s, sd * lat, 0, _ap);
           const h = q ? heightAt(_ap.x, _ap.z) : null;
-          P.push([lat, h === null ? 0.04 : Math.max(0.04, h - _ap.y + 0.1)]);
+          // 2026-11-10 턱 없애기: 땅이 도로보다 낮은 곳도 땅을 따라 내려감 (예전엔 도로 높이로 떠 있어 바깥 끝이 1 m 넘는 턱이었음)
+          P.push([lat, h === null ? 0.04 : h - _ap.y + 0.1]);
         }
         P.push([k + APRON + 0.6, P[4][1] - 3]);
         return sd > 0 ? P : P.map(([x, y]) => [-x, y]).reverse();

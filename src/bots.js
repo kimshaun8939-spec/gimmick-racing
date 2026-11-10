@@ -12,11 +12,21 @@ export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사
 
 /** 실력 단계 (설정 botLevel) */
 export const BOT_LEVELS = {
-  // 라인 봇(.debug/lineLap.js) 대비 혼자 달린 랩 시간 (race_test.js calib, C 등급): 어려움 −3~+3% · 보통 +5~9% · 쉬움 +13~19% (네온·그랑프리)
-  //   pace = 코너 속도 배수, thrK = 액셀 최대 (직선·비행 구간 차이), brakeK = 브레이크 시작 여유
-  easy: { pace: 0.9, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95 },
-  normal: { pace: 0.95, thrK: 0.87, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95 },
-  hard: { pace: 1.06, paceVar: 0.015, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 85, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1 },
+  // 실력 3단계 (2026-11-10 다시 맞춤). 기준 = 라인 봇(.debug/lineLap.js, 거의 완벽하게 달림)보다 혼자 달린 랩이 몇 % 느린지
+  //   쉬움: 약 +35~40% → 처음 하는 사람(벽에 박고 가끔 복귀, +25~35%)도 이길 수 있음
+  //   보통: 약 +14~18% → 처음 하는 사람은 이기기 어려움
+  //   어려움: 약 +3~5% → 잘하는 사람(키보드, +3~5%)과 비슷
+  //   실측 (쉬움/보통/어려움, 실수 끔): 네온 f1 +36/+15/+4% · 네온 hatch +41/+20/+7% · 그랑프리 hatch +32/+16/+6% · 그랑프리 f1 +23/+6/+3% · 달 kart +23/+9/+3%
+  //   (맵·차마다 차이가 있음: 공중에 떠 있는 시간이 긴 맵·힘이 센 차는 덜 느려짐 → 쉬움은 따라잡기 효과가 메워 줌. 자세히는 race.md '실력 3단계')
+  // pace = 코너·브레이크 속도 배수, topK = 직선 최고 속도 배수, thrK = 액셀 최대, brakeK = 브레이크 시작 여유,
+  // lateP = 실수 중 '늦은 브레이크' 비율 (뒤엉켜 박기 쉬움), mistakeEvery = 실수 간격(초)
+  // catchUp = 따라잡기 효과 (raceSystem.js catchUp, 기준 = 가장 앞선 사람):
+  //   쉬움 {aheadM, releaseM, slowMul}: 사람보다 aheadM m 넘게 앞선 봇은 slowMul배로 늦춤(코너·직선 모두), releaseM m 안으로 오면 원래대로. 빨라지게는 절대 안 함
+  //   어려움 {sec, upMul, downMul}: 사람이 sec초 넘게 앞서면 upMul배(라인 봇 속도는 안 넘음), 봇이 sec초 넘게 앞서면 downMul배
+  //   보통: 없음
+  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 } },
+  normal: { pace: 0.82, topK: 0.84, thrK: 0.86, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95 },
+  hard: { pace: 0.94, topK: 0.96, thrK: 0.92, paceVar: 0.015, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 85, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, catchUp: { sec: 3, upMul: 1.02, downMul: 0.98 } },
 };
 
 /** 같은 씨앗이면 같은 난수 (봇마다 다른 성격) */
@@ -136,7 +146,9 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       if (st.nextMistake <= 0 && risky) st.nextMistake = 1.5;
       else if (st.nextMistake <= 0) {
         const r = rand();
-        st.mistake = r < 0.4 ? 'wide' : r < 0.7 ? 'lift' : 'late';
+        // 실수 종류: 넓게 / 액셀 뗌 / 늦은 브레이크(뒤차와 엉키기 쉬움). lateP = 늦은 브레이크 비율 (기본 0.3)
+        const keep = 1 - (level.lateP ?? 0.3);
+        st.mistake = r < keep * (4 / 7) ? 'wide' : r < keep ? 'lift' : 'late';
         st.mistakeT = st.mistake === 'lift' ? 0.5 + rand() * 0.5 : 1.2 + rand();
         st.nextMistake = level.mistakeEvery * (0.5 + rand());
       }
@@ -316,6 +328,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     }
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
     if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * st.paceMul);
+    // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
+    else if (st.paceMul < 0.999 && !boosting) tgt = Math.min(tgt, vTop * st.paceMul);
     // 앞이 막혀 2초 넘게 거의 멈춰 있으면: 1.5초 동안은 앞차를 신경 쓰지 않고 밀고 나감 (영원히 기다리지 않게)
     if (follow < 3 && Math.abs(speed) < 3 && ctx.since > 1) st.blockedT += dt;
     else st.blockedT = Math.max(0, st.blockedT - dt);

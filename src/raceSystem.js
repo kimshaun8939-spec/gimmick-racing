@@ -102,6 +102,8 @@ export async function createRaceSystem(o) {
       b.car.mode = 'normal';
       b.car.manual = false;
       b.driver.reset(true);
+      b.driver.state.paceMul = 1; // 따라잡기 효과도 새로
+      b.driver.state.cuOn = false;
       Object.assign(b, { lastT: s.t, progress: s.t > 0.5 ? s.t - 1 : s.t, lapsDone: 0, lapStart: 0, lap: 1, finished: false, finishTime: null, bestLap: null, lapTimes: [], slowT: 0, offT: 0, wrongT: 0, chkT: 0, chkProg: s.t - 1, grace: 0, respawns: 0 });
       b.marks.fill(NaN);
       b.nextMark = 0;
@@ -369,15 +371,49 @@ export async function createRaceSystem(o) {
       for (const b of bots) mark(b, time);
       for (const e of opponents.entries) if (e.remote) mark(e, time);
     }
-    // 고무줄 효과 (아주 약하게): 플레이어보다 많이 앞선 봇은 살짝 느리게, 많이 뒤처진 봇은 살짝 빠르게
+    // 따라잡기 효과 (실력별, BOT_LEVELS.catchUp): 0.5초마다
     paceT += dt;
     if (paceT > 0.5) {
       paceT = 0;
-      for (const b of bots) {
-        const d = (b.progress - me.progress) * L;
-        const want = me.finished ? 1 : d > 250 ? 0.975 : d < -350 ? 1.03 : 1;
-        b.driver.state.paceMul += (want - b.driver.state.paceMul) * 0.2;
+      catchUp(time, racing);
+    }
+  }
+
+  /** 기준 = 가장 앞선 사람 (혼자면 나, 온라인이면 나와 다른 사람 중 1등). 완주한 사람은 빼고, 모두 완주했으면 null */
+  function leadHuman() {
+    let lead = null;
+    for (const e of all()) {
+      if (!(e === me || e.remote) || e.finished) continue;
+      if (!lead || e.progress > lead.progress) lead = e;
+    }
+    return lead;
+  }
+  /**
+   * 쉬움: 사람보다 aheadM m 넘게 앞선 봇은 slowMul로 늦춤 → releaseM m 안으로 들어오면 원래대로 (빨라지게는 안 함)
+   * 어려움: 사람이 sec초 넘게 앞서면 최대 upMul(단, 라인 봇 속도 = pace 1을 넘지 않게), 봇이 sec초 넘게 앞서면 downMul
+   * 보통: 없음 (항상 1)
+   */
+  function catchUp(time, racing) {
+    const cu = level.catchUp;
+    const lead = racing && cu ? leadHuman() : null;
+    for (const b of bots) {
+      const st = b.driver.state;
+      let want = 1;
+      if (lead && !b.finished) {
+        if (cu.aheadM) {
+          const d = (b.progress - lead.progress) * L; // + = 봇이 앞
+          if (d > cu.aheadM) st.cuOn = true;
+          else if (d < (cu.releaseM ?? 30)) st.cuOn = false;
+          want = st.cuOn ? cu.slowMul : 1;
+        } else if (cu.sec) {
+          const g = b.progress >= lead.progress ? gapBetween(b, lead, time) : gapBetween(lead, b, time);
+          const sec = g.laps ? 99 : g.sec || 0; // 뒤차가 몇 초 뒤인지
+          if (b.progress < lead.progress && sec > cu.sec) want = Math.max(1, Math.min(cu.upMul, 1 / Math.max(0.5, b.driver.pace))); // 빨라져도 라인 봇(pace 1)보다는 안 빠르게
+          else if (b.progress > lead.progress && sec > cu.sec) want = cu.downMul;
+        }
       }
+      st.paceMul += (want - st.paceMul) * 0.3;
+      if (Math.abs(st.paceMul - want) < 0.002) st.paceMul = want;
     }
   }
 

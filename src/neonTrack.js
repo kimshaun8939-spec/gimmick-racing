@@ -425,7 +425,10 @@ export function buildNeonTrack(data, scene) {
     const raw = new Float32Array(SAMPLES);
     for (let i = 0; i < SAMPLES; i++) {
       const wide = (kerbAt(i, side) - CURB) / (KERB_WIDE - CURB);
-      raw[i] = Math.max(DECK + wide * 2.6 + cornerW[i] * 0.4, DECK + cornerW[i], DECK + 3 * landW[i], DECK + (TUBE_RAIL - DECK) * smooth(0, 0.25, tubeK[i] || 0));
+      // 튜브 앞뒤(taper): 벽은 1/4 파이프 바깥 끝에 딱 붙임 (2026-11-10 턱 없애기)
+      //   예전엔 벽이 일찍 TUBE_RAIL(16.6 m)까지 벌어져서, 낮은 1/4 파이프 뒤쪽 갓길에 들어간 차가 파이프 밑·뒷면에 걸려 멈췄음
+      const tk = tubeK[i] > 0 ? 0.04 + 0.96 * tubeK[i] : 0;
+      raw[i] = Math.max(DECK + wide * 2.6 + cornerW[i] * 0.4, DECK + cornerW[i], DECK + 3 * landW[i], tk ? TUBE_W2 + tubeR * tk + 0.02 : 0);
     }
     const r = mS(14);
     const out = new Float32Array(SAMPLES + 1);
@@ -559,12 +562,14 @@ export function buildNeonTrack(data, scene) {
     const wallProf = (side) => (s) => {
       const k = tubeK[s.i] || 0;
       const tk = 0.04 + 0.96 * k;
+      // 파이프 바깥 끝 = 방호벽 (2026-11-10): 파이프가 작을 때는 갓길 위로 밀어내 벽에 붙임 → 파이프 뒤에 빈 틈(차가 갇히던 곳)이 없음
+      const w2s = Math.max(w2, railLatOf(s, side) - R * tk - 0.02);
       const pts = [];
       for (let j = 0; j <= ARC; j++) {
         const a = -Math.PI / 2 + (Math.PI / 2) * (j / ARC);
-        pts.push([side * (w2 + R * Math.cos(a) * tk), (R + R * Math.sin(a)) * tk]);
+        pts.push([side * (w2s + R * Math.cos(a) * tk), (R + R * Math.sin(a)) * tk]);
       }
-      pts.push([side * (w2 + R * tk), (H - R) * tk]);
+      pts.push([side * (w2s + R * tk), (H - R) * tk]);
       return side < 0 ? pts.reverse() : pts;
     };
     const [ta, tb] = rangeI(tube.t0, tube.t1);
@@ -612,13 +617,22 @@ export function buildNeonTrack(data, scene) {
     if (f.type !== 'ramp') continue;
     const s = sampleAt(f.t);
     const Wr = f.width || W, Lr = f.length || 14, Hr = f.height || 1.2;
-    // 쐐기: 앞쪽(진행 방향 뒤) 낮고 끝이 높음 (로컬 z = 진행 방향)
-    const a = [-Wr / 2, 0, 0], b = [Wr / 2, 0, 0], c = [-Wr / 2, 0, Lr], d = [Wr / 2, 0, Lr], e = [-Wr / 2, Hr, Lr], f2 = [Wr / 2, Hr, Lr];
+    // 폭 = 벽에서 벽까지 (2026-11-10 턱 없애기): 예전엔 도로+연석 폭(21.4 m)이라 옆 갓길에 선 차 앞에 1 m 옆면 턱이 있었음
+    //   로컬 x: + = 도로 왼쪽. 점프대 시작~끝 중 벽이 가장 좁은 곳에 맞춤 (벽을 뚫고 나가지 않게)
+    const i0 = indexAt(f.t);
+    let wl = Infinity, wr = Infinity;
+    for (let k = -mS(Lr) - 1; k <= 1; k++) {
+      const q = S(i0 + k);
+      wl = Math.min(wl, railLatOf(q, -1));
+      wr = Math.min(wr, railLatOf(q, 1));
+    }
+    const XL = Math.max(Wr / 2, wl - 0.08), XR = -Math.max(Wr / 2, wr - 0.08);
+    const a = [XR, 0, 0], b = [XL, 0, 0], c = [XR, 0, Lr], d = [XL, 0, Lr], e = [XR, Hr, Lr], f2 = [XL, Hr, Lr];
     const tris = [a, e, f2, a, f2, b, c, d, f2, c, f2, e, a, c, e, b, f2, d];
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tris.flat()), 3));
     const uv = [];
-    for (const v of tris) uv.push((v[0] + Wr / 2) / 4, (v[2] + v[1]) / 4);
+    for (const v of tris) uv.push((v[0] - XR) / 4, (v[2] + v[1]) / 4);
     geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     geo.computeVertexNormals();
     const ramp = new THREE.Mesh(geo, rampMat);

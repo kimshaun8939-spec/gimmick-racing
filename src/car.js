@@ -20,6 +20,32 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
+// 복귀(R)하면 안 되는 곳 표 (트랙마다 한 번만 만듦): 1 = 루프·자석 도로·튜브·점프·점프대·파도 근처
+const _respawnMasks = new WeakMap();
+function respawnMask(tr) {
+  let bad = _respawnMasks.get(tr);
+  if (bad) return bad;
+  const S = tr.samples, M = S.length - 1, ds = tr.length / M;
+  const mS = (m) => Math.max(1, Math.round(m / ds));
+  bad = new Uint8Array(M);
+  const mark = (i0, i1) => {
+    for (let i = i0; i <= i1; i++) bad[((i % M) + M) % M] = 1;
+  };
+  for (let i = 0; i < M; i++) {
+    const s = S[i];
+    if (s.roll || s.magnet || s.gap) mark(i - mS(15), i + mS(15)); // 루프·자석 도로·끊긴 도로(협곡)
+    if (tr.tubeK && tr.tubeK[i] > 0) mark(i - mS(10), i + mS(10)); // 자석 튜브 (네온)
+  }
+  for (const j of tr.jumps || []) if (j.lipI !== undefined && j.landI !== undefined) mark(j.lipI - mS(40), j.landI + mS(20)); // 점프 (달 협곡)
+  for (const r of tr.ramps || []) if (r.t !== undefined) mark(Math.round(r.t * M) - mS(25), Math.round(r.t * M) + mS(45)); // 점프대 (네온)
+  for (const w of tr.waves || []) {
+    const i = w.s ? (w.s.i ?? Math.round(w.s.t * M)) : null; // 파도 점프 (바닷가)
+    if (i !== null) mark(i - mS(15), i + mS((w.len || 16) + 40));
+  }
+  _respawnMasks.set(tr, bad);
+  return bad;
+}
+
 /** x를 target 쪽으로 초당 rate만큼 이동 */
 function approach(x, target, rate, dt) {
   return x < target ? Math.min(target, x + rate * dt) : Math.max(target, x - rate * dt);
@@ -227,19 +253,76 @@ export class Car {
       const sp = this.track.spawn;
       this.placeAtPos(sp.x, sp.z, sp.yaw);
     } else {
-      this.placeAt(this.lastSafeT - 30 / this.track.length, 0);
-      // 굴러가는 출발: 레이싱 라인 속도의 80%로 다시 시작 (멈춘 채로 다시 시작하면 점프대 앞 등에서 계속 실패할 수 있음)
-      const line = this.track.racingLine;
-      if (line && this.trackInfo) {
-        const i = this.track.nearest(this.pos).index % line.N;
-        const v = 0.8 * this.lineSpeed(i);
-        this.speed = v;
-        this.vel.copy(this.fwd).multiplyScalar(v);
-        this.fitGear();
-        this.spool = 0.7;
-      }
+      this.respawnOnRoad();
     }
     this.events.push('respawn');
+  }
+
+  /**
+   * 코스 위로 복귀 (2026-11-10 고침: 복귀하면 차 머리가 앞 코너와 안 맞던 문제)
+   *   1) 자리: 마지막 안전 지점 30 m 뒤. 루프·자석 도로·튜브·점프 근처면 그 구간을 피함
+   *      (이미 구간을 지나왔으면 구간이 끝난 바로 뒤로, 아니면 구간 앞으로)
+   *   2) 옆 위치: 레이싱 라인 위 (연석에는 안 올라가게 도로 안쪽으로 줄임)
+   *   3) 방향: 0.5초쯤 앞 레이싱 라인 점을 바라봄 → 앞 코너 쪽으로 이미 살짝 돌아가 있음
+   *      차의 위(up) = 바닥 면 방향, 앞(fwd) = 그 면에 눕힌 방향 (예전엔 위를 늘 하늘로 해서 경사·뱅크에서 기울어 있었음)
+   *   4) 속도: 레이싱 라인 속도의 80%로 굴러가며 시작 (예전과 같음)
+   */
+  respawnOnRoad() {
+    const tr = this.track, S = tr.samples, M = S.length - 1, ds = tr.length / M;
+    const line = tr.racingLine;
+    const bad = respawnMask(tr);
+    const wrap = (i) => ((i % M) + M) % M;
+    const iSafe = wrap(Math.round(this.lastSafeT * M));
+    let iPick = wrap(iSafe - Math.round(30 / ds));
+    if (bad[iPick]) {
+      // 마지막 안전 지점까지 앞으로 가며 처음 나오는 안전한 곳 (구간을 이미 지나온 경우)
+      let found = -1;
+      for (let k = 1, n = wrap(iSafe - iPick); k <= n; k++)
+        if (!bad[wrap(iPick + k)]) {
+          found = wrap(iPick + k);
+          break;
+        }
+      // 없으면 뒤로 가며 구간 앞의 안전한 곳
+      if (found < 0)
+        for (let k = 1; k < M; k++)
+          if (!bad[wrap(iPick - k)]) {
+            found = wrap(iPick - k);
+            break;
+          }
+      if (found >= 0) iPick = found;
+    }
+    const HW = tr.width / 2;
+    const offAt = (i) => (line && line.offset ? THREE.MathUtils.clamp(line.offset[i % line.N] || 0, -(HW - 1.6), HW - 1.6) : 0);
+    // 바닥이 없거나(끊긴 곳)·점프대·용암·자석이면 20 m씩 더 뒤로 (최대 6번)
+    for (let tryN = 0; tryN < 6; tryN++) {
+      this.placeAt(iPick / M, offAt(iPick));
+      const ok = this.surface !== 'ramp' && this.surface !== 'lava' && this.surface !== 'magnet' && this.track.castRay(_v.copy(this.pos).addScaledVector(WORLD_UP, 1.5), DOWN, 3);
+      if (ok) break;
+      iPick = wrap(iPick - Math.round(20 / ds));
+    }
+    // 바닥 면 방향으로 차 세우기
+    const ground = this.track.castRay(new THREE.Vector3().copy(this.pos).addScaledVector(WORLD_UP, 1.5), DOWN, 3);
+    if (ground && ground.normal.y > 0.6) this.up.copy(ground.normal);
+    // 굴러가는 출발 속도 (레이싱 라인 속도의 80%, 예전과 같음)
+    const v = line ? 0.8 * this.lineSpeed(iPick % line.N) : 0;
+    // 바라볼 곳: 약 0.5초 앞(12~30 m)의 레이싱 라인 점. 그 점이 루프·튜브 안이면 도로 방향 그대로
+    const look = Math.round(THREE.MathUtils.clamp(v * 0.5, 12, 30) / ds);
+    const j = wrap(iPick + look);
+    const dir = new THREE.Vector3();
+    if (line && !bad[j]) {
+      const sj = S[j];
+      dir.copy(sj.pos).addScaledVector(sj.right, offAt(j)).sub(this.pos);
+    } else dir.copy(S[iPick].tan3 || S[iPick].tan);
+    dir.addScaledVector(this.up, -dir.dot(this.up));
+    if (dir.lengthSq() < 1e-6) dir.copy(S[iPick].tan).addScaledVector(this.up, -S[iPick].tan.dot(this.up));
+    this.fwd.copy(dir.normalize());
+    this.yawRate = 0;
+    if (line && this.trackInfo) {
+      this.speed = v;
+      this.vel.copy(this.fwd).multiplyScalar(v);
+      this.fitGear();
+      this.spool = 0.7;
+    }
   }
 
   /** 출발 전 공회전: W를 누르고 있으면 회전수가 올라가고, 떼면 내려감 */

@@ -652,6 +652,45 @@ export function buildNeonProps(track, scene) {
     anim.push((t) => (time.value = t));
   }
 
+  // ================================================================ 튜브 출구 가이드 (2026-11-10)
+  //   튜브 벽·천장을 달리다 출구에 오면 벽이 낮아지며(taper) 차가 튕겨 나가 비스듬히(15° 넘게) 떨어졌음
+  //   → 출구 60 m 앞부터 벽 위에 있는 차만: 머리를 도로 방향 + 바닥 쪽으로 천천히 돌려 바닥으로 내려오게 함
+  //   바닥에 있는 차는 건드리지 않음 (튜브 앞·가운데의 벽 타기는 그대로). 플레이어·봇 모두 똑같이
+  const TB = track.tube;
+  const TG = { pre: mS(60), rate: 4, down: 0.45 };
+  const gT = new THREE.Vector3(), gD = new THREE.Vector3(), gC = new THREE.Vector3();
+  const fromWall = new WeakSet(); // 출구 앞에서 벽 위에 있었던 차
+  function tubeGuide(c, dt) {
+    const ti = c.trackInfo;
+    if (!TB || !ti || !c.grounded || c.flying || c.speed < 5) return;
+    const k = (((ti.index - (TB.b - TG.pre)) % N) + N) % N; // 가이드 시작점에서 몇 샘플 지났나
+    if (k > TG.pre + TB.taper + mS(6)) return void fromWall.delete(c);
+    const sm = ti.sample, su = sm.up || gC.set(0, 1, 0);
+    const tilt = 1 - c.up.dot(su); // 0 = 바닥, 1 = 수직 벽, 2 = 천장
+    // 바닥에 있는 차: 벽에서 막 내려온 차만 머리를 도로 방향으로 마저 맞추고(2° 안이 되면 끝), 나머지는 그대로
+    if (tilt < 0.03 && !fromWall.has(c)) return;
+    if (tilt >= 0.03) fromWall.add(c);
+    const wIn = THREE.MathUtils.smoothstep(k, 0, TG.pre * 0.5); // 처음 30 m에 걸쳐 서서히 세게
+    const wWall = tilt < 0.03 ? 0 : Math.min(1, tilt / 0.3);
+    // 바닥 가운데 쪽(차 바닥 면에 눕힌 방향) = 벽에서 내려오는 방향
+    gD.copy(sm.pos).sub(c.pos);
+    gD.addScaledVector(c.up, -gD.dot(c.up));
+    gT.copy(sm.tan3 || sm.tan);
+    if (gD.lengthSq() > 1e-4) gT.addScaledVector(gD.normalize(), TG.down * wWall);
+    gT.addScaledVector(c.up, -gT.dot(c.up));
+    if (gT.lengthSq() < 1e-6) return;
+    gT.normalize();
+    const a = Math.atan2(gC.crossVectors(c.fwd, gT).dot(c.up), c.fwd.dot(gT));
+    if (!wWall && Math.abs(a) < 0.035) return void fromWall.delete(c);
+    c.fwd.applyAxisAngle(c.up, a * (1 - Math.exp(-TG.rate * Math.max(wIn, wWall ? 0 : 1) * dt)));
+  }
+  function guideAll(dt, car) {
+    if (!TB) return;
+    if (car) tubeGuide(car, dt);
+    const rs = window.game && window.game.raceSys;
+    if (rs && rs.bots) for (const b of rs.bots) if (b.car && b.car !== car) tubeGuide(b.car, dt);
+  }
+
   resetItems();
   let worldG = null;
   return {
@@ -659,9 +698,11 @@ export function buildNeonProps(track, scene) {
     hit,
     items, // 테스트용
     knocked: () => items.filter((it) => it.state > 0).length, // 테스트용: 날아간 소품 수
-    update(dt) {
+    update(dt, car) {
       updateItems(dt);
+      guideAll(dt, car);
     },
+    tubeGuide, // 테스트용
     reset() {
       resetItems();
     },
