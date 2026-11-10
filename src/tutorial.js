@@ -9,7 +9,7 @@
 //   goal  : 매 프레임 차 상태(game.car)·이벤트(car.events)를 보고 성공/실패 판정. 실패하면 잠깐 뒤 다시 그 자리로
 // 코너 자리는 레이싱 라인·코너 분석(car.cornerInfo)에서 자동으로 고름 → 코스를 바꿔도 따라감
 import * as THREE from 'three';
-import { keybinds, actionsFor } from './keybinds.js';
+import { keybinds, actionsFor, codeLabel } from './keybinds.js';
 import { pad, padKbd } from './gamepad.js';
 import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
@@ -23,10 +23,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const TOUCH_LBL = { throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
 const onTouch = () => !pad.usingPad() && touchWanted();
 const TK = (id) => (onTouch() && TOUCH_LBL[id] ? `<kbd>${TOUCH_LBL[id]}</kbd>` : null);
-const K = (id) => TK(id) || (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 1));
+// 운전 키(가속·브레이크·좌우)는 W와 ↑처럼 기본·보조 키를 같이 보여 줌 (방향키로 하는 사람도 있어서)
+const DRIVE_IDS = new Set(['throttle', 'brake', 'left', 'right']);
+const K = (id) => TK(id) || (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, DRIVE_IDS.has(id) ? 2 : 1));
 const KK = (id) => TK(id) || (pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, 2));
 /** 조향 글자: 패드면 왼쪽 스틱, 터치면 왼쪽 끌기, 키보드면 왼쪽·오른쪽 키 */
-const STEER = () => (pad.usingPad() ? '<kbd class="pad">L 스틱</kbd>' : onTouch() ? '<kbd>◀ 왼쪽 끌기 ▶</kbd>' : `${K('left')}${K('right')}`);
+const STEER = () => (pad.usingPad() ? '<kbd class="pad">L 스틱</kbd>' : onTouch() ? '<kbd>◀ 왼쪽 끌기 ▶</kbd>' : [0, 1].flatMap((s) => [keybinds.keys('left')[s], keybinds.keys('right')[s]]).filter(Boolean).map((c) => `<kbd>${esc(codeLabel(c))}</kbd>`).join('') || `${K('left')}${K('right')}`);
 
 export function startTutorial(game) {
   if (!game || !game.car) return;

@@ -334,7 +334,7 @@ export function createControlsPage(opts = {}) {
       ${actionVisible('booster') ? row(K('booster'), '부스터', '3초 동안 더 빠르게 · 브레이크로 바로 꺼짐') : ''}
     </section>
     <section><h3>레이스</h3>
-      ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${k1('throttle')}! 미리 밟으면 시동이 꺼져요`)}
+      ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}
       ${row(K('respawn'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}
       ${row(K('restart'), '처음부터 다시')}
       ${row(K('menu'), '메뉴 · 일시정지', '설정, 다시 시작, 홈으로')}
@@ -343,7 +343,7 @@ export function createControlsPage(opts = {}) {
       ${row('🚗', '일반', '평소 모드')}
       ${row('🔥', '가속', '150 km/h를 넘고 핸들이 곧으면 자동 · 빠르지만 조금 미끄러워요')}
       ${row('🚤', '배', '물에 닿으면 자동')}
-      ${row('✈️', '비행', `활주로에서 자동 · ${k1('climb')} 이륙/상승 · ${k1('dive')} 하강 · ${k1('left')}${k1('right')} 선회`)}
+      ${row('✈️', '비행', `활주로에서 자동 · ${k1('climb')} 이륙/상승 · ${k1('dive')} 하강 · ${slotKeys('left', 'right')} 선회 · ${K('throttle')} 추력`)}
     </section>
     <section><h3>그 밖에</h3>
       ${row(K('gearbox'), '자동 ↔ 수동 변속', '수동: ' + k1('shiftUp') + ' 올림 · ' + k1('shiftDown') + ' 내림')}

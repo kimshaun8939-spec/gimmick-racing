@@ -202,12 +202,14 @@ export function createKeyboardInput() {
 }
 
 /** 행동의 키 이름: 패드를 쓰는 중이면 패드 버튼 (예: 'RT', 'A'), 아니면 키보드 키 (예: 'W') */
+// 운전 키(가속·브레이크·좌우)는 기본 키와 보조 키(방향키)를 같이 보여 줌 (사용자 요청 2026-11-10 "방향키 조작도 포함")
+const BOTH = new Set(['throttle', 'brake', 'left', 'right']);
 export function keyName(id) {
   if (pad.usingPad()) {
     const l = pad.label(id);
     if (l) return l;
   }
-  return keybinds.main(id);
+  return BOTH.has(id) ? keybinds.label(id) : keybinds.main(id);
 }
 
 // ------------------------------------------------------------------ 불러오는 화면: 지금 정한 키 보여 주기
@@ -216,8 +218,9 @@ function decorateLoading() {
   const ld = document.getElementById('loading');
   const box = ld && ld.querySelector('.ld');
   if (!box || box.querySelector('.ld-keys')) return;
-  const K = (id) => `<kbd>${codeLabel(keybinds.keys(id)[0]) || '?'}</kbd>`;
-  const LR = () => [keybinds.keys('left')[0], keybinds.keys('right')[0]].filter(Boolean).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('');
+  const K = (id) => (BOTH.has(id) ? keybinds.keys(id) : keybinds.keys(id).slice(0, 1)).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('') || '<kbd>?</kbd>';
+  // 조향: A D 다음에 ← → (기본 키 둘, 보조 키 둘)
+  const LR = () => [0, 1].flatMap((s) => [keybinds.keys('left')[s], keybinds.keys('right')[s]]).filter(Boolean).map((c) => `<kbd>${codeLabel(c)}</kbd>`).join('');
   const el = document.createElement('div');
   el.className = 'ld-keys';
   const draw = () =>
@@ -240,7 +243,7 @@ function decorateLoading() {
     const t = tip.textContent;
     if (!t || t === mine) return;
     let out = t.replace(/\b([A-Z]) 키/g, (m, L) => (LETTER[L] ? `${keybinds.main(LETTER[L])} 키` : m));
-    out = out.replace(/순간 W!/, `순간 ${keybinds.main('throttle')}!`);
+    out = out.replace(/순간 W!/, `순간 ${keybinds.label('throttle')}!`);
     mine = out;
     if (out !== t) tip.textContent = out;
   };
