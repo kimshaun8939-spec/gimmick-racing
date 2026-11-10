@@ -60,8 +60,8 @@ export const SETTING_DEFS = [
   { group: '게임패드', tab: 'pad', key: 'padVibe', label: '진동', desc: '연석·잔디·부딪힘에서 패드가 떨려요 (지원하는 패드만)', type: 'toggle', def: true },
 
   // 레이스 (main.js·봇·고스트가 settings.values.X ?? 기본값으로 읽음. 키 이름·값은 .debug/agents/contracts.md 약속)
-  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '타임 어택에서 같이 달리는 반투명 차', type: 'choice',
-    options: [['off', '끔'], ['best', '내 최고 기록'], ['bot', '봇 기록']], def: 'best' },
+  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '맵 최고 = 어느 차로 달렸든 이 맵에서 내 가장 빠른 기록 · 이 차 최고 = 지금 차의 기록 (없으면 다른 차 최고). 화면의 "최고 기록"도 같이 바뀜', type: 'choice',
+    options: [['off', '끔'], ['best', '맵 최고 (모든 차)'], ['car', '이 차 최고'], ['bot', '봇 기록']], def: 'best' },
   { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
   { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷', type: 'choice',

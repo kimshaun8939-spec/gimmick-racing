@@ -6,6 +6,9 @@
 //            초당 20번 위치·방향을 적어 두고, 완주 시간이 내 최고 고스트보다 빠르면 브라우저(localStorage)에 압축해서 저장
 //            예전 바퀴별 고스트(첫 바퀴 '.start' + 달리는 바퀴)만 있으면 둘을 이어 붙여 레이스 전체 고스트로 씀
 //            (records.js와 같은 규칙: 자동 운전 테스트·game.paused 중에는 저장 안 함)
+//   (2026-11-10 사용자 요청) 'best' = 맵 최고: 이 맵에서 어느 차로 달렸든 내 가장 빠른 완주 고스트 (기본)
+//                         'car'  = 이 차 최고: 지금 차의 완주 고스트, 없으면 다른 차 중 가장 빠른 것
+//            다른 차 고스트는 그 차 모양으로 보임 (o.cars = 차 목록 [{ id, name, look }])
 //   'bot'  = "기본 봇" 고스트: 레이싱 라인을 속도 계획대로 달리는 차 (출발부터 끝까지 한 번에, 계산은 순식간)
 //   화면 왼쪽 위에 고스트와의 시간 차이 (−0.42 초록 = 내가 빠름, +0.31 빨강 = 느림)
 import * as THREE from 'three';
@@ -152,6 +155,7 @@ export function createGhost(o) {
   fade = 1;
   }
   let fade = 1;
+  let modelCar = o.carId; // 지금 고스트 모델이 어느 차 모양인지
   makeModel(o.look);
   const view = fakeCar();
 
@@ -213,7 +217,35 @@ export function createGhost(o) {
     }
     return { total: off, segs, marks, react: bestStart.react, relative: 'race', stitched: true };
   }
-  let run = loadRun() || stitched();
+  let run = loadRun() || stitched(); // 이 차 고스트
+  if (run) run.car = o.carId;
+  // 다른 차들 고스트 중 가장 빠른 것 (이 맵) → { ...run, car }
+  const carList = o.cars || [];
+  const carInfo = (id) => carList.find((c) => c.id === id) || null;
+  let other = null;
+  try {
+    let bestTotal = Infinity, bestRaw = null, bestCar = null;
+    for (const c of carList) {
+      if (c.id === o.carId) continue;
+      const raw = localStorage.getItem(KEY_RUN(o.mapName, c.id));
+      if (!raw) continue;
+      const t = JSON.parse(raw).total;
+      if (t < bestTotal) (bestTotal = t), (bestRaw = raw), (bestCar = c.id);
+    }
+    if (bestRaw) {
+      other = parseRun(bestRaw);
+      if (other) other.car = bestCar;
+    }
+  } catch (err) {
+    console.warn('다른 차 고스트 불러오기 실패', err);
+    other = null;
+  }
+  /** 'best'(맵 최고)·'car'(이 차 최고)에 맞는 내 고스트 */
+  function mine(k) {
+    if (k === 'car') return run || other;
+    if (run && other) return other.total < run.total ? other : run;
+    return run || other;
+  }
 
   // --- 기본 봇 고스트 (라인 + 속도 계획으로 바로 계산) ---
   let bot = null;
@@ -288,7 +320,7 @@ export function createGhost(o) {
   const _q = new THREE.Quaternion(), _m = new THREE.Matrix4(), _x = new THREE.Vector3();
 
   function active() {
-    if (kind === 'best') return run; // 레이스 전체 (바퀴가 바뀌어도 이어서)
+    if (kind === 'best' || kind === 'car') return mine(kind); // 레이스 전체 (바퀴가 바뀌어도 이어서)
     if (kind === 'friend') return friend;
     if (kind === 'bot') return (bot ||= buildBot());
     return null;
@@ -332,14 +364,21 @@ export function createGhost(o) {
     M,
     setKind(k) {
       if (friend && k !== 'off') k = 'friend'; // 친구 고스트를 골라 들어왔으면 설정보다 먼저
-      kind = k === 'best' || k === 'bot' || k === 'friend' ? k : 'off';
+      kind = k === 'best' || k === 'car' || k === 'bot' || k === 'friend' ? k : 'off';
       if (kind === 'off') model.root.visible = false;
     },
     /** 저장된 최고 랩 고스트가 있는지 */
-    hasBest: () => !!run,
+    hasBest: () => !!(run || other),
+    /** 지금 보여 주는 내 고스트의 차 { id, name } (다른 차 고스트일 때만, 아니면 null) */
+    get otherCar() {
+      const g = kind === 'best' || kind === 'car' ? mine(kind) : null;
+      if (!g || !g.car || g.car === o.carId) return null;
+      const c = carInfo(g.car);
+      return { id: g.car, name: c ? c.name : g.car };
+    },
     /** 고스트의 반응 속도 (초, 불이 꺼진 뒤 움직이기 시작할 때까지). 없으면 null */
     get startReaction() {
-      const g = kind === 'best' ? run : kind === 'friend' ? friend : null;
+      const g = kind === 'best' || kind === 'car' ? mine(kind) : kind === 'friend' ? friend : null;
       return g ? g.react : null;
     },
     /** 친구(온라인) 고스트 쓰기: json = 서버의 고스트, look = 그 차 모양, name = 이름. 맞지 않는 맵이면 false */
@@ -353,6 +392,7 @@ export function createGhost(o) {
       if (!friend) return false;
       friend.name = name || '친구';
       makeModel(look, '#ff9a3d');
+      modelCar = 'friend';
       kind = 'friend';
       return true;
     },
@@ -404,7 +444,7 @@ export function createGhost(o) {
       lastRunJson = json;
       // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
       if (run && !run.stitched && run.total <= total) return false;
-      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race' };
+      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race', car: o.carId };
       saveStored(KEY_RUN(o.mapName, o.carId), json);
       // 예전 바퀴별 고스트는 이제 필요 없음 (저장 공간 아끼기)
       for (const k of [KEY(o.mapName, o.carId), KEY_START(o.mapName, o.carId)]) {
@@ -431,8 +471,17 @@ export function createGhost(o) {
     update(dt, elapsed, lapTime, raceTime, camera, show) {
       const g = show ? active() : null;
       if (!g || !place(g, raceTime)) {
-        model.root.visible = false;
+        if (model) model.root.visible = false;
         return;
+      }
+      // 다른 차 고스트면 그 차 모양으로 (친구 고스트는 useFriend가 이미 바꿈)
+      if (kind !== 'friend') {
+        const want = g.car && g.car !== o.carId && carInfo(g.car) ? g.car : o.carId;
+        if (want !== modelCar) {
+          makeModel(want === o.carId ? o.look : carInfo(want).look);
+          modelCar = want;
+          model.root.visible = false;
+        }
       }
       model.root.visible = true;
       // 카메라에 가까우면 더 흐리게 (내 차를 가리지 않게)

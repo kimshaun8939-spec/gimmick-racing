@@ -207,7 +207,9 @@ const raceSys = await createRaceSystem({
   loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
 });
 const sectors = createSectors({ mapName, carId });
-const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992 });
+const carList = rosterMod ? await rosterMod.listCars().catch(() => []) : []; // 다른 차 고스트·기록 이름용
+const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
+const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList });
 // 온라인 순위표에서 고른 다른 사람 고스트: ?ghost=<사람 id>&ghostCar=<차>&ghostName=<이름> (같은 맵)
 const FRIEND_GHOST = ghost && params.get('ghost') && online.enabled ? { id: params.get('ghost'), car: params.get('ghostCar') || carId, name: params.get('ghostName') || '친구' } : null;
 if (FRIEND_GHOST) {
@@ -695,7 +697,7 @@ const menu = createPauseMenu({
   getInfo: () => ({
     map: mapTitle, car: carName, free: FREE,
     lapText: `${Math.min(race.lap, totalLaps)} / ${totalLaps}`,
-    time: race.time, best: race.best, record: (records.get(mapName, carId) || {}).race,
+    time: race.time, best: race.best, record: (refRecord() || {}).race,
     phase: race.phase, lapTimes: race.lapTimes,
   }),
   onOpen() {
@@ -742,10 +744,28 @@ function assistOn() {
   return (v.brakeAssist || 'off') !== 'off' || (v.steerAssist || 'off') !== 'off';
 }
 // 내 최고 기록 (이 맵 + 이 차의 완주 시간, 여러 바퀴면 합). 완주할 때만 바뀌므로 기억해 둠
+// 기준 = 설정 ghost: 'car'(이 차 최고)면 이 차 기록 (없으면 맵 최고), 그 밖에는 맵 최고 (어느 차든) → { race, car }
 let myRecordCache = null;
+function refRecord() {
+  const mapBest = records.bestRaceOfMap(mapName);
+  if (settings.values.ghost === 'car') {
+    const own = records.get(mapName, carId);
+    if (own && own.race) return { race: own.race, car: carId };
+  }
+  return mapBest ? { race: mapBest.race, car: mapBest.car } : null;
+}
+let myRecordMode = null;
 function myRecord() {
-  if (myRecordCache === null) myRecordCache = (records.get(mapName, carId) || {}).race || 0;
+  // 설정(고스트: 맵 최고 / 이 차 최고)을 바꾸면 다시 계산
+  if (myRecordCache === null || myRecordMode !== settings.values.ghost) {
+    myRecordCache = refRecord() || 0;
+    myRecordMode = settings.values.ghost;
+  }
   return myRecordCache || null;
+}
+/** HUD 표시용: 다른 차 기록이면 그 차 이름 */
+function recordNote(r) {
+  return r && r.car !== carId ? carNameOf(r.car) : '';
 }
 function canSaveRecords() {
   // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
@@ -758,9 +778,12 @@ function nextMapId() {
 function showFinish() {
   replay.markFinish(race.clock); // 리플레이는 완주 4초 뒤까지
   const total = race.lapTimes.reduce((a, b) => a + b, 0);
-  const prev = records.get(mapName, carId);
-  const prevRace = prev && prev.race;
-  const newRace = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist) : false;
+  // 최고 기록 비교 기준 = 설정 ghost (맵 최고 / 이 차 최고). 이 차 기록은 늘 따로 저장
+  const ref = refRecord();
+  const prevRace = ref && ref.race;
+  const carRecord = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist) : false;
+  const newRace = carRecord && (!prevRace || total < prevRace);
+  const prevNote = ref ? recordNote(ref) : '';
   myRecordCache = null;
   // 고스트: 레이스 전체(모든 바퀴)가 내 최고 완주보다 빠르면 저장
   if (ghost) ghost.raceDone(total, canSaveRecords());
@@ -793,7 +816,7 @@ function showFinish() {
     }
   }
   hud.showResults(race.lapTimes, race.best, {
-    map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, hasNext: true,
+    map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: true,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
     champ, assist: !!race.assist, noRestart: !!champ,
     replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
@@ -928,7 +951,7 @@ function frame(now, manual = false) {
     race.reaction = race.time;
     car.reactionLaunch(race.time);
     // 첫 바퀴 고스트가 있으면 그 반응 속도도 같이 (고스트도 불이 꺼진 순간부터 자기 반응만큼 기다렸다 출발)
-    const gr = ghost && ghost.kind === 'best' ? ghost.startReaction : null;
+    const gr = ghost && ['best', 'car', 'friend'].includes(ghost.kind) ? ghost.startReaction : null;
     const grTxt = gr != null ? ` · 고스트 ${gr.toFixed(2)}초` : '';
     if (race.time > (car.cfg.engine.perfectReaction ?? 0.3) || grTxt) hud.toast(`반응 ${race.time.toFixed(2)}초${grTxt}`);
   }
@@ -1009,7 +1032,8 @@ function frame(now, manual = false) {
     laps: trackData.laps,
     time: race.time,
     best: race.best,
-    record: myRecord(), // 내 최고 기록 (완주 시간 = 모든 바퀴 합)
+    record: myRecord() && myRecord().race, // 내 최고 기록 (완주 시간 = 모든 바퀴 합, 설정 ghost 기준)
+    recordNote: recordNote(myRecord()),
     speed: Math.abs(car.forwardSpeed) * 3.6,
     driftTime: car.drifting ? car.driftTime : 0,
     driftLevel: car.driftLevel,
@@ -1040,7 +1064,7 @@ function frame(now, manual = false) {
     draft: race.phase === 'racing' ? car.draft || 0 : 0,
     sectors: showSectors ? sectors.hud(race.phase === 'countdown' ? 0 : race.time - race.lapStart) : null,
     ghostDelta: ghost && ghost.kind !== 'off' && race.phase === 'racing' ? ghost.delta(playerProgress() - (race.lap - 1), race.time - race.lapStart, playerProgress(), race.time) : null,
-    ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : ghost && ghost.kind === 'friend' ? ghost.friendName : '내 최고',
+    ghostLabel: ghost && ghost.kind === 'bot' ? '기본 봇' : ghost && ghost.kind === 'friend' ? ghost.friendName : ghost && ghost.otherCar ? `내 최고 · ${ghost.otherCar.name}` : '내 최고',
   });
   engineAudio.update(car);
 

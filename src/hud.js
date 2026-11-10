@@ -203,7 +203,7 @@ export function createHud(track) {
       el.lap.textContent = s.label || `LAP ${s.lap}/${s.laps}`;
       el.time.textContent = fmtTime(s.time);
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
-      const bestTxt = s.record ? `최고 기록 ${fmtTime(s.record)}` : `최고 랩 ${fmtTime(s.best)}`;
+      const bestTxt = s.record ? `최고 기록 ${fmtTime(s.record)}${s.recordNote ? ` · ${s.recordNote}` : ''}` : `최고 랩 ${fmtTime(s.best)}`;
       if (bestTxt !== el.best._t) el.best.textContent = el.best._t = bestTxt;
       el.speed.textContent = Math.round(spd(s.speed));
       // 속도감: 200 km/h 넘으면 숫자가 따뜻하게 빛나고, 부스터 중에는 초록빛
@@ -478,8 +478,10 @@ export function createHud(track) {
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
       if (info.newRace) badges.push('<span class="badge">🏆 새 최고 기록!</span>');
-      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">예전 최고 ${fmtTime(info.prevRace)} → ${diffTxt}</span>`);
-      if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)} (${diffTxt})</span>`);
+      const pn = info.prevNote ? ` · ${esc(info.prevNote)}` : ''; // 다른 차로 낸 기록이면 그 차 이름
+      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">예전 최고 ${fmtTime(info.prevRace)}${pn} → ${diffTxt}</span>`);
+      if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)}${pn} (${diffTxt})</span>`);
+      if (info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
       if (info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
       else if (info.newLap && !info.newRace) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
       if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜고 달린 기록">🛟 도움 켬</span>');
