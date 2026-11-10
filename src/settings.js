@@ -64,8 +64,8 @@ export const SETTING_DEFS = [
     options: [['off', '끔'], ['best', '맵 최고 (모든 차)'], ['car', '이 차 최고'], ['bot', '봇 기록']], def: 'best' },
   { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
-  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷', type: 'choice',
-    options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움']], def: 'normal' },
+  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷 · 고수 = 이 맵 내 최고 기록보다 1~3% 빠름 (기록이 없으면 어려움보다 확실히 빠름)', type: 'choice',
+    options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '고수']], def: 'normal' },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
   // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
   { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,

@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { settings, SETTING_DEFS, createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutorialUrl, RACE_MODES, sampleOutline, outlineLength, drawTrackThumb } from './gameData.js';
 import { records, fmtTime } from './records.js';
+import { masterTarget } from './bots.js'; // 고수 봇 목표 기록 (레이스 방식 화면 설명)
 import { online } from './online.js';
 import { createCarModel } from './carModel.js';
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 카드의 진짜 차 사진
@@ -333,7 +334,7 @@ export async function runHome() {
   views.map.innerHTML = `
     <div class="h-maps">
       <div class="head"><div><h2>맵 고르기</h2><div class="who"></div></div>
-        <div class="bar"><button class="gm-btn" data-go="car" data-nav>‹ 차 바꾸기</button><button class="gm-btn primary" data-go="mode" data-nav>다음: 레이스 방식 › <kbd>Enter</kbd></button></div></div>
+        <div class="bar"><button class="gm-btn" data-go="car" data-nav>‹ 차 바꾸기 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-go="mode" data-nav>다음: 레이스 방식 › <kbd>Enter</kbd></button></div></div>
       <div class="h-mapgrid"></div>
     </div>`;
   const grid = views.map.querySelector('.h-mapgrid');
@@ -588,8 +589,18 @@ export async function runHome() {
     refreshChamp();
     const m = RACE_MODES.find((x) => x.id === raceMode);
     // 봇 실력 설명 (사용자 요청: 쉬움 = 처음 해도 이김, 중간 = 처음엔 어려움, 어려움 = 잘하는 사람과 비슷)
-    const LEVEL_TIP = { easy: '봇 쉬움: 처음 해도 이길 수 있어요', normal: '봇 중간: 처음 하는 사람은 이기기 어려워요', hard: '봇 어려움: 잘하는 사람과 비슷한 실력이에요' };
-    const lvTip = raceMode === 'race' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] : '';
+    const LEVEL_TIP = { easy: '봇 쉬움: 처음 해도 이길 수 있어요', normal: '봇 중간: 처음 하는 사람은 이기기 어려워요', hard: '봇 어려움: 잘하는 사람과 비슷한 실력이에요', master: '봇 고수: 내 최고 기록보다 1~3% 빨라요' };
+    let lvTip = raceMode === 'race' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] || '' : '';
+    if (lvTip && settings.get('botLevel') === 'master') {
+      // 고수: 이 맵(마지막으로 고른 맵) 내 최고 기록 → 봇 목표 (bots.js masterTarget, 같은 등급 차 기록 우선)
+      let mt = null;
+      try {
+        mt = masterTarget(records.all(), mapId, carId, cars, (mapInfo[mapId] || {}).laps || null);
+      } catch {}
+      lvTip = mt
+        ? `${lvTip} (목표: 내 최고 ${fmtTime(mt.sec)}${mt.adjusted ? ' (다른 등급 기록으로 어림)' : ''} → 약 ${fmtTime(mt.sec * 0.98)})`
+        : `${lvTip} (이 맵 기록이 없어서 지금은 어려움보다 조금 빠르게 달려요)`;
+    }
     views.mode.querySelector('.h-modetip').textContent = [MODE_TIPS[raceMode] || '', lvTip].filter(Boolean).join(' · ');
     views.mode.querySelector('[data-act="start"]').innerHTML =
       raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>'
@@ -850,6 +861,8 @@ export async function runHome() {
     const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' }[k];
     if (k === 'Escape' || k === 'Backspace') {
       e.preventDefault();
+      // 맵 고르기에서 Backspace = 차 고르기로 (사용자 요청 2026-11-10), Esc는 예전처럼 홈으로
+      if (view === 'map' && k === 'Backspace') return show('car');
       if (view !== 'main') show(view === 'mode' ? modeFrom : 'main');
       return;
     }

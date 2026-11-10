@@ -7,6 +7,7 @@
 //   나란히: 옆에 붙은 차가 있으면 조금 떨어짐
 //   실수: 가끔 코너에서 넓게 나가거나, 액셀을 잠깐 떼거나, 브레이크를 늦게 밟음 (쉬움일수록 자주)
 //   부스터(E): 앞에 브레이크 구간이 없는 긴 직선에서 씀 (보통·어려움)
+import * as THREE from 'three';
 import { lineCarModel } from './car.js';
 
 export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사라', '토르', '하나', '제트', '노바'];
@@ -38,10 +39,53 @@ export const BOT_LEVELS = {
   //   어려움 {sec, upMul, upDraft, downMul, secDown}: 사람이 sec초 넘게 앞서면 upMul배 + 보이지 않는 슬립스트림 upDraft(공기 저항 −30%×upDraft),
   //     봇이 secDown초 넘게 앞서면 downMul배
   //   보통: 없음
-  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 } },
-  normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 0.45, playerPush: 0.53 },
-  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.02, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 } },
+// fly = 그랑프리 비행 루트 (2026-11-10 bots-fly): speed = 공중 속도(m/s, 비행 최고 55), latK = 활주로로 꺾어 들어갈 때 옆 접지력 여유(낮을수록 일찍·많이 줄임),
+//   wobble = 공중에서 핸들·높이 흔들림 (쉬움일수록 큼). 없으면 { speed: 42, latK: 0.85, wobble: 0 }
+  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 }, fly: { speed: 38, latK: 0.75, wobble: 0.08 } },
+  normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 0.45, playerPush: 0.53, fly: { speed: 44, latK: 0.8, wobble: 0.04 } },
+  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.02, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50 } },
 };
+
+// 고수(master, 2026-11-10 사용자 요청 "어려움보다 잘하는, 내 랩타임보다 더 잘하는 AI"): 운전은 어려움과 똑같고,
+//   '페이스 지킴이'(raceSystem.js masterKeeper)가 내 최고 완주 기록보다 spread(2~4%, 봇마다 다르게) 빠른 시간표를 따라가게 도와줌
+//   (무리 속에서는 서로 막혀서 1~2% 잃음 → 실제 결과는 대략 내 기록보다 1~3% 빠름)
+//   시간표보다 늦으면 늦은 만큼(gain초 늦으면 최대) + 계속 늦으면 0.5초마다 integ×늦은 초씩 쌓아서 도움 h(0~1):
+//     코너 속도 +paceMax·h, 타이어 접지(옆·앞뒤·브레이크)와 핸들 회전 +gripMax·h, 엔진 힘 +powerMax·h, 보이지 않는 슬립스트림 draftMax·h (공기 저항 −30%·최고 속도 +4%까지)
+//     → 코너 속도(+7%)는 접지(+24% = 코너 한계 +11%)보다 덜 올려서 어려움과 같은 여유를 남김. 최고 속도는 차 최고의 +4%까지만
+//     + saturBrake: 핸들을 끝까지 꺾어도 모자라면 바로 속도를 줄임 (화산 T7·H1 출구에서 벽에 박혔던 것)
+//   시간표보다 ease초 넘게 앞서면 도움 없이 easeMul배로 살짝 늦춤 (어려움 봇의 downMul과 같음)
+//   점프 근처(봇 st.calm)에서는 코너 속도·힘 도움 없음 (접지 도움만). 저중력 구역은 calmGrav: false라 도움 그대로
+//   기록이 없으면(또는 온라인인데 방장이 &botTarget=을 안 줬으면) 늘 noTargetHelp만큼 도움 = 어려움보다 확실히 빠름
+//   사람이 humanSec초 넘게 앞서면 그만큼도 '늦음'으로 봄 (내 기록보다 빨리 달리는 날에도 따라옴)
+BOT_LEVELS.master = {
+  ...BOT_LEVELS.hard,
+  catchUp: null,
+  master: { spread: [0.02, 0.04], gain: 1.5, integ: 0.04, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, ease: 2, easeMul: 0.97, noTargetHelp: 0.45, humanSec: 1.5, classK: 0.05, calmGrav: false, saturBrake: 8 },
+  jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
+};
+
+/**
+ * 고수 봇 목표 기록 (내 최고 완주 기록). records = records.all() = { 맵: { 차: { race, laps } } }
+ *   같은 등급 차로 낸 기록 중 가장 빠른 것. 같은 등급 기록이 없으면 맵 최고 기록에 등급 차이만큼(등급마다 약 classK = 5%) 더하거나 뺌
+ * @returns { sec, car, laps, adjusted } 또는 null
+ */
+export function masterTarget(records, map, carId, cars = [], laps = null) {
+  const r = (records && records[map]) || {};
+  const classOf = (id) => ((cars || []).find((c) => c.id === id) || {}).class || null;
+  const RANK = { A: 0, B: 1, C: 2 };
+  const myC = classOf(carId);
+  let same = null, any = null;
+  for (const [car, v] of Object.entries(r)) {
+    if (!v || !(v.race > 0) || (laps && v.laps && v.laps !== laps)) continue;
+    if (!any || v.race < any.race) any = { race: v.race, car };
+    if ((!myC || classOf(car) === myC) && (!same || v.race < same.race)) same = { race: v.race, car };
+  }
+  if (same) return { sec: same.race, car: same.car, laps, adjusted: false };
+  if (!any) return null;
+  const k = BOT_LEVELS.master.master.classK;
+  const d = (RANK[myC] ?? 0) - (RANK[classOf(any.car)] ?? 0); // + = 내 등급이 더 느림
+  return { sec: any.race * (1 + k * d), car: any.car, laps, adjusted: d !== 0 };
+}
 
 /** 같은 씨앗이면 같은 난수 (봇마다 다른 성격) */
 export function rng(seed) {
@@ -64,6 +108,85 @@ export function profileFor(line, cfg) {
 }
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+
+// --- 비행 루트 (그랑프리 활주로 → 고리 4개 → 착륙장, 2026-11-10 bots-fly) ---
+//   사람처럼: 활주로로 들어가면 차가 저절로 비행 모드(car.js autoSwitch) → 활주로 끝에서 Space(climb)로 이륙
+//   → 고리를 잇는 매끈한 곡선(.debug/fly.js flyTest와 같은 곡선)을 따라 날고 → 착륙장에 내려 라인으로 돌아감
+//   비행 구역(car.flightAllowed) 안에서만 날게 되어 있어서 따로 막을 필요 없음
+const planCache = new WeakMap();
+const APPROACH = 170; // 활주로 시작 몇 m 앞부터 활주로로 들어갈 준비 (속도 줄이기)
+export function flightPlan(track) {
+  if (planCache.has(track)) return planCache.get(track);
+  let p = null;
+  const rw = track.runway, path = track.skyPath;
+  if (rw && path && path.length >= 3 && track.racingLine && track.sampleAt) {
+    const N = track.racingLine.N, Lm = track.length;
+    const rwT = rw.start.t != null ? rw.start.t : track.nearest(rw.start.pos).t;
+    const sky = (track.data && track.data.sky) || {};
+    const landT = sky.apron ? (sky.apron.t1 + 23 / Lm) % 1 : track.nearest(path[path.length - 1]).t;
+    const last = path[path.length - 1];
+    const landPt = track.surf ? track.surf(track.sampleAt(landT), -6, 0, new THREE.Vector3()) : last.clone();
+    const n = Math.round(path[0].distanceTo(last) * 1.3);
+    const dense = new THREE.CatmullRomCurve3([...path.map((v) => v.clone()), landPt], false, 'centripetal').getSpacedPoints(n);
+    const dir = rw.end.pos.clone().sub(rw.start.pos).setY(0).normalize();
+    const rwI = Math.round(rwT * N) % N;
+    // 활주로로 들어가는 길: 활주로 시작 APPROACH m 앞부터 도로 가운데 선 → 활주로 가운데 선 (1 m 간격, 굽은 정도 = 오른쪽 +)
+    //   (활주로가 큰 코너 출구에 붙어 있어서, 라인 속도 그대로 들어가면 못 돎: 어려움 봇이 61 m/s로 와서 밖으로 튕겼음)
+    const S = track.samples, ds = Lm / N;
+    const raw = [];
+    //   도로 가운데 선 → (활주로 시작 BLEND m 앞부터) 활주로 25 m 지점까지 매끈한 곡선(Hermite) → 활주로 가운데 선
+    //   (그냥 이으면 도로와 활주로 사이 12° 꺾임에서 속도 계획이 24 m/s로 뚝 떨어졌음)
+    const BLEND = 45, kB = Math.round(BLEND / ds);
+    for (let k = Math.round(APPROACH / ds); k > kB; k--) raw.push(S[(((rwI - k) % N) + N) % N].pos);
+    const s0 = S[(((rwI - kB) % N) + N) % N], P0 = s0.pos, T0 = s0.tan.clone().setY(0).normalize();
+    const P1 = rw.start.pos.clone().addScaledVector(dir, 25);
+    const chord = Math.hypot(P1.x - P0.x, P1.z - P0.z);
+    for (let k = 0; k <= 40; k++) {
+      const u = k / 40, u2 = u * u, u3 = u2 * u;
+      const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
+      raw.push(new THREE.Vector3(
+        h00 * P0.x + h10 * chord * T0.x + h01 * P1.x + h11 * chord * dir.x,
+        P0.y + (P1.y - P0.y) * u,
+        h00 * P0.z + h10 * chord * T0.z + h01 * P1.z + h11 * chord * dir.z,
+      ));
+    }
+    for (const q of rw.samples) if (q.dist > 25.5) raw.push(q.pos);
+    const ap = [raw[0].clone()];
+    let carry = 0;
+    for (let k = 1; k < raw.length; k++) {
+      const a = raw[k - 1], b = raw[k], seg = Math.hypot(b.x - a.x, b.z - a.z);
+      let u = 1 - carry;
+      while (u <= seg) {
+        ap.push(a.clone().lerp(b, u / seg));
+        u += 1;
+      }
+      carry = seg - (u - 1);
+    }
+    const kap = new Float32Array(ap.length);
+    const H = 6; // 앞뒤 6 m 방향 차이로 굽은 정도
+    for (let k = 0; k < ap.length; k++) {
+      const a = ap[Math.max(0, k - H)], b = ap[k], c = ap[Math.min(ap.length - 1, k + H)];
+      const t1x = b.x - a.x, t1z = b.z - a.z, t2x = c.x - b.x, t2z = c.z - b.z;
+      const l1 = Math.hypot(t1x, t1z) || 1, l2 = Math.hypot(t2x, t2z) || 1;
+      const ang = Math.atan2((t1x * t2z - t1z * t2x) / (l1 * l2), (t1x * t2x + t1z * t2z) / (l1 * l2));
+      kap[k] = ang / Math.max(1, (l1 + l2) / 2);
+    }
+    // 부드럽게 (앞뒤 5 m 평균)
+    const kapS = new Float32Array(ap.length);
+    for (let k = 0; k < ap.length; k++) {
+      let sum = 0, n2 = 0;
+      for (let q = Math.max(0, k - 5); q <= Math.min(ap.length - 1, k + 5); q++) (sum += kap[q]), n2++;
+      kapS[k] = sum / n2;
+    }
+    p = {
+      rwI, start: rw.start.pos, end: rw.end.pos, dir, half: rw.half, len: rw.end.dist,
+      dense, landI: Math.round(track.nearest(last).t * N) % N,
+      ap, kap: kapS, apRw: ap.length - Math.round(rw.end.dist - 25),
+    };
+  }
+  planCache.set(track, p);
+  return p;
+}
 
 const gravCache = new WeakMap(); // 트랙마다 지점별 중력 배수 (달·정글 저중력 구역: 브레이크가 덜 듦)
 function gravityArray(track) {
@@ -109,6 +232,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     blockedT: 0, pushT: 0,
     heldT: 0, passT: 0, // 앞차에 막힌 시간, 추월 시도 남은 시간
     passSide: 0, // 추월하러 빠진 쪽 (앞차 기준 −1 왼쪽 / +1 오른쪽)
+    fly: null, // 비행 루트 단계: null(땅) / 'approach'(활주로로) / 'runway' / 'air' / 'out'(착륙 뒤 라인으로)
+    flyT: 0, flyI: 0,
   };
   // 성격: 추월을 얼마나 과감하게 하는지 (0.25~1). 씨앗으로 정해져서 같은 봇은 늘 같은 성격
   const aggr = 0.25 + rng(seed * 104729 + 7)() * 0.75;
@@ -136,6 +261,153 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     for (let k = jp.lipI - Math.round(80 / ds); k <= end + Math.round(170 / ds); k++) jumpCalm[W(k)] = 1;
   }
 
+  // 비행 루트: 실력별 비행 속도·흔들림 (level.fly). 쉬움일수록 느리고 조금 흔들림
+  const plan = flightPlan(track);
+  const FLY = { speed: 42, look: 22, gain: 2.5, wobble: 0, ...(level.fly || {}) };
+  const flyV = FLY.speed * (1 + (pace / level.pace - 1) * 0.5); // 봇마다 조금씩 다름
+  // 활주로로 들어가는 길의 속도 계획 (이 차의 옆 접지력으로, 뒤에서부터 제동 거리)
+  let apV = null;
+  if (plan) {
+    const n = plan.ap.length, aLat = cm.aLat(40) * (FLY.latK ?? 0.85) * Math.min(1, pace), aBr = cm.aBrake(40) * 0.8;
+    apV = new Float32Array(n);
+    for (let k = 0; k < n; k++) apV[k] = k >= plan.apRw ? 80 : Math.min(80, Math.sqrt(aLat / Math.max(1e-4, Math.abs(plan.kap[k]))));
+    for (let k = n - 2; k >= 0; k--) apV[k] = Math.min(apV[k], Math.sqrt(apV[k + 1] * apV[k + 1] + 2 * aBr));
+  }
+  /** 수평으로 그 점을 향하려면 핸들을 얼마나 (fly.js steerTo와 같은 식) */
+  function steerToward(x, z, gain) {
+    const tx = x - car.pos.x, tz = z - car.pos.z;
+    const tl = Math.hypot(tx, tz) || 1;
+    const fx = car.fwd.x, fz = car.fwd.z;
+    const fl = Math.hypot(fx, fz) || 1;
+    return clamp(((fx / fl) * (tz / tl) - (fz / fl) * (tx / tl)) * gain, -1, 1);
+  }
+  /** 활주로로 가는 길·활주로 위: 바로 앞 같은 줄 차 뒤에 줄 섬 (모두 같은 길로 모여서 예전엔 여기서 많이 부딪힘) */
+  function queueSpeed(ctx, speed) {
+    const myLat = car.trackInfo ? car.trackInfo.lateral : 0;
+    let f = Infinity;
+    for (const o of ctx.others) {
+      if (o.progM <= 1 || o.progM > 10 + 0.5 * Math.max(0, speed) || Math.abs(o.lat - myLat) > 2.8) continue;
+      f = Math.min(f, Math.sqrt(o.speed * o.speed * 0.8 + 2 * 6 * Math.max(0, o.progM - 7)), o.progM < 7 ? o.speed - 2 : Infinity);
+    }
+    return f;
+  }
+  /** 비행 루트 조작 (땅 운전 대신). 비행 루트가 아니면 null */
+  function flyControls(ctx, c, i0, speed) {
+    const dt = ctx.dt;
+    const dx = car.pos.x - plan.start.x, dz = car.pos.z - plan.start.z;
+    const along = dx * plan.dir.x + dz * plan.dir.z;
+    const off = Math.abs(dx * plan.dir.z - dz * plan.dir.x);
+    // 시작: 활주로 시작 APPROACH m 앞 (완주한 봇은 그냥 땅으로)
+    if (!st.fly) {
+      const dI = W(plan.rwI - i0) * ds;
+      if (dI > 0 && dI < APPROACH - 5 && !ctx.finished && car.grounded && car.mode !== 'boat') {
+        st.fly = 'approach';
+        st.flyT = 0;
+        st.apI = 0;
+      } else return null;
+    }
+    st.flyT += dt;
+    if (st.fly === 'out') {
+      if (st.flyT > 1.5 || car.mode !== 'fly') st.fly = null;
+      return null; // 땅 운전 (라인으로 돌아감)
+    }
+    if (car.flying) {
+      st.fly = 'air';
+      // 매끈한 비행 곡선에서 가장 가까운 점보다 look 칸 앞을 쫓아감
+      const D = plan.dense;
+      let bi = st.flyI, bd = Infinity;
+      for (let k = Math.max(0, st.flyI - 10); k < Math.min(D.length, st.flyI + 60); k++) {
+        const d = D[k].distanceToSquared(car.pos);
+        if (d < bd) (bd = d), (bi = k);
+      }
+      st.flyI = bi;
+      const tgt = D[Math.min(D.length - 1, bi + FLY.look)];
+      const wob = FLY.wobble * Math.sin(st.t * 1.3 + st.phase);
+      c.steer = clamp(steerToward(tgt.x, tgt.z, FLY.gain) + wob, -1, 1);
+      const dy = tgt.y - car.pos.y - car.vel.y * 0.3 + wob * 2;
+      c.climb = dy > 0.5;
+      c.dive = dy < -0.5;
+      const vNow = car.vel.length();
+      c.throttle = vNow > flyV ? 0 : 1;
+      c.brake = vNow > flyV + 4 ? 0.5 : 0;
+      // 바로 앞(14 m 안, 옆 4 m 안)에 다른 차가 날고 있으면 액셀을 뗌 (공중에서 부딪히지 않게)
+      for (const o of ctx.others) {
+        if (!o.pos) continue;
+        const ox = o.pos.x - car.pos.x, oy = o.pos.y - car.pos.y, oz = o.pos.z - car.pos.z;
+        const ah = ox * car.fwd.x + oz * car.fwd.z;
+        if (ah > 0 && ah < 14 && Math.abs(oy) < 4 && Math.abs(ox * car.fwd.z - oz * car.fwd.x) < 4) c.throttle = 0;
+      }
+      if (bi > D.length - 45) {
+        // 착륙: 내려가는 속도를 6~9 m/s로 (너무 세게 내리면 착지 때 속도를 잃음)
+        c.dive = car.vel.y > -6;
+        c.climb = car.vel.y < -9;
+        c.throttle = 0.3;
+        c.brake = 0;
+      }
+      return c;
+    }
+    if (st.fly === 'air') {
+      // 땅에 닿음: 지금 옆 위치에서 천천히 라인으로
+      st.fly = 'out';
+      st.flyT = 0;
+      st.flyI = 0;
+      const ti = car.trackInfo;
+      if (ti) st.lane = st.laneTarget = clamp(ti.lateral - L.offset[i0], -12, 12);
+      st.laneHold = 0;
+      return null;
+    }
+    // 땅 (활주로로 가는 중 / 활주로 위): 활주로 가운데 선 위 25 m 앞을 쫓아감
+    if (along > 3) st.fly = 'runway';
+    // 활주로에서 밀려났거나(옆으로 벗어남), 너무 오래 걸리면(막힘) 포기하고 땅으로
+    const past = W(i0 - plan.rwI);
+    if ((st.fly === 'runway' && off > plan.half + 4) || st.flyT > 14 || (st.fly === 'approach' && past < N / 2 && past * ds > 40 && along < 0)) {
+      st.fly = null;
+      return null;
+    }
+    if (st.fly === 'runway') {
+      c.steer = steerToward(plan.start.x + plan.dir.x * (along + 25), plan.start.z + plan.dir.z * (along + 25), 3);
+      c.throttle = 1;
+      c.brake = 0;
+      const q = queueSpeed(ctx, speed);
+      if (speed > q + 0.4) {
+        c.throttle = 0;
+        c.brake = clamp((speed - q) / 6, 0, 0.6);
+      }
+      const dEnd = Math.hypot(plan.end.x - car.pos.x, plan.end.z - car.pos.z);
+      if (speed > 27 && dEnd < 10) c.climb = true;
+      return c;
+    }
+    // 활주로 앞: 들어가는 길(도로 가운데 → 활주로 가운데)을 따라감 + 그 길의 속도 계획
+    const A = plan.ap;
+    let bi = st.apI, bd = Infinity;
+    for (let k = Math.max(0, st.apI - 5); k < Math.min(A.length, st.apI + 80); k++) {
+      const d = (A[k].x - car.pos.x) ** 2 + (A[k].z - car.pos.z) ** 2;
+      if (d < bd) (bd = d), (bi = k);
+    }
+    st.apI = bi;
+    if (bd > 30 * 30) {
+      st.fly = null; // 길에서 너무 멀어짐 (밀려남 등)
+      return null;
+    }
+    const look = Math.round(6 + Math.max(0, speed) * 0.35);
+    const tp = A[Math.min(A.length - 1, bi + look)];
+    const kf = plan.kap[Math.min(A.length - 1, bi + Math.round(Math.max(0, speed) * 0.18))];
+    c.steer = clamp((kf * speed * speed) / 24 + 2 * Math.atan2(...((dx2, dz2) => {
+      const fl = Math.hypot(car.fwd.x, car.fwd.z) || 1, fx = car.fwd.x / fl, fz = car.fwd.z / fl;
+      return [fx * dz2 - fz * dx2, fx * dx2 + fz * dz2];
+    })(tp.x - car.pos.x, tp.z - car.pos.z)), -1, 1);
+    let tgt = Infinity;
+    const reach = Math.min(A.length - 1, bi + Math.round((speed * speed) / (2 * 0.8 * cm.aBrake(30)) + 10));
+    for (let k = bi + 2; k <= reach; k++) tgt = Math.min(tgt, Math.sqrt(apV[k] * apV[k] + 2 * 0.8 * cm.aBrake(apV[k]) * (k - bi - 2)));
+    tgt = Math.min(tgt, apV[bi], queueSpeed(ctx, speed));
+    if (speed > tgt + 0.4) {
+      c.throttle = 0;
+      c.brake = clamp((speed - tgt) / 3, 0, 1);
+    } else c.throttle = Math.min(1, thrK);
+    st.dbg = { fly: st.fly, apI: bi, tgt: +tgt.toFixed(1) };
+    return c;
+  }
+
   /** 라인 지점 j에서 옆으로 lane만큼 비킨 목표 점 */
   function target(j, lane) {
     const s = S[j];
@@ -156,9 +428,16 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     const i0 = ti.index % N;
     const v = Math.max(8, Math.abs(car.speed));
     const speed = car.speed;
+    // 비행 루트 (그랑프리): 활주로·공중에서는 땅 운전 대신
+    const fc = plan ? flyControls(ctx, c, i0, speed) : null;
+    if (fc) {
+      if (ctx.since < st.react) c.throttle = c.brake = 0;
+      if (st.fly !== 'approach') st.dbg = { fly: st.fly, flyI: st.flyI };
+      return c;
+    }
 
     // --- 실수 ---
-    const risky = gAt(i0) < 0.9 || narrowAt(W(i0 + Math.round(60 / ds))) || narrowAt(i0) || car.surface === 'magnet' || !car.grounded;
+    const risky = gAt(i0) < 0.9 || narrowAt(W(i0 + Math.round(60 / ds))) || narrowAt(i0) || car.surface === 'magnet' || !car.grounded || !!st.fly;
     if (!ctx.finished && ctx.since > 5) {
       st.nextMistake -= dt;
       // 점프·저중력·좁은 길·자석 도로 근처에서는 실수하지 않음 (거기서 실수하면 떨어지거나 코스 밖으로 나가 복귀만 늘어남)
@@ -230,7 +509,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       //   예전엔 사람이 옆으로 밀고 들어오면 봇이 늘 물러나서 몸싸움에서 사람이 항상 이겼음
       //   출발 직후 12초(한 덩어리)·점프·저중력·좁은 길에서는 안 버팀 (거기서 버티면 코스 밖으로 튕겨 복귀만 늘어남)
       const firm = o.human && firmOK ? (level.firm || 0) * (0.6 + 0.4 * aggr) : 0;
-      if (jumpSoon && dM > -15 && dM < 60) jumpTraffic = true;
+      if (jumpSoon && dM > -(level.jumpTrafficM ? level.jumpTrafficM[0] : 15) && dM < (level.jumpTrafficM ? level.jumpTrafficM[1] : 60)) jumpTraffic = true;
       if (dM > 2 && dM < 30 && Math.abs(dLat) < 3.5) packAhead = true;
       // 점프 구역에서 옆(6 m 안)에 조금 앞선 차가 있으면 뒤로 빠져 그 차 뒤에 줄 섬 (슬립스트림 타고 따라감)
       if (jumpSoon && dM > 0 && dM < 8 && Math.abs(dLat) < 6) follow = Math.min(follow, o.speed - 2.5);
@@ -345,6 +624,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)));
       const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v)); // 핸들 1일 때 회전 속도 (car.js와 같은 식)
       steerCmd = yawDes / Math.max(0.05, perSteer);
+      // 핸들을 끝까지 꺾어도 모자란 정도 (고수 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
+      st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
     } else {
       // 공중·비행·배: 예전 방식 (앞 점 향하기 + 곡률)
       const look = Math.round((6 + v * 0.35) / ds);
@@ -360,6 +641,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     const leadT = st.mistake === 'late' ? level.lead * 0.35 : level.lead;
     const lead = W(i0 + Math.round((v * leadT) / ds));
     st.calm = !!((jumpCalm && jumpCalm[i0]) || gHere < 0.95); // 점프 근처·저중력: 따라잡기로 빨라지지 않음 (raceSystem의 보이지 않는 슬립스트림도 끔)
+    // 고수(level.master.calmGrav = false): 저중력 구역에서는 도움을 그대로 (점프 근처만 조심). 접지 도움도 같이 커져서 코너는 버팀
+    if (level.master && level.master.calmGrav === false) st.calm = !!(jumpCalm && jumpCalm[i0]);
     const pm = st.calm ? Math.min(1, st.paceMul) : st.paceMul;
     // 출발 뒤 25초(첫 코너들, 한 덩어리): 바로 앞에 차가 있으면 코너 속도를 조금 낮춤 (빨라진 어려움 봇이 달 T1 출구에서 뒤엉켜 여러 대 복귀했음)
     const openK = ctx.since < 25 && packAhead && level.pace > 0.95 ? 0.95 : 1;
@@ -380,6 +663,10 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
       if (allow < tgt) tgt = allow;
     }
+    // 고수(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
+    //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
+    if (level.master && level.master.saturBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - level.master.saturBrake * st.satur);
+    st.satur = 0;
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
     if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm);
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
@@ -399,6 +686,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       if (follow < tgt - 0.3 && speed > 10 && !ctx.finished) st.heldT += dt;
       else st.heldT = Math.max(0, st.heldT - dt * 0.5);
       if (st.heldT > 1.5) st.passT = 4;
+      st.tgt0 = tgt; // (테스트용) 앞차 때문에 줄이기 전 목표 속도
       tgt = Math.min(tgt, follow);
     }
     if (st.passT > 0) st.passT -= dt;
@@ -442,6 +730,8 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     /** 복귀(리스폰) 뒤: 줄·실수 초기화 */
     reset(grid = false) {
       st.lane = st.laneTarget = 0;
+      st.fly = null;
+      st.flyI = 0;
       st.mistake = null;
       st.prevLat = null;
       st.started = !grid; // 그리드에 새로 서면 출발 때 칸 줄을 지킴

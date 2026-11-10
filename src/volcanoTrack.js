@@ -138,6 +138,56 @@ function rockTexture(seed, base, spread) {
   });
 }
 
+// 마그마 핏줄: 검은 바탕에 주황·노랑으로 빛나는 갈라진 금 (emissiveMap 용). 위아래(v)로 이음매 없이 반복.
+//   bg(g, w, h): 바탕 그리기 (없으면 검정), weight(x/w): 그 가로 위치에서 금이 얼마나 밝은지 (0~1), wrapU: 가로도 반복
+function magmaVeins(seed, w, h, { bg = null, weight = () => 1, count = 26, wrapU = true } = {}) {
+  return canvasTexture(w, h, (g) => {
+    const r = seededRandom(seed);
+    if (bg) bg(g, w, h);
+    else {
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, w, h);
+    }
+    const crack = (pts, width, color, blur) => {
+      g.strokeStyle = color;
+      g.lineWidth = width;
+      g.shadowColor = '#ff4a00';
+      g.shadowBlur = blur;
+      for (const oy of [-h, 0, h])
+        for (const ox of wrapU ? [-w, 0, w] : [0]) {
+          g.beginPath();
+          pts.forEach(([x, y], k) => (k ? g.lineTo(x + ox, y + oy) : g.moveTo(x + ox, y + oy)));
+          g.stroke();
+        }
+    };
+    g.lineCap = g.lineJoin = 'round';
+    for (let k = 0; k < count; k++) {
+      let x = r() * w, y = r() * h;
+      const a = weight(x / w);
+      if (a < 0.08 || r() > a + 0.25) continue;
+      const pts = [[x, y]];
+      const dir = r() * Math.PI * 2;
+      const n = 5 + Math.floor(r() * 8);
+      for (let q = 0; q < n; q++) {
+        const ang = dir + (r() - 0.5) * 1.6;
+        x += Math.cos(ang) * (5 + r() * 12);
+        y += Math.sin(ang) * (5 + r() * 12);
+        pts.push([x, y]);
+        // 가지
+        if (r() < 0.18) {
+          const b = [[x, y]];
+          let bx = x, by = y;
+          for (let z = 0; z < 3; z++) b.push([(bx += (r() - 0.5) * 18), (by += (r() - 0.5) * 18)]);
+          crack(b, 1, `rgba(255,${90 + r() * 60},20,${0.55 * a})`, 3);
+        }
+      }
+      crack(pts, 3 + r() * 2, `rgba(200,40,0,${0.7 * a})`, 8);
+      crack(pts, 1.2, `rgba(255,${170 + r() * 60},70,${0.95 * a})`, 2);
+    }
+    g.shadowBlur = 0;
+  }, true);
+}
+
 export function buildVolcanoTrack(data, scene) {
   const buildT0 = performance.now();
   const W = data.width;
@@ -474,7 +524,8 @@ export function buildVolcanoTrack(data, scene) {
   const railGlowMat = new THREE.MeshBasicMaterial({ color: '#ff8a2a', toneMapped: false, side: THREE.DoubleSide });
   const rockWallTex = rockTexture(31, '#2a2522', [22, 34]);
   rockWallTex.repeat.set(1, 1);
-  const rockWallMat = new THREE.MeshStandardMaterial({ map: rockWallTex, roughness: 0.95, side: THREE.DoubleSide, color: '#8a7f78' });
+  const rockWallVeins = magmaVeins(61, 256, 256, { count: 13 });
+  const rockWallMat = new THREE.MeshStandardMaterial({ map: rockWallTex, roughness: 0.95, side: THREE.DoubleSide, color: '#8a7f78', emissive: '#ffffff', emissiveMap: rockWallVeins, emissiveIntensity: 0.7 });
   const posts = [];
   const railRuns = [];
   for (const [n, side] of [[0, -1], [1, 1]]) {
@@ -587,6 +638,14 @@ export function buildVolcanoTrack(data, scene) {
     }
   }
   const depthAt = (i, side) => cliffDepth[sideN(side)][wrapI(i)];
+  // 용암 골짜기: 이 구간의 깊은 낭떠러지 옆은 50 m 가까이 평평한 용암 바닥 → 칼날 능선 양쪽 아래로 용암이 보임
+  const valleySecs = data.lavaValleys || ['ridge', 'K1', 'ridge2', 'K2', 'T5', 'T6', 'T7'];
+  const valley = new Uint8Array(SAMPLES);
+  for (const nm of valleySecs) {
+    const r = data.sections && data.sections[nm];
+    if (!r) continue;
+    for (let i = Math.floor(r[0] * SAMPLES); i <= Math.ceil(r[1] * SAMPLES); i++) valley[wrapI(i)] = 1;
+  }
 
   // ---------------------------------------------------------------- 갓길 경사판 (열린 쪽만: 코스 밖에서 다시 올라올 수 있게)
   const SKW = 4.5;
@@ -625,22 +684,29 @@ export function buildVolcanoTrack(data, scene) {
   const cliffMat = new THREE.MeshStandardMaterial({ map: cliffTex, roughness: 1, side: THREE.DoubleSide, color: '#9a8c84' });
   // 아래쪽이 용암 빛을 받아 붉게: 꼭짓점 색 대신 emissive 그라데이션 텍스처 (위 검정 → 아래 주황)
   //   strip의 u = 단면 점 순서(0 = 도로 끝, 1 = 바닥), v = 도로 거리 → 그라데이션은 가로(u) 방향. 왼쪽은 단면을 뒤집어 넣으므로 텍스처도 뒤집은 재질
-  const glowTex = canvasTexture(128, 4, (g, w, h) => {
-    const grd = g.createLinearGradient(0, 0, w, 0);
-    grd.addColorStop(0, '#2a120b');
-    grd.addColorStop(0.4, '#3a1408');
-    grd.addColorStop(0.75, '#7a2000');
-    grd.addColorStop(1, '#ff4a00');
-    g.fillStyle = grd;
-    g.fillRect(0, 0, w, h);
-  }, false);
+  const glowTex = magmaVeins(53, 128, 512, {
+    wrapU: false,
+    count: 70,
+    weight: (u) => Math.min(1, Math.max(0, (u - 0.18) / 0.55)),
+    bg: (g, w, h) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, '#2a120b');
+      grd.addColorStop(0.4, '#3a1408');
+      grd.addColorStop(0.75, '#7a2000');
+      grd.addColorStop(1, '#ff4a00');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+    },
+  });
+  glowTex.wrapS = THREE.ClampToEdgeWrapping;
+  glowTex.repeat.set(1, 0.3); // v = 도로 거리/10 → 약 33 m마다 반복
   cliffMat.emissive = new THREE.Color('#ffffff');
   cliffMat.emissiveMap = glowTex;
   cliffMat.emissiveIntensity = 0.75;
   const cliffMatL = cliffMat.clone();
   cliffMatL.emissiveMap = glowTex.clone();
   cliffMatL.emissiveMap.wrapS = THREE.RepeatWrapping;
-  cliffMatL.emissiveMap.repeat.set(-1, 1);
+  cliffMatL.emissiveMap.repeat.set(-1, 0.3);
   cliffMatL.emissiveMap.offset.set(1, 0);
   cliffMatL.emissiveMap.needsUpdate = true;
   const lavaTex = lavaTexture(9);
@@ -747,6 +813,35 @@ export function buildVolcanoTrack(data, scene) {
     }
     return out;
   }
+  // 용암 들판: 칼날 능선·S자(valley 구간) 둘레 약 300 m 땅을 용암 아래로 → 좁은 길 양쪽 멀리까지 빛나는 용암 바다, 군데군데 바위섬
+  //   다른 도로(valley 아닌 곳)에서 100 m 안은 원래 땅 그대로
+  const valleyPts = [];
+  for (let i = 0; i < SAMPLES; i += 8) if (valley[i]) valleyPts.push(samples[i].pos);
+  const VR0 = data.lavaFieldInner || 230, VR1 = data.lavaFieldOuter || 360;
+  const vBox = new THREE.Box2(new THREE.Vector2(Infinity, Infinity), new THREE.Vector2(-Infinity, -Infinity));
+  for (const p of valleyPts) vBox.expandByPoint(new THREE.Vector2(p.x, p.z));
+  vBox.expandByScalar(VR1 + 10);
+  function valleyH(x, z, H, ns, nd) {
+    if (!valleyPts.length || x < vBox.min.x || x > vBox.max.x || z < vBox.min.y || z > vBox.max.y) return H;
+    let d2 = Infinity;
+    for (const p of valleyPts) {
+      const q = (p.x - x) ** 2 + (p.z - z) ** 2;
+      if (q < d2) d2 = q;
+    }
+    const d = Math.sqrt(d2) + noise(x / 60, z / 60, 2) * 40;
+    let w = 1 - smooth(VR0, VR1, d);
+    if (w <= 0) return H;
+    if (ns && !valley[ns.i]) w *= smooth(55, 98, nd); // 다른 도로 근처는 원래 땅
+    else if (ns) {
+      const sd = (x - ns.pos.x) * ns.right.x + (z - ns.pos.z) * ns.right.z < 0 ? -1 : 1;
+      if (edgeAt(ns.i, sd) !== EDGE.cliff) w *= smooth(40, 90, nd); // 열린 길가·벽 쪽은 길 옆 땅을 남김
+    }
+    if (w <= 0) return H;
+    // 용암 바닥 + 바위섬 (노이즈가 높은 곳만 용암 위로)
+    const isl = noise(x / 55, z / 55, 3);
+    const floor = LAVA_Y - 6 + Math.max(0, isl - 0.5) * 40 + noise(x / 13, z / 13, 2) * 1.5;
+    return Math.min(H, THREE.MathUtils.lerp(H, floor, w));
+  }
   function terrainH(x, z) {
     let nd = Infinity, ns = null, under = Infinity;
     roadNear(x, z, 100, (s) => {
@@ -781,7 +876,8 @@ export function buildVolcanoTrack(data, scene) {
           // 낭떠러지: 바로 깊이만큼 떨어지고, 아주 멀리서야 원래 땅으로 (용암까지면 넓은 용암 골짜기)
           const dep = depthAt(ns.i, side);
           edgeY = roadEdge - dep;
-          k = smooth(eW + 0.4, eW + (dep > 30 ? 110 : 45), nd);
+          if (dep > 30 && valley[ns.i]) k = smooth(eW + 42, 97, nd + noise(x / 23, z / 23, 2) * 9); // 넓은 용암 바닥 뒤 가파른 골짜기 벽
+          else k = smooth(eW + 0.4, eW + (dep > 30 ? 110 : 45), nd);
         } else if (e === EDGE.lava) {
           edgeY = roadEdge - 3.2; // 용암 웅덩이 밑 (웅덩이 면은 도로 −1.4 m)
           k = smooth(eW + 24, eW + 40, nd);
@@ -798,6 +894,7 @@ export function buildVolcanoTrack(data, scene) {
       H = edgeY * (1 - k) + nat * k - sink;
       if (under < Infinity) H = Math.min(H, under - 0.1);
     }
+    if (!(ns && nd < eW + 1 && under < Infinity)) H = valleyH(x, z, H, ns, nd);
     return { H: lakeH(x, z, chasmH(x, z, H)), nd: ns ? nd : Infinity };
   }
 
@@ -880,6 +977,17 @@ export function buildVolcanoTrack(data, scene) {
     const t = lavaTexture(21);
     t.repeat.set(w / 60, h / 60);
     const mat = new THREE.MeshBasicMaterial({ map: t, color: '#ffffff', toneMapped: false });
+    // 안개를 덜 받음 (1.4 km 안은 60%만) → 능선에서 멀리 내려다봐도 용암이 빛나 보임, 아주 먼 끝은 안개에 녹음
+    mat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <fog_fragment>',
+        `#ifdef USE_FOG
+          float vfF = smoothstep( fogNear, fogFar, vFogDepth );
+          vfF = mix( vfF * 0.6, vfF, smoothstep( 1400.0, 2300.0, vFogDepth ) );
+          gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, vfF );
+        #endif`,
+      );
+    };
     const m = new THREE.Mesh(geo, mat);
     m.position.set(gx0 + (NX * CELL) / 2, LAVA_Y, gz0 + (NZ * CELL) / 2);
     m.name = 'volcanoLava';
@@ -1002,6 +1110,7 @@ export function buildVolcanoTrack(data, scene) {
     lavaSea.mat.color.setScalar(pulse);
     lavaPoolMat.color.setScalar(pulse);
     cliffMat.emissiveIntensity = cliffMatL.emissiveIntensity = 0.75 + Math.sin(time * 1.3) * 0.1;
+    rockWallMat.emissiveIntensity = 0.6 + Math.sin(time * 1.1 + 1) * 0.18;
     lipGlow.color.setHSL(0.11, 1, 0.55 + Math.sin(time * 6) * 0.15);
   }
   const sampleAtTracked = (t) => (lastSampled = sampleAt(t));

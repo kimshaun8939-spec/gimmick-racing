@@ -478,6 +478,8 @@
   "half": 3.75, "hitR": 1.25, "surge": [1.1, 0.6], "comboStep": 0.12, "comboMax": 5, "perfect": [3.0, 1.5], "hitSlow": 0.88
  },
  "_laneBuoys": "물길 양옆 부표 줄 (2026-11-10): 빨강·흰 부표가 물길(빠른 물) 경계. 부표 밖은 거친 물 = 초당 속도 roughDrag 비율만큼 더 느려짐(최고 약 −15%, 플레이어만). 부표에 박으면 튕겨 나가고 hitSlow만큼 느려짐. every = 간격(m), out = 도로 끝에서 바깥(m)",
+ "_offCourse": "코스 밖 물 (2026-11-10 seafix, 사용자 요청 \"바다에서 숏컷을 가도 페널티가 없음\", src/seaGates.js offCourse): 배로 물길 부표 줄 밖 free m까지는 괜찮음, 그 밖은 멀수록 느려짐(초당 k0 + kPer×넘은 m, 최대 kMax) + '🌊 코스 밖! 느려져요', 부표 줄 밖 resetOut m 넘게(resetDelay초) 나가거나 코스 밖에 maxOutT초 넘게 있으면 물길로 복귀. 플레이어만 (봇은 그대로). enabled false면 끔, rope false면 밧줄·뜨개 안 보임",
+ "offCourse": { "free": 4, "k0": 0.2, "kPer": 0.05, "kMax": 1.2, "resetOut": 24, "resetDelay": 0.35, "maxOutT": 4, "rope": true, "ropeEvery": 3 },
  "laneBuoys": { "every": 20, "out": 1.6, "roughDrag": 0, "hitSlow": 1 },
  "_currents": "급류 (2026-11-10): 물 위에 하늘색 화살표 띠. 그 안에 있으면 물살 가속(car.boatSurge). [p0, p1, 시작 옆 위치, 끝 옆 위치, 폭, 세기]",
  "_off_currents": [[37.5, 39.45, 2.0, -1.0, 7, 1.0]

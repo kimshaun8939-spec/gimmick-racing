@@ -187,6 +187,37 @@ export function buildSeaScenery(track, scene) {
     }
     return hi - lo < maxD;
   };
+  /**
+   * (2026-11-10 seafix "바다의 물건이 육지까지 침투") 물이 충분히 깊고 코스에서 떨어진 곳인가
+   *   (x, z) 가운데 + 둘레 반지름 r 원 위 8점의 바닥이 모두 −depth보다 깊고(격자 밖 = 먼바다는 깊음),
+   *   코스(도로·물길) 가운데에서 clear + r m 넘게 떨어져 있어야 함
+   */
+  const deepWater = (x, z, r, depth = 1.5, clear = HW + 12) => {
+    for (let k = 0; k <= 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const px = k === 8 ? x : x + Math.cos(a) * r, pz = k === 8 ? z : z + Math.sin(a) * r;
+      const y = groundY(px, pz);
+      if (y !== null && y > -depth) return false;
+    }
+    return track.nearestRaw(tmpV.set(x, 0, z)) > clear + r;
+  };
+  /** 배 몸통(뱃머리·고물·양옆·가운데)이 모두 −depth보다 깊은 물 위인가. yaw = 뱃머리 방향 */
+  const hullInWater = (x, z, yaw, half, beam, depth = 1.0) => {
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    for (const [a, b] of [[0, 0], [half, 0], [-half, 0], [half * 0.5, beam], [half * 0.5, -beam], [-half * 0.5, beam], [-half * 0.5, -beam]]) {
+      const y = groundY(x + fx * a + fz * b, z + fz * a - fx * b);
+      if (y !== null && y > -depth) return false;
+    }
+    return true;
+  };
+  /** 물 위를 천천히 도는 원 길이 처음부터 끝까지 물 위인가 (8 m보다 촘촘히 검사) */
+  const loopInWater = (cx, cz, rad, foot, depth, clear) => {
+    if (rad < 1) return deepWater(cx, cz, foot, depth, clear);
+    const step = Math.min(0.25, 8 / rad);
+    for (let a = 0; a < Math.PI * 2; a += step) if (!deepWater(cx + Math.cos(a) * rad, cz + Math.sin(a) * rad, foot, depth, clear)) return false;
+    return true;
+  };
+  track.seaCheck = { deepWater, hullInWater, loopInWater }; // seaLife.js·테스트(.debug/sea_fix_test.js)도 씀
 
   // 인스턴스 묶음
   const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -630,7 +661,10 @@ export function buildSeaScenery(track, scene) {
       for (let d = 8; d < len - 2; d += 9) for (const sgn of [-1, 1]) {
         if (rand() < 0.25) continue;
         const q = base.clone().addScaledVector(out, d).addScaledVector(s.tan, sgn * 4.6);
-        (rand() < 0.7 ? yachts : fishing).push({ x: q.x, y: 0, z: q.z, ry: Math.atan2(out.x, out.z) + (rand() < 0.5 ? 0 : Math.PI), s: R(0.9, 1.2), ph: R(0, 6.3) });
+        const isYacht = rand() < 0.7, ry = Math.atan2(out.x, out.z) + (rand() < 0.5 ? 0 : Math.PI), sc = R(0.9, 1.2);
+        // (seafix) 부두 안쪽은 모래밭(물 깊이 0 근처)이라 요트가 모래 위에 서 있었음 → 몸통 전체가 1 m 넘게 깊은 물일 때만
+        if (!hullInWater(q.x, q.z, ry, 3.9 * sc, 1.6 * sc, 1.0)) continue;
+        (isYacht ? yachts : fishing).push({ x: q.x, y: 0, z: q.z, ry, s: sc, ph: R(0, 6.3) });
       }
     }
     instanced(postGeo, postMat, posts, { name: 'pierPosts' });
@@ -645,8 +679,13 @@ export function buildSeaScenery(track, scene) {
     }
     // 화물선 (크레인 앞)
     {
-      const c = track.surf(sC, sd * (prom.outer + 48), 0).addScaledVector(sC.tan, -10);
-      ships.push({ x: c.x, z: c.z, ry: yawOf(sC), kind: 'cargo' });
+      // (seafix) 몸통(70 m)이 모두 3 m 넘게 깊은 물에 들어갈 때까지 바다 쪽으로 10 m씩
+      for (let extra = 0; extra <= 80; extra += 10) {
+        const c = track.surf(sC, sd * (prom.outer + 48 + extra), 0).addScaledVector(sC.tan, -10);
+        if (!hullInWater(c.x, c.z, yawOf(sC), 36, 8, 3)) continue;
+        ships.push({ x: c.x, z: c.z, ry: yawOf(sC), kind: 'cargo' });
+        break;
+      }
     }
     boatSets.push({ list: yachts, geo: yachtGeometry(true) }, { list: fishing, geo: fishBoatGeometry() });
   }
@@ -1223,50 +1262,84 @@ export function buildSeaScenery(track, scene) {
       colored(new THREE.CylinderGeometry(3, 4.2, 30, 10).rotateX(Math.PI / 2).scale(1, 0.6, 1), '#6b4528', M(0, 1, 0)),
       ...[-8, 2, 11].flatMap((z) => [colored(new THREE.CylinderGeometry(0.3, 0.4, 26, 6), '#4a3220', M(0, 15, z)), colored(new THREE.BoxGeometry(14, 6, 0.2), '#fff4e2', M(0, 12, z + 0.6)), colored(new THREE.BoxGeometry(11, 5, 0.2), '#fff4e2', M(0, 19, z + 0.6))]),
     ]);
-    const addShip = (geo, x, z, ry, speed = 0) => {
+    // (seafix) 예전엔 움직이는 배가 한 방향으로 끝없이 나아가서(초당 2~4 m) 몇 분 뒤 해변·코스 위로 올라왔음
+    //   → 시간으로 정해지는 큰 원을 천천히 돎. 원 전체(배 길이만큼 둘레)가 깊은 물이고 코스에서 멀리 떨어졌는지 미리 검사,
+    //     안 되면 원을 줄이고, 그래도 안 되면 제자리에서 둥실거리기만, 그것도 안 되면 안 만듦
+    const shipLoops = [];
+    const addShip = (geo, x, z, ry, speed = 0, half = 36) => {
+      let loop = null;
+      if (speed) {
+        for (const k of [1, 0.7, 0.5, 0.35]) {
+          const rad = Math.max(60, half * 4) * k;
+          // 지금 자리(x, z)를 지나가는 원: 가운데는 뱃머리 오른쪽(또는 왼쪽) rad m
+          const dirn = rand() < 0.5 ? 1 : -1;
+          const cx = x + Math.cos(ry) * rad * dirn, cz = z - Math.sin(ry) * rad * dirn;
+          if (loopInWater(cx, cz, rad, half + 6, 4, 150)) {
+            loop = { cx, cz, rad, w: (speed / rad) * dirn, a0: Math.atan2(z - cz, x - cx) };
+            break;
+          }
+        }
+      }
+      if (!loop && !deepWater(x, z, half + 6, 4, 150)) return;
       const m = new THREE.Mesh(geo, shipMat);
+      m.name = 'ship';
       m.position.set(x, 0, z);
       m.rotation.y = ry;
       m.castShadow = true;
       group.add(m);
+      shipLoops.push({ m, loop, half });
       const ph = R(0, 6);
-      animators.push((t, dt) => {
-        if (speed && dt > 0) {
-          m.position.x += Math.sin(m.rotation.y) * speed * dt;
-          m.position.z += Math.cos(m.rotation.y) * speed * dt;
+      animators.push((t) => {
+        if (loop) {
+          const a = loop.a0 + t * loop.w;
+          m.position.x = loop.cx + Math.cos(a) * loop.rad;
+          m.position.z = loop.cz + Math.sin(a) * loop.rad;
+          // 진행 방향 = 원의 접선
+          const tx = -Math.sin(a) * Math.sign(loop.w), tz = Math.cos(a) * Math.sign(loop.w);
+          m.rotation.y = Math.atan2(tx, tz);
         }
         m.position.y = Math.sin(t * 0.6 + ph) * 0.25;
         m.rotation.z = Math.sin(t * 0.5 + ph) * 0.015;
       });
     };
-    for (const sh of ships) addShip(cargo, sh.x, sh.z, sh.ry);
+    for (const sh of ships) addShip(cargo, sh.x, sh.z, sh.ry, 0, 36);
     for (const [x, z, ry, sp, kind] of P.ships || [[-250, -820, 1.2, 3, 'cruise'], [520, -900, -1.9, 2, 'cruise'], [-620, -560, 0.4, 4, 'tall'], [900, -380, 2.6, 3, 'tall'], [60, -700, 1.6, 2.5, 'cargo']]) {
       const gy = groundY(x, z);
       if (gy !== null && gy > -4) continue;
-      addShip(kind === 'cruise' ? cruise : kind === 'tall' ? tall : cargo, x, z, ry, sp);
+      addShip(kind === 'cruise' ? cruise : kind === 'tall' ? tall : cargo, x, z, ry, sp, kind === 'cruise' ? 62 : kind === 'tall' ? 18 : 36);
     }
   }
 
   // ---------------------------------------------------------------- 요트·어선 (항구) + 바다를 떠다니는 돛단배
   {
+    // (seafix) 돛단배: 예전엔 한 방향으로 끝없이 떠내려가서(초당 0.6~1.6 m) 레이스 몇 분 뒤 해변·출발 게이트 앞 도로까지 올라왔음
+    //   → 물 위 작은 원(반지름 18~45 m)을 시간에 맞춰 천천히 돎. 원 전체가 2.5 m 넘게 깊고 코스에서 45 m 넘게 떨어진 곳만
     const sailing = [];
-    for (let k = 0; k < 60 && sailing.length < 26; k++) {
+    for (let k = 0; k < 500 && sailing.length < 22; k++) {
       const x = R(-800, 900), z = R(-850, -80);
       const y = groundY(x, z);
-      if (y === null || y > -3 || !roadClear(x, z, 30, 10) || !free(x, z, 12)) continue;
-      sailing.push({ x, y: 0, z, ry: R(0, 6.3), s: R(1, 1.5), ph: R(0, 6.3), drift: R(0.6, 1.6) });
-      occupy(x, z, 12);
+      if (y !== null && y > -3) continue;
+      const sc = R(1, 1.5), rad = R(18, 45), foot = 5 * sc;
+      if (!free(x, z, rad + 12) || !loopInWater(x, z, rad, foot, 2.5, HW + 45)) continue;
+      const dirn = rand() < 0.5 ? 1 : -1;
+      sailing.push({ x, y: 0, z, cx: x, cz: z, rad, w: (R(0.6, 1.6) / rad) * dirn, ry: 0, s: sc, ph: R(0, 6.3), a0: R(0, 6.3) });
+      occupy(x, z, rad + 12);
     }
     boatSets.push({ list: sailing, geo: yachtGeometry(true), sail: true });
     for (const set of boatSets) {
       if (!set.list.length) continue;
       const im = instanced(set.geo, vcMat, set.list, { name: 'boats' });
+      im.userData.seaList = set.list; // 테스트용 (.debug/sea_fix_test.js): 배 자리
+      im.frustumCulled = false; // 움직이는 배라 처음 경계 구가 맞지 않음
+      im.userData.dynamic = true;
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
-      animators.push((t, dt) => {
+      animators.push((t) => {
         set.list.forEach((b, i) => {
-          if (set.sail && dt > 0) {
-            b.x += Math.sin(b.ry) * b.drift * dt;
-            b.z += Math.cos(b.ry) * b.drift * dt;
+          if (set.sail) {
+            const a = b.a0 + t * b.w;
+            b.x = b.cx + Math.cos(a) * b.rad;
+            b.z = b.cz + Math.sin(a) * b.rad;
+            b.ry = Math.atan2(-Math.sin(a) * Math.sign(b.w), Math.cos(a) * Math.sign(b.w));
           }
           q.setFromEuler(e.set(Math.cos(t * 1.1 + b.ph) * 0.03, b.ry, Math.sin(t * 0.9 + b.ph) * (set.sail ? 0.1 : 0.05)));
           im.setMatrixAt(i, m4.compose(p.set(b.x, Math.sin(t * 1.3 + b.ph) * 0.12, b.z), q, sc.setScalar(b.s)));
@@ -1286,12 +1359,16 @@ export function buildSeaScenery(track, scene) {
         const side = k % 2 ? 1 : -1;
         for (let j = 0; j < 3; j++) {
           const p = track.surf(s, side * (HW + R(14, 30)), 0, new THREE.Vector3()).addScaledVector(s.tan, R(-8, 8));
+          // (seafix) 뛰어오르는 길(앞뒤 5 m)이 모두 1.5 m 넘게 깊은 물일 때만 (물길이 해변·동굴 가까이 지날 때 땅 위에서 뛰었음)
+          if (!deepWater(p.x, p.z, 6, 1.5, HW + 9)) continue;
           list.push({ x: p.x, z: p.z, dir: yawOf(s) + R(-0.4, 0.4), ph: R(0, 10) + j * 0.35, per: R(5, 8) });
         }
       }
     }
     if (list.length) {
       const im = new THREE.InstancedMesh(dolphinGeometry(), vcMat, list.length);
+      im.name = 'dolphins';
+      im.userData.seaList = list;
       im.castShadow = true;
       im.frustumCulled = false;
       group.add(im);

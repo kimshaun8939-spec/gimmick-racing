@@ -263,7 +263,7 @@ export function createSeaGates(track, scene) {
   gates.forEach((g, i) => (g.k = i));
   const NG = gates.length;
   const run = { active: false, passed: 0, combo: 0, best: 0, done: false };
-  const totals = { runs: 0, passed: 0, missed: 0, perfect: 0, hits: 0, buoyHits: 0, roughT: 0, currentT: 0 };
+  const totals = { runs: 0, passed: 0, missed: 0, perfect: 0, hits: 0, buoyHits: 0, roughT: 0, currentT: 0, offT: 0, offMax: 0, offResets: 0, slowLost: 0 };
   let lastRun = null;
 
   const postMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -370,6 +370,50 @@ export function createSeaGates(track, scene) {
     buoyIm.name = 'laneBuoys';
     group.add(buoyIm);
   }
+  // (seafix 2026-11-10) 물길 경계를 한눈에: 큰 부표 사이를 잇는 밧줄 + 작은 노랑·흰 뜨개 (부딪히지 않음, 모습만)
+  //   이 줄 밖으로 많이 나가면 '코스 밖' (아래 offCourse)
+  const OC = data.offCourse || {};
+  if (LB && OC.rope !== false) {
+    const floats = [], rope = [];
+    const every = OC.ropeEvery ?? 3;
+    for (const [a, b] of track.waterRuns || []) {
+      for (const side of [-1, 1]) {
+        let last = -99, prev = null, n = 0;
+        for (const s of track.spanList(a, b)) {
+          if (s.dist - last < every) continue;
+          last = s.dist;
+          const p = track.surf(s, side * (HW + (LB.out ?? 1.6)), 0, V());
+          const gy = track.groundY(p.x, p.z);
+          // 물 위만 (선착장 끝 콘크리트·모래 위에는 안 놓음)
+          if (gy !== null && gy > -0.25) {
+            prev = null;
+            continue;
+          }
+          floats.push({ x: p.x, z: p.z, c: n++ % 2 });
+          if (prev) rope.push(prev.x, 0.16, prev.z, p.x, 0.16, p.z);
+          prev = p;
+        }
+      }
+    }
+    if (floats.length) {
+      const fIm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 8, 6).scale(1, 0.7, 1), new THREE.MeshLambertMaterial({}), floats.length);
+      const m4 = new THREE.Matrix4();
+      const cY = new THREE.Color('#ffd21f'), cW = new THREE.Color('#ffffff');
+      floats.forEach((f, i) => {
+        fIm.setMatrixAt(i, m4.makeTranslation(f.x, 0.1, f.z));
+        fIm.setColorAt(i, f.c ? cY : cW);
+      });
+      fIm.instanceColor.needsUpdate = true;
+      fIm.name = 'laneFloats';
+      fIm.computeBoundingSphere();
+      const rg = new THREE.BufferGeometry();
+      rg.setAttribute('position', new THREE.Float32BufferAttribute(rope, 3));
+      const rl = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: '#fff2c4' }));
+      rl.name = 'laneRope';
+      group.add(fIm, rl);
+    }
+  }
+
   /** 부표를 날림: 차가 오는 방향으로 튀어 오르며 빙글빙글 */
   function knockBuoy(b, car, playerHit) {
     const sp = Math.hypot(car.vel.x, car.vel.z);
@@ -550,10 +594,83 @@ export function createSeaGates(track, scene) {
   const prevPos = V();
   const crossLog = []; // 테스트용: 최근 게이트 통과 기록 (문 가운데 기준 옆 위치)
   let havePrev = false, roughHintT = 0, roughFlag = false, curFlag = false;
+
+  // ================================================================ 코스 밖 물 (seafix 2026-11-10, 사용자 요청 "바다에서 숏컷을 가도 페널티가 없음")
+  //   물 위(배)에서 코스(물길·도로) 가운데로부터 떨어진 거리 ti.dist를 봄. 부표 줄(HW + out) 밖으로
+  //   free m까지는 괜찮음(조금 넓게 나간 것) → 그 밖은 멀수록 세게 느려짐(거친 물) + "🌊 코스 밖! 느려져요"
+  //   → resetOut m 넘게(물길 가운데에서 약 35 m) 나가거나 코스 밖에 maxOutT초 넘게 있으면 물길로 복귀(car.respawn = 마지막으로 코스 위에 있던 곳 30 m 뒤)
+  //   봇은 이 함수를 안 거침 (update는 플레이어 차만 받음)
+  const offCfg = {
+    free: OC.free ?? 4, // 부표 줄 밖 몇 m까지 봐줌
+    k0: OC.k0 ?? 0.2, // 봐주는 선을 넘은 순간 초당 감속 비율
+    kPer: OC.kPer ?? 0.05, // 1 m 더 나갈 때마다 더하는 감속
+    kMax: OC.kMax ?? 1.2,
+    resetOut: OC.resetOut ?? 24, // 부표 줄 밖 이만큼이면 복귀
+    resetDelay: OC.resetDelay ?? 0.35, // (한 프레임 튀는 것 무시)
+    maxOutT: OC.maxOutT ?? 4, // 코스 밖에 이만큼 오래 있으면 복귀
+  };
+  const off = { t: 0, farT: 0, hintT: 0, warnT: 0, flag: false, last: 0 };
+  function offCourse(dt, car, ti) {
+    if (off.hintT > 0) off.hintT -= dt;
+    if (off.warnT > 0) off.warnT -= dt;
+    if (!LB || OC.enabled === false) return;
+    const raceOn = !(window.game && window.game.race && window.game.race.phase === 'finished');
+    // 물 위(배)인가: 물에 떠 있거나, 파도 점프로 물 위 공중
+    const wet = car.surface === 'water' && car.grounded;
+    const airOverWater = !car.grounded && car.mode === 'boat';
+    if (!wet && !airOverWater) {
+      off.t = Math.max(0, off.t - dt * 2);
+      off.farT = 0;
+      off.flag = false;
+      return;
+    }
+    const out = ti.dist - (HW + (LB.out ?? 1.6)); // 부표 줄 밖으로 몇 m
+    off.last = out;
+    if (airOverWater) return; // 공중에서는 판정만 멈춤 (착지하면 다시)
+    if (out > totals.offMax) totals.offMax = out;
+    const over = out - offCfg.free;
+    if (over <= 0) {
+      off.t = Math.max(0, off.t - dt * 2);
+      off.farT = 0;
+      off.flag = false;
+      return;
+    }
+    off.t += dt;
+    totals.offT += dt;
+    // 거친 물: 멀수록 세게 (속도에 곱하기, 앞뒤 속도와 실제 움직임 둘 다)
+    const k = Math.min(offCfg.kMax, offCfg.k0 + offCfg.kPer * over);
+    const f = Math.exp(-k * dt);
+    totals.slowLost += Math.abs(car.speed) * (1 - f);
+    car.speed *= f;
+    car.vel.x *= f;
+    car.vel.z *= f;
+    if (raceOn && !off.flag && off.hintT <= 0) {
+      popText('🌊 코스 밖! 느려져요', '#9fdcff', false, 1.2);
+      off.hintT = 3;
+    }
+    off.flag = true;
+    if (raceOn && out > offCfg.resetOut * 0.6 && off.warnT <= 0 && off.hintT < 2.2) {
+      popText('⚠️ 부표 줄 안으로! 더 나가면 돌아가요', '#ffd27a', false, 1.2);
+      off.warnT = 3;
+    }
+    off.farT = out > offCfg.resetOut ? off.farT + dt : 0;
+    if (off.farT > offCfg.resetDelay || off.t > offCfg.maxOutT) {
+      off.t = off.farT = 0;
+      off.flag = false;
+      totals.offResets++;
+      car.respawn();
+      havePrev = false;
+      off.hintT = 3;
+      popText('🌊 코스를 벗어나서 물길로 돌아왔어요', '#9fdcff', false, 1.8);
+      sfx.thunk(false);
+    }
+  }
+
   function update(dt, car) {
     carRef = car;
     const ti = car.trackInfo;
     if (!ti) return;
+    offCourse(dt, car, ti);
     const jumped = havePrev && Math.hypot(car.pos.x - prevPos.x, car.pos.z - prevPos.z) > 6; // 복귀·순간 이동
     prevPos.copy(car.pos);
     havePrev = true;
@@ -838,6 +955,7 @@ export function createSeaGates(track, scene) {
     for (const b of buoys) b.off.set(0, 0, 0), b.vel.set(0, 0, 0), b.rot.set(0, 0, 0), (b.air = false), (b.cool = 0);
     Object.assign(run, { active: false, passed: 0, combo: 0, best: 0, done: false });
     havePrev = false;
+    Object.assign(off, { t: 0, farT: 0, hintT: 0, warnT: 0, flag: false, last: 0 });
     chipT = popT = 0;
     pop.style.opacity = chip.style.opacity = '0';
   }
@@ -851,7 +969,7 @@ export function createSeaGates(track, scene) {
     currents,
     /** 테스트용: 이번 바퀴·전체 기록 */
     sfx,
-    stats: () => ({ run: { ...run }, lastRun, total: NG, ...totals, crossLog: crossLog.slice() }),
+    stats: () => ({ run: { ...run }, lastRun, total: NG, ...totals, crossLog: crossLog.slice(), off: { ...off } }),
   };
   track.buoyGates = api;
   track.boatSpray = true; // offroadFx.js: 물 위 네모 조각 대신 이 파일의 물보라를 씀

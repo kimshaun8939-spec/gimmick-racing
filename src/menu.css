@@ -367,7 +367,20 @@ kbd { display: inline-grid; place-items: center; min-width: 28px; height: 28px; 
 #results td { padding: 7px 8px; border-top: 1px solid var(--gm-line); text-align: left; }
 #results td:last-child { text-align: right; }
 #results tr.best td { color: var(--gm-accent); font-weight: 800; }
-#results .btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+/* 결과 화면 버튼 (2026-11-10 다시 배치): 위 = 큰 버튼 (다시 하기 · 다음 맵), 아래 = 같은 크기 작은 버튼 3개 (리플레이 · 차·맵 · 홈) */
+#results .btns { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gm-line); }
+#results .ra-main, #results .ra-sub { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
+#results .ra-main:empty { display: none; }
+#results .ra-sub { gap: 8px; }
+#results .btns .gm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+#results .btns .gm-btn.big { font-size: 17px; min-height: 54px; border-radius: 14px; padding: 12px 18px; }
+#results .btns .gm-btn.big kbd { margin-left: 2px; }
+#results .btns .gm-btn.next:not(.primary) { border-color: rgba(255, 207, 63, 0.45); color: var(--gm-accent); }
+#results .btns .gm-btn.sub { flex-direction: column; gap: 3px; font-size: 13px; padding: 9px 8px 8px; min-height: 58px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); white-space: normal; line-height: 1.2; }
+#results .btns .gm-btn.sub:hover, #results .btns .gm-btn.sub:focus { background: rgba(255, 207, 63, 0.12); }
+#results .btns .ic { font-size: 18px; line-height: 1; }
+#results .btns .gm-btn.sub .ic { font-size: 17px; opacity: 0.9; }
+#results .btns .ic.r { font-size: 22px; margin-top: -2px; }
 
 /* =====================================================================
    로딩 화면
@@ -914,7 +927,9 @@ body.touch-on #toast { font-size: 22px; top: 18%; white-space: nowrap; }
 @media (max-height: 560px), (max-width: 560px) {
   #results .res, #results .res.wide { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; padding: 14px 16px 0; width: min(660px, calc(100vw - 16px)); }
   #results .btns { position: sticky; bottom: 0; z-index: 2; margin: 10px -16px 0; padding: 10px 12px 12px; background: linear-gradient(rgba(13, 19, 36, 0), rgba(13, 19, 36, 0.97) 28%); }
-  #results .btns .gm-btn { flex: 1 1 0; min-width: 110px; min-height: 44px; }
+  #results .btns { border-top: 0; padding-top: 10px; gap: 8px; }
+  #results .btns .gm-btn.big { min-height: 46px; font-size: 16px; }
+  #results .btns .gm-btn.sub { min-height: 50px; }
 }
 @media (max-height: 560px) {
   #results .flag { display: none; }

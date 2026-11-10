@@ -76,16 +76,28 @@ export function buildSeaLife(track, group, animators, rand) {
     const s0 = track.samples[0];
     // 출발 직선 바다 쪽(-오른쪽) 50~140 m 앞바다에서 빈 물 찾기
     const loops = [];
-    for (let k = 0; k < 40 && loops.length < 4; k++) {
+    // (seafix) 길 검사를 촘촘히(약 4 m마다) + 배 몸통 둘레 4 m + 뒤로 끌리는 물결 판 끝(40 m 뒤)까지 물 위인지
+    const chk = track.seaCheck;
+    for (let k = 0; k < 80 && loops.length < 4; k++) {
       const along = R(-160, 140), off = R(70, 150);
       const cx = s0.pos.x + s0.tan.x * along - s0.right.x * off, cz = s0.pos.z + s0.tan.z * along - s0.right.z * off;
       const rx = R(22, 45), rz = R(12, 22), rot = Math.atan2(s0.tan.x, s0.tan.z) + R(-0.3, 0.3);
       let ok = true;
-      for (let a = 0; a < 6.28 && ok; a += 0.4) {
+      for (let a = 0; a < 6.28 && ok; a += 0.1) {
         const lx = Math.cos(a) * rx, lz = Math.sin(a) * rz;
         const x = cx + lx * Math.cos(rot) + lz * Math.sin(rot), z = cz - lx * Math.sin(rot) + lz * Math.cos(rot);
         const y = groundY(x, z);
-        if (y === null || y > -1.5 || track.nearestRaw(tmpV.set(x, 0, z)) < HW + 20) ok = false;
+        if (y === null || y > -1.5 || track.nearestRaw(tmpV.set(x, 0, z)) < HW + 24) ok = false;
+        else if (chk && !chk.deepWater(x, z, 4, 1.5, HW + 20)) ok = false;
+        else {
+          // 물결 판 끝: 접선 뒤쪽 40 m
+          const tx = -Math.sin(a) * rx, tz = Math.cos(a) * rz, tl = Math.hypot(tx, tz) || 1;
+          for (const sg of [1, -1]) {
+            const wx = (tx / tl) * Math.cos(rot) + (tz / tl) * Math.sin(rot), wz = -(tx / tl) * Math.sin(rot) + (tz / tl) * Math.cos(rot);
+            const ey = groundY(x - wx * 40 * sg, z - wz * 40 * sg);
+            if (ey !== null && ey > -0.5) ok = false;
+          }
+        }
       }
       if (ok && loops.every((l) => Math.hypot(l.cx - cx, l.cz - cz) > 70)) loops.push({ cx, cz, rx, rz, rot, sp: R(0.12, 0.22) * (rand() < 0.5 ? -1 : 1), ph: R(0, 6.3) });
     }
@@ -125,6 +137,7 @@ export function buildSeaLife(track, group, animators, rand) {
     const wakeMat = new THREE.MeshBasicMaterial({ map: wakeTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     loops.forEach((l, i) => {
       const m = new THREE.Mesh(motorBoatGeometry(colors[i % colors.length]), vcMat);
+      m.name = 'motorBoat';
       m.castShadow = true;
       group.add(m);
       // 뒤에 V자 하얀 물결 자국 (배가 앞으로 살짝 들려 있어서 배에 붙이면 끝이 물속에 묻혔음 → 따로 물 위에 눕힘)
@@ -148,6 +161,7 @@ export function buildSeaLife(track, group, animators, rand) {
   // ---------------------------------------------------------------- 수상비행기 (만 위를 크게 돌다가 물길 옆으로 낮게 지나감)
   {
     const plane = new THREE.Mesh(seaplaneGeometry(), vcMat);
+    plane.name = 'seaplane';
     plane.castShadow = true;
     const prop = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 0.06), new THREE.MeshLambertMaterial({ color: '#2a2a2a' }));
     prop.position.set(0, 0, 5.45);

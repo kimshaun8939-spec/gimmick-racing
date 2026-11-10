@@ -3,7 +3,10 @@
 //     플레이어와 봇 모두 (봇은 window.game.raceSys.bots)
 //   - 불티(위로 떠오르는 주황 불꽃)와 화산재(천천히 떨어지는 회색 알갱이): 카메라 주변에만 (가벼움)
 //   - 화면 위 알림: "🌋 낭떠러지!" (추락), 용암 근처 열기 (화면 가장자리 붉게)
+//   - 살아 있는 이벤트 (volcanoEvents.js, 2026-11-10): 화산탄·경고 원·무너지는 가장자리·용암 간헐천·첨벙·화산 소리 (volcanoAudio.js)
+//     → 반환 값의 events (조절: events.cfg, 기록: events.stats)
 import * as THREE from 'three';
+import { createVolcanoEvents } from './volcanoEvents.js';
 
 const EMBER_N = 420;
 const ASH_N = 520;
@@ -33,6 +36,8 @@ export function buildVolcanoProps(track, scene) {
     toast.style.transform = 'translateX(-50%) scale(1)';
     toastT = 1.6;
   }
+  // 화산탄·간헐천·무너지는 가장자리·소리
+  const events = createVolcanoEvents(track, scene, group, { toast: showToast });
 
   // ---------------------------------------------------------------- 낭떠러지 추락 감지
   const state = new WeakMap(); // car → { idx, fallT }
@@ -69,6 +74,7 @@ export function buildVolcanoProps(track, scene) {
     st.underT = underDeck ? (st.underT || 0) + dt : 0;
     if (isPlayer) fallHeat = falling ? Math.min(1, fallHeat + dt * 4) : fallHeat;
     if (st.fallT > 0.25 || st.underT > 0.4) {
+      if (st.fallT > 0.25) events.carFell(car); // 용암에 닿을 곳에서 첨벙 (보기·소리만)
       st.fallT = st.underT = 0;
       car.respawn();
       st.idx = -1;
@@ -165,14 +171,16 @@ export function buildVolcanoProps(track, scene) {
     fallCheck(car, dt, true);
     const rs = window.game && window.game.raceSys;
     if (rs && rs.bots) for (const b of rs.bots) if (b.car && b.car !== car) fallCheck(b.car, dt, false);
+    events.update(dt, car);
     // 용암에 가까울수록 화면 가장자리 열기 (차 높이가 용암에서 12 m 안)
     const nearLava = 1 - THREE.MathUtils.clamp((car.pos.y - track.lavaY) / 12, 0, 1);
     fallHeat = Math.max(nearLava * 0.8, fallHeat - dt * 1.5);
     lastCam = car.pos;
   }
   let shownHeat = -1;
-  function animate() {
+  function animate(elapsed) {
     const g = window.game;
+    events.animate(elapsed ?? performance.now() / 1000);
     const cam = g && g.camera ? g.camera.position : lastCam;
     if (cam) particles(1 / 60, cam);
     if (toastT > 0) {
@@ -192,7 +200,8 @@ export function buildVolcanoProps(track, scene) {
     toastT = 0;
     toast.style.opacity = '0';
     fallHeat = 0;
+    events.reset();
   }
 
-  return { group, update, reset, animate, fallCheck, props: [], cubes: [], barricade: null, barricades: [] };
+  return { group, update, reset, animate, fallCheck, events, props: [], cubes: [], barricade: null, barricades: [] };
 }

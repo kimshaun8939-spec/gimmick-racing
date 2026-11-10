@@ -9,8 +9,8 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng } from './bots.js';
-import { fmtTime } from './records.js';
+import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, masterTarget, flightPlan } from './bots.js';
+import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
 
 const CAR_R = 1.05; // 차끼리 충돌: 차 하나 = 앞뒤 원 2개 (반지름)
@@ -22,7 +22,10 @@ export async function createRaceSystem(o) {
   const { track, car, scenery, opponents, laps, carId } = o;
   const L = track.length;
   const M = Math.max(100, Math.min(600, Math.round(L / 20))); // 한 바퀴 기록 지점 수
-  const level = BOT_LEVELS[o.botLevel] || BOT_LEVELS.normal;
+  // 실력: 주소의 &botLevel=이 있으면 그것 (온라인은 방장이 넣어 줌, 혼자일 때는 테스트용), 없으면 설정
+  const QS = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+  const levelName = BOT_LEVELS[QS.get('botLevel')] ? QS.get('botLevel') : BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal';
+  const level = BOT_LEVELS[levelName];
   const line = track.racingLine;
   const nBots = line && !track.arena ? Math.max(0, Math.min(7, o.botCount | 0)) : 0;
   // 씨앗: 온라인이면 방 코드로 (모든 사람에게 같은 봇 이름·차·성격), 아니면 무작위
@@ -46,8 +49,8 @@ export async function createRaceSystem(o) {
   // --- 봇 ---
   const bots = [];
   const botTrack = nBots > 0 ? (car.track && car.track !== track ? car.track : fastTrack(track)) : track; // 봇 차는 땅 찾기 레이를 격자로 빠르게 (결과는 같음)
+  let roster = { cars: [] };
   if (nBots > 0) {
-    let roster = { cars: [] };
     try {
       roster = await (await fetch('data/cars.json')).json();
     } catch {}
@@ -68,6 +71,7 @@ export async function createRaceSystem(o) {
       bots.push(timing(h.entry));
     });
   }
+  const MASTER = level.master && bots.length ? setupMaster() : null;
   // 온라인 상대가 들어오면 기록 배열 준비
   opponents.onChange((kind, e) => kind === 'add' && timing(e));
   for (const e of opponents.entries) timing(e);
@@ -106,6 +110,7 @@ export async function createRaceSystem(o) {
       b.driver.state.paceMul = 1; // 따라잡기 효과도 새로
       b.driver.state.cuOn = false;
       b.cuDraft = 0;
+      if (MASTER) masterHelp(b, (b.mH = b.mI = 0), false);
       Object.assign(b, { lastT: s.t, progress: s.t > 0.5 ? s.t - 1 : s.t, lapsDone: 0, lapStart: 0, lap: 1, finished: false, finishTime: null, bestLap: null, lapTimes: [], slowT: 0, offT: 0, wrongT: 0, chkT: 0, chkProg: s.t - 1, grace: 0, respawns: 0 });
       b.marks.fill(NaN);
       b.nextMark = 0;
@@ -133,7 +138,7 @@ export async function createRaceSystem(o) {
   function trackBot(b, time) {
     const bc = b.car;
     if (!bc.trackInfo) return;
-    if (track.onShortcut && track.onShortcut(bc.pos)) return;
+    if (b.offMain) return; // 지름길·비행 루트 위: 진행 판정 멈춤 (main.js의 플레이어와 같음)
     const t = bc.trackInfo.t;
     let d = t - b.lastT;
     if (d > 0.5) d -= 1;
@@ -176,7 +181,8 @@ export async function createRaceSystem(o) {
     }
     const ti = bc.trackInfo;
     // 루프·벽(자석 도로)·뒤집힌 자세에서는 방향·진행 판정이 맞지 않음 → 멈춤만 봄
-    const loopy = bc.surface === 'magnet' || bc.up.y < 0.8 || (ti && ti.sample && ti.sample.roll);
+    //   비행 루트(활주로·하늘·착륙장, track.onShortcut)도 진행 거리가 멈춰 있으므로 같게 (2026-11-10 bots-fly: 안 그러면 5초 '진행 없음' 복귀)
+    const loopy = bc.surface === 'magnet' || bc.up.y < 0.8 || (ti && ti.sample && ti.sample.roll) || bc.flying || b.offMain;
     if (loopy) {
       b.wrongT = b.offT = 0;
       b.chkT = 0;
@@ -364,6 +370,8 @@ export async function createRaceSystem(o) {
     me.progress = playerProgress;
     me.speed = Math.abs(car.speed);
     me.lateral = (car.trackInfo || (car.trackInfo = track.nearest(car.pos))).lateral;
+    // 지름길·비행 루트(활주로·하늘·착륙장) 위인지: 그동안 진행 거리가 멈춰 있어서 '앞뒤 거리'가 틀림 → 봇은 실제 위치로 봄
+    for (const e of all()) e.offMain = !!(e.view && (e.view.flying || (track.onShortcut && track.onShortcut(e.view.pos))));
     // 봇 운전
     for (const b of bots) {
       const bc = b.car;
@@ -376,7 +384,17 @@ export async function createRaceSystem(o) {
         const others = [];
         for (const e of all()) {
           if (e === b || (e.finished && !b.finished && !e.isPlayer)) continue; // 완주하고 천천히 도는 봇은 피하지 않음 (부딪힘도 없음)
-          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human: e === me || !!e.remote });
+          const human = e === me || !!e.remote;
+          if (b.offMain || e.offMain) {
+            // 둘 중 하나가 비행 루트 위: 진행 거리 대신 실제 위치 차이 (60 m 안만), 내 차 앞 방향 기준 앞뒤·옆
+            const ep = e.view.pos, dx = ep.x - bc.pos.x, dy = ep.y - bc.pos.y, dz = ep.z - bc.pos.z;
+            if (dx * dx + dy * dy + dz * dz > 3600) continue;
+            const fl = Math.hypot(bc.fwd.x, bc.fwd.z) || 1, fx = bc.fwd.x / fl, fz = bc.fwd.z / fl;
+            if (Math.abs(dy) > 4 && !(b.offMain && e.offMain)) continue; // 한쪽은 하늘, 한쪽은 땅
+            others.push({ progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep });
+            continue;
+          }
+          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
@@ -427,6 +445,110 @@ export async function createRaceSystem(o) {
     }
   }
 
+  // --- 고수(master) 페이스 지킴이 (bots.js BOT_LEVELS.master 설명 참고) ---
+  //   목표 = 내 최고 완주 기록 (주소 &botTarget=초 > 내 기록(records, 같은 등급) > 없음). 온라인(?room=)은 사람마다 기록이 달라서
+  //   주소의 botTarget만 씀 (모두 같은 봇이 되게), 없으면 '기록 없음' 방식
+  //   시간표: 내 완주 고스트(gimmick.ghost.<맵>.<차>.run)가 있으면 그 진행-시간표를, 없으면 레이싱 라인 속도 계획을 목표 시간에 맞게 늘이거나 줄임
+  function setupMaster() {
+    const mc = level.master;
+    const mapId = QS.get('map') || 'gp';
+    const onlineRace = QS.has('room');
+    let target = null;
+    const qT = parseFloat(QS.get('botTarget'));
+    if (qT > 20) target = { sec: qT, car: null, laps, adjusted: false, how: 'url' };
+    else if (!onlineRace) {
+      target = masterTarget(records.all(), mapId, carId, roster.cars, laps);
+      if (target) target.how = 'record';
+    }
+    // 진행(0~laps) → 시간 비율 (0~1)
+    let frac = null, how = 'line';
+    if (target && target.car && !onlineRace) {
+      try {
+        const j = JSON.parse(localStorage.getItem(`gimmick.ghost.${mapId}.${target.car}.run`) || 'null');
+        if (j && j.v === 2 && j.laps === laps && j.len === Math.round(L) && Array.isArray(j.marks) && j.total > 0) {
+          const mk = j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000));
+          for (let k = 1; k < mk.length; k++) if (!(mk[k] >= mk[k - 1])) mk[k] = mk[k - 1]; // 빈 칸·거꾸로는 앞 값으로
+          if (isFinite(mk[0]) && mk.length > 10) {
+            const tot = j.total, R = mk.length - 1;
+            frac = (p) => {
+              const x = Math.max(0, Math.min(R, (p / laps) * R)), k = Math.floor(x), u = x - k;
+              return (k >= R ? tot : mk[k] + (mk[k + 1] - mk[k]) * u) / tot;
+            };
+            how = 'ghost';
+          }
+        }
+      } catch {}
+    }
+    if (!frac) {
+      // 레이싱 라인 속도 계획: 한 바퀴의 지점별 누적 시간 (첫 바퀴는 출발 손해 START초를 앞 200 m에 나눠 더함)
+      const prof = bots[0].car._lineProfile, N = line.N, ds = L / N;
+      const cum = new Float64Array(N + 1);
+      // 그랑프리 비행 루트: 활주로 시작~착지점 사이 땅 길 대신 비행 시간 (활주로 ÷ 38 m/s + 하늘 길 ÷ 46 m/s, 실측 어려움 봇과 비슷)
+      const fp = flightPlan(track);
+      let flyDense = 0;
+      if (fp) for (let k = 1; k < fp.dense.length; k++) flyDense += fp.dense[k].distanceTo(fp.dense[k - 1]);
+      const inFly = (i) => fp && (fp.landI > fp.rwI ? i > fp.rwI && i <= fp.landI : i > fp.rwI || i <= fp.landI);
+      for (let i = 0; i < N; i++) cum[i + 1] = cum[i] + (inFly(i) ? (i === fp.landI ? fp.len / 38 + flyDense / 46 : 0) : ds / Math.max(5, prof.speed[i]));
+      const lapT = cum[N], START = 2;
+      const T = START + lapT * laps;
+      frac = (p) => {
+        const q = Math.max(0, Math.min(laps, p)), lp = Math.floor(q), x = (q - lp) * N, k = Math.min(N - 1, Math.floor(x));
+        const t = lp * lapT + cum[k] + (cum[k + 1] - cum[k]) * (x - k) + START * Math.min(1, (q * L) / 200);
+        return t / T;
+      };
+    }
+    // 봇마다 목표: 내 기록 × (1 − spread) (spread 사이를 고르게 나눔, 씨앗으로 순서를 섞음)
+    const order = bots.map((_, i) => i).sort(() => rand() - 0.5);
+    const n = bots.length;
+    bots.forEach((b, i) => {
+      const r = n > 1 ? order.indexOf(i) / (n - 1) : 0.5;
+      b.mCut = mc.spread[0] + (mc.spread[1] - mc.spread[0]) * r;
+      b.mTarget = target ? target.sec * (1 - b.mCut) : null;
+      b.mH = b.mI = 0;
+      const cfg = b.car.cfg;
+      b.mBase = { lat: cfg.tire.lateral, steerLat: cfg.steerLat, steerRate: cfg.steerRate, trac: cfg.tire.traction, brake: cfg.tire.brakeGrip, power: cfg.engine.power };
+    });
+    return { target, how, frac, info: { target: target && target.sec, car: target && target.car, how: target ? target.how : 'none', adjusted: !!(target && target.adjusted), schedule: how, bots: bots.map((b) => b.mTarget && +b.mTarget.toFixed(2)) } };
+  }
+  /** 고수 도움 h(0~1)를 차 성능에 반영 (봇 차의 cfg는 봇마다 따로라 다른 차에 영향 없음) */
+  function masterHelp(b, h, calm) {
+    const mc = level.master, cfg = b.car.cfg, B = b.mBase;
+    if (!B) return;
+    const g = 1 + mc.gripMax * h;
+    cfg.tire.lateral = B.lat * g;
+    cfg.steerLat = B.steerLat * g;
+    cfg.steerRate = B.steerRate * g; // 느린 헤어핀은 접지보다 핸들 꺾임(회전 속도)이 한계 → 같이 늘려야 빨라진 속도로도 돎 (화산 H1에서 벽에 박혔음)
+    cfg.tire.traction = B.trac * g;
+    cfg.tire.brakeGrip = B.brake * g;
+    cfg.engine.power = B.power * (1 + (calm ? 0 : mc.powerMax * h));
+  }
+  /** 0.5초마다: 시간표와 비교해서 도움 정하기 → { want(paceMul), draft } */
+  function masterKeeper(b, time, lead) {
+    const mc = level.master, st = b.driver.state;
+    let hT = 0, ease = false;
+    if (b.mTarget) {
+      const behind = time - b.mTarget * MASTER.frac(Math.max(0, b.progress)); // + = 시간표보다 늦음
+      b.mBehind = behind;
+      // 비례 + 적분: 늦은 만큼 바로 돕고(gain초 늦으면 최대), 계속 늦으면 도움을 조금씩 더 쌓음 (비례만으로는 늘 1~3초 늦게 끝났음)
+      b.mI = Math.max(0, Math.min(1, (b.mI || 0) + mc.integ * behind));
+      hT = Math.max(0, Math.min(1, b.mI + behind / mc.gain));
+      ease = behind < -mc.ease;
+    } else hT = mc.noTargetHelp;
+    if (lead && b.progress < lead.progress) {
+      const g = gapBetween(lead, b, time);
+      const sec = g.laps ? 99 : g.sec || 0;
+      if (sec > mc.humanSec) {
+        hT = Math.max(hT, Math.min(1, (sec - mc.humanSec) / mc.gain));
+        ease = false;
+      }
+    }
+    if (time < 3) hT = Math.min(hT, mc.noTargetHelp); // 출발 덩어리에서는 덜
+    b.mH += (hT - b.mH) * 0.3;
+    if (b.mH < 0.01) b.mH = 0;
+    masterHelp(b, b.mH, st.calm);
+    return { want: ease ? mc.easeMul : 1 + mc.paceMax * b.mH, draft: mc.draftMax * b.mH };
+  }
+
   /** 기준 = 가장 앞선 사람 (혼자면 나, 온라인이면 나와 다른 사람 중 1등). 완주한 사람은 빼고, 모두 완주했으면 null */
   function leadHuman() {
     let lead = null;
@@ -443,11 +565,14 @@ export async function createRaceSystem(o) {
    */
   function catchUp(time, racing) {
     const cu = level.catchUp;
-    const lead = racing && cu ? leadHuman() : null;
+    const lead = racing && (cu || MASTER) ? leadHuman() : null;
     for (const b of bots) {
       const st = b.driver.state;
       let want = 1, draft = 0;
-      if (lead && !b.finished) {
+      if (MASTER) {
+        if (racing && !b.finished) ({ want, draft } = masterKeeper(b, time, lead));
+        else if (b.mH) masterHelp(b, (b.mH = 0), false);
+      } else if (lead && !b.finished) {
         if (cu.aheadM) {
           const d = (b.progress - lead.progress) * L; // + = 봇이 앞
           if (d > cu.aheadM) st.cuOn = true;
@@ -562,6 +687,8 @@ export async function createRaceSystem(o) {
       gridTotal = Math.max(total || 0, (humans || 0) + bots.length, index + 1);
       humanSlots = humans || 0;
     },
-    level: o.botLevel,
+    level: levelName,
+    /** 고수 봇 목표 (화면에 "목표: 내 최고 … → 약 …"을 띄울 때): { target, car, how: record|url|none, schedule: ghost|line, bots: [목표 초] } */
+    master: MASTER ? MASTER.info : null,
   };
 }

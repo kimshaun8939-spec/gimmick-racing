@@ -74,7 +74,9 @@ const ld = (id, text) => {
   if (e) e.textContent = text;
 };
 ld('ldMap', mapMeta().title);
-ld('ldTip', '💡 ' + LOAD_TIPS[Math.floor(Math.random() * LOAD_TIPS.length)]);
+const MAP_TIPS = { volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'] };
+const tipList = MAP_TIPS[mapName] && Math.random() < 0.7 ? MAP_TIPS[mapName] : LOAD_TIPS;
+ld('ldTip', '💡 ' + tipList[Math.floor(Math.random() * tipList.length)]);
 // 차: ?car=<id> (없으면 기본 차 = 테스트가 늘 같은 차로 돌게). 차 목록·성능은 carRoster.js
 const carParam = params.get('car');
 let carCfg;
@@ -300,7 +302,7 @@ function resetRace() {
 
 // --- 출발 그리드 소개: 불이 켜지기 전에 카메라가 그리드 앞에서부터 차들을 한 대씩 훑고 내 차 뒤로 돌아옴 ---
 //   봇 레이스에서 페이지를 처음 열었을 때만 (다시 시작 Enter에는 없음). 아무 키나 누르면 건너뜀. ?intro=0이면 끔
-const LEVEL_NAME = { easy: '쉬움', normal: '중간', hard: '어려움' };
+const LEVEL_NAME = { easy: '쉬움', normal: '중간', hard: '어려움', master: '고수' };
 const intro = { on: false, played: false, t: 0, dur: 0, keys: [], cards: [] };
 const _ka = new THREE.Vector3(), _kb = new THREE.Vector3(), _kla = new THREE.Vector3(), _klb = new THREE.Vector3();
 function startIntro() {

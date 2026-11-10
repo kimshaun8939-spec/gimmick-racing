@@ -471,6 +471,11 @@ export function createHud(track) {
      * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next | home | car)
      */
     showResults(lapTimes, best, info = {}) {
+      const nextBtn = (o) => {
+        const lbl = String(o.nextLabel || '다음 맵').replace(/\s*›\s*$/, '');
+        const arrow = /홈으로/.test(lbl) ? '' : '<span class="ic r">›</span>';
+        return `<button class="gm-btn big next${o.noRestart ? ' primary' : ''}" data-res="next">${escH(lbl)}${arrow}</button>`;
+      };
       const total = lapTimes.reduce((a, b) => a + b, 0);
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
@@ -522,11 +527,15 @@ export function createHud(track) {
         ${secHtml}
         ${cornerHtml(info.corners)}
         <div class="btns">
-          ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart">다시 하기 <kbd>Enter</kbd></button>'}
-          ${info.hasNext ? `<button class="gm-btn${info.noRestart ? ' primary' : ''}" data-res="next">${escH(info.nextLabel || '다음 맵 ›')}</button>` : ''}
-          ${info.replay ? '<button class="gm-btn" data-res="replay">▶ 리플레이</button>' : ''}
-          <button class="gm-btn" data-res="car">차·맵 바꾸기</button>
-          <button class="gm-btn" data-res="home">홈으로</button>
+          <div class="ra-main">
+            ${info.noRestart ? '' : '<button class="gm-btn primary big" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
+            ${info.hasNext ? nextBtn(info) : ''}
+          </div>
+          <div class="ra-sub">
+            ${info.replay ? '<button class="gm-btn sub" data-res="replay"><span class="ic">▶</span>리플레이</button>' : ''}
+            <button class="gm-btn sub" data-res="car"><span class="ic">🚗</span>차·맵 바꾸기</button>
+            <button class="gm-btn sub" data-res="home"><span class="ic">🏠</span>홈으로</button>
+          </div>
         </div></div>`;
       el.results.querySelectorAll('[data-res]').forEach((b) =>
         b.addEventListener('click', (ev) => {

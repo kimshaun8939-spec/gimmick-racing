@@ -54,7 +54,7 @@ export function lastChamp() {
 
 /**
  * 새 시즌 시작 → 첫 경기 주소
- * @param o { classId, carId, level: 'easy'|'normal'|'hard', maps: ['gp',...], bots: 1~7 }
+ * @param o { classId, carId, level: 'easy'|'normal'|'hard'|'master', maps: ['gp',...], bots: 1~7 }
  */
 export function startChamp(o = {}) {
   const set = readSettings();
@@ -67,7 +67,7 @@ export function startChamp(o = {}) {
     seed: (Math.random() * 1e9) | 0, // 모든 경기에 같은 봇 (이름·차·성격)
     classId: o.classId || null,
     carId,
-    level: ['easy', 'normal', 'hard'].includes(o.level) ? o.level : set.botLevel || 'normal',
+    level: ['easy', 'normal', 'hard', 'master'].includes(o.level) ? o.level : set.botLevel || 'normal', // master = 경기마다 그 맵 내 최고 기록 기준
     bots,
     maps,
     results: [], // 경기마다 { map, rows: [{ id, name, color, carName, pos, points, total, isPlayer }] }
