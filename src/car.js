@@ -1110,7 +1110,8 @@ export class Car {
         this.apexWatch = null;
         return;
       }
-      const inside = w.best >= this.track.width / 2 - k.apexReach; // 차 중심이 도로 끝에서 apexReach m 안 (안쪽 바퀴가 연석 위)
+      const hwAp = this.track.halfWidthAt ? this.track.halfWidthAt(ap.i) : this.track.width / 2; // 도로 폭이 구간마다 다른 맵 (화산)
+      const inside = w.best >= hwAp - k.apexReach; // 차 중심이 도로 끝에서 apexReach m 안 (안쪽 바퀴가 연석 위)
       const fast = w.speed >= need * k.apexSpeedRatio;
       if (inside && fast && w.n !== this.lastApexN) {
         const perfect = w.speed >= need * 0.97;

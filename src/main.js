@@ -43,7 +43,7 @@ async function loadJSON(url) {
 // 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 M 키로 차례대로 바꿈
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
 // 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
-const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json' };
+const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json', volcano: 'data/volcano.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');

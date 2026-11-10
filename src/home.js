@@ -343,7 +343,7 @@ export async function runHome() {
     card.className = 'gm-btn h-map';
     card.dataset.nav = '';
     card.dataset.map = m.id;
-    const stars = '★'.repeat(m.difficulty || 1) + '☆'.repeat(3 - (m.difficulty || 1));
+    const stars = '★'.repeat(m.difficulty || 1) + '☆'.repeat(Math.max(0, 3 - (m.difficulty || 1))); // 4 = 아주 어려움 (화산)
     const len = !info.ok ? '🚧 준비 중' : info.free ? '자유 주행' : `📏 약 ${info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1)} km · 🔁 ${info.laps}바퀴`;
     card.innerHTML = `<canvas width="480" height="270"></canvas>
       <div class="body">
