@@ -15,6 +15,7 @@ import { records, fmtTime } from './records.js';
 import { online } from './online.js';
 import { createCarModel } from './carModel.js';
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 카드의 진짜 차 사진
+import { profile } from './profile.js'; // 드라이버 카드 (레벨·라이선스·XP)
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 
 export const VERSION = 'v0.9 · 2026.11';
@@ -83,10 +84,15 @@ export async function runHome() {
     <div class="h-top">
       <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">기믹 <em>레이싱</em></div><div class="sub">GIMMICK RACING</div></div></div>
       <div class="h-icons">
-        <button class="gm-btn small h-name" data-act="name" data-nav title="레이스에서 보일 이름 바꾸기">👤 <span></span></button>
-        <button class="gm-btn small" data-go="records" data-nav>🏆 기록</button>
-        <button class="gm-btn small" data-go="controls" data-nav>🎮 조작법</button>
-        <button class="gm-btn small" data-go="settings" data-nav>⚙️ 설정</button>
+        <button class="gm-btn hx-driver h-name" data-act="name" data-nav title="이름 바꾸기 (레이스·순위표에 보여요)">
+          <span class="hx-lic"></span>
+          <span class="hx-dinfo"><b class="nm"></b><small class="lv"></small><span class="hx-xp"><i></i></span><small class="st"></small></span>
+        </button>
+        <div class="hx-util">
+          <button class="gm-btn hx-ico" data-go="settings" data-nav title="설정" aria-label="설정">⚙️</button>
+          <button class="gm-btn hx-ico" data-go="controls" data-nav title="조작법" aria-label="조작법">🎮</button>
+          <button class="gm-btn hx-ico" data-act="mute" data-nav title="소리 켜기/끄기" aria-label="소리 켜기/끄기">🔊</button>
+        </div>
       </div>
     </div>
     <div class="h-view" data-view="main"></div>
@@ -125,19 +131,25 @@ export async function runHome() {
 
   // ------------------------------------------------------------------ 메인 메뉴
   views.main.innerHTML = `
-    <div class="h-main">
-      <h1 class="h-hero">달리고,<br>변신하고,<br>날아올라!<small>기믹 가득한 3D 레이싱 · 땅·물·하늘·우주까지</small></h1>
-      <button class="gm-btn primary h-start" data-act="start" data-nav><span class="big">레이스 시작</span><span class="sel"></span><span class="go">▶</span></button>
-      <div class="h-menu">
-        <div class="h-duo">
-          <button class="gm-btn h-item" data-act="tutorial" data-nav><span class="ic">🎓</span><span class="t"><b>튜토리얼</b><small>빠르게 달리는 법</small></span></button>
-          <button class="gm-btn h-item" data-act="multi" data-nav><span class="ic">🌐</span><span class="t"><b>멀티플레이</b><small>친구와 같이</small></span></button>
-        </div>
-        <button class="gm-btn h-item" data-go="car" data-nav><span class="ic">🏎️</span><span class="t"><b>차 고르기</b><small data-f="car"></small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="map" data-nav><span class="ic">🗺️</span><span class="t"><b>맵 고르기</b><small data-f="map"></small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="records" data-nav><span class="ic">🏆</span><span class="t"><b>내 기록</b><small>${online.enabled ? '🌐 온라인 순위표 · 맵마다 최고 기록' : '맵마다 최고 기록'}</small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="settings" data-nav><span class="ic">⚙️</span><span class="t"><b>설정</b><small>소리 · 그래픽 · 운전 도움 · 조작키</small></span><span class="arrow">›</span></button>
-        <button class="gm-btn h-item" data-go="controls" data-nav><span class="ic">🎮</span><span class="t"><b>조작법</b><small>키보드 · 게임패드 안내</small></span><span class="arrow">›</span></button>
+    <div class="h-main hx">
+      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b><small>땅 · 물 · 하늘 · 우주까지 달리는 기믹 레이싱</small></div>
+      <button class="gm-btn primary h-start hx-hero" data-act="start" data-nav>
+        <span class="hx-thumb"><img alt="" draggable="false" hidden><span class="ph">🏎️</span></span>
+        <span class="hx-htxt"><span class="hx-kicker">READY TO RACE</span><span class="big">레이스 시작</span><span class="sel"></span>
+          <span class="hx-chips"><i data-c="map"></i><i data-c="car"></i><i data-c="mode"></i></span></span>
+        <span class="go">▶</span>
+      </button>
+      <div class="hx-sec"><span>레이스 준비</span></div>
+      <div class="h-menu hx-grid">
+        <button class="gm-btn h-item hx-tile" data-go="car" data-nav style="--tc:#ff6a4d"><span class="ic">🏎️</span><span class="t"><b>차 고르기</b><small data-f="car"></small></span></button>
+        <button class="gm-btn h-item hx-tile" data-go="map" data-nav style="--tc:#4da3ff"><span class="ic">🗺️</span><span class="t"><b>맵 고르기</b><small data-f="map"></small></span></button>
+        <button class="gm-btn h-item hx-tile" data-go="mode" data-nav style="--tc:#ffcf3f"><span class="ic">🏁</span><span class="t"><b>레이스 방식</b><small data-f="mode"></small></span></button>
+      </div>
+      <div class="hx-sec"><span>더 보기</span></div>
+      <div class="h-menu hx-grid">
+        <button class="gm-btn h-item hx-tile" data-act="multi" data-nav style="--tc:#5fd0ff"><span class="ic">🌐</span><span class="t"><b>온라인</b><small>친구와 같이 달리기</small></span></button>
+        <button class="gm-btn h-item hx-tile" data-go="records" data-nav style="--tc:#c79bff"><span class="ic">🏆</span><span class="t"><b>${online.enabled ? '기록 · 순위표' : '내 기록'}</b><small>${online.enabled ? '온라인 순위 · 내 최고' : '맵마다 최고 기록'}</small></span></button>
+        <button class="gm-btn h-item hx-tile" data-act="tutorial" data-nav style="--tc:#7dff6a"><span class="ic">🎓</span><span class="t"><b>튜토리얼</b><small>빠르게 달리는 법</small></span></button>
       </div>
     </div>
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
@@ -237,6 +249,7 @@ export async function runHome() {
   }
   /** 차 사진이 준비되면 카드에 끼움 (부드럽게 나타남) */
   function putThumb(id, url) {
+    if (id === carId) setTimeout(heroThumb, 0);
     for (const pic of carList.querySelectorAll(`.h-carcard[data-car="${id}"] .pic`)) {
       if (pic.querySelector('img')) continue;
       const im = new Image();
@@ -513,12 +526,64 @@ export async function runHome() {
     const c = carOf(carId), m = mapOf(mapId);
     const rm = RACE_MODES.find((x) => x.id === raceMode);
     views.main.querySelector('.h-start .sel').textContent = `${m.title} · ${c.name}${rm ? ` · ${rm.icon} ${rm.name}` : ''}`;
+    {
+      // 큰 시작 버튼: 고른 맵·차·방식 딱지 + 차 사진
+      const chip = (k, t) => (views.main.querySelector(`.hx-chips [data-c="${k}"]`).textContent = t);
+      chip('map', `🗺️ ${m.title}`);
+      chip('car', `🏎️ ${c.name}`);
+      chip('mode', rm ? `${rm.icon} ${rm.name}` : '');
+      views.main.querySelector('[data-f="mode"]').textContent = rm ? `지금: ${rm.name}` : '';
+      heroThumb();
+    }
     views.mode.querySelector('.who').textContent = `🗺️ ${m.title} · 🏎️ ${c.name}`;
     views.main.querySelector('[data-f="car"]').textContent = `지금: ${c.name}`;
     views.main.querySelector('[data-f="map"]').textContent = `지금: ${m.title}`;
     views.main.querySelector('.h-cartag .tg').textContent = c.tag || '';
     views.main.querySelector('.h-cartag .n').textContent = c.name;
     views.map.querySelector('.who').textContent = `🏎️ ${c.name} 으로 달려요`;
+  }
+
+  /** 큰 시작 버튼의 차 사진 (carThumbs가 찍어 둔 것, 아직 없으면 그림 글자) */
+  function heroThumb() {
+    const box = views.main.querySelector('.hx-thumb');
+    if (!box) return;
+    const im = box.querySelector('img'), ph = box.querySelector('.ph');
+    let url = null;
+    try {
+      url = thumbUrl(carId);
+    } catch {}
+    if (url) {
+      if (im.getAttribute('src') !== url) im.src = url;
+      im.hidden = false;
+      ph.hidden = true;
+    } else {
+      im.hidden = true;
+      ph.hidden = false;
+    }
+  }
+  /** 드라이버 카드: 라이선스 아이콘 · 레벨 · XP 막대 · 레이스/우승 수 */
+  function showDriver() {
+    const box = $('.hx-driver');
+    if (!box) return;
+    let p = null;
+    try {
+      p = profile.get();
+    } catch {}
+    if (!p) p = { level: 1, title: '루키 라이선스', icon: '🔰', color: '#8fd3ff', pct: 0, have: 0, need: 200, races: 0, wins: 0 };
+    box.style.setProperty('--lc', p.color || '#8fd3ff');
+    box.querySelector('.hx-lic').textContent = p.icon || '🔰';
+    box.querySelector('.lv').textContent = `Lv.${p.level} ${p.title}`;
+    box.querySelector('.hx-xp i').style.width = `${Math.round((p.pct || 0) * 100)}%`;
+    box.querySelector('.hx-xp').title = `다음 레벨까지 ${p.have} / ${p.need} XP`;
+    box.querySelector('.st').textContent = `레이스 ${p.races || 0} · 우승 ${p.wins || 0}`;
+  }
+  /** 소리 버튼 그림 (설정의 '소리 끄기'와 같은 값) */
+  function showMute() {
+    const b = $('[data-act="mute"]');
+    if (!b) return;
+    const off = !!settings.get('muted');
+    b.textContent = off ? '🔇' : '🔊';
+    b.classList.toggle('off', off);
   }
 
   // ------------------------------------------------------------------ 레이스 방식 고르기
@@ -541,10 +606,11 @@ export async function runHome() {
       </div>
     </div>`;
   // 방식마다 고를 수 있는 것 (설정 값을 바로 바꿈: 홈 설정·Esc 메뉴 설정과 같은 값)
-  const MODE_OPTS = { race: ['bots', 'botLevel'], champ: ['champLen', 'botLevel'], time: ['ghost'], net: [], free: [] };
+  const MODE_OPTS = { item: ['bots', 'botLevel'], race: ['bots', 'botLevel'], champ: ['champLen', 'botLevel'], time: ['ghost'], net: [], free: [] };
   const OPT_LABEL = { bots: '봇 수', botLevel: '봇 실력', ghost: '고스트', champLen: '시즌' };
   const MODE_TIPS = {
     race: '🏁 봇들과 같은 출발선에서 출발해요. 봇은 내 차와 같은 등급의 차를 타요',
+    item: '🎁 코스의 아이템 상자를 먹고 부스터·로켓·방어막을 써요. 드리프트로 게이지를 채우면 부스터가 생겨요',
     time: '⏱️ 혼자 달리며 고스트(내 최고 기록)와 겨뤄요. 구간마다 빨라졌는지 느려졌는지 알려 줘요',
     net: '🌐 방을 만들어 코드를 친구에게 보내거나, 친구 코드로 들어가요. 모두 준비되면 같이 출발해요',
     free: '🧭 봇·고스트 없이 혼자 달려요. 코스를 익히거나 레이싱 라인을 연습할 때 좋아요',
@@ -589,7 +655,7 @@ export async function runHome() {
     const m = RACE_MODES.find((x) => x.id === raceMode);
     // 봇 실력 설명 (사용자 요청: 쉬움 = 처음 해도 이김, 중간 = 처음엔 어려움, 어려움 = 잘하는 사람과 비슷)
     const LEVEL_TIP = { easy: '봇 쉬움: 처음 해도 이길 수 있어요', normal: '봇 중간: 처음 하는 사람은 이기기 어려워요', hard: '봇 어려움: 잘하는 사람과 비슷한 실력이에요', master: '봇 마스터: 어려움보다 훨씬 빨라요. 아주 잘해야 이겨요' };
-    let lvTip = raceMode === 'race' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] || '' : '';
+    let lvTip = raceMode === 'race' || raceMode === 'item' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] || '' : '';
     views.mode.querySelector('.h-modetip').textContent = [MODE_TIPS[raceMode] || '', lvTip].filter(Boolean).join(' · ');
     views.mode.querySelector('[data-act="start"]').innerHTML =
       raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>'
@@ -727,7 +793,7 @@ export async function runHome() {
     const m = mapOf(mapId), c = carOf(carId), rm = RACE_MODES.find((x) => x.id === mode);
     $('#hLaunch').innerHTML = `<div class="logo">기믹 레이싱</div><div class="map">${esc(m.title)}</div><div class="car">${esc(c.name)}</div><div class="mode">${rm ? `${rm.icon} ${esc(rm.name)}` : ''}</div>`;
     $('.h-launch').classList.add('on');
-    const extra = mode === 'race' || mode === 'time' ? { mode } : {};
+    const extra = mode === 'race' || mode === 'time' || mode === 'item' ? { mode } : {};
     setTimeout(() => (location.href = raceUrl(mapId, carId, extra)), 380);
   }
   /** 다른 주소로 출발 (챔피언십 등): 출발 화면을 보여 주고 이동 */
@@ -781,6 +847,11 @@ export async function runHome() {
     if (act === 'start') view === 'mode' ? start() : show('mode');
     else if (act === 'tutorial') startTutorial();
     else if (act === 'multi') openLobby({ map: mapId, car: carId });
+    else if (act === 'mute') {
+      settings.set('muted', !settings.get('muted'));
+      showMute();
+      uiSound('toggle');
+    }
     else if (act === 'prevCar') stepCar(-1);
     else if (act === 'nextCar') stepCar(1);
     else if (act === 'pickCar') show('map');
@@ -954,10 +1025,12 @@ export async function runHome() {
   // 이름 (멀티플레이 대기실과 같은 'gimmick.nick')
   function showName() {
     const n = getNick();
-    $('.h-name span').textContent = n || '이름 정하기';
+    $('.h-name .nm').textContent = n || '이름 정하기';
     $('.h-name').classList.toggle('empty', !n);
+    showDriver();
   }
   showName();
+  showMute();
   // 게임패드가 연결되면 아래 안내에 패드 버튼도
   const padHint = () => {
     const h = $('.h-foot .padhint');

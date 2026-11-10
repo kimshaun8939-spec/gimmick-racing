@@ -97,6 +97,7 @@ export function raceUrl(map, car, extra = {}) {
 /** 레이스 방식: 주소의 mode 값, 화면 이름 */
 export const RACE_MODES = [
   { id: 'race', icon: '🏁', name: '봇 레이스', desc: '봇들과 순위 경쟁' },
+  { id: 'item', icon: '🎁', name: '아이템전', desc: '아이템 상자를 먹고 부스터·로켓·방어막으로 싸우는 봇 레이스! 드리프트로 게이지를 채우면 부스터' },
   { id: 'champ', icon: '🏆', name: '챔피언십', desc: '여러 맵 시즌 · 점수로 챔피언 경쟁' },
   { id: 'time', icon: '⏱️', name: '타임 어택', desc: '혼자 달리며 고스트와 기록 경쟁' },
   { id: 'net', icon: '🌐', name: '멀티플레이', desc: '친구와 방 코드로 같이 달리기' },

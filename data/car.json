@@ -75,6 +75,8 @@
   "feel": { "roll": 1, "pitch": 1, "spring": 90, "damp": 0.6 },
   "_boostsEnabled": "false = 부스트 패드·드리프트 부스트·비행 고리 부스트를 끔 (E 부스터는 booster.enabled로 따로). true로 바꾸면 다시 켜짐",
   "boostsEnabled": false,
+  "_items": "아이템전(?mode=item) 물리 값: boostTop 부스터 최고 속도 배수, boostAccel 부스터 가속(m/s²), shockTop 전기 충격 최고 속도 배수. 나머지 값은 src/items.js CFG",
+  "items": { "boostTop": 1.22, "boostAccel": 16, "shockTop": 0.75 },
   "boost": { "speedFactor": 1.2, "accel": 30 },
   "gravity": 32,
   "stepHeight": 0.9,

@@ -31,6 +31,8 @@ import { champRace, recordRace, champStandings, champUrl } from './championship.
 import { createReplay } from './replay.js';
 import { createCornerReport } from './cornerReport.js';
 import { online } from './online.js';
+import { createItems } from './items.js'; // 아이템전 (?mode=item)
+import './profile.js'; // 완주 이벤트(gimmick:raceDone)를 듣고 경험치 표시
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -48,7 +50,9 @@ const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
 // 레이스 방식: ?mode=race (AI 봇과 레이스) / ?mode=time (혼자 타임 어택 + 고스트) / 없음 = 예전처럼 혼자 달리기 (테스트가 그대로 돌게)
-const MODE = ['race', 'time'].includes(params.get('mode')) ? params.get('mode') : null;
+// 아이템전 (?mode=item): 봇 레이스와 똑같이 진행 + 아이템 (src/items.js). 온라인에서는 안 함. 기록·고스트·순위표는 저장 안 함
+const ITEM = params.get('mode') === 'item' && !params.get('room');
+const MODE = ITEM ? 'race' : ['race', 'time'].includes(params.get('mode')) ? params.get('mode') : null;
 // 온라인 레이스 (?room=코드): 봇 수·실력은 주소(&bots=N&botLevel=..)로 → 모든 사람이 같은 봇 (방 코드로 같은 씨앗)
 const ONLINE = !!params.get('room');
 if (!mapParam) {
@@ -202,7 +206,7 @@ const keyLabel = (id, def) => {
 };
 const hud = createHud(track);
 // --- 챔피언십 (?champ=1): 시즌 내내 같은 봇 (championship.js) ---
-const CHAMP = MODE === 'race' && !ONLINE && !FREE && params.get('champ') ? champRace(mapName) : null;
+const CHAMP = MODE === 'race' && !ITEM && !ONLINE && !FREE && params.get('champ') ? champRace(mapName) : null;
 // --- 상대 차·레이스 진행·고스트·구간 기록 ---
 const opponents = createOpponents(scene); // 봇 + 온라인 상대 (game.opponents)
 const raceSys = await createRaceSystem({
@@ -213,6 +217,15 @@ const raceSys = await createRaceSystem({
   loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
 });
 const sectors = createSectors({ mapName, carId });
+// 아이템전: 상자·아이템·드리프트 게이지 (만들다 실패해도 레이스는 그대로 됨)
+let items = null;
+if (ITEM && !FREE) {
+  try {
+    items = createItems({ scene, track, car, raceSys, hud, keyLabel });
+  } catch (err) {
+    console.warn('아이템전 만들기 실패', err);
+  }
+}
 const carList = rosterMod ? await rosterMod.listCars().catch(() => []) : []; // 다른 차 고스트·기록 이름용
 const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
 const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList });
@@ -288,6 +301,8 @@ function resetRace() {
   else if (raceSys.hasGrid()) startT = raceSys.placeGrid().t; // 봇 레이스·온라인: 2열 출발 그리드
   else car.placeAt(0.992, 0); // 출발선 바로 뒤
   props.reset();
+  if (items) items.reset();
+  race.doneSent = false;
   // F1식 출발 신호: 0.6초 뒤부터 빨간불이 0.7초마다 하나씩 → 5개 다 켜지면 0.7~2.3초(무작위) 기다렸다가 한꺼번에 꺼짐
   car.jumpStall = 0;
   car.needRelease = false;
@@ -364,7 +379,7 @@ function applyIntro(dt) {
   const card = (e < 0.5 ? a.card : b.card) || null;
   hud.intro({
     title: mapTitle,
-    sub: CHAMP ? `🏆 챔피언십 ${CHAMP.index + 1}/${CHAMP.total} 경기 · 봇 ${LEVEL_NAME[raceSys.level] || ''}` : `봇 레이스 · ${raceSys.bots.length + 1}대 · ${LEVEL_NAME[raceSys.level] || ''} · ${trackData.laps}바퀴`,
+    sub: CHAMP ? `🏆 챔피언십 ${CHAMP.index + 1}/${CHAMP.total} 경기 · 봇 ${LEVEL_NAME[raceSys.level] || ''}` : `${ITEM ? '🎁 아이템전' : '봇 레이스'} · ${raceSys.bots.length + 1}대 · ${LEVEL_NAME[raceSys.level] || ''} · ${trackData.laps}바퀴`,
     card,
     hint: '아무 키나 누르면 건너뛰기',
   });
@@ -524,7 +539,7 @@ function updateCamera(dt) {
   if (buzzK > 0 && CAM.buzz > 0) camera.position.addScaledVector(camUp, CAM.buzz * buzzK * (Math.sin(cam.t * 83) * 0.6 + Math.sin(cam.t * 131 + 1.3) * 0.4));
 
   // 속도감: 빠를수록, 부스터일 때 시야각 넓어짐
-  const boosting = car.boostTime > 0 || car.form === 'spike';
+  const boosting = car.boostTime > 0 || car.form === 'spike' || car.itemBoostT > 0;
   cam.boostK = THREE.MathUtils.lerp(cam.boostK, boosting ? 1 : 0, 1 - Math.exp(-(boosting ? 5 : 2) * dt));
   const targetFov = CAM.fovBase + CAM.fovSpeed * cam.sk + CAM.fovBooster * cam.boostK;
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 1 - Math.exp(-CAM.fovRate * dt));
@@ -633,6 +648,7 @@ function stepWorld(controls) {
   // 봇 운전·차끼리 충돌·순위 기록 (봇·상대가 없으면 거의 아무것도 안 함)
   if (race.phase !== 'countdown') race.clock += FIXED_DT; // 내가 완주한 뒤에도 흐르는 레이스 시계 (봇 완주 시간)
   raceSys.step(FIXED_DT, race.phase, race.clock, playerProgress());
+  if (items) items.step(FIXED_DT, race.phase !== 'countdown');
 }
 
 // --- 설정 적용 (settings.js: 홈·ESC 메뉴에서 바꾸면 바로 여기로) ---
@@ -647,6 +663,7 @@ function setModuleMute(m) {
   kerbFx.setMuted(m);
   transformSfx.setMuted(m);
   speedFx.setMuted(m);
+  if (items) items.setMuted(m);
 }
 /** 그래픽 품질: 낮음 = 해상도 낮추고 그림자 끔, 보통 = 해상도 1배·그림자 작게, 높음 = 예전과 같음
  *  자동 (2026-11-10, 기본) = 높음과 같게 그리다가 화면이 끊기면 해상도 배율만 조금씩 낮춤 (autoRes), 부드러워지면 다시 올림 */
@@ -834,9 +851,14 @@ function myRecord() {
 function recordNote(r) {
   return r && r.car !== carId ? carNameOf(r.car) : '';
 }
+/** 진짜 플레이인지 (테스트 자동 운전·튜토리얼 아님) */
+function realPlay() {
+  return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
+}
 function canSaveRecords() {
   // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
-  return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
+  // 아이템전도 저장 안 함 (아이템 때문에 시간을 비교할 수 없음)
+  return !ITEM && realPlay();
 }
 function nextMapId() {
   const order = mapsMeta.map((m) => m.id).filter((id) => MAPS[id]);
@@ -860,6 +882,16 @@ function showFinish() {
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
   race.resultsT = 0;
+  // 완주 알림 (profile.js 경험치 등): 진짜 플레이일 때만, 한 번만
+  if (!race.doneSent && realPlay() && !replay.active) {
+    race.doneSent = true;
+    try {
+      const nCars = standings ? standings.length : 1;
+      window.dispatchEvent(new CustomEvent('gimmick:raceDone', { detail: { map: mapName, car: carId, mode: ITEM ? 'item' : MODE || 'solo', place: position || 1, total: nCars, time: total } }));
+    } catch (err) {
+      console.warn(err);
+    }
+  }
   const showSec = settings.values.sectors ?? true;
   // 챔피언십: 이 경기 점수 저장 (한 번만) + 시즌 순위
   let champ = null;
@@ -898,7 +930,7 @@ function showFinish() {
       }
       else if (a === 'next') {
         const u = new URL(raceUrl(nextMapId(), carId));
-        if (MODE) u.searchParams.set('mode', MODE);
+        if (MODE) u.searchParams.set('mode', ITEM ? 'item' : MODE);
         location.href = u.toString();
       }
       else if (a === 'replay') replay.start();
@@ -970,6 +1002,7 @@ function frame(now, manual = false) {
   // 리플레이 중: 물리·시간은 멈추고 기록만 다시 그림 (온라인이면 내 차는 그 자리에 멈춰 있음 = 이미 완주한 뒤)
   if (replay.active) {
     elapsed += dt;
+    if (items) items.setVisible(false);
     replay.frame(dt, elapsed);
     renderer.render(scene, camera);
     input.endFrame();
@@ -1041,6 +1074,7 @@ function frame(now, manual = false) {
   const ctlOverride = window.game && window.game.controlsOverride; // 테스트용: 자동 운전 함수
   const controls = race.phase === 'racing' && !menuHold ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
   if (race.phase === 'racing' && !race.assist && !ctlOverride && assistOn()) race.assist = true; // 레이스 중에 도움을 켜도 표시
+  if (items && controls.booster) items.usePlayer(); // 아이템전: 부스터 키 = 아이템 쓰기
   acc += dt;
   while (acc >= FIXED_DT) {
     stepWorld(controls);
@@ -1085,6 +1119,10 @@ function frame(now, manual = false) {
   props.animate(elapsed);
   // 봇·온라인 상대 모델 + 이름표, 고스트
   raceSys.update(dt, elapsed, camera);
+  if (items) {
+    items.setVisible(true);
+    items.update(dt, elapsed);
+  }
   if (ghost) ghost.update(dt, elapsed, race.time - race.lapStart, race.time, camera, race.phase === 'racing' && ghost.kind !== 'off');
   // 순위 패널은 1초에 5번만 (글자 바꾸기가 무거움). 완주 뒤 결과표 순위도 봇이 들어오면 갱신
   race.hudT = (race.hudT || 0) + dt;
@@ -1161,7 +1199,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
-  mode: MODE, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep,
+  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작

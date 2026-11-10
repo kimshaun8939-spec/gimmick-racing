@@ -331,7 +331,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
       ${row(K('drift'), '드리프트', '꺾으면서 누르기')}
-      ${actionVisible('booster') ? row(K('booster'), '부스터', '3초 동안 더 빠르게 · 브레이크로 바로 꺼짐') : ''}
+      ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '아이템전에서 가진 아이템 쓰기 (드리프트로 게이지를 채우면 부스터)') : ''}
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}
@@ -355,7 +355,7 @@ export function createControlsPage(opts = {}) {
       ${row('<kbd class="pad">L 스틱</kbd>', '조향', '기울인 만큼 꺾여요 (설정 → 게임패드에서 데드존·커브)')}
       ${row(pad.html('throttle') + pad.html('brake'), '가속 · 브레이크', '트리거를 밟은 만큼')}
       ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}
-      ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '부스터 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
+      ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '아이템 사용 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
       ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')}`)}
       ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 처음부터 다시', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
     </section>

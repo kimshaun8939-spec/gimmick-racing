@@ -148,6 +148,7 @@ export class Car {
     this.sliding = 0; // 0~1 뒤가 미끄러짐
     this.limiter = false; // 회전수 한계에 닿음
     // 손맛 (2026-11-10 2라운드)
+    this.itemBoostT = this.itemSlowT = 0; // 아이템전: 부스터·전기 충격 남은 시간 (items.js가 넣음)
     this.draft = 0; // 0~1 슬립스트림: 앞차 바로 뒤 (raceSystem이 매 스텝 밖에서 넣어 줌) → 공기 저항 ↓
     this.latG = 0; // 옆 가속 (m/s², + = 오른쪽으로 도는 중) → 차체 기울기 (carModel)
     this.lonG = 0; // 앞뒤 가속 (m/s², + 가속, - 브레이크) → 차체 앞뒤 숙임
@@ -218,6 +219,7 @@ export class Car {
     this.latG = this.lonG = this.tyreSlip = this.thrHeld = this.liftKick = this.liftOff = 0;
     this.driftAngle = this.driftHold = this.driftLoss = this.exitRefund = 0;
     this.draft = 0;
+    this.itemBoostT = this.itemSlowT = 0; // 아이템전: 부스터·전기 충격 남은 시간 (items.js가 넣음)
     if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
@@ -437,6 +439,13 @@ export class Car {
     }
   }
 
+  /** 아이템에 맞음: 가던 방향 그대로 속도만 k배 (옆으로 밀지 않음 → 낭떠러지에서 안 떨어짐) */
+  itemHit(k) {
+    this.speed *= k;
+    this.vel.multiplyScalar(k);
+    this.itemBoostT = 0;
+  }
+
   startBoost(seconds, minSpeedFactor = 1, fromBooster = false) {
     // E 부스터는 booster.enabled, 그 밖의 부스트(패드·드리프트·고리)는 boostsEnabled로 켜고 끔
     if (!(fromBooster ? this.cfg.booster.enabled ?? true : this.cfg.boostsEnabled)) return;
@@ -620,6 +629,8 @@ export class Car {
     else this.updateAir(dt, c);
 
     if (this.boostTime > 0) this.boostTime -= dt;
+    if (this.itemBoostT > 0) this.itemBoostT -= dt;
+    if (this.itemSlowT > 0) this.itemSlowT -= dt;
     if (this.pos.y < -30 || (!this.grounded && this.airTime > 8)) this.respawn();
 
     // 차가 받는 가속 (옆·앞뒤): 차체 기울기·숙임 연출용. 복귀·착지 같은 순간 이동은 잘라 냄
@@ -670,6 +681,10 @@ export class Car {
     // (착륙한 뒤 활주로 밖에서는 안 줄임: 착륙장에서 비행 최고 속도로 확 깎이지 않게)
     const flyGround = this.mode === 'fly' && M.fly && this.rwZoneLast > 0;
     if (this.draft > 0 && !flyGround) maxSpeed *= 1 + (cfg.draft?.topGain ?? 0.04) * Math.min(1, this.draft); // 슬립스트림: 최고 속도도 살짝 (추월 가능)
+    // 아이템전: 부스터 = 최고 속도 ↑, 전기 충격 = 최고 속도 ↓ (items.js가 시간을 넣음)
+    const IT = cfg.items || {};
+    if (this.itemBoostT > 0 && !flyGround) maxSpeed *= IT.boostTop ?? 1.22;
+    if (this.itemSlowT > 0) maxSpeed *= IT.shockTop ?? 0.75;
     if (flyGround) maxSpeed = Math.min(maxSpeed, M.fly.maxSpeed);
     const e = cfg.engine, G = this.gearSpeeds(), tire = cfg.tire;
     const v = Math.abs(f);
@@ -764,6 +779,7 @@ export class Car {
     this.liftOff = this.liftKick * THREE.MathUtils.clamp((latUse - 0.35) / 0.4, 0, 1);
 
     if (boosting && f < maxSpeed) f = Math.min(maxSpeed, f + cfg.boost.accel * dt);
+    if (this.itemBoostT > 0 && f > -1 && f < maxSpeed) f = Math.min(maxSpeed, f + (IT.boostAccel ?? 16) * dt); // 아이템 부스터: 세게 밀어 줌
     // 깔끔한 드리프트 탈출: 드리프트로 잃은 속도 일부를 0.3초쯤에 걸쳐 돌려받음 (부스트 아님: 최고 속도를 넘지 않음)
     if (this.exitRefund > 0) {
       const a = Math.min(this.exitRefund, (cfg.drift.exitRate ?? 16) * dt);
@@ -1248,6 +1264,9 @@ export class Car {
     const boosting = this.boostTime > 0;
     let maxF = b.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
     let thrust = b.thrust;
+    const IT = cfg.items || {};
+    if (this.itemBoostT > 0) (maxF *= IT.boostTop ?? 1.22), (thrust += IT.boostAccel ?? 16); // 아이템 부스터 (물 위)
+    if (this.itemSlowT > 0) maxF *= IT.shockTop ?? 0.75;
     // 물살 가속 (부표 게이트·급류): 잠깐 최고 속도·추진력이 올라감
     const SG = b.surge;
     if (this.surgeT > 0 && SG) {

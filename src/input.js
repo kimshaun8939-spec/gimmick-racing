@@ -228,7 +228,7 @@ function decorateLoading() {
       ? [['<kbd>◀ ▶</kbd>', '조향'], ['<kbd>▲</kbd>', '가속'], ['<kbd>▼</kbd>', '브레이크'], ['<kbd>💨</kbd>', '드리프트'], ['<kbd>↺</kbd>', '복귀']]
           .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
           .join('')
-      : [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], actionVisible('booster') && [K('booster'), '부스터'], [K('respawn'), '복귀'], ['<kbd>Esc</kbd>', '메뉴']]
+      : [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], new URLSearchParams(location.search).get('mode') === 'item' && [K('booster'), '아이템'], [K('respawn'), '복귀'], ['<kbd>Esc</kbd>', '메뉴']]
         .filter(Boolean)
         .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
         .join('') + (pad.connected() ? '<span class="pad">🎮 패드 OK</span>' : ''));
