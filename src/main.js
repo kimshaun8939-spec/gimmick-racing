@@ -10,6 +10,7 @@ import { createKeyboardInput, emptyControls } from './input.js';
 import { createHud } from './hud.js';
 import { buildScenery } from './scenery.js';
 import { buildProps } from './props.js';
+import { batchStatic, batchLocal } from './staticBatch.js';
 import { createOffroadFx } from './offroadFx.js';
 import { createEngineAudio } from './engineAudio.js';
 import { createRacingLineFx } from './racingLineFx.js';
@@ -144,12 +145,15 @@ resize();
 // --- 게임 오브젝트 ---
 // 맵 전용 모듈: 맵 json에 "module": "neonMap" 처럼 적으면 src/neonMap.js의 buildTrack/buildScenery/buildProps를 씀 (없는 함수는 기본 것)
 const mapMod = trackData.module ? await import(`./${trackData.module}.js`) : null;
+const sceneBeforeMap = new Set(scene.children); // 트랙·풍경이 새로 넣은 것만 묶어 그리기 대상 (staticBatch.js)
 const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : buildTrack(trackData, scene);
 const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : buildScenery(track, scene);
+const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
 const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : buildProps(track, scene);
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
+const modelBatch = params.get('batch') === '0' ? null : batchLocal(model.root); // 차 부품 묶어 그리기 (움직이는 부품은 스스로 풂)
 scene.add(model.root);
 const offroadFx = createOffroadFx(scene);
 const engineAudio = createEngineAudio(carCfg.sound); // 차마다 엔진 소리 (cars.json tune.sound)
@@ -642,21 +646,82 @@ function setModuleMute(m) {
   transformSfx.setMuted(m);
   speedFx.setMuted(m);
 }
-/** 그래픽 품질: 낮음 = 해상도 낮추고 그림자 끔, 보통 = 해상도 1배·그림자 작게, 높음 = 예전과 같음 */
+/** 그래픽 품질: 낮음 = 해상도 낮추고 그림자 끔, 보통 = 해상도 1배·그림자 작게, 높음 = 예전과 같음
+ *  자동 (2026-11-10, 기본) = 높음과 같게 그리다가 화면이 끊기면 해상도 배율만 조금씩 낮춤 (autoRes), 부드러워지면 다시 올림 */
+const autoRes = { scale: 1, min: 0.55, acc: 0, frames: 0, slowT: 0, goodT: 0, smallShadow: false, log: [] };
+// 이 컴퓨터에서 지난번에 맞춘 값부터 시작 (처음 몇 초 렉 줄이기). 한 칸 높게 시작해서 버티면 그대로, 못 버티면 다시 내려감
+try {
+  const saved = JSON.parse(localStorage.getItem('gimmick.autoRes') || 'null');
+  if (saved && saved.scale > 0) {
+    autoRes.scale = Math.min(1, Math.max(autoRes.min, saved.scale * 1.1));
+    autoRes.smallShadow = !!saved.smallShadow && autoRes.scale <= autoRes.min + 0.05;
+  }
+} catch {}
+const saveAutoRes = () => {
+  try {
+    localStorage.setItem('gimmick.autoRes', JSON.stringify({ scale: +autoRes.scale.toFixed(3), smallShadow: autoRes.smallShadow }));
+  } catch {}
+};
 function applyQuality(q) {
-  const pr = q === 'low' ? Math.min(devicePixelRatio, 1) * 0.8 : q === 'medium' ? Math.min(devicePixelRatio, 1.25) : Math.min(devicePixelRatio, 2);
+  const full = Math.min(devicePixelRatio, 2);
+  const pr = q === 'low' ? Math.min(devicePixelRatio, 1) * 0.8 : q === 'medium' ? Math.min(devicePixelRatio, 1.25) : q === 'auto' ? Math.max(0.6, full * autoRes.scale) : full;
   if (Math.abs(renderer.getPixelRatio() - pr) > 1e-3) {
     renderer.setPixelRatio(pr);
     resize();
   }
   sun.castShadow = q !== 'low';
-  const size = q === 'high' ? 2048 : 1024;
+  const size = q === 'high' || (q === 'auto' && !autoRes.smallShadow) ? 2048 : 1024;
   if (sun.shadow.mapSize.x !== size) {
     sun.shadow.mapSize.set(size, size);
     if (sun.shadow.map) {
       sun.shadow.map.dispose();
       sun.shadow.map = null;
     }
+  }
+}
+/** 자동 품질: 실제 화면 프레임 시간으로 판단 (1초마다). 목표 = 60fps(또는 프레임 제한)의 90% */
+function autoResTick(dt) {
+  if (settings.values.quality !== 'auto' || dt <= 0 || document.hidden || elapsed < 3) return; // 처음 3초는 셰이더 준비로 끊길 수 있어 빼고
+  autoRes.acc += dt;
+  autoRes.frames++;
+  if (autoRes.acc < 1) return;
+  const fps = autoRes.frames / autoRes.acc;
+  autoRes.acc = 0;
+  autoRes.frames = 0;
+  const cap = settings.values.fpsCap || 60;
+  const want = Math.min(cap, 60) * 0.9;
+  let next = autoRes.scale;
+  if (fps < want) {
+    autoRes.goodT = 0;
+    autoRes.slowT++;
+    // 많이 느리면 크게, 조금 느리면 조금 (한 번에 최대 25%)
+    next = Math.max(autoRes.min, autoRes.scale * Math.max(0.75, Math.min(0.95, Math.sqrt(fps / want))));
+    // 이미 가장 낮은데도 느리면 그림자 지도를 작게
+    if (autoRes.scale <= autoRes.min + 1e-3 && autoRes.slowT >= 3 && !autoRes.smallShadow) {
+      autoRes.smallShadow = true;
+      applyQuality('auto');
+      saveAutoRes();
+    }
+  } else {
+    autoRes.slowT = 0;
+    autoRes.goodT++;
+    // 4초 동안 계속 부드러우면 조금 올려 봄 (못 버티면 다시 내려옴)
+    if (autoRes.goodT >= 4 && autoRes.scale < 1) {
+      next = Math.min(1, autoRes.scale * 1.1);
+      autoRes.goodT = 0;
+    }
+    // 충분히 회복했으면 그림자 지도도 원래 크기로
+    if (autoRes.smallShadow && autoRes.goodT === 0 && next > autoRes.min + 0.15) {
+      autoRes.smallShadow = false;
+      applyQuality('auto');
+    }
+  }
+  if (Math.abs(next - autoRes.scale) > 1e-3) {
+    autoRes.scale = next;
+    autoRes.log.push([Math.round(elapsed), Math.round(fps), +next.toFixed(2)]);
+    if (autoRes.log.length > 40) autoRes.log.shift();
+    applyQuality('auto');
+    saveAutoRes();
   }
 }
 function applySettings(key) {
@@ -862,6 +927,19 @@ let acc = 0;
 let last = performance.now();
 let elapsed = 0;
 let fpsFrames = 0, fpsT = performance.now();
+// 가만히 있는 트랙·풍경 메시를 재질별로 묶어 그림 호출 수를 줄임 (모양은 그대로, 렉 줄이기). ?batch=0 이면 끔
+const batcher = (() => {
+  if (params.get('batch') === '0') return null;
+  // 코스에서 먼 물체는 큰 칸으로 묶음 (멀리 있는 하늘 섬·산을 120 m 칸으로 자르면 조각만 많아짐)
+  const pts = track.samples.filter((_, i) => i % Math.max(1, Math.floor(track.samples.length / 400)) === 0).map((s) => s.pos);
+  const cellFor = (p) => {
+    let d = Infinity;
+    for (const q of pts) d = Math.min(d, (q.x - p.x) ** 2 + (q.z - p.z) ** 2);
+    d = Math.sqrt(d);
+    return d < 250 ? 120 : d < 800 ? 300 : 800;
+  };
+  return batchStatic(staticRoots, { debug: params.has('batchdebug'), cellFor });
+})();
 resetRace();
 {
   const l = document.getElementById('loading');
@@ -897,6 +975,7 @@ function frame(now, manual = false) {
     return;
   }
   elapsed += dt;
+  if (!manual) autoResTick(dt); // 자동 품질 (테스트용 game.tick은 빼고)
   if (settings.values.showFps) {
     fpsFrames++;
     if (now - fpsT >= 500) {
@@ -1068,6 +1147,7 @@ function frame(now, manual = false) {
   });
   engineAudio.update(car);
 
+  if (batcher) batcher.update();
   renderer.render(scene, camera);
   input.endFrame();
   if (!manual) requestAnimationFrame(frame);
@@ -1077,7 +1157,7 @@ requestAnimationFrame(frame);
 // 디버그/테스트용 (브라우저 콘솔에서 사용 가능)
 window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
-  carId, carName, carCfg, mapTitle, menu, settings, records,
+  carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
   mode: MODE, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep,
   /**

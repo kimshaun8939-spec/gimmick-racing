@@ -16,8 +16,8 @@ export const SETTING_DEFS = [
   { group: '소리', key: 'fxVol', label: '효과음', desc: '변신·바람·연석·메뉴 소리', type: 'slider', def: 1 },
   { group: '소리', key: 'muted', label: '소리 끄기', desc: () => `게임 중 ${keybinds.main('sound')} 키와 같아요`, type: 'toggle', def: false },
 
-  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '노트북이 뜨거워지면 낮춰 보세요', type: 'choice',
-    options: [['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'high' },
+  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 높음으로 그리다가 끊기면 해상도만 살짝 낮춤 (렉이 걸리는 컴퓨터용). 노트북이 뜨거워지면 낮춰 보세요', type: 'choice',
+    options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
   { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 배터리·발열이 줄어요', type: 'choice',
     options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 0 },
   { group: '화면·그래픽', key: 'speedFx', label: '속도감 효과', desc: '바람 줄기·속도선·시야 넓어짐', type: 'choice',

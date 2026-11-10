@@ -8,6 +8,7 @@
 //   화면: 차마다 3D 모델 + 머리 위 이름표. 멀리 있는 차는 가벼운 모형(LOD)으로 바꿔서 그림 → 7대여도 가볍게
 import * as THREE from 'three';
 import { createCarModel } from './carModel.js';
+import { batchLocal } from './staticBatch.js'; // 차 부품 묶어 그리기 (렉 줄이기)
 
 const FULL_DIST = 120; // 이 거리(m) 안에서만 자세한 모델 (밖은 단순한 모형)
 const HIDE_DIST = 900; // 이보다 멀면 안 그림 (안개 너머)
@@ -103,6 +104,7 @@ export function createOpponents(scene) {
   /** 화면용 부품 (모델 + 모형 + 이름표) */
   function makeVisual(entry) {
     const model = createCarModel(entry.look || '#e8463a');
+    if (!/[?&]batch=0/.test(location.search)) batchLocal(model.root); // 같은 그룹 안 부품을 묶음 (움직이면 스스로 풂)
     scene.add(model.root);
     const proxy = proxyModel(entry.color);
     scene.add(proxy);
