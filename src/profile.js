@@ -4,7 +4,25 @@
 //   받는 신호: window 이벤트 `gimmick:raceDone` detail { map, car, mode, place, total, time }
 //     (main.js가 완주 때 보냄. 기록을 저장할 수 있는 진짜 플레이일 때만)
 //   쓰는 법: profile.get() → { xp, level, title, icon, color, have, need, pct, races, wins, podiums }
+//   계정 합치기 (사용자 요청 2026-11-12 "레벨도 총 경험치 기준으로 합쳐지게"): 이름+비밀번호 계정이 있으면
+//     레벨 = 이 기기 경험치 + 같은 계정 다른 기기들 경험치 합 (online.js syncXp가 서버 gr_xp에서 받아 'gimmick.profileNet'에 저장)
+//     'gimmick.profile'은 계속 이 기기에서 모은 값만 (서버에 기기마다 따로 올림 → 두 번 세지 않음)
 const KEY = 'gimmick.profile';
+const NET_KEY = 'gimmick.profileNet';
+/** 같은 계정 다른 기기들의 합 (지금 이 기기 계정과 같은 id일 때만) */
+function others() {
+  try {
+    const me = JSON.parse(localStorage.getItem('gimmick.online') || 'null');
+    const n = JSON.parse(localStorage.getItem(NET_KEY) || 'null');
+    if (me && me.id && n && n.id === me.id) return { xp: +n.xp || 0, races: +n.races || 0, wins: +n.wins || 0, podiums: +n.podiums || 0, devices: +n.devices || 1 };
+  } catch {}
+  return null;
+}
+function combined(p) {
+  const o = others();
+  if (!o) return { ...p, local: p.xp, devices: 1 };
+  return { ...p, xp: p.xp + o.xp, races: p.races + o.races, wins: p.wins + o.wins, podiums: p.podiums + o.podiums, local: p.xp, devices: o.devices };
+}
 const TIERS = [
   { lv: 1, title: '루키 라이선스', icon: '🔰', color: '#8fd3ff' },
   { lv: 3, title: '브론즈 라이선스', icon: '🥉', color: '#d9935a' },
@@ -71,19 +89,21 @@ export function xpFor(d = {}) {
 }
 
 export const profile = {
-  get: () => describe(load()),
+  get: () => describe(combined(load())),
+  /** 이 기기에서 모은 값만 (서버에 올릴 때) */
+  local: () => load(),
   tiers: () => TIERS.slice(),
   /** 완주 보상. 돌려주는 값 { gained, before, after, levelUp, tierUp } */
   award(d = {}) {
     const p = load();
-    const before = describe(p);
+    const before = describe(combined(p));
     const gained = xpFor(d);
     p.xp += gained;
     p.races++;
     if (d.total > 1 && d.place === 1) p.wins++;
     if (d.total > 1 && d.place > 0 && d.place <= 3) p.podiums++;
     save(p);
-    const after = describe(p);
+    const after = describe(combined(p));
     return { gained, before, after, levelUp: after.level > before.level, tierUp: after.title !== before.title };
   },
   reset() {

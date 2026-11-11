@@ -63,7 +63,7 @@ export async function runHome() {
     document.head.appendChild(ln);
   }
   unlocks.registerCars(cars);
-  const myLevel = unlocks.currentLevel();
+  let myLevel = unlocks.currentLevel();
   const isOpen = (id) => unlocks.isCarUnlocked(id);
   for (const c of cars) {
     c.look0 = c.look; // 원래 색
@@ -1190,6 +1190,7 @@ export async function runHome() {
     else if (act === 'name') {
       const r = await welcomeDialog({ first: false });
       if (r) {
+        myLevel = unlocks.currentLevel(); // 계정에 들어가면 다른 기기 경험치까지 합친 레벨
         showName();
         if (r.msg) toast(r.msg);
         if (view === 'records') renderOnline();
@@ -1356,7 +1357,24 @@ export async function runHome() {
   }
 
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
-  setTimeout(showLevelNews, 700);
+  // 레벨 합치기 (2026-11-12): 서버에서 같은 계정 다른 기기 경험치를 받아 온 뒤 레벨·레벨 업 알림
+  let newsDone = false;
+  const levelNews = () => {
+    if (newsDone) return;
+    newsDone = true;
+    showLevelNews();
+  };
+  online
+    .syncXp()
+    .then((r) => {
+      if (!r) return;
+      myLevel = unlocks.currentLevel();
+      showDriver();
+      if (view === 'car') renderCarList();
+    })
+    .catch(() => {})
+    .finally(() => setTimeout(levelNews, 150));
+  setTimeout(levelNews, 2500); // 서버가 느리면 기다리지 않음
   setTimeout(startThumbs, 1500); // 메인 화면에 있어도 미리 찍어 둠 (다음부터는 저장된 사진을 바로 씀)
   const ld = document.getElementById('loading');
   if (ld) {

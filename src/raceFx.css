@@ -57,7 +57,7 @@
   background: radial-gradient(ellipse at 50% 58%, transparent 34%, rgba(255, 214, 92, 0.22) 72%, rgba(255, 190, 60, 0.42) 100%);
 }
 #slingFlash b {
-  position: absolute; left: 50%; top: 64%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 33%; transform: translate(-50%, -50%);
   font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 0.05em; white-space: nowrap;
   color: #ffe27a; text-shadow: 0 0 18px rgba(255, 190, 40, 0.9), 0 3px 10px rgba(0, 0, 0, 0.7);
 }

@@ -42,7 +42,7 @@ export function createSlipFx(o = {}) {
   let mesh = null;
   const seeds = [];
   for (let i = 0; i < N; i++)
-    seeds.push({ lat: Math.random() * 2 - 1, h: 0.2 + Math.random() * 1.2, len: 2.4 + Math.random() * 2.8, w: 0.035 + Math.random() * 0.055, sp: 0.75 + Math.random() * 0.6, u: Math.random(), ph: Math.random() * 6.28 });
+    seeds.push({ lat: Math.random() * 2 - 1, h: 0.15 + Math.random() * 1.45, len: 3 + Math.random() * 4, w: 0.09 + Math.random() * 0.13, sp: 0.85 + Math.random() * 0.6, u: Math.random(), ph: Math.random() * 6.28 });
   function ensureMesh() {
     if (mesh) return mesh;
     const scene = getScene();
@@ -75,7 +75,7 @@ export function createSlipFx(o = {}) {
     const fwd = src.fwd, right = src.right, up = src.up || THREE.Object3D.DEFAULT_UP;
     _a.copy(fwd).normalize();
     const gap = myPos ? Math.max(0, (src.pos.x - myPos.x) * _a.x + (src.pos.z - myPos.z) * _a.z) : 20;
-    const span = THREE.MathUtils.clamp(gap - 1.5, 6, 34);
+    const span = THREE.MathUtils.clamp(gap + 9, 12, 44); // 내 차 옆을 지나 뒤까지 흐름
     const readyK = THREE.MathUtils.clamp((charge - readyAt + 0.25) / 0.25, 0, 1);
     _c.copy(CYAN).lerp(GOLD, readyK);
     const vis = wakeVis * (0.55 + 0.45 * Math.min(1, charge / readyAt));
@@ -85,10 +85,10 @@ export function createSlipFx(o = {}) {
       if (s.u >= 1) {
         s.u -= 1;
         s.lat = Math.random() * 2 - 1;
-        s.h = 0.2 + Math.random() * 1.2;
+        s.h = 0.15 + Math.random() * 1.45;
       }
       const back = 1.6 + s.u * span;
-      const spread = Math.min(1.7, 0.55 + 0.035 * back);
+      const spread = Math.min(2.5, 0.8 + 0.06 * back); // 뒤로 갈수록 넓게 퍼짐 → 내 차 양옆으로 지나감
       const lat = s.lat * spread + Math.sin(wakeT * 3 + s.ph) * 0.12;
       _p.copy(src.pos).addScaledVector(_a, -back).addScaledVector(right, lat).addScaledVector(up, s.h);
       // 줄기 방향(앞뒤)을 축으로 카메라 쪽을 보게 돌림 (원통 빌보드)
@@ -101,7 +101,8 @@ export function createSlipFx(o = {}) {
       _m.makeBasis(_x.copy(_a).multiplyScalar(len), _y.multiplyScalar(s.w * (1 + 0.6 * readyK)), _n);
       _m.setPosition(_p);
       mesh.setMatrixAt(i, _m);
-      const a = Math.pow(Math.sin(Math.PI * s.u), 1.2) * vis * 0.9;
+      const camD = camera.position.distanceTo(_p);
+      const a = Math.sin(Math.PI * s.u) * vis * 1.25 * THREE.MathUtils.clamp((camD - 2.5) / 7, 0, 1); // 카메라 바로 앞은 흐리게 (화면을 덮지 않게)
       mesh.instanceColor.setXYZ(i, _c.r * a, _c.g * a, _c.b * a);
     }
     mesh.instanceMatrix.needsUpdate = true;

@@ -13,6 +13,29 @@
 import { ONLINE_URL, ONLINE_KEY } from './onlineConfig.js';
 
 const ID_KEY = 'gimmick.online';
+const DEVICE_KEY = 'gimmick.device'; // 이 브라우저 id (경험치를 기기마다 따로 올림)
+const NET_KEY = 'gimmick.profileNet'; // 같은 계정 다른 기기들 경험치 합 (profile.js가 더해서 레벨을 보여 줌)
+function deviceId() {
+  try {
+    let d = localStorage.getItem(DEVICE_KEY);
+    if (!d || d.length < 8) {
+      const a = new Uint8Array(12);
+      crypto.getRandomValues(a);
+      d = Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(DEVICE_KEY, d);
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+function localProfile() {
+  try {
+    const j = JSON.parse(localStorage.getItem('gimmick.profile') || 'null');
+    if (j && typeof j.xp === 'number') return { xp: Math.floor(j.xp), races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0 };
+  } catch {}
+  return null;
+}
 const NICK_KEY = 'gimmick.nick';
 const TIMEOUT = 12000;
 
@@ -131,7 +154,30 @@ export const online = {
     try {
       localStorage.setItem(NICK_KEY, r.nick);
     } catch {}
+    await this.syncXp();
     return { nick: r.nick, created: !!r.created, merged: r.merged || 0, claimed: !!r.claimed };
+  },
+  /**
+   * 레벨 합치기: 이 기기 경험치를 서버에 올리고 같은 계정 다른 기기들의 합을 받아 둠 → { others, total, devices } 또는 null
+   *   (계정이 없거나 서버에 gr_xp가 없으면 null, 레벨은 이 기기 값만으로 보임)
+   */
+  async syncXp() {
+    const m = readId();
+    const p = localProfile();
+    const dev = deviceId();
+    if (!m || !p || !dev || !this.enabled) return null;
+    try {
+      const r = await rpc('gr_xp', { p_id: m.id, p_secret: m.secret, p_device: dev, p_xp: p.xp, p_races: p.races, p_wins: p.wins, p_podiums: p.podiums });
+      if (!r || !r.others) return null;
+      try {
+        localStorage.setItem(NET_KEY, JSON.stringify({ id: m.id, ...r.others, devices: r.devices || 1, at: Date.now() }));
+      } catch {}
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('gimmick:xpnet', { detail: r }));
+      return r;
+    } catch (err) {
+      if (/unknown player/.test(err.message || '')) writeId(null);
+      return null;
+    }
   },
   /** 이 기기 계정 이름 바꾸기 (계정이 없으면 true = 할 일 없음). 남이 비밀번호로 지킨 이름이면 false */
   async rename(nick) {
@@ -213,3 +259,11 @@ export const online = {
     writeId(null);
   },
 };
+
+// 완주해서 경험치를 받으면(profile.js 'gimmick:xp') 계정 경험치도 올림
+if (typeof window !== 'undefined' && !window.__gimmickXpSync) {
+  window.__gimmickXpSync = true;
+  window.addEventListener('gimmick:xp', () => {
+    online.syncXp();
+  });
+}

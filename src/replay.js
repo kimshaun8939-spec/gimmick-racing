@@ -266,6 +266,8 @@ export function createReplay(o) {
     });
     root.classList.add('rp');
     document.body.classList.add('replaying');
+    // 결과 창은 숨김 (CSS '#results.rp > .res'가 디자인 2차의 '#results .res.wide { display: flex }'에 져서 순위표가 있는 결과 창이 리플레이를 가렸음, 2026-11-12)
+    root.querySelectorAll(':scope > .res').forEach((e) => (e.style.display = 'none'));
   }
   function refreshBar() {
     if (!bar) return;
@@ -353,6 +355,7 @@ export function createReplay(o) {
     const root = document.getElementById('results');
     root.classList.remove('rp');
     document.body.classList.remove('replaying');
+    root.querySelectorAll(':scope > .res').forEach((e) => (e.style.display = ''));
     // 상대 모델은 원래대로 (다음 화면에서 opponents가 LOD·이름표를 다시 정함)
     for (const c of cars || []) if (c.entry) c.entry.lod = null;
     camera.fov = savedFov;
