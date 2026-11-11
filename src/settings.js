@@ -66,6 +66,7 @@ export const SETTING_DEFS = [
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
   { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷 · 마스터 = 어려움보다 훨씬 빠름, 아주 잘해야 이김', type: 'choice',
     options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '마스터']], def: 'normal' },
+  { group: '레이스', key: 'tow', label: '견인', desc: '1등에게 많이 뒤처지면 살짝 끌어당겨 줘요 (봇도 똑같이, 봇 레이스·아이템전·챔피언십). 견인을 받으면 기록에 "🛟 도움 켬"', type: 'toggle', def: true },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
   // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
   { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,

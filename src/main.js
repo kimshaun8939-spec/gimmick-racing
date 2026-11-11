@@ -956,7 +956,7 @@ function showFinish() {
       .submit({ map: mapName, car: carId, total, laps: race.lapTimes, bestLap, assist: !!race.assist, ghost: ghost ? ghost.lastRunJson : null })
       .then((r) => {
         if (!r) return hud.setOnline('');
-        if (r.needNick) return hud.setOnline('🌐 홈에서 이름을 정하면 온라인 순위표에 올라가요');
+        if (r.needLogin || r.needNick) return hud.setOnline('🌐 홈 오른쪽 위 👤에서 이름과 비밀번호 4자리를 정하면 온라인 순위표에 올라가요');
         const where = `<b>${r.rank}위</b> / ${r.players}명`;
         hud.setOnline(r.saved ? `🌐 온라인 순위표에 올렸어요 · 이 맵 ${where}` : `🌐 온라인 내 최고 ${fmtTime(r.best)} · 이 맵 ${where}`);
       })
@@ -1092,7 +1092,7 @@ function frame(now, manual = false) {
 
   const ctlOverride = window.game && window.game.controlsOverride; // 테스트용: 자동 운전 함수
   const controls = race.phase === 'racing' && !menuHold ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
-  if (race.phase === 'racing' && !race.assist && !ctlOverride && assistOn()) race.assist = true; // 레이스 중에 도움을 켜도 표시
+  if (race.phase === 'racing' && !race.assist && !ctlOverride && (assistOn() || (raceSys.towAssisted && raceSys.towAssisted()))) race.assist = true; // 레이스 중에 도움을 켜도 표시 (견인을 받아도: raceSystem 2026-11-12)
   if (items && controls.booster) items.usePlayer(); // 아이템전: 부스터 키 = 아이템 쓰기
   acc += dt;
   while (acc >= FIXED_DT) {

@@ -251,6 +251,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" />
   <link rel="stylesheet" href="src/menu.css" />
+  <link rel="stylesheet" href="src/raceFx.css" />
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -315,7 +316,12 @@
   <!-- 2라운드: 띠 알림, 슬립스트림, 출발 그리드 소개 -->
   <div id="banner" class="hud"></div>
   <div id="draftLines"></div>
-  <div id="draftBox" class="hud">💨 슬립스트림</div>
+  <!-- 슬립스트림 충전 막대 + 견인 칩 (src/slipFx.js가 켜고 끔, 모양 src/raceFx.css) -->
+  <div id="slipDock" class="hud">
+    <div id="towBox" title="1등에게 많이 뒤처져서 살짝 끌어당겨 주는 중"><span class="tw-ico">🧲</span><b>견인</b><div class="tw-bar"><i></i></div></div>
+    <div id="draftBox"><div class="sl-row"><span class="sl-ico">💨</span><b>슬립스트림</b><em>0%</em></div><div class="sl-bar"><i></i></div><div class="sl-tip">바짝 붙어서 충전 중…</div></div>
+  </div>
+  <div id="slingFlash"><b>⚡ 슬링샷!</b></div>
   <div id="introBox" class="hud"></div>
 
   <!-- 완주 결과 (hud.js가 채움) -->

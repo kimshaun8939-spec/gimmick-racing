@@ -731,18 +731,25 @@ export async function runHome() {
   // ------------------------------------------------------------------ 온라인 순위표 (내 기록 화면 위쪽)
   //   맵마다 사람별 가장 빠른 완주 기록 (어느 차든) / 지금 고른 차만. 줄마다 "👻 같이 달리기" = 그 사람 고스트와 타임 어택
   let olMap = null, olCarOnly = false, olSeq = 0;
+  // 순위표 아래 내 계정 줄 (이름 + 비밀번호 4자리 = 한 계정, 2026-11-12)
+  function olMeHtml(me) {
+    if (me && me.claimed) return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> <em class="ol-lock">🔐 내 이름</em></span><span class="ol-tip">다른 기기에서도 같은 이름 + 비밀번호를 넣으면 이 계정이에요</span><button class="gm-btn small" data-act="name" data-nav>👤 바꾸기</button>`;
+    if (me) return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> 으로 올리는 중</span><span class="ol-tip warn">비밀번호를 정하면 이 이름이 내 것이 되고, 다른 기기에서도 이어 할 수 있어요</span><button class="gm-btn small primary" data-act="name" data-nav>🔐 비밀번호 정하기</button>`;
+    return `<span class="ol-tip warn">이름과 비밀번호 4자리를 정하면 완주 기록이 순위표에 올라가요 · 다른 기기에서도 같은 이름 + 비밀번호면 같은 계정</span><button class="gm-btn small primary" data-act="name" data-nav>🔐 이름·비밀번호 정하기</button>`;
+  }
   async function renderOnline() {
     const box = views.records.querySelector('.h-online');
     if (!box) return;
     fixRecMap();
     const me = online.me();
-    const code = online.myCode();
-    box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>로그인 없이 이름으로 · 완주하면 자동으로 올라감</small></h3>
+    box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>이름 + 비밀번호 4자리 · 완주하면 자동으로 올라감</small></h3>
       <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
       <div class="h-olboard"><div class="none">불러오는 중…</div></div>
-      <div class="h-olme">${me ? `👤 <b>${esc(me.nick)}</b> 으로 올리는 중` : '👤 아직 올린 기록이 없어요 (완주하면 홈의 이름으로 올라가요)'}
-        ${code ? '<button class="gm-btn small" data-act="olCopy" data-nav title="다른 컴퓨터·브라우저에서 같은 이름으로 이어 하기">🔑 내 코드 복사</button>' : ''}
-        <span class="h-olcode"><input type="text" spellcheck="false" autocomplete="off" placeholder="다른 기기의 코드 (GR-…)" aria-label="내 코드 넣기"><button class="gm-btn small" data-act="olUse" data-nav>코드로 이어 하기</button></span></div>`;
+      <div class="h-olme">${olMeHtml(me)}</div>`;
+    if (me) online.refresh().then((m2) => {
+      const el = box.querySelector('.h-olme');
+      if (el && (!m2 || m2.nick !== me.nick || m2.claimed !== me.claimed)) el.innerHTML = olMeHtml(m2);
+    });
     const seq = ++olSeq;
     const board = box.querySelector('.h-olboard');
     try {
@@ -1182,7 +1189,11 @@ export async function runHome() {
     else if (act === 'editKeys') show('settings', true, 'keys');
     else if (act === 'name') {
       const r = await welcomeDialog({ first: false });
-      if (r) showName();
+      if (r) {
+        showName();
+        if (r.msg) toast(r.msg);
+        if (view === 'records') renderOnline();
+      }
     }
     else if (act === 'olMap') {
       // 기록 화면 위 맵 띠: 고른 맵으로 순위표·내 기록 둘 다 바꿈
@@ -1370,6 +1381,7 @@ export async function runHome() {
         if (view !== 'main' || launching || dialogOpen()) return;
         const r = await welcomeDialog({ first: true });
         showName();
+        if (r && r.msg) toast(r.msg);
         if (r && r.tutorial) startTutorial();
       }, 700);
     }
@@ -1700,20 +1712,60 @@ function welcomeDialog({ first = false } = {}) {
       ${first ? '<div class="wl-flag">🏁</div><h3>기믹 레이싱에 온 걸 환영해요!</h3><p>먼저 레이스에서 보일 <b>이름</b>을 정해 주세요. 멀티플레이와 결과표에 나와요.</p>' : '<h3>👤 내 이름</h3><p>멀티플레이 대기실과 레이스 결과표에 보이는 이름이에요.</p>'}
       <div class="wl-name"><input type="text" maxlength="12" spellcheck="false" autocomplete="off" aria-label="이름"><button class="gm-btn small" data-r="dice" title="아무 이름이나">🎲</button></div>
       <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
+      ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="${online.isMine(cur) ? '이 이름은 이미 내 것 · 비워 둬도 돼요' : '••••'}"></label>
+        <small class="wl-pinhint">🌐 온라인 순위표용 · <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>
+        <div class="wl-err" role="alert"></div></div>` : ''}
       ${first ? `<div class="wl-tut"><span class="ic">🎓</span><div><b>처음이라면 튜토리얼부터!</b><small>약 5분 · 출발 신호, 브레이크, 에이펙스, 드리프트, 변신(가속·배·비행)까지 직접 해 보며 배워요</small></div></div>` : ''}
       <div class="btns">${first ? '<button class="gm-btn" data-r="skip">바로 둘러보기</button><button class="gm-btn primary" data-r="tut">🎓 튜토리얼 시작<kbd>Enter</kbd></button>' : '<button class="gm-btn" data-r="cancel">취소</button><button class="gm-btn primary" data-r="ok">저장<kbd>Enter</kbd></button>'}</div></div>`;
     const inp = wrap.querySelector('input');
+    const pinInp = wrap.querySelector('.wl-pin input');
+    const errEl = wrap.querySelector('.wl-err');
     inp.value = cur || (first ? randomNick() : '');
-    const done = (r) => {
-      window.removeEventListener('keydown', onKey, true);
-      wrap.remove();
+    if (pinInp) pinInp.addEventListener('input', () => (pinInp.value = pinInp.value.replace(/\D/g, '').slice(0, 4)));
+    let busy = false;
+    const fail = (msg, el) => {
+      errEl.textContent = msg;
+      errEl.classList.add('on');
+      uiSound('back');
+      (el || pinInp).focus();
+      (el || pinInp).select && (el || pinInp).select();
+    };
+    const done = async (r) => {
+      if (busy) return;
       if (r) {
         const n = cleanNick(inp.value) || cur || randomNick();
+        // 온라인: 비밀번호를 넣었으면 이름 + 비밀번호로 시작/이어 하기, 안 넣었으면 이 기기 계정 이름만 바꿈
+        if (pinInp && online.enabled) {
+          const pin = pinInp.value.trim();
+          if (pin && !/^[0-9]{4}$/.test(pin)) return fail('비밀번호는 숫자 4자리예요');
+          busy = true;
+          wrap.classList.add('busy');
+          try {
+            if (pin) {
+              const res = await online.login(n, pin);
+              wrap.dataset.msg = res.merged ? `👤 ${res.nick} 계정으로 이어 해요 · 이 기기 기록 ${res.merged}개를 합쳤어요` : res.created || res.claimed ? `🔐 ${res.nick} 이름을 지켰어요` : `👤 ${res.nick} 계정으로 이어 해요`;
+            } else if (!(await online.rename(n))) {
+              busy = false;
+              wrap.classList.remove('busy');
+              return fail('이미 다른 사람이 비밀번호로 지킨 이름이에요 · 내 이름이면 비밀번호를 넣어 주세요');
+            }
+          } catch (err) {
+            busy = false;
+            wrap.classList.remove('busy');
+            return fail(err.reason ? err.message : '서버에 연결하지 못했어요 (인터넷 확인)');
+          }
+        }
+        window.removeEventListener('keydown', onKey, true);
+        wrap.remove();
         setNick(n);
+        const m = online.me();
+        if (m && m.claimed && m.nick !== n) setNick(m.nick); // 서버의 이름(대소문자·띄어쓰기)을 따름
         uiSound('select');
         if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
-        resolve({ name: n, tutorial: r === 'tut' });
+        resolve({ name: getNick(), tutorial: r === 'tut', msg: wrap.dataset.msg || '' });
       } else {
+        window.removeEventListener('keydown', onKey, true);
+        wrap.remove();
         uiSound('back');
         if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
         resolve(null);
@@ -1729,9 +1781,9 @@ function welcomeDialog({ first = false } = {}) {
         if (a && a.dataset && a.dataset.r === 'dice') return (inp.value = randomNick()), uiSound('move');
         return done(a && a.dataset && a.dataset.r && a !== inp ? (a.dataset.r === 'cancel' ? null : a.dataset.r) : primary);
       }
-      if (['ArrowUp', 'ArrowDown'].includes(e.code) || (a !== inp && ['ArrowLeft', 'ArrowRight'].includes(e.code))) {
+      if (['ArrowUp', 'ArrowDown'].includes(e.code) || (a !== inp && a !== pinInp && ['ArrowLeft', 'ArrowRight'].includes(e.code))) {
         e.preventDefault();
-        const items = [inp, ...wrap.querySelectorAll('button')];
+        const items = [inp, ...(pinInp ? [pinInp] : []), ...wrap.querySelectorAll('button')];
         const i = items.indexOf(a);
         const d = e.code === 'ArrowUp' || e.code === 'ArrowLeft' ? -1 : 1;
         items[(i + d + items.length) % items.length].focus();

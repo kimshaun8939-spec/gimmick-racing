@@ -1,0 +1,89 @@
+/* 슬립스트림 충전 막대 · 견인 칩 · 슬링샷 번쩍임 (2026-11-12, src/slipFx.js가 켜고 끔)
+   menu.css 다음에 불러옴 → index.html 안의 예전 #draftBox 모양·menu.css 자리를 여기서 덮어씀
+   HUD 한 가족(--hud-glass·--hud-line·--hud-edge, menu.css '디자인 시스템 v2')을 그대로 씀 */
+
+#slipDock {
+  right: var(--hud-edge, 16px); bottom: calc(var(--hud-edge, 16px) + 172px);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 6;
+}
+
+/* --- 💨 슬립스트림 --- */
+#slipDock #draftBox {
+  position: relative; right: auto; bottom: auto; opacity: 1; display: none; box-sizing: border-box;
+  width: 216px; padding: 7px 11px 8px; border-radius: var(--hud-r, 14px);
+  background: var(--hud-glass, rgba(9, 13, 26, 0.64)); border: 1px solid rgba(143, 227, 255, 0.5);
+  box-shadow: var(--hud-sh, none), 0 0 14px rgba(110, 210, 255, 0.25);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+  color: #dff7ff; font-size: 13px; letter-spacing: 0.02em; animation: none;
+}
+#slipDock #draftBox.on { display: block; animation: slipIn 0.22s ease-out; }
+#draftBox .sl-row { display: flex; align-items: center; gap: 6px; }
+#draftBox .sl-ico { font-size: 15px; display: inline-block; animation: slipBlow 0.6s ease-in-out infinite alternate; }
+#draftBox .sl-row b { font-weight: 900; letter-spacing: 0.05em; }
+#draftBox .sl-row em { margin-left: auto; font-style: normal; font-weight: 900; font-variant-numeric: tabular-nums; color: #bff0ff; }
+#draftBox .sl-bar { position: relative; height: 7px; margin-top: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+#draftBox .sl-bar i { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #3fb6ff, #9fe8ff 70%, #e9fbff); box-shadow: 0 0 8px rgba(120, 220, 255, 0.8); transition: width 0.12s linear; }
+#draftBox .sl-bar::after { /* 막대 위를 흐르는 바람 무늬 */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(115deg, transparent 0 10px, rgba(255, 255, 255, 0.22) 10px 12px); background-size: 26px 100%;
+  animation: slipFlow 0.45s linear infinite;
+}
+#draftBox .sl-tip { margin-top: 4px; font-size: 11px; font-weight: 700; color: #b9d6e6; white-space: nowrap; }
+#slipDock #draftBox.ready { border-color: rgba(255, 214, 92, 0.85); color: #fff3cf; animation: slipReady 0.5s ease-in-out infinite alternate; }
+#draftBox.ready .sl-row em { color: #ffe08a; }
+#draftBox.ready .sl-bar i { background: linear-gradient(90deg, #ffb020, #ffe27a 70%, #fffbe6); box-shadow: 0 0 10px rgba(255, 200, 60, 0.95); }
+#draftBox.ready .sl-tip { color: #ffe08a; font-weight: 900; }
+
+/* --- 🧲 견인 --- */
+#towBox {
+  display: none; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px;
+  background: var(--hud-glass, rgba(9, 13, 26, 0.64)); border: 1px solid rgba(255, 140, 214, 0.55);
+  box-shadow: var(--hud-sh, none), 0 0 12px rgba(255, 110, 200, 0.25);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+  color: #ffe0f4; font-size: 12.5px; font-weight: 800; letter-spacing: 0.04em;
+}
+#towBox.on { display: flex; animation: slipIn 0.25s ease-out; }
+#towBox.off { display: none; }
+#towBox .tw-ico { display: inline-block; animation: towPull 0.9s ease-in-out infinite; }
+#towBox .tw-bar { width: 56px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+#towBox .tw-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, #ff6ec7, #c78bff); transition: width 0.2s linear; }
+
+/* --- 화면 가장자리 바람 줄(예전 #draftLines): 슬링샷 준비면 금빛 --- */
+#draftLines.ready { filter: sepia(0.85) saturate(3.2) hue-rotate(-8deg) brightness(1.15); }
+
+/* --- ⚡ 슬링샷! --- */
+#slingFlash {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 2;
+  background: radial-gradient(ellipse at 50% 58%, transparent 34%, rgba(255, 214, 92, 0.22) 72%, rgba(255, 190, 60, 0.42) 100%);
+}
+#slingFlash b {
+  position: absolute; left: 50%; top: 64%; transform: translate(-50%, -50%);
+  font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 0.05em; white-space: nowrap;
+  color: #ffe27a; text-shadow: 0 0 18px rgba(255, 190, 40, 0.9), 0 3px 10px rgba(0, 0, 0, 0.7);
+}
+#slingFlash.go { animation: slingGo 1.1s ease-out forwards; }
+#slingFlash.go b { animation: slingTxt 1.1s ease-out forwards; }
+
+@keyframes slipIn { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes slipBlow { from { transform: translateX(0); } to { transform: translateX(-3px); } }
+@keyframes slipFlow { from { background-position: 0 0; } to { background-position: -26px 0; } }
+@keyframes slipReady { from { box-shadow: var(--hud-sh, none), 0 0 8px rgba(255, 200, 60, 0.35); } to { box-shadow: var(--hud-sh, none), 0 0 20px rgba(255, 200, 60, 0.85); } }
+@keyframes towPull { 0%, 100% { transform: translateX(0) rotate(0); } 50% { transform: translateX(2px) rotate(-12deg); } }
+@keyframes slingGo { 0% { opacity: 0; } 10% { opacity: 1; } 60% { opacity: 0.6; } 100% { opacity: 0; } }
+@keyframes slingTxt { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.18); } 30% { transform: translate(-50%, -50%) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
+
+body.replaying #slipDock, body.replaying #slingFlash { display: none !important; }
+
+/* 좁은 화면 */
+@media (max-width: 720px) {
+  #slipDock #draftBox { width: 180px; }
+  #slingFlash b { font-size: 26px; }
+}
+/* 터치 조작: 속도계가 아래 가운데로 감 → 그 위 가운데 */
+body.touch-on #slipDock { right: auto; left: 50%; transform: translateX(-50%) scale(0.85); transform-origin: bottom center; bottom: calc(max(8px, env(safe-area-inset-bottom)) + 92px); align-items: center; }
+@media (orientation: portrait) {
+  body.touch-on #slipDock { bottom: auto; top: 200px; transform-origin: top center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #draftBox .sl-ico, #draftBox .sl-bar::after, #towBox .tw-ico, #slipDock #draftBox.ready { animation: none; }
+}

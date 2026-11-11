@@ -296,15 +296,7 @@ export function createHud(track) {
         } else if (toastTimer <= 0) el.toast.style.opacity = 0;
       }
       drawMinimap(s.carPos, s.carYaw, s.others);
-      // 슬립스트림: 앞차 바로 뒤에서 공기 저항이 줄어드는 중
-      const dk = s.draft > 0.12 ? Math.min(1, (s.draft - 0.12) / 0.5) : 0;
-      const dq = Math.round(dk * 20) / 20;
-      if (dq !== draftShown && el.draft) {
-        draftShown = dq;
-        el.draft.style.opacity = dq;
-        el.draft.classList.toggle('on', dq > 0);
-        if (el.draftLines) el.draftLines.style.opacity = dq * 0.9;
-      }
+      // 슬립스트림·견인 칩(#draftBox·#towBox)과 바람 줄(#draftLines)은 2026-11-12부터 src/slipFx.js가 그림 (raceSystem.update)
       if (bannerTimer > 0) {
         bannerTimer -= 1 / 60;
         if (bannerTimer <= 0) el.banner.classList.remove('on');
@@ -504,7 +496,7 @@ export function createHud(track) {
       if (info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
       if (info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
       else if (info.newLap && !info.newRace) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
-      if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜고 달린 기록">🛟 도움 켬</span>');
+      if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜거나 견인(뒤처지면 끌어당겨 줌)을 받고 달린 기록">🛟 도움 켬</span>');
       // 레이스(봇·온라인): 순위 결과표, 구간 기록표
       const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
       const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>` : '';

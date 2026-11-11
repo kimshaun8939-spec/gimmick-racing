@@ -1037,6 +1037,11 @@ body.touch-on #toast { font-size: 22px; top: 18%; white-space: nowrap; }
 .h-olt tr.me { background: rgba(255, 207, 63, 0.14); }
 .h-olme { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--gm-dim); }
 .h-olcode { display: inline-flex; gap: 6px; margin-left: auto; }
+.h-olme .ol-acc { color: var(--gm-text, #fff); font-weight: 700; }
+.h-olme .ol-lock { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(90, 220, 140, 0.16); color: #7dffb0; border: 1px solid rgba(90, 220, 140, 0.35); margin-left: 4px; }
+.h-olme .ol-tip { flex: 1 1 220px; font-size: 12px; line-height: 1.4; }
+.h-olme .ol-tip.warn { color: #ffd77a; }
+.h-olme .gm-btn { margin-left: auto; }
 .h-olcode input { width: 230px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--gm-line2); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; }
 
 /* =====================================================================
@@ -1938,3 +1943,17 @@ body #lobby .lb-mycar .lb-cars { grid-auto-rows: max-content; }
   .cx-find span { display: none; }
   .cx-sort { min-width: 0; flex: 0 1 auto; max-width: 80px; }
 }
+
+/* 이름 창 비밀번호 4자리 (온라인 계정, 2026-11-12) */
+.gm-welcome .wl-pin { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(120, 170, 255, 0.07); border: 1px solid rgba(120, 170, 255, 0.25); }
+.gm-welcome .wl-pin label { display: flex; align-items: center; gap: 12px; }
+.gm-welcome .wl-pin label > span { font-weight: 800; font-size: 14px; white-space: nowrap; }
+.gm-welcome .wl-pin label > span small { display: block; color: var(--gm-dim); font-size: 11px; font-weight: 700; }
+.gm-welcome .wl-pin input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--gm-line2); background: #0b1020; color: #fff; font: 800 20px/1.2 system-ui, sans-serif; letter-spacing: 0.3em; outline: none; }
+.gm-welcome .wl-pin input::placeholder { letter-spacing: 0; font-size: 13px; font-weight: 700; color: var(--gm-dim); }
+.gm-welcome .wl-pin input:focus { border-color: var(--gm-accent); box-shadow: 0 0 0 3px rgba(255, 207, 63, 0.18); }
+.gm-welcome .wl-pinhint { display: block; margin-top: 8px; color: var(--gm-dim); font-size: 12px; font-weight: 700; line-height: 1.45; }
+.gm-welcome .wl-pinhint b { color: #9cc4ff; }
+.gm-welcome .wl-err { display: none; margin-top: 8px; padding: 7px 10px; border-radius: 9px; background: rgba(255, 75, 58, 0.15); border: 1px solid rgba(255, 75, 58, 0.45); color: #ffb0a6; font-size: 13px; font-weight: 800; }
+.gm-welcome .wl-err.on { display: block; animation: gmPop 0.25s ease-out; }
+.gm-welcome.busy .btns { opacity: 0.55; pointer-events: none; }

@@ -152,6 +152,9 @@ export class Car {
     // 손맛 (2026-11-10 2라운드)
     this.itemBoostT = this.itemSlowT = 0; // 아이템전: 부스터·전기 충격 남은 시간 (items.js가 넣음)
     this.draft = 0; // 0~1 슬립스트림: 앞차 바로 뒤 (raceSystem이 매 스텝 밖에서 넣어 줌) → 공기 저항 ↓
+    // 견인·슬링샷 (2026-11-12, raceSystem이 넣어 줌): tow 0~1 = 1등에게 많이 뒤처짐 → 공기 저항 ↓·최고 속도·힘 살짝 ↑ (cfg.tow)
+    //   slingT = 슬링샷 남은 시간 (충전된 슬립스트림에서 옆으로 빠짐), assistDraft = 봇 따라잡기의 보이지 않는 슬립스트림 (예전 세기)
+    this.tow = this.slingT = this.assistDraft = 0;
     this.latG = 0; // 옆 가속 (m/s², + = 오른쪽으로 도는 중) → 차체 기울기 (carModel)
     this.lonG = 0; // 앞뒤 가속 (m/s², + 가속, - 브레이크) → 차체 앞뒤 숙임
     this.tyreSlip = 0; // 0~1 타이어가 비명을 지르는 정도 (미끄러짐·헛돎·앞 밀림·바퀴 잠김·드리프트) → 타이어 소리
@@ -225,6 +228,7 @@ export class Car {
     this.latG = this.lonG = this.tyreSlip = this.thrHeld = this.liftKick = this.liftOff = 0;
     this.driftAngle = this.driftHold = this.driftLoss = this.exitRefund = 0;
     this.draft = 0;
+    this.tow = this.slingT = this.assistDraft = 0;
     this.itemBoostT = this.itemSlowT = 0; // 아이템전: 부스터·전기 충격 남은 시간 (items.js가 넣음)
     if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
@@ -636,6 +640,7 @@ export class Car {
 
     if (this.boostTime > 0) this.boostTime -= dt;
     if (this.itemBoostT > 0) this.itemBoostT -= dt;
+    if (this.slingT > 0) this.slingT -= dt;
     if (this.itemSlowT > 0) this.itemSlowT -= dt;
     if (this.pos.y < -30 || (!this.grounded && this.airTime > 8)) this.respawn();
 
@@ -686,7 +691,16 @@ export class Car {
     // 활주로(비행 모드로 땅을 달리는 중): 비행 최고 속도까지 빠르게 줄임 (가속 모드로 너무 빨리 들어오면 이륙 뒤 고리 쪽으로 못 돎)
     // (착륙한 뒤 활주로 밖에서는 안 줄임: 착륙장에서 비행 최고 속도로 확 깎이지 않게)
     const flyGround = this.mode === 'fly' && M.fly && this.rwZoneLast > 0;
-    if (this.draft > 0 && !flyGround) maxSpeed *= 1 + (cfg.draft?.topGain ?? 0.04) * Math.min(1, this.draft); // 슬립스트림: 최고 속도도 살짝 (추월 가능)
+    // 슬립스트림: 최고 속도도 (추월 가능). 봇 따라잡기의 보이지 않는 슬립스트림(assistDraft)은 예전 세기 그대로, 둘 중 큰 쪽만
+    //   견인(tow)·슬링샷(slingT)은 따로 곱함 (raceSystem이 넣어 줌, data/car.json draft·tow)
+    const DR = cfg.draft || {}, TW = cfg.tow || {};
+    const drK = Math.min(1, this.draft || 0), adK = Math.min(1, this.assistDraft || 0), twK = Math.min(1, this.tow || 0);
+    if (!flyGround) {
+      const top = Math.max(drK * (DR.topGain ?? 0.04), adK * (DR.assistTopGain ?? 0.04));
+      if (top > 0) maxSpeed *= 1 + top;
+      if (twK > 0) maxSpeed *= 1 + (TW.topGain ?? 0) * twK;
+      if (this.slingT > 0) maxSpeed *= 1 + (DR.slingTop ?? 0.06);
+    }
     // 아이템전: 부스터 = 최고 속도 ↑, 전기 충격 = 최고 속도 ↓ (items.js가 시간을 넣음)
     const IT = cfg.items || {};
     if (this.itemBoostT > 0 && !flyGround) maxSpeed *= IT.boostTop ?? 1.22;
@@ -745,7 +759,8 @@ export class Car {
       const turboK = tb ? 1 - tb.share * (1 - this.spool) : 1;
       if (this.shiftTimer <= 0 && wheelRpm < e.limiter && this.thr > 0) {
         const modeK = accel ? M.accel.powerFactor : boatOnLand ? M.boat.landPowerFactor : 1;
-        const want = (this.thr * e.power * modeK * torqueAt(e.torque, this.rpm) * launchK * turboK) / G[g - 1];
+        const towP = twK > 0 ? 1 + (TW.powerGain ?? 0) * twK : 1; // 견인: 힘 살짝 ↑ (타이어 한계는 그대로)
+        const want = (this.thr * e.power * modeK * torqueAt(e.torque, this.rpm) * launchK * turboK * towP) / G[g - 1];
         if (want > tractionLimit) {
           // 타이어가 버티지 못함 → 바퀴가 헛돌며 힘이 새어 나감
           this.wheelspin = Math.min(1, ((want - tractionLimit) / tractionLimit) * 2.5);
@@ -764,7 +779,8 @@ export class Car {
       }
     }
     // 공기 저항 + 구름 저항. 슬립스트림(앞차 바로 뒤, car.draft 0~1)이면 공기 저항이 draft.dragCut만큼 줄어듦
-    const draftK = this.draft > 0 ? 1 - (cfg.draft?.dragCut ?? 0.3) * Math.min(1, this.draft) : 1;
+    //   봇 따라잡기의 보이지 않는 슬립스트림(assistDraft)은 예전 세기(assistDragCut), 진짜 슬립스트림과 겹치면 큰 쪽만. 견인은 따로 곱함
+    const draftK = (1 - Math.max(drK * (DR.dragCut ?? 0.3), adK * (DR.assistDragCut ?? 0.3))) * (twK > 0 ? 1 - (TW.dragCut ?? 0) * twK : 1);
     dec += cfg.aero.drag * v * v * draftK + cfg.aero.rolling;
     f += drive * dt;
     f = Math.sign(f) * Math.max(0, Math.abs(f) - dec * dt); // 저항은 속도를 0까지만 줄임
@@ -786,6 +802,7 @@ export class Car {
 
     if (boosting && f < maxSpeed) f = Math.min(maxSpeed, f + cfg.boost.accel * dt);
     if (this.itemBoostT > 0 && f > -1 && f < maxSpeed) f = Math.min(maxSpeed, f + (IT.boostAccel ?? 16) * dt); // 아이템 부스터: 세게 밀어 줌
+    if (this.slingT > 0 && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (DR.slingAccel ?? 6) * dt); // 슬링샷: 앞차 옆으로 튀어 나감
     // 깔끔한 드리프트 탈출: 드리프트로 잃은 속도 일부를 0.3초쯤에 걸쳐 돌려받음 (부스트 아님: 최고 속도를 넘지 않음)
     if (this.exitRefund > 0) {
       const a = Math.min(this.exitRefund, (cfg.drift.exitRate ?? 16) * dt);

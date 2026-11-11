@@ -12,6 +12,8 @@ import { Car } from './car.js';
 import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
+import { settings } from './settings.js';
+import { createSlipFx } from './slipFx.js';
 
 const CAR_R = 1.05; // 차끼리 충돌: 차 하나 = 앞뒤 원 2개 (반지름)
 const CAR_OFF = 1.3; // 원 중심이 차 가운데에서 앞뒤로 떨어진 거리
@@ -32,6 +34,15 @@ export async function createRaceSystem(o) {
   const seed = o.seed != null ? [...String(o.seed)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0 : (Math.random() * 1e9) | 0;
   const rand = rng(seed);
   const markLen = (laps + 2) * M + 2;
+  // 슬립스트림·견인 값 (data/car.json draft·tow, 플레이어 차 cfg 기준). 주소 &slip=old = 예전 슬립스트림(비교용), &tow=0 = 견인 끔
+  const SLIP_OLD = QS.get('slip') === 'old';
+  const legacyDraft = (cfg) => {
+    if (SLIP_OLD && cfg && cfg.draft && cfg.draft.legacy) cfg.draft = { ...cfg.draft, ...cfg.draft.legacy };
+  };
+  legacyDraft(car.cfg);
+  const DC = car.cfg.draft || {};
+  const TC = car.cfg.tow || {};
+  const TOW_URL_OFF = QS.get('tow') === '0';
 
   function timing(e) {
     if (e.marks) return e;
@@ -59,6 +70,7 @@ export async function createRaceSystem(o) {
     const cfgs = await Promise.all(picks.map((p) => o.loadCarConfig(p.id)));
     picks.forEach((p, i) => {
       const cfg = cfgs[i];
+      legacyDraft(cfg);
       const bc = new Car(cfg, botTrack);
       bc.manual = false;
       const prof = profileFor(line, cfg);
@@ -116,8 +128,9 @@ export async function createRaceSystem(o) {
       b.nextMark = 0;
     }
     Object.assign(me, { finished: false, finishTime: null, bestLap: null, lapTimes: [], progress: p.t - 1, draft: 0 });
-    for (const b of bots) b.draft = b.car.draft = 0;
-    car.draft = 0;
+    for (const e of [me, ...bots]) Object.assign(e, { draft: 0, slip: 0, slipSrc: null, slings: 0, tow: 0, towUsed: 0, towMax: 0, slingFx: false });
+    for (const b of bots) b.car.draft = b.car.assistDraft = b.car.tow = b.car.slingT = 0;
+    car.draft = car.tow = car.slingT = 0;
     fastest = null;
     notices.length = 0;
     for (const key in botCornerBest) delete botCornerBest[key];
@@ -320,12 +333,16 @@ export async function createRaceSystem(o) {
   const stats = { contacts: 0, hard: 0 }; // 테스트용: 차끼리 닿은 수, 세게 부딪힌 수
   const respawnLog = []; // 테스트용: 봇이 복귀한 이유·위치
 
-  // --- 슬립스트림 (드래프트): 앞차 바로 뒤(4~30 m, 옆 2 m 안)에 있으면 공기 저항이 줄어듦 → car.draft (0~1) ---
-  //   car.js가 car.draft만큼 공기 저항을 줄임 (cars 담당). 여기서는 값만 계산해서 넣음 (플레이어·봇)
-  const DRAFT_MIN = 4, DRAFT_MAX = 30, DRAFT_LAT = 2;
+  // --- 슬립스트림 (드래프트): 앞차 바로 뒤(minGap~range m, 옆 lat m 안)에 있으면 공기 저항이 줄어듦 → car.draft (0~1) ---
+  //   car.js가 car.draft만큼 공기 저항을 줄이고 최고 속도를 올림. 여기서는 값만 계산해서 넣음 (플레이어·봇)
+  //   2026-11-12 (사용자 요청 "더 세고 잘 보이게"): 4~45 m, 옆 2.3 m (예전 4~30 m, 2 m), car.json draft 값도 셈.
+  //   충전(x.slip 0~1): draft 0.4 넘게 chargeTime초 → ready 이상 충전된 채 옆으로 빠지면 슬링샷 (car.slingT)
+  const DRAFT_MIN = DC.minGap ?? 4, DRAFT_MAX = DC.range ?? 30, DRAFT_LAT = DC.lat ?? 2, DRAFT_V = DC.minSpeed ?? 15;
+  const SLING = DC.sling !== false && !SLIP_OLD;
   function draftFor(x) {
     const c = x.view;
-    if (!c || (c.mode === 'fly' && c.flying) || Math.abs(c.speed || 0) < 15) return 0;
+    x.slipCand = null;
+    if (!c || (c.mode === 'fly' && c.flying) || Math.abs(c.speed || 0) < DRAFT_V) return 0;
     let best = 0;
     for (const y of all()) {
       if (y === x) continue;
@@ -334,10 +351,15 @@ export async function createRaceSystem(o) {
       const dl = Math.abs((y.lateral || 0) - (x.lateral || 0));
       if (dl > DRAFT_LAT + 0.6) continue;
       if (Math.abs(y.view.pos.y - c.pos.y) > 3) continue; // 위아래로 다른 길
+      if (y.view.flying) continue;
       const kd = d < DRAFT_MIN ? (d - (DRAFT_MIN - 1)) : 1 - Math.pow((d - DRAFT_MIN) / (DRAFT_MAX - DRAFT_MIN), 1.3);
       const kl = dl <= DRAFT_LAT ? 1 : 1 - (dl - DRAFT_LAT) / 0.6;
-      const ks = Math.min(1, (Math.abs(c.speed) - 15) / 15);
-      best = Math.max(best, Math.max(0, kd) * kl * ks);
+      const ks = Math.min(1, (Math.abs(c.speed) - DRAFT_V) / 15);
+      const v = Math.max(0, kd) * kl * ks;
+      if (v > best) {
+        best = v;
+        x.slipCand = y;
+      }
     }
     return best;
   }
@@ -345,8 +367,85 @@ export async function createRaceSystem(o) {
     const want = racing ? draftFor(x) : 0;
     const k = want > (x.draft || 0) ? 3 : 5; // 들어갈 땐 천천히, 빠질 땐 빨리
     x.draft = (x.draft || 0) + (want - (x.draft || 0)) * Math.min(1, dt * k);
-    if (x.draft < 0.01) x.draft = 0;
+    // 0 근처 자르기는 원할 때(want)도 0일 때만 (예전엔 매 스텝 잘라서 want < 0.4 = 19 m보다 먼 슬립스트림은 아예 안 생겼음. &slip=old는 예전 그대로)
+    if (x.draft < 0.01 && (SLIP_OLD || want < 0.01)) x.draft = 0;
     x.view.draft = x.draft;
+    if (x.slipCand) x.slipSrc = x.slipCand;
+    if (!SLING || !racing) {
+      x.slip = 0;
+      return;
+    }
+    // 충전·슬링샷
+    const c = x.view, ready = DC.ready ?? 0.9;
+    if (x.draft > 0.4) x.slip = Math.min(1, (x.slip || 0) + (dt / (DC.chargeTime ?? 1.6)) * Math.min(1, x.draft / 0.8));
+    else if (x.draft < 0.15) {
+      if ((x.slip || 0) >= ready && x.slipSrc && pulledOut(x, x.slipSrc)) {
+        c.slingT = DC.slingTime ?? 1.5;
+        x.slings = (x.slings || 0) + 1;
+        x.slip = 0;
+        if (x === me) x.slingFx = true;
+      }
+      x.slip = Math.max(0, (x.slip || 0) - dt / (DC.decayTime ?? 1.2));
+    }
+    if (!x.slip && x.draft === 0) x.slipSrc = null;
+  }
+  /** 충전된 채 앞차 옆으로 빠졌는지: 앞차가 아직 가까이(옆 또는 앞 slingAhead m 안) 있고, 옆으로 비켜 있고, 액셀을 밟는 중 */
+  function pulledOut(x, y) {
+    const c = x.view;
+    if (!c || !c.grounded || c.flying || Math.abs(c.speed || 0) < 20 || (c.thr ?? 1) < 0.3) return false;
+    const d = near(x, y);
+    if (d < -3 || d > (DC.slingAhead ?? 32)) return false;
+    return Math.abs((y.lateral || 0) - (x.lateral || 0)) > DRAFT_LAT;
+  }
+
+  // --- 견인 (2026-11-12, 사용자 요청 "뒤처지면 끌어당겨 줌"): 1등보다 startSec초 넘게 뒤처진 차를 살짝 밀어 줌 → car.tow (0~1) ---
+  //   효과는 car.js (공기 저항 ↓, 최고 속도·힘 살짝 ↑, data/car.json tow). startSec 안으로 들어오면 꺼지므로 1등을 따라잡게 만들지는 않음
+  //   봇 레이스·아이템전·챔피언십·온라인(내 차·내 화면의 봇만), 혼자·타임 어택은 없음 (상대가 없으면 꺼짐). 설정 '견인' 또는 &tow=0이면 끔
+  //   봇 따라잡기(어려움 upMul/upDraft, 마스터)를 받는 봇은 견인 없음 (겹쳐서 고무줄이 너무 세지 않게)
+  const towCalm = (() => {
+    // 점프 립 80 m 앞 ~ 착지 200 m 뒤 (bots.js jumpCalm과 같은 구간): 견인으로 빨라지면 점프 착지가 어긋남
+    const Nn = line && line.N;
+    if (!Nn || !track.jumps || !track.jumps.length) return null;
+    const arr = new Uint8Array(Nn), ds = L / Nn, W = (i) => ((i % Nn) + Nn) % Nn;
+    for (const jp of track.jumps) {
+      if (jp.lipI == null) continue;
+      let end = (jp.landI != null ? jp.landI : jp.lipI + Math.round(60 / ds)) + Math.round(200 / ds);
+      if (end < jp.lipI) end += Nn;
+      for (let k = jp.lipI - Math.round(80 / ds); k <= end; k++) arr[W(k)] = 1;
+    }
+    return arr;
+  })();
+  const towOn = () => !TOW_URL_OFF && settings.values.tow !== false && (bots.length > 0 || opponents.entries.some((e) => e.remote));
+  function towWant(x, lead, time) {
+    const c = x.view;
+    if (!lead || x === lead || x.finished || x.remote || !c || time < (TC.startDelay ?? 8)) return 0;
+    if (c.flying || !c.grounded || c.surface === 'water' || c.mode === 'fly' || x.offMain) return 0;
+    const ti = c.trackInfo;
+    if (towCalm && ti && towCalm[Math.min(towCalm.length - 1, Math.max(0, Math.floor(ti.t * towCalm.length)))]) return 0;
+    if (c.gravityScale && c.gravityScale() < 0.95) return 0; // 저중력: 빨라지면 날아감
+    if (x !== me) {
+      const st = x.driver && x.driver.state;
+      if (MASTER || (x.cuDraft || 0) > 0.01 || (st && (st.paceMul > 1.001 || st.calm))) return 0;
+    }
+    const g = gapBetween(lead, x, time);
+    const sec = g.laps ? 99 : g.sec || 0;
+    const s0 = TC.startSec ?? 2.5, s1 = TC.fullSec ?? 10;
+    return Math.max(0, Math.min(1, (sec - s0) / Math.max(0.1, s1 - s0)));
+  }
+  function updateTow(dt, time, racing) {
+    const on = racing && towOn();
+    let lead = null;
+    if (on) for (const e of all()) if (!e.finished && (!lead || e.progress > lead.progress)) lead = e;
+    for (const x of [me, ...bots]) {
+      const want = on ? towWant(x, lead, time) : 0;
+      const cur = x.tow || 0;
+      const r = want > cur ? TC.rampIn ?? 1.5 : TC.rampOut ?? 0.5;
+      x.tow = cur + (want - cur) * Math.min(1, dt / Math.max(0.05, r));
+      if (x.tow < 0.01 && want < 0.01) x.tow = 0;
+      x.view.tow = x.tow;
+      if (x.tow > (x.towMax || 0)) x.towMax = x.tow;
+      if (x === me && x.tow > 0 && !x.finished) x.towUsed = (x.towUsed || 0) + x.tow * dt; // 기록 '도움 켬' 판정용 (가장 센 견인 기준 초)
+    }
   }
 
   // --- 레이스 알림 (main.js가 꺼내 감): 최고 랩 ---
@@ -361,7 +460,7 @@ export async function createRaceSystem(o) {
       if (!first || laps > 1) notices.push({ type: 'fastest', ...fastest });
     }
   }
-  let paceT = 0;
+  let paceT = 0, racingNow = false;
   /** 물리 한 스텝 (main.js의 고정 스텝마다) */
   function step(dt, phase, time, playerProgress) {
     const racing = phase !== 'countdown';
@@ -425,12 +524,16 @@ export async function createRaceSystem(o) {
       for (const b of bots) collide(b.car, e.view, true);
     }
     // 슬립스트림
+    racingNow = racing;
     updateDraft(me, dt, racing);
     for (const b of bots) {
       updateDraft(b, dt, racing);
       b.driver.state.realDraft = b.draft; // 봇 운전사는 진짜 슬립스트림만 봄 (추월 판단)
-      if (b.cuDraft > 0 && racing && !b.driver.state.calm) b.car.draft = Math.max(b.draft, b.cuDraft); // 따라잡기(어려움), 점프 근처·저중력에서는 안 함
+      // 따라잡기(어려움·마스터)의 보이지 않는 슬립스트림: car.assistDraft (예전 세기 그대로, car.json draft.assistDragCut·assistTopGain), 점프 근처·저중력에서는 안 함
+      b.car.assistDraft = b.cuDraft > 0 && racing && !b.driver.state.calm ? b.cuDraft : 0;
     }
+    // 견인
+    updateTow(dt, time, racing);
     // 간격 기록
     if (racing) {
       mark(me, time);
@@ -605,9 +708,27 @@ export async function createRaceSystem(o) {
     lapSet(me, lapTime);
   }
 
+  // --- 슬립스트림·견인 연출 (slipFx.js): 플레이어 기준 ---
+  const findScene = () => {
+    for (const e of opponents.entries) if (e.model && e.model.root && e.model.root.parent) return e.model.root.parent;
+    return null;
+  };
+  let slipFx = null;
+  try {
+    slipFx = createSlipFx({ getScene: findScene, draftCfg: DC });
+    if (bots.length) slipFx.prepare(); // 공기 줄기 메시를 미리 장면에 넣어 둠 (불러오는 화면에서 셰이더를 미리 만듦)
+  } catch (err) {
+    console.warn('슬립스트림 연출 만들기 실패', err);
+  }
+
   /** 화면 */
   function update(dt, elapsed, camera) {
     opponents.render(dt, elapsed, camera, (e) => [e.name, `P${e.position || ''}`]);
+    if (slipFx) {
+      const src = me.slipSrc && me.slipSrc.view && me.draft > 0.03 ? me.slipSrc.view : null;
+      slipFx.update(dt, camera, { racing: racingNow && !me.finished, draft: me.draft || 0, charge: me.slip || 0, src, myPos: car.pos, tow: me.tow || 0, towOn: towOn(), sling: !!me.slingFx });
+      me.slingFx = false;
+    }
   }
 
   /** 미니맵 점 */
@@ -626,6 +747,12 @@ export async function createRaceSystem(o) {
       humanSlots = humans || 0;
     },
     level: levelName,
+    /** 견인을 의미 있게 받았는지 (가장 센 견인 기준 tow.assistSec초 넘게) → main.js가 기록에 '도움 켬' */
+    towAssisted: () => (me.towUsed || 0) >= (TC.assistSec ?? 3),
+    /** 테스트용: 슬립스트림·견인 상태 */
+    slipInfo: () => ({ old: SLIP_OLD, towOn: towOn(), me: { draft: me.draft, slip: me.slip, slings: me.slings, tow: me.tow, towUsed: me.towUsed, sling: car.slingT }, bots: bots.map((b) => ({ name: b.name, draft: +(b.draft || 0).toFixed(2), slip: +(b.slip || 0).toFixed(2), slings: b.slings || 0, tow: +(b.tow || 0).toFixed(2), towMax: +(b.towMax || 0).toFixed(2) })) }),
+    slipFx,
+    _draftFor: (x) => draftFor(x || me),
     /** 마스터 봇 도움 정도: { help: [봇마다 0~1] } */
     master: MASTER ? MASTER.info : null,
   };

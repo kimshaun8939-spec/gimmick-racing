@@ -69,8 +69,15 @@
     "spinAngle": 1.15, "spinLoss": 0.15,
     "exitAngle": 0.6, "exitGood": 0.35, "exitMinHold": 0.4, "exitKeep": 0.45, "exitMax": 3.5, "exitAlign": 0.4, "exitRate": 16
   },
-  "_draft": "슬립스트림 (앞차 바로 뒤, car.draft 0~1은 raceSystem이 넣어 줌): 공기 저항이 dragCut 비율만큼 줄고 최고 속도가 topGain 비율만큼 늘어남",
-  "draft": { "dragCut": 0.3, "topGain": 0.04 },
+  "_draft": "슬립스트림 (2026-11-12 세게 + 잘 보이게, .debug/agents/tow-slip.md). 앞차 뒤 minGap~range m, 옆 lat m 안이면 car.draft 0~1 (raceSystem이 넣어 줌, minSpeed m/s 아래는 없음): 공기 저항 × (1 − dragCut·draft), 최고 속도 × (1 + topGain·draft). draft가 0.4 넘으면 충전(chargeTime초에 가득, 빠지면 decayTime초에 비움) → ready 이상 충전된 채 옆으로 빠지면 슬링샷: slingTime초 동안 최고 속도 +slingTop, 가속 +slingAccel m/s² (앞차가 slingAhead m 안일 때만). assistDragCut·assistTopGain = 봇 따라잡기의 '보이지 않는 슬립스트림'(car.assistDraft) 세기 = 예전 값 그대로 (봇 실력 맞춘 값이 안 바뀌게). legacy = 주소 &slip=old일 때 쓰는 예전 값 (비교 테스트용)",
+  "draft": {
+    "dragCut": 0.5, "topGain": 0.08, "range": 45, "minGap": 4, "lat": 2.3, "minSpeed": 15,
+    "chargeTime": 1.6, "decayTime": 1.2, "ready": 0.9, "slingTime": 1.5, "slingTop": 0.06, "slingAccel": 6, "slingAhead": 32,
+    "assistDragCut": 0.3, "assistTopGain": 0.04,
+    "legacy": { "dragCut": 0.3, "topGain": 0.04, "range": 30, "lat": 2, "sling": false }
+  },
+  "_tow": "견인 (2026-11-12, 뒤처진 차를 1등 쪽으로 살짝 끌어당김; 봇 레이스·아이템전·챔피언십·온라인, 혼자·타임 어택은 없음; 설정 '견인' 또는 주소 &tow=0이면 끔). 1등(완주 안 한 차 중 가장 앞)보다 startSec초 넘게 뒤면 켜지기 시작해서 fullSec초 뒤에서 가장 셈 (car.tow 0~1, rampIn초에 걸쳐 들어오고 rampOut초에 빠짐). 효과: 공기 저항 × (1 − dragCut·tow), 최고 속도 × (1 + topGain·tow), 엔진 힘 × (1 + powerGain·tow). 출발 뒤 startDelay초·점프 근처·저중력·공중·물·비행에서는 없음. 봇 따라잡기(어려움·마스터)를 받는 봇은 견인 없음 (겹치지 않게). 플레이어가 견인을 assistSec초(가장 센 견인 기준) 넘게 받으면 그 레이스 기록에 '🛟 도움 켬'",
+  "tow": { "startSec": 2.5, "fullSec": 10, "dragCut": 0.25, "topGain": 0.035, "powerGain": 0.06, "rampIn": 1.5, "rampOut": 0.5, "startDelay": 8, "assistSec": 3 },
   "_feel": "차체 연출 (carModel): roll = 코너에서 바깥으로 기우는 정도 배수, pitch = 브레이크 때 앞이 숙고 가속 때 뒤가 주저앉는 정도 배수 (모양마다 기본값 × 이 값), spring = 서스펜션 단단함 (클수록 빨리 따라감), damp = 출렁임 줄이기 (1이면 안 넘침, 작을수록 출렁)",
   "feel": { "roll": 1, "pitch": 1, "spring": 90, "damp": 0.6 },
   "_boostsEnabled": "false = 부스트 패드·드리프트 부스트·비행 고리 부스트를 끔 (E 부스터는 booster.enabled로 따로). true로 바꾸면 다시 켜짐",
