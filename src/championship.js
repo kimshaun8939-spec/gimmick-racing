@@ -17,7 +17,7 @@ const KEY = 'gimmick.champ';
 /** F1 점수: 1위 25, 2위 18, ... 8위 4 */
 export const POINTS = [25, 18, 15, 12, 10, 8, 6, 4];
 /** 기본 시즌 맵 순서 */
-export const CHAMP_MAPS = ['gp', 'sea', 'neon', 'moon', 'jungle', 'volcano'];
+export const CHAMP_MAPS = ['gp', 'sea', 'neon', 'moon', 'jungle', 'volcano', 'glacier'];
 /** 등급마다 기본 차 (carId를 안 주면) */
 const CLASS_CAR = { A: 'f1', B: 'gt', C: 'hatch' };
 

@@ -46,7 +46,7 @@ async function loadJSON(url) {
 // 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 M 키로 차례대로 바꿈
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
 // 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
-const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json', volcano: 'data/volcano.json' };
+const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json', volcano: 'data/volcano.json', glacier: 'data/glacier.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
@@ -79,7 +79,10 @@ const ld = (id, text) => {
   if (e) e.textContent = text;
 };
 ld('ldMap', mapMeta().title);
-const MAP_TIPS = { volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'] };
+const MAP_TIPS = {
+  volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'],
+  glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '1 km 직선 끝 T1이 가장 좋은 추월 지점: 늦게 브레이크!', '길이 넓으니 큰 스위퍼는 연석까지 넓게 쓰세요. 눈밭은 미끄럽고 느려요'],
+};
 const tipList = MAP_TIPS[mapName] && Math.random() < 0.7 ? MAP_TIPS[mapName] : LOAD_TIPS;
 ld('ldTip', '💡 ' + tipList[Math.floor(Math.random() * tipList.length)]);
 // 차: ?car=<id> (없으면 기본 차 = 테스트가 늘 같은 차로 돌게). 차 목록·성능은 carRoster.js

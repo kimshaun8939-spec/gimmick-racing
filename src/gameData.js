@@ -16,6 +16,7 @@ const FALLBACK_MAPS = [
 const EXTRA_MAPS = [
   { id: 'neon', file: 'data/neon.json', title: '네온 시티', subtitle: '밤의 네온 도시', desc: '빛나는 고층 빌딩 사이를 달리는 밤의 시가지 코스.', tags: ['🌃 야경', '🏙️ 시가지'], theme: ['#3a1460', '#0a0618', '#ff4fd8'], difficulty: 2, extra: true },
   { id: 'moon', file: 'data/moon.json', title: '달 중력 기지', subtitle: '가벼운 중력 · 큰 점프', desc: '중력이 약한 달 기지. 점프가 길고 높아요.', tags: ['🌙 낮은 중력', '🚀 점프'], theme: ['#2b2f45', '#07080f', '#d9e2ff'], difficulty: 2, extra: true },
+  { id: 'glacier', file: 'data/glacier.json', title: '빙하 하이웨이', subtitle: '오로라 설원 고속 서킷', desc: '코너가 적고 길이 넓은 시원한 고속 코스.', tags: ['🏔️ 설원', '💨 고속'], theme: ['#1d4f7a', '#060d1c', '#7fffd4'], difficulty: 1, extra: true },
   { id: 'jungle', file: 'data/jungle.json', title: '정글 유적', subtitle: '숲 속 고대 유적', desc: '울창한 정글과 고대 유적을 지나는 코스.', tags: ['🌴 정글', '🗿 유적'], theme: ['#1d4a2a', '#07160c', '#8dff8a'], difficulty: 3, extra: true },
 ];
 let mapsPromise = null;
