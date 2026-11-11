@@ -426,28 +426,31 @@ export async function runHome() {
   }
 
   // ------------------------------------------------------------------ 맵 고르기
+  //   (사용자 요청 2026-11-11 "맵이 많아져도 되게"): 왼쪽 = 작은 맵 칸 목록 (2~3열, 아래로 스크롤, 맵 수 제한 없음)
+  //   오른쪽 = 고른 맵 자세히 (큰 코스 그림 · 난이도 · 설명 · 태그 · 길이 · 내 기록 · 온라인 1~3등)
   views.map.innerHTML = `
     <div class="h-maps">
       <div class="head"><div><h2>맵 고르기</h2><div class="who"></div></div>
         <div class="bar"><button class="gm-btn" data-go="car" data-nav>‹ 차 바꾸기 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-go="mode" data-nav>다음: 레이스 방식 › <kbd>Enter</kbd></button></div></div>
-      <div class="h-mapgrid"></div>
+      <div class="mp-layout">
+        <div class="h-panel mp-list"><div class="mp-ltitle">코스 · ${maps.length}개<span class="mp-lhint">↑↓←→ 고르기 · Enter 다음</span></div><div class="h-mapgrid"></div></div>
+        <div class="h-panel mp-info"></div>
+      </div>
     </div>`;
   const grid = views.map.querySelector('.h-mapgrid');
+  const mapInfoBox = views.map.querySelector('.mp-info');
+  const DIFF_WORD = ['', '쉬움', '보통', '어려움', '아주 어려움'];
+  const starsOf = (m) => '★'.repeat(m.difficulty || 1) + '☆'.repeat(Math.max(0, 3 - (m.difficulty || 1))); // 4 = 아주 어려움 (화산)
   for (const m of maps) {
     const info = mapInfo[m.id];
     const card = document.createElement('button');
     card.className = 'gm-btn h-map';
     card.dataset.nav = '';
     card.dataset.map = m.id;
-    const stars = '★'.repeat(m.difficulty || 1) + '☆'.repeat(Math.max(0, 3 - (m.difficulty || 1))); // 4 = 아주 어려움 (화산)
-    const len = !info.ok ? '🚧 준비 중' : info.free ? '자유 주행' : `📏 약 ${info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1)} km · 🔁 ${info.laps}바퀴`;
-    card.innerHTML = `<canvas width="480" height="270"></canvas>
+    card.innerHTML = `<canvas width="320" height="180"></canvas>
       <div class="body">
-        <div class="t"><b>${esc(m.title)}</b><span class="stars" title="난이도">${stars}</span></div>
-        <div class="sub">${esc(m.subtitle || '')}</div>
-        <div class="desc">${esc(m.desc || '')}</div>
-        <div class="tags">${(m.tags || []).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
-        <div class="meta"><span>${len}</span><span class="rec"></span></div>
+        <div class="t"><b>${esc(m.title)}</b><span class="stars" title="난이도">${starsOf(m)}</span></div>
+        <div class="meta"><span class="len">${!info.ok ? '🚧 준비 중' : info.free ? '자유 주행' : `${info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1)} km · ${info.laps}바퀴`}</span><span class="rec"></span></div>
       </div>`;
     drawTrackThumb(card.querySelector('canvas'), info.pts, m.theme);
     card.addEventListener('click', () => {
@@ -460,26 +463,63 @@ export async function runHome() {
     grid.appendChild(card);
   }
   function selectMap(id, sound = false) {
+    const changed = mapId !== id;
     mapId = id;
     if (sound) uiSound('move');
     grid.querySelectorAll('.h-map').forEach((b) => b.classList.toggle('sel', b.dataset.map === id));
     refreshSummary();
     setLast({ map: id });
+    if (changed || !mapInfoBox.dataset.map) renderMapInfo();
+    const card = grid.querySelector('.h-map.sel');
+    if (card && views.map.classList.contains('on')) card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  /** 오른쪽 자세히 패널 */
+  const olTop = new Map(); // 맵 → 온라인 1~3등 (한 번 받으면 이 홈에서 다시 안 받음)
+  function renderMapInfo() {
+    const m = mapOf(mapId), info = mapInfo[m.id];
+    mapInfoBox.dataset.map = m.id;
+    const mine = records.get(m.id, carId);
+    const best = records.bestRaceOfMap(m.id);
+    const bestRec = best ? records.get(m.id, best.car) : null;
+    const d = m.difficulty || 1;
+    const len = !info.ok ? '준비 중' : info.free ? '자유 주행' : `${info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1)} km`;
+    mapInfoBox.innerHTML = `<div class="mp-pic"><canvas width="760" height="330"></canvas><span class="mp-diff d${d}">${starsOf(m)} ${DIFF_WORD[d] || ''}</span></div>
+      <div class="mp-head"><h3>${esc(m.title)}</h3><div class="sub">${esc(m.subtitle || '')}</div></div>
+      <div class="mp-facts"><span><small>길이</small><b>${len}</b></span><span><small>바퀴</small><b>${info.free ? '—' : `${info.laps}바퀴`}</b></span>
+        <span><small>내 기록 · ${esc(carOf(carId).name)}</small><b class="${mine && mine.race ? 'gold' : 'none'}">${mine && mine.race ? fmtTime(mine.race) + (mine.raceAssist ? ' 🛟' : '') : '없음'}</b></span>
+        <span><small>내 맵 최고</small><b class="${best ? '' : 'none'}">${best ? fmtTime(best.race) + (bestRec && bestRec.raceAssist ? ' 🛟' : '') : '없음'}</b>${best ? `<em>${esc(carOf(best.car).name)}</em>` : ''}</span></div>
+      <p class="mp-desc">${esc(m.desc || '')}</p>
+      <div class="mp-tags">${(m.tags || []).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
+      ${online.enabled && !info.free ? '<div class="mp-online"><div class="mp-ot">🌐 온라인 1~3등</div><div class="mp-olist"><span class="none">불러오는 중…</span></div></div>' : ''}`;
+    drawTrackThumb(mapInfoBox.querySelector('canvas'), info.pts, m.theme);
+    if (online.enabled && !info.free) fillMapTop(m.id);
+  }
+  async function fillMapTop(id) {
+    let rows = olTop.get(id);
+    if (!rows) {
+      try {
+        rows = await online.board(id, null, 3);
+        olTop.set(id, rows);
+      } catch {
+        rows = null;
+      }
+    }
+    const box = mapInfoBox.dataset.map === id && mapInfoBox.querySelector('.mp-olist');
+    if (!box) return;
+    if (!rows) box.innerHTML = '<span class="none">순위표를 불러오지 못했어요</span>';
+    else if (!rows.length) box.innerHTML = '<span class="none">아직 아무도 없어요 · 첫 번째가 되어 보세요!</span>';
+    else box.innerHTML = rows.map((r, i) => `<span class="r${i + 1}"><i>${['🥇', '🥈', '🥉'][i]}</i><b>${esc(r.nickname)}</b><em>${fmtTime(r.total)}</em></span>`).join('');
   }
   function refreshRecords() {
     grid.querySelectorAll('.h-map').forEach((card) => {
       const id = card.dataset.map;
       // 최고 기록 = 완주 기록 (여러 바퀴 맵은 모든 바퀴 합) (사용자 요청 2026-11-10)
-      const mine = records.get(id, carId);
       const best = records.bestRaceOfMap(id);
       const el = card.querySelector('.rec');
-      const bestRec = best ? records.get(id, best.car) : null;
-      if (mapInfo[id].free) el.textContent = '';
-      else if (mine && mine.race) el.innerHTML = `🏆 ${fmtTime(mine.race)}${mine.raceAssist ? ASSIST_TAG : ''}`;
-      else if (best) el.innerHTML = `🏆 ${fmtTime(best.race)} (${esc(carOf(best.car).name)})${bestRec && bestRec.raceAssist ? ASSIST_TAG : ''}`;
-      else el.textContent = '기록 없음';
-      el.title = '내 최고 기록 (완주 시간, 지금 고른 차)';
+      el.textContent = mapInfo[id].free || !best ? '' : `🏆 ${fmtTime(best.race)}`;
+      el.title = '이 맵 내 최고 기록 (완주 시간, 어느 차든)';
     });
+    renderMapInfo(); // 차가 바뀌었을 수 있음 (내 기록 · 차 이름)
   }
 
   // ------------------------------------------------------------------ 설정 · 조작법 · 기록
