@@ -13,6 +13,52 @@ import { batchLocal } from './staticBatch.js'; // 차 부품 묶어 그리기 (�
 const FULL_DIST = 120; // 이 거리(m) 안에서만 자세한 모델 (밖은 단순한 모형)
 const HIDE_DIST = 900; // 이보다 멀면 안 그림 (안개 너머)
 const TAG_DIST = 260; // 이름표가 보이는 거리
+// 그림자 줄이기 (렉 줄이기 2, 2026-11-11): 봇 차 한 대가 그림자를 30~40조각으로 따로 그렸음 (봇 6대 = 그림자만 그림 호출 약 200)
+//   멀리 있는 차는 작은 부품(거울·흡입구·작은 날개 등)의 그림자를 끔. 차체·바퀴처럼 큰 것만 그림자를 남김
+//   [거리 m, 남길 부품의 겉넓이 m²]: 20 m 안은 전부, 20~45 m는 0.8 m² 이상, 그 밖은 4 m² 이상 (차체 큰 판·바퀴)
+const SHADOW_TIERS = [[20, 0], [45, 0.8], [Infinity, 4]];
+const _shadow0 = new WeakMap(); // 메시 → 원래 castShadow
+const _areaOf = new WeakMap(); // 모양 → 겉넓이 (m², 한 번만 계산)
+function geoArea(g) {
+  let a = _areaOf.get(g);
+  if (a !== undefined) return a;
+  a = 0;
+  const p = g.attributes.position, idx = g.index;
+  if (p) {
+    const n = idx ? idx.count : p.count;
+    for (let i = 0; i + 2 < n; i += 3) {
+      const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+      const ax = p.getX(ia), ay = p.getY(ia), az = p.getZ(ia);
+      const ux = p.getX(ib) - ax, uy = p.getY(ib) - ay, uz = p.getZ(ib) - az;
+      const vx = p.getX(ic) - ax, vy = p.getY(ic) - ay, vz = p.getZ(ic) - az;
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      a += Math.sqrt(cx * cx + cy * cy + cz * cz) / 2;
+    }
+  }
+  _areaOf.set(g, a);
+  return a;
+}
+function shadowTierOf(d) {
+  let t = 0;
+  while (d > SHADOW_TIERS[t][0]) t++;
+  return t;
+}
+/** 차 모델의 그림자 단계 적용 (tier 0 = 원래대로 전부) */
+function applyShadowTier(root, tier) {
+  const minArea = SHADOW_TIERS[tier][1];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    let cs0 = _shadow0.get(o);
+    if (cs0 === undefined) _shadow0.set(o, (cs0 = o.castShadow));
+    if (!cs0) return;
+    if (minArea <= 0) {
+      o.castShadow = true;
+      return;
+    }
+    const sc = o.scale.x * o.scale.y * o.scale.z; // 부품 크기 (보통 1)
+    o.castShadow = geoArea(o.geometry) * Math.abs(sc) ** (2 / 3) >= minArea;
+  });
+}
 
 /** 모델(carModel.sync)이 읽는 값만 가진 가짜 차 (온라인 상대·고스트용) */
 export function fakeCar() {
@@ -104,7 +150,9 @@ export function createOpponents(scene) {
   /** 화면용 부품 (모델 + 모형 + 이름표) */
   function makeVisual(entry) {
     const model = createCarModel(entry.look || '#e8463a');
-    if (!/[?&]batch=0/.test(location.search)) batchLocal(model.root); // 같은 그룹 안 부품을 묶음 (움직이면 스스로 풂)
+    if (!/[?&]batch=0/.test(location.search)) batchLocal(model.root, { pbr: !/[?&]pbr=0/.test(location.search) }); // 같은 그룹 안 부품을 묶음 (움직이면 스스로 풂). pbr = 렉 줄이기 2
+    // 그림자 단계용 겉넓이를 불러올 때 미리 계산 (레이스 중에 처음 계산하면 한 번에 수 ms 멈칫)
+    model.root.traverse((o) => o.isMesh && o.castShadow && geoArea(o.geometry));
     scene.add(model.root);
     const proxy = proxyModel(entry.color);
     scene.add(proxy);
@@ -205,7 +253,18 @@ export function createOpponents(scene) {
         if (lod === 'full') e.model.sync(v, 1, elapsed); // 다시 보일 때 바로 제자리
         e.lod = lod;
       }
-      if (lod === 'full') e.model.sync(v, dt, elapsed);
+      if (lod === 'full') {
+        e.model.sync(v, dt, elapsed);
+        // 그림자 단계: 거리가 바뀌면 바로, 아니어도 1초마다 다시 (변신으로 부품이 풀려 새로 생긴 메시까지)
+        let tier = shadowTierOf(d);
+        if (e.shTier != null && tier !== e.shTier && shadowTierOf(d + (tier > e.shTier ? -2 : 2)) === e.shTier) tier = e.shTier; // 경계에서 2 m 여유 (깜빡임 방지)
+        e.shT = (e.shT || 0) - dt;
+        if (tier !== e.shTier || e.shT < 0) {
+          applyShadowTier(e.model.root, tier);
+          e.shTier = tier;
+          e.shT = 1;
+        }
+      }
       else if (lod === 'proxy') {
         _x.crossVectors(v.up, v.fwd).normalize();
         _m.makeBasis(_x, v.up, v.fwd);

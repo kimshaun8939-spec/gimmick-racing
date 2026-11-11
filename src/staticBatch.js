@@ -115,6 +115,99 @@ function eligible(o) {
   return true;
 }
 
+// --- 거칠기·금속·빛 굽기 (렉 줄이기 2, 2026-11-11): 차 모델 전용 (batchLocal(root, { pbr: true })) ---
+//   차 한 대가 재질(색·거칠기·금속 느낌·빛)이 15~20가지라 같은 그룹 안에서도 그림 호출이 15~20번이었음
+//   표준 재질(MeshStandardMaterial)의 색·거칠기·금속·빛(emissive)을 꼭짓점마다 적어 두고 셰이더가 그 값을 쓰게 하면
+//   값만 다른 재질들을 한 메시로 그릴 수 있음 (보이는 결과는 같음: 같은 계산에 같은 숫자)
+//   텍스처·투명·양면 등 다른 것이 있는 재질, 달리는 동안 값이 바뀌는 재질(userData.live)은 빼고 예전처럼
+const PBR_SKIP = new Set(['color', 'vertexColors', 'emissive', 'emissiveIntensity', 'roughness', 'metalness']);
+function pbrSig(m) {
+  const parts = [m.type];
+  for (const k in m) {
+    if (k[0] === '_' || SKIP.has(k) || PBR_SKIP.has(k)) continue;
+    const v = m[k];
+    if (v === null || v === undefined) parts.push(k + '=-');
+    else if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') parts.push(k + '=' + v);
+    else if (v.isColor) parts.push(k + '=' + v.getHexString());
+    else if (v.isVector2 || v.isVector3 || v.isEuler) parts.push(k + '=' + v.toArray().join(','));
+    else if (typeof v === 'function') continue;
+    else return null;
+  }
+  return parts.join(';');
+}
+function pbrBakeable(m, geo) {
+  if (!m || m.type !== 'MeshStandardMaterial' || m.transparent || (m.userData && m.userData.live)) return false;
+  if (m.onBeforeCompile !== BASE_OBC || hasTex(m) || m.vertexColors) return false;
+  if (geo.attributes.color) return false;
+  return true;
+}
+const pbrMats = new Map(); // 서명 → 공용 재질 (차가 여러 대여도 셰이더 하나)
+function pbrMaterial(f, sig) {
+  let mat = pbrMats.get(sig);
+  if (mat) return mat;
+  mat = f.clone();
+  mat.color.setRGB(1, 1, 1);
+  mat.vertexColors = true;
+  mat.emissive.setRGB(0, 0, 0);
+  mat.emissiveIntensity = 1;
+  mat.userData = { pbrBake: true };
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = ['attribute vec2 bakeRM;', 'attribute vec3 bakeEm;', 'varying vec2 vBakeRM;', 'varying vec3 vBakeEm;', ''].join('\n') + sh.vertexShader.replace('#include <begin_vertex>', ['#include <begin_vertex>', 'vBakeRM = bakeRM;', 'vBakeEm = bakeEm;'].join('\n'));
+    sh.fragmentShader = ['varying vec2 vBakeRM;', 'varying vec3 vBakeEm;', ''].join('\n') + sh.fragmentShader
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vBakeRM.x;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vBakeRM.y;')
+      .replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vBakeEm;');
+  };
+  mat.customProgramCacheKey = () => 'pbrBake1';
+  pbrMats.set(sig, mat);
+  return mat;
+}
+/** 모양 복사 + 꼭짓점마다 색·거칠기/금속·빛 */
+function pbrGeo(o, names) {
+  const src = o.geometry, m = o.material;
+  const g = new THREE.BufferGeometry();
+  for (const n of names) g.setAttribute(n, src.attributes[n].clone());
+  if (src.index) g.setIndex(src.index.clone());
+  const cnt = src.attributes.position.count;
+  const col = new Float32Array(cnt * 3), rm = new Float32Array(cnt * 2), em = new Float32Array(cnt * 3);
+  const ei = m.emissiveIntensity ?? 1;
+  for (let i = 0; i < cnt; i++) {
+    col[i * 3] = m.color.r;
+    col[i * 3 + 1] = m.color.g;
+    col[i * 3 + 2] = m.color.b;
+    rm[i * 2] = m.roughness;
+    rm[i * 2 + 1] = m.metalness;
+    em[i * 3] = m.emissive.r * ei;
+    em[i * 3 + 1] = m.emissive.g * ei;
+    em[i * 3 + 2] = m.emissive.b * ei;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('bakeRM', new THREE.BufferAttribute(rm, 2));
+  g.setAttribute('bakeEm', new THREE.BufferAttribute(em, 3));
+  return g;
+}
+
+/** 재질에서 자주 바뀌는 값만 숫자 하나로 (쓰레기 안 만듦, 렉 줄이기 2): 색·빛·투명도·거칠기·금속·텍스처·버전 */
+function quickSig(m) {
+  let h = m.version | 0;
+  const add = (x) => {
+    h = (Math.imul(h, 31) + (x * 1000 | 0)) | 0;
+  };
+  if (m.color) add(m.color.r), add(m.color.g), add(m.color.b);
+  if (m.emissive) add(m.emissive.r), add(m.emissive.g), add(m.emissive.b);
+  add(m.emissiveIntensity ?? 0);
+  add(m.opacity ?? 1);
+  add(m.roughness ?? 0);
+  add(m.metalness ?? 0);
+  add(m.transparent ? 1 : 0);
+  add(m.visible ? 1 : 0);
+  add(m.map ? m.map.id + 1 : 0);
+  add(m.emissiveMap ? m.emissiveMap.id + 1 : 0);
+  add(m.side | 0);
+  add(m.wireframe ? 1 : 0);
+  return h;
+}
+
 /** 물체의 지금 모양 기록 (바뀌었는지 비교용) */
 function snap(o) {
   return { o, pos: o.position.clone(), quat: o.quaternion.clone(), scale: o.scale.clone(), mtx: o.matrix.clone(), mat: o.material, geo: o.geometry, vis: o.visible, parent: o.parent };
@@ -429,7 +522,7 @@ function undoSplit(sp, debug) {
  *     위치·재질·모양이 바뀌면 다음 화면부터 원래대로 풀고, 보이기는 모두 같이 바뀌면 따라 함
  * @returns { batches, meshesBefore, meshesAfter }
  */
-export function batchLocal(root) {
+export function batchLocal(root, opts = {}) {
   const byParent = new Map();
   root.traverse((o) => {
     if (o === root || !eligible(o) || !o.parent) return;
@@ -445,17 +538,29 @@ export function batchLocal(root) {
       if (o.matrixAutoUpdate) o.updateMatrix();
       if (o.matrix.determinant() < 0) continue;
       const geo = o.geometry;
-      const bake = canBake(o.material, geo);
+      const live = !!(o.material.userData && o.material.userData.live);
+      // pbr: 보이는 표준 재질은 색·거칠기·금속·빛까지 구워서 한 묶음 (숨은 부품은 변신 때 따로 나타나므로 예전처럼)
+      const psig = opts.pbr && o.visible && pbrBakeable(o.material, geo) ? pbrSig(o.material) : null;
+      if (psig) {
+        const names = Object.keys(geo.attributes).filter((n) => !/^uv\d?$/.test(n)).sort();
+        const key = ['pbr:' + psig, attrKeyNames(geo, names), o.castShadow ? 1 : 0, o.receiveShadow ? 1 : 0, o.renderOrder, 1, o.layers.mask].join('|');
+        let l = groups.get(key);
+        if (!l) groups.set(key, (l = { pbr: psig, list: [] }));
+        l.list.push({ o, names });
+        continue;
+      }
+      // 값이 바뀌는 재질(live)은 같은 재질 물체끼리만, 색 굽기 없이 (묶은 메시가 같은 재질을 그대로 쓰니 바뀐 값이 바로 보임)
+      const bake = !live && canBake(o.material, geo);
       const names = keepNames(o.material, geo, bake);
-      const key = [bake ? 'bake:' + matSig(o.material, true) : matSig(o.material), attrKeyNames(geo, names), o.castShadow ? 1 : 0, o.receiveShadow ? 1 : 0, o.renderOrder, o.visible ? 1 : 0, o.layers.mask].join('|');
+      const key = [live ? 'live:' + o.material.uuid : bake ? 'bake:' + matSig(o.material, true) : matSig(o.material), attrKeyNames(geo, names), o.castShadow ? 1 : 0, o.receiveShadow ? 1 : 0, o.renderOrder, o.visible ? 1 : 0, o.layers.mask].join('|');
       let l = groups.get(key);
-      if (!l) groups.set(key, (l = { bake, list: [] }));
+      if (!l) groups.set(key, (l = { bake, live, list: [] }));
       l.list.push({ o, names });
     }
-    for (const { bake, list } of groups.values()) {
+    for (const { bake, live, pbr, list } of groups.values()) {
       if (list.length < 2) continue;
       const geos = list.map(({ o, names }) => {
-        const g = bakeGeo(o, names, bake);
+        const g = pbr ? pbrGeo(o, names) : bakeGeo(o, names, bake);
         g.applyMatrix4(o.matrix);
         return g;
       });
@@ -470,7 +575,8 @@ export function batchLocal(root) {
       geo.computeBoundingSphere();
       const f = list[0].o;
       let mat = f.material;
-      if (bake) {
+      if (pbr) mat = pbrMaterial(f.material, pbr);
+      else if (bake) {
         const mk = matSig(f.material, true);
         mat = bakedMats.get(mk);
         if (!mat) {
@@ -484,7 +590,8 @@ export function batchLocal(root) {
       Object.assign(merged, { castShadow: f.castShadow, receiveShadow: f.receiveShadow, renderOrder: f.renderOrder, frustumCulled: f.frustumCulled });
       merged.layers.mask = f.layers.mask;
       merged.userData = { batched: true };
-      const items = list.map(({ o }) => ({ o, pos: o.position.clone(), quat: o.quaternion.clone(), scale: o.scale.clone(), mat: o.material, geo: o.geometry, sig: matSig(o.material) }));
+      const items = list.map(({ o }) => ({ o, pos: o.position.clone(), quat: o.quaternion.clone(), scale: o.scale.clone(), mat: o.material, geo: o.geometry, sig: matSig(o.material), quick: quickSig(o.material) }));
+      const sameMat = !bake && !pbr && items.every((it) => it.mat === f.material); // 모두 같은 재질을 그대로 씀 → 재질 값이 바뀌어도 묶은 메시에 바로 보임 (풀 필요 없음)
       for (const it of items) parent.remove(it.o);
       parent.add(merged);
       let undone = false, k = 0;
@@ -495,8 +602,13 @@ export function batchLocal(root) {
         geo.dispose();
         for (const it of items) if (!it.o.parent) parent.add(it.o);
       };
-      merged.onBeforeRender = () => {
+      let lastFrame = -1, n = 0;
+      merged.onBeforeRender = (renderer) => {
         if (undone) return;
+        // 한 화면에 한 번만 확인 (그림자 그리기 때 또 불려도 건너뜀, 렉 줄이기 2)
+        const fr = renderer && renderer.info ? renderer.info.render.frame : -2;
+        if (fr === lastFrame && fr !== -2) return;
+        lastFrame = fr;
         const v0 = items[0].o.visible;
         for (const it of items) {
           const o = it.o;
@@ -504,8 +616,13 @@ export function batchLocal(root) {
         }
         geo.setDrawRange(0, v0 ? Infinity : 0);
         // 재질 값은 한 번에 하나씩 (깜빡이는 불 등)
+        //   렉 줄이기 2: 예전엔 매번 matSig(재질의 모든 값을 긴 글자로)를 만들어 화면마다 수백 KB 쓰레기 → 자주 바뀌는 값만 빠르게 비교,
+        //   전체 비교(matSig)는 64번에 한 번만
+        if (sameMat) return;
         k = (k + 1) % items.length;
-        if (matSig(items[k].mat) !== items[k].sig) undo();
+        const it = items[k];
+        if (quickSig(it.mat) !== it.quick) return undo();
+        if (++n % 64 === 0 && matSig(it.mat) !== it.sig) undo();
       };
       merged.userData.undo = undo;
       stats.batches++;

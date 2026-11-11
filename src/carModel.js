@@ -375,6 +375,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const numTex = numberTexture(String(look.number ?? '7'), look.numberBg || '#f3f4f6', look.numberFg || '#14161b');
   const numMat = new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.4 });
   const M = { paint, accent, trim, carbon, dark, rubber, metal, darkMetal, glowGreen, glass, lamp, lampYellow, glowTrim, helmetMat, rimMat, tailMat, numMat };
+  // 달리는 동안 값이 바뀌는 재질 (차체 빛·브레이크등·초록 빛) → 묶어 그리기에서 다른 재질과 섞지 않음 (staticBatch.js batchLocal, 렉 줄이기 2)
+  for (const m of [paint, glowGreen, tailMat]) m.userData.live = true;
 
   const add = (geo, mat, x, y, z, parent = body) => {
     const m = new THREE.Mesh(geo, mat);
@@ -547,6 +549,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   // ------------------------------------------------------------------ 가속 모드 부품 (평소엔 숨어 있음)
   const glowTex = glowTexture();
   const accelGlow = new THREE.MeshStandardMaterial({ color: '#ffd2b0', emissive: '#ff7a2e', emissiveIntensity: 1.4, roughness: 0.3 });
+  accelGlow.userData.live = true;
   const nitroOuter = new THREE.MeshBasicMaterial({ color: '#ff8a3a', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
   const nitroCore = new THREE.MeshBasicMaterial({ color: '#bfe4ff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   const nitroDisc = new THREE.MeshBasicMaterial({ color: '#e6f4ff' });
@@ -669,6 +672,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const navRed = new THREE.MeshBasicMaterial({ color: '#ff2a2a' });
   const navGreen = new THREE.MeshBasicMaterial({ color: '#2aff6a' });
   const strobeMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+  for (const m of [navRed, navGreen, strobeMat]) m.userData.live = true;
   const trailMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
   const jetGeos = {
     body: new THREE.CylinderGeometry(0.17, 0.14, 0.9, 16).rotateX(Math.PI / 2), // 앞이 굵음

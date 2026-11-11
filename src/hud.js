@@ -131,8 +131,21 @@ export function createHud(track) {
   const toMap = (x, z) => [mm.width - pad - (x - minX) * scale - ((mm.width - pad * 2) - (maxX - minX) * scale) / 2,
     mm.height - pad - (z - minZ) * scale - ((mm.height - pad * 2) - (maxZ - minZ) * scale) / 2];
 
+  // 렉 줄이기 2: 코스 그림(바뀌지 않음)은 한 번만 그려 두고 매 화면은 그 그림 + 차 점만 그림
+  //   (예전엔 매 화면 코스 점 수백 개를 다시 계산하고 선 4번을 새로 그렸음). 크기가 바뀌면 다시 그림
+  let trackLayer = null;
   function drawMinimap(pos, yaw, others) {
+    if (!trackLayer || trackLayer.width !== mm.width || trackLayer.height !== mm.height) {
+      trackLayer = document.createElement('canvas');
+      trackLayer.width = mm.width;
+      trackLayer.height = mm.height;
+      drawTrackLayer(trackLayer.getContext('2d'));
+    }
     g.clearRect(0, 0, mm.width, mm.height);
+    g.drawImage(trackLayer, 0, 0);
+    drawCars(pos, yaw, others);
+  }
+  function drawTrackLayer(g) {
     g.lineJoin = 'round';
     g.beginPath();
     track.outline.forEach(([x, z], i) => {
@@ -171,6 +184,8 @@ export function createHud(track) {
         g.stroke();
         g.setLineDash([]);
       }
+  }
+  function drawCars(pos, yaw, others) {
     // 상대 차 (봇·온라인): 차 색 점
     if (others)
       for (const o of others) {

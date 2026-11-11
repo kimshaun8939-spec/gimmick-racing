@@ -70,6 +70,8 @@ function signedAngle(a, b, up) {
 }
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(); // 레일 검사용 임시 벡터
+// 땅 위 이동(매 스텝, 차마다)에 쓰는 임시 벡터 (렉 줄이기 2: 예전엔 스텝마다 새 벡터 7~8개 → 쓰레기 청소로 가끔 멈칫)
+const _mv = new THREE.Vector3(), _md = new THREE.Vector3(), _org = new THREE.Vector3(), _dir = new THREE.Vector3(), _np = new THREE.Vector3(), _probe = new THREE.Vector3(), _down = new THREE.Vector3();
 
 export class Car {
   /**
@@ -180,6 +182,10 @@ export class Car {
   }
   get moveDir() {
     return this.fwd.clone().applyAxisAngle(this.up, this.slip);
+  }
+  /** moveDir와 같지만 새 벡터를 안 만듦 (out에 넣음) */
+  moveDirTo(out) {
+    return out.copy(this.fwd).applyAxisAngle(this.up, this.slip);
   }
   /** 벽이나 천장을 달리는 중인가 */
   get onWall() {
@@ -789,7 +795,7 @@ export class Car {
     if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : 2.5) * dt));
     if (offK > 0) f -= f * cfg.offroad.drag * offK * (this.runoff ? 0.3 : 1) * dt;
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
-    if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDir.y * 0.5 * dt;
+    if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDirTo(_md).y * 0.5 * dt;
 
     // 드리프트 시작 / 종료
     if (!this.drifting && c.drift && this.mode !== 'fly' && Math.abs(c.steer) > 0.3 && f > cfg.drift.minSpeed && !(this.hitT > 0)) {
@@ -953,11 +959,11 @@ export class Car {
     }
 
     // --- 이동: 앞에 벽이 있는지 확인 ---
-    let move = this.moveDir.multiplyScalar(f * dt);
+    let move = this.moveDirTo(_mv).multiplyScalar(f * dt);
     const dist = move.length();
     if (dist > 1e-6) {
-      const origin = this.pos.clone().addScaledVector(this.up, 0.6);
-      const wall = this.track.castRay(origin, move.clone().divideScalar(dist), dist + 2.0);
+      const origin = _org.copy(this.pos).addScaledVector(this.up, 0.6);
+      const wall = this.track.castRay(origin, _dir.copy(move).divideScalar(dist), dist + 2.0);
       if (wall && wall.normal.dot(this.up) < 0.5) {
         // 너무 가파른 면 = 벽. 벽을 따라 미끄러지며 살짝 튕김
         const v = this.moveDir.multiplyScalar(f);
@@ -968,24 +974,24 @@ export class Car {
           if (this.drifting) this.endDrift(false);
           this.setVelocityOnSurface(v);
           this.afterImpact(vn);
-          move = this.moveDir.multiplyScalar(this.speed * dt);
+          move = this.moveDirTo(_mv).multiplyScalar(this.speed * dt);
         }
       }
     }
-    const newPos = this.pos.clone().add(move);
+    const newPos = _np.copy(this.pos).add(move);
 
     // --- 바닥 찾기 (차 기준 아래 방향으로) ---
     const sticky = this.magnet;
     const probeUp = 1.5;
     const probeDown = sticky ? 2.5 : 0.7;
-    const hit = this.track.castRay(newPos.clone().addScaledVector(this.up, probeUp), this.up.clone().negate(), probeUp + probeDown);
+    const hit = this.track.castRay(_probe.copy(newPos).addScaledVector(this.up, probeUp), _down.copy(this.up).negate(), probeUp + probeDown);
     if (!hit) {
       // 바닥 끝(점프대 끝, 벽 끝)을 벗어남 → 공중으로
       this.pos.copy(newPos);
       this.leaveGround(this.moveDir.multiplyScalar(this.speed));
       return;
     }
-    const h = hit.point.clone().sub(newPos).dot(this.up);
+    const h = (hit.point.x - newPos.x) * this.up.x + (hit.point.y - newPos.y) * this.up.y + (hit.point.z - newPos.z) * this.up.z;
     if (h > cfg.stepHeight) {
       // 너무 높은 턱 → 못 올라감
       this.speed *= -0.3;
@@ -1097,7 +1103,7 @@ export class Car {
     if (pad && !this.wasOnPad && !braking) this.startBoost(pad.duration, 1.15);
     this.wasOnPad = !!pad;
 
-    this.vel.copy(this.moveDir).multiplyScalar(this.speed);
+    this.moveDirTo(this.vel).multiplyScalar(this.speed);
   }
 
   /**

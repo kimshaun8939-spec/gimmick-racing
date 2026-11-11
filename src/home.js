@@ -171,7 +171,11 @@ export async function runHome() {
   // ------------------------------------------------------------------ 차 고르기
   views.car.innerHTML = `
     <div class="h-car">
-      <div class="h-panel h-carlist"><div class="h-title">차고 · ${cars.length}대${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div><div class="list"></div></div>
+      <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div>
+        <div class="cx-tools"><label class="cx-find"><span>🔍</span><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
+          <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
+          <button class="cx-btn cx-open" type="button" title="지금 탈 수 있는 차만 보기">🔓</button><button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
+        <div class="list"></div></div>
       <div class="h-carstage">
         <div class="h-drag">↔ 끌어서 돌려 보기</div>
         <button class="gm-btn h-arrow" data-act="prevCar" aria-label="이전 차">‹</button>
@@ -209,12 +213,95 @@ export async function runHome() {
       if (b) setClassTab(b.dataset.ctab, true);
     });
   } else tabsEl.remove();
+  // 차가 많아져도 (사용자 요청 2026-11-11): 이름 찾기 · 정렬 · 탈 수 있는 차만 · 작게 보기 (localStorage 'gimmick.carList')
+  const cx = (() => {
+    try {
+      return { find: '', sort: 'class', open: false, dense: cars.length > 24, ...JSON.parse(localStorage.getItem('gimmick.carList') || '{}'), find: '' };
+    } catch {
+      return { find: '', sort: 'class', open: false, dense: cars.length > 24 };
+    }
+  })();
+  const saveCx = () => {
+    try {
+      localStorage.setItem('gimmick.carList', JSON.stringify({ sort: cx.sort, open: cx.open, dense: cx.dense }));
+    } catch {}
+  };
+  const cxTools = views.car.querySelector('.cx-tools');
+  const cxFind = cxTools.querySelector('input');
+  const cxSort = cxTools.querySelector('.cx-sort');
+  const cxOpenBtn = cxTools.querySelector('.cx-open');
+  const cxDenseBtn = cxTools.querySelector('.cx-dense');
+  const carListBox = views.car.querySelector('.h-carlist');
+  function syncCxTools() {
+    cxSort.value = cx.sort;
+    cxOpenBtn.classList.toggle('on', cx.open);
+    cxDenseBtn.classList.toggle('on', cx.dense);
+    carListBox.classList.toggle('dense', cx.dense);
+  }
+  const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, '');
+  /** 찾기 · 열린 차만 거른 차 목록 */
+  function cxMatch(c) {
+    if (cx.open && !isOpen(c.id)) return false;
+    if (!cx.find) return true;
+    const k = classOfId(c.class);
+    return norm(`${c.name} ${c.tag || ''} ${c.id} ${k ? k.name : ''}`).includes(norm(cx.find));
+  }
+  const STAT_SORT = { speed: 1, accel: 1, handling: 1, grip: 1 };
+  function cxSorted(list) {
+    const a = list.slice();
+    if (STAT_SORT[cx.sort]) a.sort((x, y) => (y.stats?.[cx.sort] || 0) - (x.stats?.[cx.sort] || 0));
+    else if (cx.sort === 'name') a.sort((x, y) => x.name.localeCompare(y.name, 'ko'));
+    else if (cx.sort === 'unlock') a.sort((x, y) => (x.unlockLevel || 0) - (y.unlockLevel || 0));
+    return a; // 'class' = cars.json 순서 (등급 묶음은 아래에서)
+  }
+  cxFind.addEventListener('input', () => {
+    cx.find = cxFind.value.trim();
+    renderCarList();
+  });
+  cxFind.addEventListener('keydown', (e) => {
+    // 찾기 칸: Enter·↓ = 첫 카드로, Esc = 지우고 고른 차로
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const first = carList.querySelector('.h-carcard');
+      if (first) first.focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cxFind.value = '';
+      cx.find = '';
+      renderCarList();
+      const card = carList.querySelector('.h-carcard.sel') || carList.querySelector('.h-carcard');
+      if (card) card.focus();
+    }
+  });
+  cxSort.addEventListener('change', () => {
+    cx.sort = cxSort.value;
+    saveCx();
+    renderCarList();
+    uiSound('toggle');
+  });
+  cxOpenBtn.addEventListener('click', () => {
+    cx.open = !cx.open;
+    saveCx();
+    syncCxTools();
+    renderCarList();
+    uiSound('toggle');
+  });
+  cxDenseBtn.addEventListener('click', () => {
+    cx.dense = !cx.dense;
+    saveCx();
+    syncCxTools();
+    uiSound('toggle');
+  });
+  syncCxTools();
   function renderCarList() {
     carList.innerHTML = '';
-    const groups = classFilter === 'all' && useClasses ? classTabs.filter((k) => k.id !== 'all') : [null];
+    const grouped = classFilter === 'all' && useClasses && cx.sort === 'class';
+    const groups = grouped ? classTabs.filter((k) => k.id !== 'all') : [null];
+    let shown = 0;
     for (const g of groups) {
-      const list = cars.filter((c) => (g ? inTab(c, g.id) : inTab(c, classFilter)));
+      const list = cxSorted(cars.filter((c) => (g ? inTab(c, g.id) : inTab(c, classFilter)) && cxMatch(c)));
       if (!list.length) continue;
+      shown += list.length;
       if (g) {
         const h = document.createElement('div');
         h.className = 'h-cgroup';
@@ -242,6 +329,14 @@ export async function runHome() {
         btn.addEventListener('focus', () => selectCar(c.id));
         carList.appendChild(btn);
       }
+    }
+    const filtered = cx.find || cx.open;
+    views.car.querySelector('.h-title .cnt').textContent = filtered || classFilter !== 'all' ? `${shown} / ${cars.length}대` : `${cars.length}대`;
+    if (!shown) {
+      const e = document.createElement('div');
+      e.className = 'cx-empty';
+      e.textContent = cx.find ? `'${cx.find}'에 맞는 차가 없어요` : '이 등급에는 탈 수 있는 차가 아직 없어요';
+      carList.appendChild(e);
     }
   }
   // 화면에 보이는 순서 그대로 (전체 탭은 C→B→A 묶음 순서라 cars.json 순서와 다름) → ←→가 바로 옆 카드로

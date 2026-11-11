@@ -1899,3 +1899,42 @@ body #lobby .lb-mycar .lb-cars { grid-auto-rows: max-content; }
   .mp-list .h-mapgrid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
   .mp-list .h-map .t b { font-size: 13px; }
 }
+
+/* ================================================================== 차 고르기: 차가 많아져도 2026-11-11
+   이름 찾기 · 정렬 · 탈 수 있는 차만 · 작게 보기 */
+.cx-tools { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.cx-find { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 9px; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.1)); }
+.cx-find:focus-within { border-color: var(--gm-accent); }
+.cx-find span { font-size: 12px; opacity: 0.7; }
+.cx-find input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--gm-text, #fff); font: inherit; font-size: 13px; font-weight: 600; }
+.cx-find input::placeholder { color: var(--gm-dim); font-weight: 500; }
+.cx-sort { height: 32px; max-width: 118px; padding: 0 6px; border-radius: 9px; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.1)); color: var(--gm-text, #fff); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.cx-sort option { background: #141a2b; color: #fff; }
+.cx-btn { flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.1)); color: var(--gm-dim); font-size: 14px; cursor: pointer; }
+.cx-btn:hover { color: var(--gm-text, #fff); border-color: var(--sf-line2, rgba(255, 255, 255, 0.25)); }
+.cx-btn.on { background: var(--gm-accent); border-color: var(--gm-accent); color: #10131c; }
+.h-title .cnt { font-variant-numeric: tabular-nums; }
+.cx-empty { grid-column: 1 / -1; padding: 24px 8px; text-align: center; color: var(--gm-dim); font-size: 13px; font-weight: 600; }
+/* 작게 보기: 3열, 이름만 */
+.h-carlist.dense .list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.h-carlist.dense .h-carcard { border-radius: 11px; }
+.h-carlist.dense .h-carcard .nm { padding: 4px 7px 6px; }
+.h-carlist.dense .h-carcard .nm b { font-size: 12px; }
+.h-carlist.dense .h-carcard .nm small { display: none; }
+.h-carlist.dense .h-carcard .cl { font-size: 9.5px; padding: 2px 4px; left: 4px; top: 4px; }
+.h-carlist.dense .h-carcard .chk { width: 15px; height: 15px; font-size: 9px; right: 4px; top: 4px; }
+.h-carlist.dense .h-carcard .gx-lock { font-size: 10px; }
+@media (max-height: 560px) {
+  .cx-tools { gap: 4px; }
+  .cx-find, .cx-sort, .cx-btn { height: 28px; }
+  .cx-btn { width: 28px; }
+  .cx-sort { max-width: 92px; font-size: 11px; }
+}
+@media (max-width: 900px), (max-height: 560px) {
+  /* 휴대폰: 목록 칸이 좁으니 작게 보기는 끄고(2열), 찾기 칸이 안 찌그러지게 */
+  .cx-dense { display: none; }
+  .h-carlist.dense .list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cx-find { min-width: 72px; padding: 0 7px; }
+  .cx-find span { display: none; }
+  .cx-sort { min-width: 0; flex: 0 1 auto; max-width: 80px; }
+}

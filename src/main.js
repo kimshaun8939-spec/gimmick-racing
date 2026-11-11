@@ -11,6 +11,7 @@ import { createHud } from './hud.js';
 import { buildScenery } from './scenery.js';
 import { buildProps } from './props.js';
 import { batchStatic, batchLocal } from './staticBatch.js';
+import { prewarm } from './prewarm.js'; // 불러올 때 셰이더·모양 미리 올리기 (렉 줄이기 2)
 import { createOffroadFx } from './offroadFx.js';
 import { createEngineAudio } from './engineAudio.js';
 import { createRacingLineFx } from './racingLineFx.js';
@@ -163,7 +164,7 @@ performance.mark('load:props');
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
-const modelBatch = params.get('batch') === '0' ? null : batchLocal(model.root); // 차 부품 묶어 그리기 (움직이는 부품은 스스로 풂)
+const modelBatch = params.get('batch') === '0' ? null : batchLocal(model.root, { pbr: params.get('pbr') !== '0' }); // 차 부품 묶어 그리기 (움직이는 부품은 스스로 풂). pbr = 거칠기·금속·빛까지 구워 더 크게 묶음 (렉 줄이기 2, ?pbr=0 이면 끔)
 scene.add(model.root);
 const offroadFx = createOffroadFx(scene);
 const engineAudio = createEngineAudio(carCfg.sound); // 차마다 엔진 소리 (cars.json tune.sound)
@@ -982,6 +983,14 @@ const batcher = (() => {
   return batchStatic(staticRoots, { debug: params.has('batchdebug'), cellFor });
 })();
 resetRace();
+// 미리 데우기 (렉 줄이기 2): 불러오는 화면 동안 모든 셰이더·모양을 그래픽카드에 올려 둠 → 처음 보이는 순간 멈칫하지 않음 (prewarm.js, ?prewarm=0 이면 끔)
+if (params.get('prewarm') !== '0') {
+  try {
+    window.__prewarm = await prewarm(renderer, scene, camera);
+  } catch (e) {
+    console.warn('미리 데우기 실패 (괜찮음)', e);
+  }
+}
 {
   const l = document.getElementById('loading');
   l.classList.add('out');
