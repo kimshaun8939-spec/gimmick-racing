@@ -274,6 +274,7 @@ export async function runHome() {
       const im = new Image();
       im.alt = '';
       im.src = url;
+      if (ph.classList.contains('big')) im.className = 'big';
       ph.replaceWith(im);
     }
     for (const pic of carList.querySelectorAll(`.h-carcard[data-car="${id}"] .pic`)) {
@@ -497,66 +498,107 @@ export async function runHome() {
       return {};
     }
   };
-  // 기록 화면 (사용자 요청 2026-11-11: 왼쪽 = 온라인 순위표(1·2·3등 이펙트), 오른쪽 = 맵마다 기록 카드)
-  //   카드: 코스 그림 · 최고 기록(큰 금색) + 그 차 사진 · 최고 랩 · 구간 S1~S3 · 이론상 · 차마다 기록 막대(가장 빠른 차 대비)
+  // 기록 화면 (사용자 요청 2026-11-11)
+  //   위 = 맵 고르기 띠 (맵이 많아져도 옆으로 넘김 · ‹ › 버튼 · 고른 맵이 보이게 자동 스크롤)
+  //   왼쪽 = 고른 맵의 온라인 순위표 (1·2·3등 이펙트), 오른쪽 = 고른 맵의 내 기록 (자세히)
+  const recMaps = () => maps.filter((m) => !mapInfo[m.id].free);
+  function fixRecMap() {
+    const list = recMaps();
+    if (!olMap || !list.some((m) => m.id === olMap)) olMap = (list.find((m) => m.id === mapId) || list[0] || maps[0]).id;
+  }
   function renderRecords() {
+    fixRecMap();
     const all = records.all();
-    const sec = readSectors();
-    const list = maps.filter((m) => !mapInfo[m.id].free);
-    let done = 0;
-    const cards = list
+    const chips = recMaps()
       .map((m) => {
-        const r = all[m.id] || {};
-        const entries = Object.entries(r);
-        const lap = entries.filter(([, v]) => v.lap).sort((a, b) => a[1].lap - b[1].lap)[0];
-        const race = entries.filter(([, v]) => v.race).sort((a, b) => a[1].race - b[1].race)[0];
-        const best3 = [0, 1, 2].map((i) => Math.min(...Object.values(sec[m.id] || {}).map((v) => (v && v[i]) || Infinity)));
-        const head = `<div class="hr-head"><canvas class="hr-mini" width="132" height="84" data-map="${m.id}"></canvas>
-          <div class="hr-title"><b>${esc(m.title)}</b><span>${mapInfo[m.id].laps}바퀴${mapInfo[m.id].km ? ` · ${mapInfo[m.id].km.toFixed(1)} km` : ''}</span></div>`;
-        if (!race && !lap) {
-          return `<article class="hr-card empty" data-map="${m.id}">${head}<div class="hr-empty">🏁 아직 달리지 않았어요</div></div></article>`;
-        }
-        done++;
-        const rc = race ? carOf(race[0]) : null;
-        const pic = rc ? thumbUrl(rc.id) : null;
-        const bigTime = race
-          ? `<div class="hr-best"><small>최고 기록</small><strong>${fmtTime(race[1].race)}</strong>${race[1].raceAssist ? ASSIST_TAG : ''}</div>
-             <div class="hr-car">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${rc.id}">🏎️</span>`}<span>${esc(rc.name)}</span></div>`
-          : '<div class="hr-best"><small>최고 기록</small><strong class="none">—</strong></div>';
-        // 차마다 완주 기록: 가장 빠른 차 = 막대 가득, 느릴수록 짧게 (+초 차이)
-        const perCar = cars.filter((c) => r[c.id] && r[c.id].race).map((c) => ({ c, t: r[c.id].race, a: r[c.id].raceAssist })).sort((a, b) => a.t - b.t);
-        const top = perCar.length ? perCar[0].t : 0;
-        const bars = perCar
-          .slice(0, 6)
-          .map((p, i) => {
-            const w = Math.max(18, 100 - ((p.t - top) / top) * 100 * 6); // 1% 느릴 때마다 6%씩 짧게
-            return `<li class="${i === 0 ? 'top' : ''}"><span class="n">${esc(p.c.name)}</span><span class="bar"><i style="width:${w.toFixed(1)}%"></i></span><span class="t">${i === 0 ? fmtTime(p.t) : `+${(p.t - top).toFixed(3)}`}${p.a ? ' 🛟' : ''}</span></li>`;
-          })
-          .join('');
-        const more = perCar.length > 6 ? `<li class="more">외 ${perCar.length - 6}대</li>` : '';
-        const secHtml = best3.every(Number.isFinite)
-          ? `<div class="hr-secs">${best3.map((v, i) => `<span><small>S${i + 1}</small>${v.toFixed(2)}</span>`).join('')}<span class="th"><small>이론상</small>${fmtTime(best3[0] + best3[1] + best3[2])}</span></div>`
-          : '';
-        return `<article class="hr-card" data-map="${m.id}">${head}${bigTime}</div>
-          <div class="hr-stats"><div><small>최고 랩</small><b>${lap ? fmtTime(lap[1].lap) : '—'}</b>${lap ? `<em>${esc(carOf(lap[0]).name)}${lap[1].lapAssist ? ' 🛟' : ''}</em>` : ''}</div>
-            <div><small>달린 차</small><b>${perCar.length}대</b><em>${cars.length}대 중</em></div></div>
-          ${secHtml}
-          ${bars ? `<ul class="hr-bars">${bars}${more}</ul>` : ''}</article>`;
+        const best = Object.values(all[m.id] || {}).filter((v) => v.race).sort((a, b) => a.race - b.race)[0];
+        return `<button class="gm-btn hr-mchip${m.id === olMap ? ' sel' : ''}" data-act="olMap" data-map="${m.id}" data-nav>
+          <canvas width="160" height="90" data-map="${m.id}"></canvas>
+          <span class="tx"><b>${esc(m.title)}</b><small>${best ? `🏆 ${fmtTime(best.race)}` : '기록 없음'}</small></span></button>`;
       })
       .join('');
     const box = views.records.querySelector('.scroll');
-    box.innerHTML = `<div class="hr-grid${online.enabled ? '' : ' solo'}">
-      ${online.enabled ? '<section class="hr-col hr-left"><div class="h-online"></div></section>' : ''}
-      <section class="hr-col hr-right">
-        <h3 class="h-subt">💾 내 기록 <small>이 브라우저 · ${done}/${list.length} 맵 완주</small></h3>
-        <div class="hr-cards">${cards}</div>
-        <div class="hr-foot"><span>${online.enabled ? '완주하면 온라인 순위표에도 자동으로 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>기록 지우기</button></div>
-      </section></div>`;
-    for (const cv of box.querySelectorAll('canvas.hr-mini')) {
-      const m = list.find((x) => x.id === cv.dataset.map);
+    box.innerHTML = `<div class="hr-mapbar"><button class="gm-btn hr-arr" data-act="recScroll" data-dir="-1" aria-label="이전 맵들">‹</button><div class="hr-maps">${chips}</div><button class="gm-btn hr-arr" data-act="recScroll" data-dir="1" aria-label="다음 맵들">›</button></div>
+      <div class="hr-grid${online.enabled ? '' : ' solo'}">
+        ${online.enabled ? '<section class="hr-col hr-left"><div class="h-online"></div></section>' : ''}
+        <section class="hr-col hr-right"><div class="hr-mine"></div></section></div>`;
+    for (const cv of box.querySelectorAll('.hr-mchip canvas')) {
+      const m = mapOf(cv.dataset.map);
       try {
         drawTrackThumb(cv, mapInfo[m.id].pts || [], m.theme);
       } catch {}
+    }
+    renderMine();
+    revealRecMap(false);
+  }
+  /** 고른 맵 칩이 띠 안에 보이게 */
+  function revealRecMap(smooth = true) {
+    const strip = views.records.querySelector('.hr-maps');
+    const chip = strip && strip.querySelector('.hr-mchip.sel');
+    if (!chip) return;
+    const l = chip.offsetLeft - strip.offsetLeft, r = l + chip.offsetWidth;
+    if (l < strip.scrollLeft) strip.scrollTo({ left: l - 8, behavior: smooth ? 'smooth' : 'auto' });
+    else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollTo({ left: r - strip.clientWidth + 8, behavior: smooth ? 'smooth' : 'auto' });
+  }
+  /** 오른쪽: 고른 맵 하나의 내 기록 */
+  function renderMine() {
+    const box = views.records.querySelector('.hr-mine');
+    if (!box) return;
+    const m = mapOf(olMap), info = mapInfo[m.id];
+    const r = records.all()[m.id] || {};
+    const sec = readSectors()[m.id] || {};
+    const runs = cars.filter((c) => r[c.id] && (r[c.id].race || r[c.id].lap)).map((c) => ({ c, v: r[c.id] }));
+    const byRace = runs.filter((x) => x.v.race).sort((a, b) => a.v.race - b.v.race);
+    const byLap = runs.filter((x) => x.v.lap).sort((a, b) => a.v.lap - b.v.lap);
+    const best = byRace[0], lap = byLap[0];
+    // 구간마다 가장 빠른 기록 (어느 차든) + 그 차
+    const secBest = [0, 1, 2].map((i) => {
+      let t = Infinity, car = null;
+      for (const [cid, v] of Object.entries(sec)) if (v && v[i] > 0 && v[i] < t) (t = v[i]), (car = cid);
+      return { t, car };
+    });
+    const theo = secBest.every((s) => Number.isFinite(s.t)) ? secBest.reduce((a, s) => a + s.t, 0) : null;
+    const pic = (id, big) => {
+      const u = thumbUrl(id);
+      return u ? `<img src="${u}" alt=""${big ? ' class="big"' : ''}>` : `<span class="ph${big ? ' big' : ''}" data-car="${id}">🏎️</span>`;
+    };
+    const kmTxt = info.km ? `${info.km >= 10 ? info.km.toFixed(0) : info.km.toFixed(1)} km` : '';
+    const head = `<h3 class="h-subt">💾 내 기록 <small>${esc(m.title)} · 이 브라우저</small></h3>`;
+    const hero = `<div class="hm-hero"><canvas width="320" height="200"></canvas>
+      <div class="hm-main"><div class="hm-name"><b>${esc(m.title)}</b><span>${info.laps}바퀴${kmTxt ? ` · ${kmTxt}` : ''}</span></div>
+        ${best
+          ? `<div class="hm-best"><small>최고 기록${info.laps > 1 ? ` (${info.laps}바퀴 합)` : ''}</small><strong>${fmtTime(best.v.race)}</strong>${best.v.raceAssist ? ASSIST_TAG : ''}</div>
+             <div class="hm-car">${pic(best.c.id, true)}<span><b>${esc(best.c.name)}</b><small>${esc(best.c.tag || '')}</small></span></div>`
+          : `<div class="hm-none">🏁 아직 이 맵을 달리지 않았어요<small>완주하면 여기에 기록이 쌓여요</small></div>`}
+        <button class="gm-btn primary small hm-go" data-act="recRace" data-nav>🏁 이 맵 달리기 ›</button></div></div>`;
+    if (!runs.length) {
+      box.innerHTML = head + `<div class="hm-card empty">${hero}</div>` + foot();
+    } else {
+      const top = byRace.length ? byRace[0].v.race : 0;
+      const rows = byRace
+        .map((x, i) => {
+          const gap = x.v.race - top;
+          const w = Math.max(14, 100 - (gap / top) * 100 * 6);
+          return `<li class="${i === 0 ? 'top' : ''}">${pic(x.c.id)}<span class="n"><b>${esc(x.c.name)}</b><small>최고 랩 ${x.v.lap ? fmtTime(x.v.lap) : '—'}${x.v.lapAssist ? ' 🛟' : ''}</small></span>
+            <span class="bar"><i style="width:${w.toFixed(1)}%"></i></span><span class="t"><b>${fmtTime(x.v.race)}${x.v.raceAssist ? ' 🛟' : ''}</b><small>${i === 0 ? '내 1등 차' : `+${gap.toFixed(3)}`}</small></span></li>`;
+        })
+        .join('');
+      box.innerHTML = head + `<div class="hm-card">${hero}
+        <div class="hm-stats">
+          <div><small>⚡ 최고 랩</small><b>${lap ? fmtTime(lap.v.lap) : '—'}</b><em>${lap ? esc(lap.c.name) + (lap.v.lapAssist ? ' 🛟' : '') : ''}</em></div>
+          <div><small>🧩 이론상 최고 랩</small><b>${theo ? fmtTime(theo) : '—'}</b><em>${theo ? '구간 최고를 더한 값' : '구간 기록이 아직 없어요'}</em></div>
+          <div><small>🏎️ 달린 차</small><b>${runs.length}대</b><em>${cars.length}대 중</em></div>
+        </div>
+        ${theo ? `<div class="hm-secs">${secBest.map((s, i) => `<span><small>S${i + 1}</small><b>${s.t.toFixed(2)}</b><em>${esc(carOf(s.car).name)}</em></span>`).join('')}</div>` : ''}
+        ${rows ? `<div class="hm-lt">차마다 최고 기록</div><ol class="hm-cars">${rows}</ol>` : ''}
+      </div>` + foot();
+    }
+    const cv = box.querySelector('.hm-hero canvas');
+    try {
+      drawTrackThumb(cv, info.pts || [], m.theme);
+    } catch {}
+    function foot() {
+      return `<div class="hr-foot"><span>${online.enabled ? '완주하면 온라인 순위표에도 자동으로 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>모든 기록 지우기</button></div>`;
     }
   }
 
@@ -566,12 +608,11 @@ export async function runHome() {
   async function renderOnline() {
     const box = views.records.querySelector('.h-online');
     if (!box) return;
-    if (!olMap || !maps.some((m) => m.id === olMap && !mapInfo[m.id].free)) olMap = (maps.find((m) => m.id === mapId && !mapInfo[m.id].free) || maps.find((m) => !mapInfo[m.id].free) || maps[0]).id;
+    fixRecMap();
     const me = online.me();
     const code = online.myCode();
-    const tabs = maps.filter((m) => !mapInfo[m.id].free).map((m) => `<button class="gm-btn small${m.id === olMap ? ' on' : ''}" data-act="olMap" data-map="${m.id}" data-nav>${esc(m.title)}</button>`).join('');
     box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>로그인 없이 이름으로 · 완주하면 자동으로 올라감</small></h3>
-      <div class="h-oltabs">${tabs}<button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
+      <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
       <div class="h-olboard"><div class="none">불러오는 중…</div></div>
       <div class="h-olme">${me ? `👤 <b>${esc(me.nick)}</b> 으로 올리는 중` : '👤 아직 올린 기록이 없어요 (완주하면 홈의 이름으로 올라가요)'}
         ${code ? '<button class="gm-btn small" data-act="olCopy" data-nav title="다른 컴퓨터·브라우저에서 같은 이름으로 이어 하기">🔑 내 코드 복사</button>' : ''}
@@ -1018,8 +1059,24 @@ export async function runHome() {
       if (r) showName();
     }
     else if (act === 'olMap') {
-      olMap = b.dataset.map;
-      renderOnline();
+      // 기록 화면 위 맵 띠: 고른 맵으로 순위표·내 기록 둘 다 바꿈
+      if (olMap !== b.dataset.map) {
+        olMap = b.dataset.map;
+        uiSound('move');
+        views.records.querySelectorAll('.hr-mchip').forEach((c) => c.classList.toggle('sel', c.dataset.map === olMap));
+        renderMine();
+        renderOnline();
+      }
+      revealRecMap();
+    }
+    else if (act === 'recScroll') {
+      const strip = views.records.querySelector('.hr-maps');
+      if (strip) strip.scrollBy({ left: Number(b.dataset.dir) * strip.clientWidth * 0.8, behavior: 'smooth' });
+    }
+    else if (act === 'recRace') {
+      // 이 맵으로 레이스 준비 (차 고르기부터)
+      selectMap(olMap);
+      show('car');
     }
     else if (act === 'olCar') {
       olCarOnly = !olCarOnly;
