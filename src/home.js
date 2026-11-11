@@ -174,7 +174,7 @@ export async function runHome() {
       <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div>
         <div class="cx-tools"><label class="cx-find"><span>🔍</span><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
           <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
-          <button class="cx-btn cx-open" type="button" title="지금 탈 수 있는 차만 보기">🔓</button><button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
+          <button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
         <div class="list"></div></div>
       <div class="h-carstage">
         <div class="h-drag">↔ 끌어서 돌려 보기</div>
@@ -216,7 +216,7 @@ export async function runHome() {
   // 차가 많아져도 (사용자 요청 2026-11-11): 이름 찾기 · 정렬 · 탈 수 있는 차만 · 작게 보기 (localStorage 'gimmick.carList')
   const cx = (() => {
     try {
-      return { find: '', sort: 'class', open: false, dense: cars.length > 24, ...JSON.parse(localStorage.getItem('gimmick.carList') || '{}'), find: '' };
+      return { find: '', sort: 'class', open: false, dense: cars.length > 24, ...JSON.parse(localStorage.getItem('gimmick.carList') || '{}'), find: '', open: false }; // 잠긴 차도 늘 보임 (사용자 요청 2026-11-11)
     } catch {
       return { find: '', sort: 'class', open: false, dense: cars.length > 24 };
     }
@@ -229,12 +229,10 @@ export async function runHome() {
   const cxTools = views.car.querySelector('.cx-tools');
   const cxFind = cxTools.querySelector('input');
   const cxSort = cxTools.querySelector('.cx-sort');
-  const cxOpenBtn = cxTools.querySelector('.cx-open');
   const cxDenseBtn = cxTools.querySelector('.cx-dense');
   const carListBox = views.car.querySelector('.h-carlist');
   function syncCxTools() {
     cxSort.value = cx.sort;
-    cxOpenBtn.classList.toggle('on', cx.open);
     cxDenseBtn.classList.toggle('on', cx.dense);
     carListBox.classList.toggle('dense', cx.dense);
   }
@@ -279,13 +277,6 @@ export async function runHome() {
     renderCarList();
     uiSound('toggle');
   });
-  cxOpenBtn.addEventListener('click', () => {
-    cx.open = !cx.open;
-    saveCx();
-    syncCxTools();
-    renderCarList();
-    uiSound('toggle');
-  });
   cxDenseBtn.addEventListener('click', () => {
     cx.dense = !cx.dense;
     saveCx();
@@ -321,7 +312,7 @@ export async function runHome() {
         const url = thumbUrl(c.id);
         const [en, ko] = splitTag(c.tag);
         const locked = !isOpen(c.id);
-        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? `<span class="gx-lock">🔒 Lv.${c.unlockLevel}</span>` : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? `레벨 ${c.unlockLevel}에 열려요` : ko || en)}</small></span>`;
+        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? `<span class="gx-lock" title="레벨 ${c.unlockLevel}에 열려요 · 눌러서 미리 보기">🔒 Lv.${c.unlockLevel}</span>` : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? `레벨 ${c.unlockLevel}에 열려요` : ko || en)}</small></span>`;
         btn.classList.toggle('gx-locked', locked);
         btn.classList.toggle('sel', c.id === carId);
         btn.addEventListener('click', () => selectCar(c.id, true));
@@ -335,7 +326,7 @@ export async function runHome() {
     if (!shown) {
       const e = document.createElement('div');
       e.className = 'cx-empty';
-      e.textContent = cx.find ? `'${cx.find}'에 맞는 차가 없어요` : '이 등급에는 탈 수 있는 차가 아직 없어요';
+      e.textContent = cx.find ? `'${cx.find}'에 맞는 차가 없어요` : '이 등급에는 차가 없어요';
       carList.appendChild(e);
     }
   }
@@ -469,7 +460,7 @@ export async function runHome() {
     const info = views.car.querySelector('.h-carinfo');
     const note = info.querySelector('.gx-locknote');
     note.hidden = open;
-    if (!open) note.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열려요</b><span>지금 Lv.${myLevel} · 레이스를 완주하면 경험치가 올라요</span>`;
+    if (!open) note.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열려요</b><span>👀 디자인 미리 보기 중 · 끌어서 돌려 보고 아래 버튼으로 변신 모습도 볼 수 있어요</span><span>지금 Lv.${myLevel} · 레이스를 완주하면 경험치가 올라요</span>`;
     const pick = info.querySelector('[data-act="pickCar"]');
     pick.classList.toggle('gx-off', !open);
     pick.textContent = open ? '다음: 맵 고르기 ›' : `🔒 Lv.${c.unlockLevel}에 열려요`;
