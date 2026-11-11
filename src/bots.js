@@ -41,9 +41,9 @@ export const BOT_LEVELS = {
   //   보통: 없음
 // fly = 그랑프리 비행 루트 (2026-11-10 bots-fly): speed = 공중 속도(m/s, 비행 최고 55), latK = 활주로로 꺾어 들어갈 때 옆 접지력 여유(낮을수록 일찍·많이 줄임),
 //   wobble = 공중에서 핸들·높이 흔들림 (쉬움일수록 큼). 없으면 { speed: 42, latK: 0.85, wobble: 0 }
-  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.035, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 }, fly: { speed: 38, latK: 0.75, wobble: 0.08 } },
-  normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.03, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 0.45, playerPush: 0.53, fly: { speed: 44, latK: 0.8, wobble: 0.04 } },
-  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.02, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50 } },
+  easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.008, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 20, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 }, fly: { speed: 38, latK: 0.75, wobble: 0.08 } },
+  normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.007, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 38, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 0.45, playerPush: 0.53, fly: { speed: 44, latK: 0.8, wobble: 0.04 } },
+  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.006, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 100, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 0.9, playerPush: 0.57, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50 } },
 };
 
 // 마스터(master, 2026-11-10 사용자 요청: 처음엔 "내 기록보다 빠르게" → 고침 "내 기록과 상관없이 그냥 어렵게, 이름은 마스터"):
@@ -57,7 +57,7 @@ export const BOT_LEVELS = {
 BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
-  master: { help: [0.85, 1], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 8 },
+  master: { help: [0.89, 0.96], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 8 },
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
 
@@ -71,6 +71,90 @@ export function rng(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+// --- 같은 단계 봇끼리 비슷하게 (2026-11-12 사용자 요청 "같은 난이도여도 실력 차이가 커서 같이 경쟁이 안 됨", 메모 .debug/agents/bots-pack.md) ---
+//   원인 (봇 7대, 따라잡기 끔, .debug/pack_test.js): 1등과 꼴찌 차이 보통 8~12%, 빙하 B 등급은 33%
+//     ① 같은 등급 차라도 맵마다 빠르기가 다름 (혼자 달려도 gp A 3%·B 8%, 빙하 A 9%·B 30%) → 빠른 차가 느린 차 뒤에 막혀 더 벌어짐
+//     ② paceVar: 봇마다 코너 속도 ±2~3.5% + 액셀도 같이 (쉬움·보통은 이것만으로 5~10%)  ③ 마스터 도움 범위 0.85~1
+//   고친 것: carEq = 봇은 '자기 차가 이 맵에서 같은 등급 가운데 차보다 몇 % 빠른지'(CAR_REL 표)만큼 늦추거나(최대 slowMax)
+//     보이지 않게 도와줌(최대 helpMax: 타이어 접지·핸들·엔진·최고 속도. 사람 차에는 안 함). 표에 없는 맵·차는 속도 계획 시간으로 어림(늦추기만·빠르게는 여유 안에서)
+//     + 봇이 고르는 차에서 이 맵에서 너무 느린 차(rel > pickMax)는 빼고 (같은 등급 다른 차가 충분하면) + paceVar 줄임 + keep(무리 유지)
+//   ?pack=0 이면 전부 예전처럼 (paceVar는 줄인 값 그대로), ?keep=0 이면 무리 유지만 끔
+export const PACK = {
+  on: true,
+  slowMax: 0.15, // 빠른 차를 최대 15%까지 늦춤
+  helpMax: 0.06, // 느린 차는 최대 6%까지 빠르게 (보이지 않는 도움)
+  pickMax: 1.06, // 이 맵에서 등급 가운데보다 6% 넘게 느린 차는 봇이 고르지 않음 (다른 차가 충분할 때)
+  // 무리 유지: 봇끼리만 (사람은 안 봄). 봇 무리 가운데(중앙값)보다 behind초 넘게 뒤면 1초당 perSec씩(최대 up) 빠르게, ahead초 넘게 앞이면 (최대 down) 늦게.
+  //   벌어지는 이유는 대부분 첫 바퀴: 맨 앞 그리드 차만 빈 길로 빠져나가고 나머지는 첫 코너에서 엉키고 줄 서서 5~10초 잃음
+//   → 무리보다 앞선 차는 늦추고(최대 down) 뒤처진 차는 당김(최대 up) → 다시 한 덩어리가 되어 추월이 일어남
+  //   fMax = 차 맞추기 × 무리 유지 최대. 마스터는 코너·직선 목표 속도만 (차 도움은 raceSystem 마스터 도움이 덮어써서)
+  open: { sec: 25, k: 0.95 }, // 출발 뒤 sec초 동안 바로 앞에 차가 있으면 코너 속도 ×k (어려움·마스터, 예전 그대로)
+  keep: { on: true, after: 8, behind: 1, ahead: 1, up: 0.07, down: 0.05, perSec: 0.025, fMax: 1.1, bias: 1.015 },
+};
+try {
+  const q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+  if (q.get('pack') === '0') PACK.on = false;
+  if (q.get('keep') === '0') PACK.keep.on = false;
+  if (q.get('opensec')) PACK.open.sec = +q.get('opensec');
+  if (q.get('openk')) PACK.open.k = +q.get('openk');
+} catch {}
+
+// 차마다 맵별 혼자 달린 시간 ÷ 같은 등급 가운데값 (어려움 운전, 실수·paceVar 끔, 1.00 = 등급 가운데, 1.05 = 5% 느림)
+//   만드는 법: .debug/pack_solo.js(차·맵마다 혼자 달리기) → .debug/pack_table.py. L = 그때 트랙 길이 (맵을 고쳐 길이가 바뀌면 표를 안 쓰고 속도 계획으로 어림)
+const CAR_REL = {
+  gp: { L: 10138.1, rel: { f1: 1.004, proto: 0.99, hyper: 1.021, rocket: 0.999, volt: 1.0, razor: 1.007, nova: 0.995, gt: 0.98, rally: 1.027, muscle: 1.0, junior: 0.99, trophy: 1.075, midnight: 0.981, blizzard: 1.018, buggy: 1.008, kart: 1.0, hatch: 0.995, roadster: 0.967, pickup: 1.142, cube: 0.996, scorpion: 1.008 } },
+  sea: { L: 3454.3, rel: { f1: 0.996, proto: 0.999, hyper: 1.015, rocket: 0.996, volt: 1.008, razor: 1.0, nova: 1.008, gt: 0.987, rally: 1.024, muscle: 0.998, junior: 0.994, trophy: 1.079, midnight: 1.0, blizzard: 1.017, buggy: 0.999, kart: 0.997, hatch: 1.0, roadster: 0.977, pickup: 1.037, cube: 1.003, scorpion: 1.0 } },
+  moon: { L: 3557.2, rel: { f1: 0.996, proto: 0.992, hyper: 1.015, rocket: 0.999, volt: 1.007, razor: 1.002, nova: 1.0, gt: 1.0, rally: 0.998, muscle: 1.001, junior: 0.969, trophy: 1.068, midnight: 1.001, blizzard: 0.993, buggy: 1.009, kart: 0.98, hatch: 0.999, roadster: 0.969, pickup: 1.063, cube: 1.0, scorpion: 1.013 } },
+  glacier: { L: 4867.6, rel: { f1: 1.0, proto: 1.026, hyper: 0.94, rocket: 0.953, volt: 1.004, razor: 0.949, nova: 1.021, gt: 0.86, rally: 1.088, muscle: 0.885, junior: 1.027, trophy: 1.0, midnight: 0.853, blizzard: 1.068, buggy: 1.011, kart: 1.053, hatch: 0.983, roadster: 0.89, pickup: 1.02, cube: 0.993, scorpion: 1.0 } },
+  neon: { L: 3514.6, rel: { f1: 0.984, proto: 1.0, hyper: 1.005, rocket: 0.979, volt: 1.002, razor: 0.985, nova: 1.003, gt: 0.97, rally: 1.017, muscle: 0.98, junior: 1.0, trophy: 1.035, midnight: 0.97, blizzard: 1.01, buggy: 0.999, kart: 0.986, hatch: 1.001, roadster: 0.935, pickup: 1.016, cube: 1.005, scorpion: 1.0 } },
+  jungle: { L: 3562.5, rel: { f1: 1.0, proto: 0.991, hyper: 1.025, rocket: 1.004, volt: 0.999, razor: 1.025, nova: 0.994, gt: 0.983, rally: 1.009, muscle: 1.005, junior: 0.981, trophy: 1.064, midnight: 0.985, blizzard: 1.0, buggy: 1.014, kart: 0.988, hatch: 1.0, roadster: 0.972, pickup: 1.049, cube: 1.002, scorpion: 1.0 } },
+};
+
+const mapParam = () => {
+  try {
+    return new URLSearchParams(location.search).get('map') || 'gp';
+  } catch {
+    return 'gp';
+  }
+};
+/** 이 맵 표에서 이 차의 rel (없으면 null) */
+function tableRel(track, carId) {
+  const e = CAR_REL[mapParam()];
+  if (!e || !track || Math.abs(e.L - track.length) > 3) return null;
+  return e.rel[carId] ?? null;
+}
+const planReg = new WeakMap(); // 트랙 → Map(차 → 속도 계획 한 바퀴 시간): 표가 없을 때 봇들끼리 비교
+function planTime(prof, track) {
+  let t = 0;
+  const n = prof.speed.length, ds = track.length / n;
+  for (let i = 0; i < n; i++) t += ds / Math.max(1, prof.speed[i]);
+  return t;
+}
+/** 봇 차에 보이지 않는 도움 (c = 코너 배수, t = 최고 속도 배수, 1이면 원래대로). 원래 값은 car._packBase에 */
+function setCarHelp(car, c, t) {
+  const cfg = car.cfg;
+  const B = car._packBase || (car._packBase = {
+    lat: cfg.tire.lateral, steerLat: cfg.steerLat, steerRate: cfg.steerRate, trac: cfg.tire.traction, brake: cfg.tire.brakeGrip,
+    power: cfg.engine.power, maxSpeed: cfg.maxSpeed, gears: cfg.gears.slice(),
+    boat: cfg.modes && cfg.modes.boat ? { thrust: cfg.modes.boat.thrust, maxSpeed: cfg.modes.boat.maxSpeed } : null,
+  });
+  const g = c * c; // 코너 속도 ∝ √접지
+  cfg.tire.lateral = B.lat * g;
+  cfg.steerLat = B.steerLat * g;
+  cfg.steerRate = B.steerRate * c;
+  cfg.tire.traction = B.trac * g;
+  cfg.tire.brakeGrip = B.brake * g;
+  cfg.maxSpeed = B.maxSpeed * t;
+  cfg.gears = B.gears.map((x) => x * t);
+  car._accelGears = null; // car.js가 가속 모드 기어를 캐시함 → 다시 계산
+  cfg.engine.power = B.power * t * t * Math.sqrt(c); // 기어가 길어진 만큼 + 조금 더 (코너 탈출)
+  if (B.boat) {
+    cfg.modes.boat.thrust = B.boat.thrust * t * t;
+    cfg.modes.boat.maxSpeed = B.boat.maxSpeed * t;
+  }
+  car._packHelp = [c, t];
 }
 
 const profiles = new Map(); // 차 종류마다 속도 계획 (한 번만 계산)
@@ -186,10 +270,45 @@ function gravityArray(track) {
  * @param level BOT_LEVELS 중 하나
  * @param seed  성격 씨앗
  */
-export function createBotDriver(car, track, prof, level, seed = 1) {
+export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const L = track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
   const rand = rng(seed * 7919 + 13);
   const pace = level.pace + (rand() * 2 - 1) * level.paceVar;
+  // 같은 단계 봇끼리 비슷하게 (PACK): opts.pack === false면 끔 (테스트에서 사람 차를 봇 운전사로 몰 때)
+  const packOn = PACK.on && opts.pack !== false;
+  const pe = pace > 1 ? 1 + (pace - 1) * 0.25 : pace; // 실제로 먹는 코너 속도 배수 (1 위로는 차 한계라 거의 안 빨라짐)
+  const topK0 = level.topK || 1;
+  const eq = { carK: 1, keep: 1, kMul: 1, topMul: 1, kCalm: 1, topCalm: 1, src: 'off' };
+  /** 차 맞추기·무리 유지를 합친 배수 f(>1 빠르게, <1 늦게) → 코너 속도 배수·최고 속도 배수·보이지 않는 도움 */
+  function applyEq(physical) {
+    const f = Math.min(PACK.keep.fMax || 9, eq.carK * eq.keep);
+    eq.kMul = f >= 1 ? f : (pe * f) / pace;
+    eq.topMul = f;
+    // 점프 근처·저중력(st.calm)에서는 무리 유지로 빨라지지 않음 (달 B등급: 뭉친 채 빨리 뛰다 착지에서 코스 밖 복귀가 늘었음)
+    const fc = Math.min(PACK.keep.fMax || 9, eq.carK * Math.min(1, eq.keep));
+    eq.kCalm = fc >= 1 ? fc : (pe * fc) / pace;
+    eq.topCalm = fc;
+    if (physical) {
+      // 느린 차를 빠르게: 실력 배수로 모자란 만큼만 차를 도움 (쉬움·보통은 여유가 있어 거의 안 도움)
+      const c = Math.max(1, pe * f) / Math.max(1, pe);
+      const t = Math.max(1, topK0 * f) / Math.max(1, topK0);
+      if (c > 1.0005 || t > 1.0005 || car._packHelp) setCarHelp(car, c, t);
+    }
+  }
+  if (packOn && car.cfg) {
+    const rel = tableRel(track, car.cfg.carId);
+    if (rel != null) {
+      eq.carK = clamp(rel, 1 - PACK.slowMax, 1 + PACK.helpMax);
+      eq.src = 'table';
+      applyEq(true);
+    } else {
+      // 표 없음: 봇들끼리 속도 계획 시간으로 비교 (첫 조작 때, 모든 봇이 만들어진 뒤)
+      let reg = planReg.get(track);
+      if (!reg) planReg.set(track, (reg = new Map()));
+      reg.set(car, planTime(prof, track));
+      eq.src = 'plan?';
+    }
+  }
   const cm = lineCarModel(car.cfg); // 제동력 계산용
   const thrK = level.thrK ? Math.min(1, (level.thrK * pace) / level.pace) : 1; // 봇마다 조금씩 다른 액셀 (실력 차이)
   let vTop = 0;
@@ -208,6 +327,7 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     passSide: 0, // 추월하러 빠진 쪽 (앞차 기준 −1 왼쪽 / +1 오른쪽)
     fly: null, // 비행 루트 단계: null(땅) / 'approach'(활주로로) / 'runway' / 'air' / 'out'(착륙 뒤 라인으로)
     flyT: 0, flyI: 0,
+    eq, keepT: 0, keepWant: 1, // 같은 단계 봇끼리 비슷하게 (PACK)
   };
   // 성격: 추월을 얼마나 과감하게 하는지 (0.25~1). 씨앗으로 정해져서 같은 봇은 늘 같은 성격
   const aggr = 0.25 + rng(seed * 104729 + 7)() * 0.75;
@@ -408,6 +528,45 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
       if (ctx.since < st.react) c.throttle = c.brake = 0;
       if (st.fly !== 'approach') st.dbg = { fly: st.fly, flyI: st.flyI };
       return c;
+    }
+
+    // --- 같은 단계 봇끼리 비슷하게 (PACK) ---
+    if (eq.src === 'plan?') {
+      // 표가 없는 맵·차: 이 트랙 봇들의 속도 계획 시간 가운데값과 비교 (늦추기만 확실히, 빠르게는 실력 여유 안에서 = 차는 안 도움)
+      const reg = planReg.get(track), ts = reg ? [...reg.values()].sort((a, b) => a - b) : [];
+      const me = reg && reg.get(car);
+      if (ts.length >= 2 && me) eq.carK = clamp(me / ts[(ts.length - 1) >> 1], 1 - PACK.slowMax, 1 + PACK.helpMax);
+      eq.src = 'plan';
+      applyEq(false);
+    }
+    if (packOn && PACK.keep.on) {
+      const K = PACK.keep;
+      st.keepT -= dt;
+      if (st.keepT <= 0) {
+        st.keepT = 0.5;
+        let want = 1;
+        if (!ctx.finished && ctx.since > K.after && !st.fly) {
+          // 봇 무리 가운데: 다른 봇들(사람 빼고)과 나의 진행 거리 중앙값 (+ = 가운데가 내 앞)
+          const ps = [0];
+          for (const o of ctx.others) if (!o.human) ps.push(o.progM);
+          if (ps.length >= 3) {
+            ps.sort((a, b) => a - b);
+            const n = ps.length, med = n % 2 ? ps[n >> 1] : (ps[n / 2 - 1] + ps[n / 2]) / 2;
+            const sec = med / Math.max(20, Math.abs(speed)); // 몇 초 차이인지 (지금 속도로 어림)
+            // bias: 무리로 달리면 앞차는 늦추고 뒤차는 (차 한계 때문에) 덜 빨라져서 단계 평균이 1~2% 느려졌음 → 무리 전체를 조금 빠르게
+            want = K.bias || 1;
+            if (sec > K.behind) want += Math.min(K.up, (sec - K.behind) * K.perSec);
+            else if (-sec > K.ahead && (!(st.paceMul > 1) || level.master)) want -= Math.min(K.down, (-sec - K.ahead) * K.perSec);
+          }
+        }
+        if (want > 1 && st.paceMul < 0.999) want = 1; // 사람 따라잡기로 늦추는 중이면 빠르게 하지 않음
+        st.keepWant = want;
+      }
+      eq.keep += (st.keepWant - eq.keep) * Math.min(1, dt * 0.8);
+      if (Math.abs(eq.keep - (eq.keepApplied ?? 1)) > 0.001 || (eq.keep !== eq.keepApplied && Math.abs(eq.keep - st.keepWant) < 1e-4)) {
+        eq.keepApplied = eq.keep;
+        applyEq(eq.src === 'table' && !level.master);
+      }
     }
 
     // --- 실수 ---
@@ -619,8 +778,10 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     if (level.master && level.master.calmGrav === false) st.calm = !!(jumpCalm && jumpCalm[i0]);
     const pm = st.calm ? Math.min(1, st.paceMul) : st.paceMul;
     // 출발 뒤 25초(첫 코너들, 한 덩어리): 바로 앞에 차가 있으면 코너 속도를 조금 낮춤 (빨라진 어려움 봇이 달 T1 출구에서 뒤엉켜 여러 대 복귀했음)
-    const openK = ctx.since < 25 && packAhead && level.pace > 0.95 ? 0.95 : 1;
-    const k = pace * pm * openK * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
+    const OP = PACK.open;
+    const openK = ctx.since < OP.sec && packAhead && level.pace > 0.95 ? OP.k : 1;
+    const eqK = st.calm ? Math.min(eq.kMul, eq.kCalm) : eq.kMul;
+    const k = pace * eqK * pm * openK * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
     // 목표 속도: 앞쪽 지점들의 계획 속도 × 실력에서, 거기까지 브레이크로 줄일 수 있는 속도 (계획보다 빠를 때도 제때 제동)
     //   부스터 중에는 직선(계획이 최고 속도) 지점은 제한 없음 → 직선에서 부스터를 브레이크로 끄지 않음
     const boosting = car.form === 'spike';
@@ -642,9 +803,9 @@ export function createBotDriver(car, track, prof, level, seed = 1) {
     if (level.master && level.master.saturBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - level.master.saturBrake * st.satur);
     st.satur = 0;
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
-    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm);
+    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul));
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
-    else if (st.paceMul < 0.999 && !boosting) tgt = Math.min(tgt, vTop * st.paceMul);
+    else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) tgt = Math.min(tgt, vTop * st.paceMul * eq.topMul);
     // 앞이 막혀 2초 넘게 거의 멈춰 있으면: 1.5초 동안은 앞차를 신경 쓰지 않고 밀고 나감 (영원히 기다리지 않게)
     if (follow < 3 && Math.abs(speed) < 3 && ctx.since > 1) st.blockedT += dt;
     else st.blockedT = Math.max(0, st.blockedT - dt);
@@ -722,6 +883,14 @@ export function pickBotCars(roster, playerCarId, count, seed = 1) {
   const me = cars.find((c) => c.id === playerCarId);
   let pool = me && me.class ? cars.filter((c) => c.class === me.class) : cars.slice();
   if (pool.length < 2) pool = cars.slice();
+  // 같은 단계 봇끼리 비슷하게 (PACK): 이 맵에서 등급 가운데보다 pickMax 넘게 느린 차는 빼고 (남는 차가 봇 수만큼 또는 4대 이상일 때)
+  if (PACK.on) {
+    const e = CAR_REL[mapParam()];
+    if (e) {
+      const ok = pool.filter((c) => !(e.rel[c.id] > PACK.pickMax));
+      if (ok.length >= Math.min(count, 4) && ok.length >= 2) pool = ok;
+    }
+  }
   const rand = rng(seed);
   // 섞기
   pool = pool.slice().sort(() => rand() - 0.5);

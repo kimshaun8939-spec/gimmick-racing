@@ -19,7 +19,7 @@ export const SETTING_DEFS = [
   { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 높음으로 그리다가 끊기면 해상도만 살짝 낮춤 (렉이 걸리는 컴퓨터용). 노트북이 뜨거워지면 낮춰 보세요', type: 'choice',
     options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
   { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 배터리·발열이 줄어요', type: 'choice',
-    options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 0 },
+    options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 60 }, // 2026-11-12 기본 0 → 60 (사용자 요청: 발열)
   { group: '화면·그래픽', key: 'speedFx', label: '속도감 효과', desc: '바람 줄기·속도선·시야 넓어짐', type: 'choice',
     options: [[0, '끔'], [0.5, '약하게'], [1, '보통'], [1.5, '강하게']], def: 1 },
   { group: '화면·그래픽', key: 'shake', label: '화면 흔들림', desc: '부딪힘·착지·연석에서 카메라 떨림', type: 'choice',
@@ -85,6 +85,17 @@ function load() {
     saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
   } catch {}
   const s = { ...DEFAULTS, ...saved };
+  // 프레임 제한 기본값이 '제한 없음'(0)에서 60으로 바뀜 (2026-11-12, 발열): 예전 기본값 0이 저장된 사람도 한 번만 60으로.
+  //   그 뒤에 직접 고른 값('제한 없음' 포함)은 그대로 (gimmick.fps60 표시)
+  try {
+    if (!localStorage.getItem('gimmick.fps60')) {
+      localStorage.setItem('gimmick.fps60', '1');
+      if (s.fpsCap === 0) {
+        s.fpsCap = 60;
+        localStorage.setItem(KEY, JSON.stringify(s));
+      }
+    }
+  } catch {}
   // 예전부터 쓰던 레이싱 라인 저장값(L 키)을 따름
   try {
     const rl = localStorage.getItem('racingLine');

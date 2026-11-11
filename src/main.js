@@ -888,7 +888,9 @@ function showFinish() {
   // 고스트: 레이스 전체(모든 바퀴)가 내 최고 완주보다 빠르면 저장
   if (ghost) ghost.raceDone(total, canSaveRecords());
   // 온라인 순위표에 올리기 (서버 설정이 있을 때, 내 온라인 기록보다 빠를 때만 서버가 바꿈)
-  const uploadOnline = !FREE && online.enabled && canSaveRecords();
+  //   봇·온라인 상대와 같이 달린 레이스는 안 올림 (사용자 요청 2026-11-12: 슬립스트림·견인·몸싸움이 있어 혼자 달린 기록과 비교가 안 됨)
+  const withRivals = raceSys.active() || ONLINE; // 봇 0대로 고른 레이스는 혼자 달린 것과 같아서 올림
+  const uploadOnline = !FREE && online.enabled && canSaveRecords() && !withRivals;
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
@@ -964,12 +966,15 @@ function showFinish() {
         console.warn('온라인 순위표', err);
         hud.setOnline('🌐 온라인 순위표에 못 올렸어요 (인터넷 확인)');
       });
+  } else if (!FREE && online.enabled && canSaveRecords() && withRivals) {
+    hud.setOnline('🌐 봇과 같이 달린 레이스는 온라인 순위표에 안 올라가요 · 타임 어택이나 혼자 달리기로 도전하세요');
   }
 }
 
 // --- 게임 루프 ---
 let acc = 0;
 let last = performance.now();
+let capNext = 0; // 프레임 제한: 다음에 그릴 시각
 let elapsed = 0;
 let fpsFrames = 0, fpsT = performance.now();
 // 가만히 있는 트랙·풍경 메시를 재질별로 묶어 그림 호출 수를 줄임 (모양은 그대로, 렉 줄이기). ?batch=0 이면 끔
@@ -1003,7 +1008,12 @@ if (params.get('prewarm') !== '0') {
 function frame(now, manual = false) {
   // 프레임 제한 (설정): 너무 이르면 이번 화면은 건너뜀
   const cap = settings.values.fpsCap;
-  if (!manual && cap && now - last < 1000 / cap - 1.5) return requestAnimationFrame(frame);
+  // 다음 그릴 시각을 1/cap초씩 쌓아서 정함 (2026-11-12): 예전처럼 '지난 프레임에서 1/cap초'로 재면 144 Hz 화면에서 60 제한이 48 fps가 됐음
+  if (!manual && cap) {
+    const iv = 1000 / cap;
+    if (now < capNext - 2) return requestAnimationFrame(frame);
+    capNext = now - capNext > iv ? now + iv : capNext + iv;
+  }
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); // 음수 방지 (game.tick 뒤 진짜 화면 프레임이 오면 시간이 거꾸로였음)
   last = now;
   if (window.game && window.game.paused) {
