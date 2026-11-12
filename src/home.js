@@ -22,6 +22,7 @@ import { LESSONS, LICENSES, GROUPS, academy, lessonMeta, licenseChip, MEDALS, ME
 import { academyArt, licenseBadge } from './academyArt.js';
 import { PRESETS, keybinds } from './keybinds.js';
 import { statScore } from './carRoster.js';
+import { createCarCompare } from './carCompare.js';
 import { applyCostume } from './carCostumes.js';
 import { meta, bootMeta } from './meta.js';
 import { createMetaPage, createCostumePicker } from './metaUI.js';
@@ -227,8 +228,8 @@ export async function runHome() {
       <div class="h-panel h-carinfo">
         <div class="ihead"><div class="h-classchip"></div><span class="num"></span></div>
         <div class="tg"></div><h2></h2><p class="desc"></p>
-        <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button">비교 기준으로</button></div>
-        <div class="ns-reference" hidden></div><small class="ns-estimate">평지 예상 성능 · 모든 차를 같은 기준으로 비교</small><div class="h-stats"></div>
+        <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button" data-nav>⚖ 비교하기</button></div>
+        <small class="ns-estimate">평지 예상 성능 · 모든 차를 같은 기준으로 비교</small><div class="h-stats"></div>
         <details class="ns-method"><summary>점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h 옆 한계와 다운포스, 드리프트는 유지 각도·회전·미끄러짐, 오프로드는 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
         <div class="h-perks"></div>
         <div class="gx-locknote" hidden></div>
@@ -368,7 +369,13 @@ export async function runHome() {
         btn.addEventListener('click', () => selectCar(c.id, true));
         btn.addEventListener('dblclick', () => show('map')); // 두 번 누르면 바로 맵 고르기
         btn.addEventListener('focus', () => selectCar(c.id));
-        carList.appendChild(btn);
+        const tile = document.createElement('div');
+        tile.className = 'cp-tile';
+        const quick = document.createElement('button');
+        quick.type = 'button'; quick.className = 'gm-btn cp-quick'; quick.dataset.nav = '';
+        quick.textContent = '⚖'; quick.title = c.name + ' 비교하기'; quick.setAttribute('aria-label', c.name + ' 비교하기');
+        quick.addEventListener('click', () => compare.open(c.id));
+        tile.append(btn, quick); carList.appendChild(tile);
       }
     }
     const filtered = cx.find || cx.open;
@@ -404,6 +411,7 @@ export async function runHome() {
   }
   /** 차 사진이 준비되면 카드에 끼움 (부드럽게 나타남) */
   function putThumb(id, url) {
+    compare.updateThumb(id, url);
     if (id === carId) setTimeout(heroThumb, 0);
     // 기록 화면(순위표·기록 카드)에서 사진을 기다리던 자리
     for (const ph of views.records.querySelectorAll(`.ph[data-car="${id}"]`)) {
@@ -465,7 +473,6 @@ export async function runHome() {
     }),
   );
 
-  let compareId = null;
   const metricLabel = (c, k) => {
     const m = c.stats?.metrics;
     if (!m) return '';
@@ -473,22 +480,19 @@ export async function runHome() {
   };
   function renderStats(c) {
     const info = views.car.querySelector('.h-carinfo');
-    const ref = compareId ? carOf(compareId) : null;
-    const reference = info.querySelector('.ns-reference');
-    reference.hidden = !ref;
-    reference.textContent = ref ? '비교 기준 · ' + ref.name : '';
     const btn = info.querySelector('.ns-compare');
-    btn.textContent = ref ? '비교 해제' : '비교 기준으로';
-    btn.setAttribute('aria-pressed', String(!!ref));
+    btn.textContent = '⚖ 비교하기';
+    btn.setAttribute('aria-haspopup', 'dialog');
     info.querySelector('.h-stats').innerHTML = STAT_NAMES.map(([k, label]) => {
-      const v = statScore(c.stats, k), delta = ref ? v - statScore(ref.stats, k) : null;
-      return '<div class="h-stat ns-stat' + (v >= 85 ? ' top' : '') + '"><span class="ns-label">' + label + '<small>' + esc(metricLabel(c, k)) + '</small></span><span class="bar" role="meter" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + v + '"><i class="on" style="width:' + v + '%"></i></span><span class="v">' + v + (delta != null ? '<small class="' + (delta > 0 ? 'up' : delta < 0 ? 'down' : '') + '">' + (delta > 0 ? '+' : '') + delta + '</small>' : '') + '</span></div>';
+      const v = statScore(c.stats, k);
+      return '<div class="h-stat ns-stat' + (v >= 85 ? ' top' : '') + '"><span class="ns-label">' + label + '<small>' + esc(metricLabel(c, k)) + '</small></span><span class="bar" role="meter" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + v + '"><i class="on" style="width:' + v + '%"></i></span><span class="v">' + v + '</span></div>';
     }).join('');
   }
-  views.car.querySelector('.ns-compare').addEventListener('click', () => {
-    compareId = compareId ? null : carId;
-    renderStats(carOf(carId));
+  const compare = createCarCompare({ host: home, cars, classOf: classOfId, isOpen,
+    onPick(id) { selectCar(id, true); show('map'); },
+    onVisibility(open) { preview.setView(open ? 'compare' : view); },
   });
+  views.car.querySelector('.ns-compare').addEventListener('click', () => compare.open(carId));
 
   function selectCar(id, sound = false) {
     if (id === carId && preview.carId === id) return;
