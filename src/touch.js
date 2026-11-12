@@ -1,7 +1,7 @@
 // 터치 조작 (휴대폰·태블릿). input.js가 read()에 섞음 → main.js는 몰라도 됨
 //   - 왼쪽: 조향 (끌기 패드 = 처음 닿은 곳에서 옆으로 끈 만큼 아날로그 / 버튼 = ◀ ▶)
 //   - 오른쪽: 가속(큰 버튼) · 브레이크 · 드리프트 (비행 중에는 상승 · 하강)
-//   - 작은 버튼: ↺ 복귀 · ☰ 메뉴
+//   - 작은 버튼: ↺ 복귀 · ☰ 메뉴 · 그 아래 👁 시점 바꾸기 (2026-11-12, 백미러와 안 겹치게 아래 줄)
 //   - 기울여 조향 (DeviceOrientation, 설정에서 켬, 기본 끔). iPhone은 처음 켤 때 허락을 물어봄
 //   - 세로 화면으로 달리면 "가로로 돌려 주세요" 안내
 //   설정: touchCtl ('auto' = 터치 기기면 켬 | 'on' | 'off'), touchSteer ('pad' | 'buttons'), tilt (true/false), touchSize ('s'|'m'|'l')
@@ -60,7 +60,7 @@ function build() {
     <button class="tc-btn tc-brake" data-hold="brake" aria-label="브레이크"><b>▼</b><small class="lb">브레이크</small></button>
     <button class="tc-btn tc-drift" data-hold="drift" aria-label="드리프트"><b>💨</b><small class="lb">드리프트</small></button>
     <button class="tc-btn tc-dive" data-hold="dive" aria-label="하강"><b>⬇</b><small>하강</small></button>
-    <div class="tc-small"><button class="tc-btn tc-mini" data-tap="respawn" aria-label="도로로 복귀">↺<small>복귀</small></button><button class="tc-btn tc-mini" data-tap="menu" aria-label="메뉴">☰<small>메뉴</small></button></div>
+    <div class="tc-small"><button class="tc-btn tc-mini" data-tap="respawn" aria-label="도로로 복귀">↺<small>복귀</small></button><button class="tc-btn tc-mini" data-tap="menu" aria-label="메뉴">☰<small>메뉴</small></button><button class="tc-btn tc-mini tc-cam" data-tap="camView" aria-label="시점 바꾸기" style="position:absolute;top:calc(100% + 8px);right:0">👁<small>시점</small></button></div>
     <div class="tc-tilt">📱 기울여 조향</div>
     <div id="rotateHint"><div class="box"><div class="ph">📱</div><b>가로로 돌려 주세요</b><small>가로 화면이 훨씬 잘 보이고 버튼도 편해요</small><button class="gm-btn small" data-rot>세로로 할게요</button></div></div>`;
   document.body.appendChild(root);

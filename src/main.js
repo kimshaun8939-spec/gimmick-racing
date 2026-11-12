@@ -31,6 +31,8 @@ import { createSectors } from './sectors.js';
 import { fastTrack } from './fastTrack.js';
 import { champRace, recordRace, champStandings, champUrl } from './championship.js';
 import { createReplay } from './replay.js';
+import { createCamViews } from './camViews.js'; // 시점 바꾸기 (V 키): 기본·가까이·멀리·보닛·운전석 (2026-11-12)
+import { createMirror } from './mirror.js'; // 백미러: 뒤에 차가 붙으면 화면 위에 작은 거울 (2026-11-12)
 import { createCornerReport } from './cornerReport.js';
 import { online } from './online.js';
 import { createItems } from './items.js'; // 아이템전 (?mode=item)
@@ -169,6 +171,8 @@ performance.mark('load:props');
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
+// 시점 바꾸기 (camViews.js): 1인칭에서 앞을 가리는 내 차 부품을 레이어로 나눠 둠 → 꼭 batchLocal 전에
+const camViews = createCamViews({ camera, model, car, sun, cfg: () => CAM });
 const modelBatch = params.get('batch') === '0' ? null : batchLocal(model.root, { pbr: params.get('pbr') !== '0' }); // 차 부품 묶어 그리기 (움직이는 부품은 스스로 풂). pbr = 거칠기·금속·빛까지 구워 더 크게 묶음 (렉 줄이기 2, ?pbr=0 이면 끔)
 scene.add(model.root);
 const offroadFx = createOffroadFx(scene);
@@ -256,6 +260,8 @@ if (FRIEND_GHOST) {
     });
 }
 const finishCbs = []; // raceCtl.onFinish
+// 백미러 (mirror.js): 게임 화면을 그린 바로 뒤에 mirror.frame으로 작은 칸에 뒤쪽을 한 번 더 그림
+const mirror = createMirror({ renderer, scene, car, model, raceSys, opponents, track });
 // 리플레이 (완주 뒤 결과 화면 "▶ 리플레이"): 모든 차를 1초에 15번 기록 → 다시 볼 때는 물리를 멈추고 replay.frame만
 const replay = createReplay({
   scene, camera, track, car, model, opponents,
@@ -488,8 +494,10 @@ const smoothK = (x, a, b) => {
 };
 function cameraTarget(outPos, outLook) {
   // 차 바로 뒤, 낮게 붙어서 따라감 (CAM_BACK을 키우면 멀어짐). 빠를수록 조금 가깝고 낮게 (땅이 더 빨리 흘러 보임)
-  const back = CAM_BACK + CAM.speedBack * cam.sk + cam.pull;
-  const up = CAM_UP + CAM.speedUp * cam.sk;
+  //   시점(camViews.dist): 가까운 추격·먼 추격은 거리·높이·보는 곳에 배율
+  const vk = camViews.dist;
+  const back = (CAM_BACK + CAM.speedBack * cam.sk) * vk.back + cam.pull;
+  const up = (CAM_UP + CAM.speedUp * cam.sk) * vk.up;
   outPos.copy(car.pos).addScaledVector(camFwd, -back).addScaledVector(camUp, up);
   // 보는 곳: 빠를수록 조금 더 멀리, 미끄러질 때는 차가 실제로 가는 쪽을 조금 더 봄
   _lookDir.copy(camFwd);
@@ -498,9 +506,10 @@ function cameraTarget(outPos, outLook) {
     md.addScaledVector(camUp, -md.dot(camUp)).normalize();
     _lookDir.lerp(md, CAM.lookSlip).normalize();
   }
-  outLook.copy(car.pos).addScaledVector(_lookDir, 6 + CAM.lookAhead * cam.sk).addScaledVector(camUp, 1.0);
+  outLook.copy(car.pos).addScaledVector(_lookDir, (6 + CAM.lookAhead * cam.sk) * vk.look).addScaledVector(camUp, 1.0 * vk.lookUp);
 }
 function snapCamera() {
+  camViews.snap();
   camFwd.copy(car.fwd);
   camUp.copy(car.up);
   cam.pull = cam.acc = 0;
@@ -554,9 +563,12 @@ function updateCamera(dt) {
   // 속도감: 빠를수록, 부스터일 때 시야각 넓어짐
   const boosting = car.boostTime > 0 || car.form === 'spike' || car.itemBoostT > 0;
   cam.boostK = THREE.MathUtils.lerp(cam.boostK, boosting ? 1 : 0, 1 - Math.exp(-(boosting ? 5 : 2) * dt));
-  const targetFov = CAM.fovBase + CAM.fovSpeed * cam.sk + CAM.fovBooster * cam.boostK;
+  const targetFov = CAM.fovBase + camViews.fovAdd + (CAM.fovSpeed * cam.sk + CAM.fovBooster * cam.boostK) * camViews.fovSpeedK; // 시점마다 시야 조금씩 (1인칭은 빠를 때 덜 넓어짐)
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 1 - Math.exp(-CAM.fovRate * dt));
   camera.updateProjectionMatrix();
+  // 시점 (camViews.js): 보닛·운전석이면 카메라를 차에 붙임. 그리드 소개·결과 화면·튜토리얼 시범·테스트 카메라에서는 기본 시점
+  const tut = window.game && window.game.tutorial;
+  camViews.apply(dt, { lock: intro.on || race.phase === 'finished' || !!(window.game && window.game.cameraOverride) || !!(tut && tut.phase === 'demo'), chaseLook: camLook });
 
   // 그림자가 차 주변에 생기도록 태양도 따라감
   sun.position.copy(car.pos).add(SUN_OFFSET);
@@ -777,6 +789,7 @@ function applySettings(key) {
   fpsEl.style.display = s.showFps ? 'block' : 'none';
   if (!key || key === 'gearbox') car.manual = s.gearbox === 'manual';
   if (!key || key === 'quality') applyQuality(s.quality);
+  if (!key || key === 'camView') camViews.setView(s.camView || 'chase'); // 시점 (V 키로도)
   // 고스트 (설정 ghost: off | best | bot). 봇 레이스에서는 끔
   if (ghost && (!key || key === 'ghost')) ghost.setKind(MODE === 'race' ? 'off' : s.ghost ?? 'best');
   if (key && menuOpen()) renderer.render(scene, camera); // 메뉴 뒤 화면도 새 설정으로
@@ -1034,6 +1047,7 @@ function frame(now, manual = false) {
   if (replay.active) {
     elapsed += dt;
     if (items) items.setVisible(false);
+    camViews.neutral(); // 리플레이는 자기 카메라 (내 차 부품 모두 보이게)
     replay.frame(dt, elapsed);
     renderer.render(scene, camera);
     input.endFrame();
@@ -1074,6 +1088,12 @@ function frame(now, manual = false) {
     hud.toast(lineFx.toggle() ? '레이싱 라인 켬 (초록 밟기 · 노랑 떼기 · 빨강 브레이크)' : '레이싱 라인 끔');
     settings.set('racingLine', lineFx.visible);
   }
+  // 시점 바꾸기 (V, 2026-11-12): 기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석. 결과 화면·튜토리얼 시범 중엔 그대로 (리플레이는 위에서 따로)
+  if (input.actionPressed('camView') && !menuHold && race.phase !== 'finished' && !(window.game && window.game.tutorial && window.game.tutorial.phase === 'demo')) {
+    const v = camViews.cycle();
+    settings.set('camView', v.id);
+    hud.toast(`${v.icon} 시점: ${v.name} (${keyLabel('camView', 'V')})`);
+  }
 
   if (race.phase === 'countdown') {
     // 출발 전: 차는 움직이지 않음. 빨간불 5개가 꺼지는 순간 출발
@@ -1106,7 +1126,9 @@ function frame(now, manual = false) {
   const controls = race.phase === 'racing' && !menuHold ? (ctlOverride ? ctlOverride() : input.read()) : emptyControls();
   if (race.phase === 'racing' && !race.assist && !ctlOverride && (assistOn() || (raceSys.towAssisted && raceSys.towAssisted()))) race.assist = true; // 레이스 중에 도움을 켜도 표시 (견인을 받아도: raceSystem 2026-11-12)
   if (items && controls.booster) items.usePlayer(); // 아이템전: 부스터 키 = 아이템 쓰기
-  acc += dt;
+  // 슬로 모션 (튜토리얼 시범 주행, 2026-11-12): game.timeScale(0.05~4, 기본 1)만큼 물리 시간을 늦춤. race.time은 물리 스텝마다 더하므로 기록 계산은 그대로
+  const tsc = window.game && window.game.timeScale > 0 && window.game.timeScale !== 1 ? Math.min(4, Math.max(0.05, window.game.timeScale)) : 1;
+  acc += dt * tsc;
   while (acc >= FIXED_DT) {
     stepWorld(controls);
     controls.booster = false; // 부스터, 변속 명령은 한 번만 전달
@@ -1122,7 +1144,7 @@ function frame(now, manual = false) {
   handleEvents();
   replay.sample(race.clock, race.phase); // 리플레이 기록 (1/15초마다)
 
-  model.sync(car, dt, elapsed);
+  model.sync(car, dt * tsc, elapsed);
   offroadFx.update(car, dt);
   lineFx.update(car);
   if (corners) corners.update(car, dt);
@@ -1143,7 +1165,8 @@ function frame(now, manual = false) {
   }
   if (applyIntro(dt)) _shakeBase.copy(camera.position);
   hud.shakeCamera(camera, dt);
-  if (!co && shakeK !== 1) camera.position.lerpVectors(_shakeBase, camera.position, shakeK);
+  const shk = shakeK * camViews.shakeMul; // 1인칭(보닛·운전석)은 흔들림을 줄임
+  if (!co && shk !== 1) camera.position.lerpVectors(_shakeBase, camera.position, shk);
   if (!co) speedFx.update(car, camera, dt);
   track.animate(elapsed);
   scenery.animate(elapsed, dt, car);
@@ -1220,6 +1243,7 @@ function frame(now, manual = false) {
 
   if (batcher) batcher.update();
   renderer.render(scene, camera);
+  mirror.frame(dt, { phase: race.phase, intro: intro.on, override: !!co }); // 백미러 (보일 때만 그림)
   input.endFrame();
   if (!manual) requestAnimationFrame(frame);
 }
@@ -1230,7 +1254,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
-  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep,
+  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep, mirror, camViews,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작

@@ -1,0 +1,56 @@
+/* 백미러 (2026-11-12, src/mirror.js가 불러옴)
+   테두리만 HTML이고 안쪽 거울 그림은 게임 캔버스에 직접 그림 → 안쪽은 꼭 비워 둘 것 (배경 없음)
+   mirror.js가 테두리 안쪽 칸(offset·client 크기)을 재서 그 자리에 그림. 크기를 바꾸면 거울 그림도 따라 바뀜
+   테두리는 불투명이어야 함: 캔버스 칸은 네모라서 둥근 모서리 밖으로 삐져나온 부분을 테두리가 가림
+   (바깥 둥글기 R ≤ 테두리 굵기 × 3.4 이면 안전) */
+
+#rearMirror {
+  left: 50%; top: 12px; z-index: 5;
+  width: 300px; height: 74px; box-sizing: content-box;
+  border: 4px solid #121826; border-radius: 13px;
+  transform: translateX(-50%); transform-origin: 50% 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  visibility: hidden; opacity: 0;
+}
+#rearMirror.on { visibility: visible; opacity: 1; }
+/* 유리 반사 (아주 옅게) + 안쪽 그림자 */
+#rearMirror .rm-sheen {
+  position: absolute; inset: 0; border-radius: 9px; pointer-events: none;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 22%, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.07) 100%);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55);
+}
+/* 테두리 위 가운데 작은 손잡이 (거울을 매단 기둥 느낌) */
+#rearMirror::before {
+  content: ""; position: absolute; left: 50%; top: -12px; width: 26px; height: 9px; margin-left: -13px;
+  border-radius: 4px 4px 2px 2px; background: #121826; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+/* 뒤차 간격 · 이름: 거울 안 왼쪽 위 작은 칩 (거울 밖에 두면 아래 알림 띠(#banner)·토스트와 겹침) */
+#rearMirror .rm-tag {
+  position: absolute; left: 5px; top: 4px;
+  display: none; align-items: center; gap: 5px; white-space: nowrap;
+  padding: 1px 7px 2px; border-radius: 999px;
+  background: rgba(9, 13, 26, 0.66); border: 1px solid rgba(255, 255, 255, 0.16);
+  font: 800 11px "Pretendard", "Malgun Gothic", sans-serif; color: #f3f6fb; font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+#rearMirror .rm-tag.on { display: flex; }
+#rearMirror .rm-gap { color: #ffd23a; }
+#rearMirror .rm-name { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+
+/* 좁은 화면 */
+@media (max-width: 900px) {
+  #rearMirror { width: 240px; height: 60px; border-width: 3px; border-radius: 10px; }
+  #rearMirror .rm-sheen { border-radius: 7px; }
+}
+/* 휴대폰 (터치 조작): 더 작게, 위쪽 끝에 붙여서 버튼들과 안 겹치게 */
+body.touch-on #rearMirror { top: max(8px, env(safe-area-inset-top)); width: 184px; height: 46px; border-width: 3px; border-radius: 9px; }
+body.touch-on #rearMirror::before { display: none; }
+body.touch-on #rearMirror .rm-sheen { border-radius: 6px; }
+body.touch-on #rearMirror .rm-tag { left: 3px; top: 2px; font-size: 9.5px; padding: 0 5px 1px; gap: 4px; }
+body.touch-on #rearMirror .rm-name { max-width: 56px; }
+@media (max-width: 560px) {
+  body.touch-on #rearMirror { width: 150px; height: 38px; }
+}
+
+/* 리플레이·ESC 메뉴 중엔 숨김 */
+body.replaying #rearMirror, body:has(#pauseMenu.on) #rearMirror { display: none !important; }

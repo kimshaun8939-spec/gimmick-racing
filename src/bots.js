@@ -61,6 +61,25 @@ BOT_LEVELS.master = {
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
 
+// --- 접전 (2026-11-12 close-race, 사용자 요청 "한 번 멀어지면 그대로 경기가 진행돼서 재미없음 → 경쟁을 많이 할 수 있게") ---
+//   무리 유지(PACK.keep)의 기준을 '봇 무리 가운데'에서 '사람(플레이어)'으로 바꿈: 봇마다 사람과의 시간 차(초)를 보고
+//     사람보다 ahead초 넘게 앞서면 1초당 kDown씩(최대 down) 늦추고, behind초 넘게 뒤면 1초당 kUp씩(최대 up) 빠르게, 그 사이(사람 근처)면 그대로 (= 보통 경주)
+//   그래서 앞서 나간 봇은 사람이 따라잡을 수 있는 거리에서 기다리고, 뒤처진 봇은 사람 뒤 1~2초까지 다시 붙음. 띠 안에서는 실력대로 → 추월·재추월
+//   단계마다 띠(초)와 세기가 다름: 쉬움 = 앞선 봇을 세게 늦춤(이기기 쉬움), 어려움·마스터 = 띠가 넓고 약함(잘 달려야 이김, 못 달리면 앞 봇이 2~3초 앞에서 계속 달림)
+//   raceSystem의 예전 따라잡기(쉬움 slowMul·어려움 upMul/upDraft)는 이게 켜져 있으면 안 씀 (겹치지 않게). 마스터 도움은 그대로, 견인은 이걸로 빨라지는 봇은 안 받음
+//   사람이 없거나(봇끼리) 사람이 완주했으면 예전 봇 무리 가운데 기준. 점프 근처·저중력·비행 중에는 빨라지지 않음 (PACK.keep과 같음)
+//   주소 &close=0 이면 끔 (예전 그대로)
+export const CLOSE = { on: true };
+try {
+  const q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+  if (q.get('close') === '0') CLOSE.on = false;
+} catch {}
+//   draft = 띠보다 draftAt초(기본 1) 넘게 뒤처진 봇에게 (1.5초에 걸쳐 커짐) 주는 보이지 않는 슬립스트림 최대 (raceSystem cuDraft, 예전 어려움 upDraft와 같은 것; 속도 계획 표가 없는 맵(화산)에서도 실제로 빨라지게)
+BOT_LEVELS.easy.close = { ahead: 0.6, behind: 0.8, up: 0.12, down: 0.15, kUp: 0.06, kDown: 0.08 };
+BOT_LEVELS.normal.close = { ahead: 1.0, behind: 0.6, up: 0.08, down: 0.06, kUp: 0.08, kDown: 0.05, draft: 0.4, draftAt: 0.5 };
+BOT_LEVELS.hard.close = { ahead: 1.5, behind: 0.8, up: 0.05, down: 0.03, kUp: 0.05, kDown: 0.03, draft: 0.7, draftAt: 0.4 };
+BOT_LEVELS.master.close = { ahead: 2.5, behind: 1.5, up: 0.03, down: 0.02, kUp: 0.02, kDown: 0.015 };
+
 /** 같은 씨앗이면 같은 난수 (봇마다 다른 성격) */
 export function rng(seed) {
   let a = seed >>> 0;
@@ -545,7 +564,19 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (st.keepT <= 0) {
         st.keepT = 0.5;
         let want = 1;
-        if (!ctx.finished && ctx.since > K.after && !st.fly) {
+        st.closeOn = false;
+        // 접전(CLOSE): 가장 가까운(완주 안 한) 사람 기준
+        let hum = null;
+        if (CLOSE.on && level.close && packOn) for (const o of ctx.others) if (o.human && !o.fin && (!hum || Math.abs(o.progM) < Math.abs(hum.progM))) hum = o;
+        if (hum && !ctx.finished && ctx.since > K.after && !st.fly) {
+          const C = level.close;
+          const sec = hum.progM / Math.max(20, Math.abs(speed)); // + = 사람이 내 앞 (몇 초)
+          want = sec > 0 ? K.bias || 1 : 1; // bias(무리 전체 조금 빠르게)는 사람보다 뒤에 있는 봇만
+          if (sec > C.behind) want += Math.min(C.up, (sec - C.behind) * C.kUp);
+          else if (-sec > C.ahead) want -= Math.min(C.down, (-sec - C.ahead) * C.kDown);
+          st.closeOn = true;
+          st.closeSec = sec;
+        } else if (!ctx.finished && ctx.since > K.after && !st.fly) {
           // 봇 무리 가운데: 다른 봇들(사람 빼고)과 나의 진행 거리 중앙값 (+ = 가운데가 내 앞)
           const ps = [0];
           for (const o of ctx.others) if (!o.human) ps.push(o.progM);
@@ -559,7 +590,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
             else if (-sec > K.ahead && (!(st.paceMul > 1) || level.master)) want -= Math.min(K.down, (-sec - K.ahead) * K.perSec);
           }
         }
-        if (want > 1 && st.paceMul < 0.999) want = 1; // 사람 따라잡기로 늦추는 중이면 빠르게 하지 않음
+        if (want > 1 && st.paceMul < 0.999 && !st.closeOn) want = 1; // 사람 따라잡기로 늦추는 중이면 빠르게 하지 않음
         st.keepWant = want;
       }
       eq.keep += (st.keepWant - eq.keep) * Math.min(1, dt * 0.8);
@@ -800,7 +831,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     }
     // 마스터(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
-    if (level.master && level.master.saturBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - level.master.saturBrake * st.satur);
+    //   접전(CLOSE)으로 빨라진 봇(eq.keep > 1)도 같은 규칙 (화산에서 사람보다 뒤인 봇이 계속 빨라져 낭떠러지로 떨어졌음)
+    const sBrake = (level.master && level.master.saturBrake) || (st.closeOn && eq.keep > 1.001 ? 8 : 0);
+    if (sBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - sBrake * st.satur);
     st.satur = 0;
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
     if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul));

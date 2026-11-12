@@ -9,7 +9,7 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan } from './bots.js';
+import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
 import { settings } from './settings.js';
@@ -31,6 +31,8 @@ export async function createRaceSystem(o) {
   const line = track.racingLine;
   const nBots = line && !track.arena ? Math.max(0, Math.min(7, o.botCount | 0)) : 0;
   // 씨앗: 온라인이면 방 코드로 (모든 사람에게 같은 봇 이름·차·성격), 아니면 무작위
+  //   (테스트용 &rseed=N: 혼자 봇 레이스에서도 같은 봇 이름·차·성격 = 전/후 비교, close-race)
+  if (o.seed == null && QS.get('rseed')) o = { ...o, seed: 'r' + QS.get('rseed') };
   const seed = o.seed != null ? [...String(o.seed)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0 : (Math.random() * 1e9) | 0;
   const rand = rng(seed);
   const markLen = (laps + 2) * M + 2;
@@ -43,6 +45,10 @@ export async function createRaceSystem(o) {
   const DC = car.cfg.draft || {};
   const TC = car.cfg.tow || {};
   const TOW_URL_OFF = QS.get('tow') === '0';
+  // 차끼리 몸싸움 (2026-11-12 close-race, 사용자 요청 "몸싸움하면 차가 돌고 감속이 너무 심함 → 도는 것 자체를 없애줘"): data/car.json contact
+  //   NOSPIN: 부딪혀도 차 방향·회전·미끄럼각(slip)은 그대로, 옆으로 살짝 밀리기만 (car.cNudge, 금방 사라짐). &nospin=0 = 예전 몸싸움(비교용)
+  const CC = car.cfg.contact || {};
+  const NOSPIN = QS.get('nospin') !== '0' && CC.nospin !== false;
 
   function timing(e) {
     if (e.marks) return e;
@@ -276,6 +282,7 @@ export async function createRaceSystem(o) {
       }
     }
     stats.contacts++;
+    if (NOSPIN) stats.nospin = true;
     if (a === car || b === car) stats.player = (stats.player || 0) + 1; // 플레이어 차가 낀 접촉
     if (stats.time < 8) stats.start = (stats.start || 0) + 1; // 출발 8초 안 (한 덩어리로 출발할 때)
     if (stats.where) {
@@ -287,6 +294,7 @@ export async function createRaceSystem(o) {
     //   플레이어 대 봇 (hard2): 플레이어가 level.playerPush만큼 (어려움 0.57 = 봇이 조금 더 무거운 것처럼). 예전엔 반반 + 봇이 늘 양보해서 사람이 몸싸움에 항상 이김
     const pp = level.playerPush ?? 0.5;
     const share = bStatic ? 1 : a === car ? pp : b === car ? 1 - pp : 0.5; // a가 받는 몫 (b는 1 − share)
+    if (NOSPIN) return softContact(a, b, bStatic, share, sideHit, best);
     a.pos.addScaledVector(_n, best * share);
     if (!bStatic) b.pos.addScaledVector(_n, -best * (1 - share));
     velOf(a, _va);
@@ -328,6 +336,145 @@ export async function createRaceSystem(o) {
         if (b.afterImpact && b.grounded) b.afterImpact(rel * 0.6);
       }
     }
+  }
+
+  // --- 부드러운 몸싸움 (NOSPIN) ---
+  //   예전: 부딪히면 속도 벡터를 꺾어서(setVelocityOnSurface) 차 방향과 진행 방향이 어긋남(미끄럼각 5~20°) → 다음 스텝부터 타이어(뒤 접지·꼬리 흔들림)가
+  //     그 미끄럼을 되돌리며 차 머리를 돌림(최대 110°/s) + 미끄러지는 만큼 감속(slipDrag) + 세게 부딪히면 afterImpact가 머리를 70% 돌리고 마찰로 최대 45% 감속
+  //     → 같은 몸싸움이라도 각도·위치·드리프트 상태에 따라 돌거나 크게 느려져서 기준이 안 보였음
+  //   지금: 밀어내는 충격(속도 변화)을 차마다 '진행 방향 성분'과 '옆 성분'으로 나눔
+  //     옆 성분 → car.cNudge (옆으로 미끄러지듯 밀리는 속도, m/s). 차 방향·slip·yawRate는 안 건드림 → 돌 일이 없음. contact.nudgeDecay로 금방 사라짐 (타이어가 잡아 줌)
+  //     진행 방향 성분 → speed만 바꿈 (뒤에서 박으면 뒤차 −, 앞차 +). 나란히 비빌 때(sideHit)는 진행 방향 성분이 없고 앞 속도는 scrub만큼만
+  //     afterImpact(벽 충돌용 자세 잡기·감속)는 차끼리는 안 부름. 'bump'(흔들림·소리)는 그대로
+  const _fa = new THREE.Vector3(), _wd = new THREE.Vector3(), _wo = new THREE.Vector3();
+  function flatDir(c, out) {
+    if (c.grounded && c.moveDirTo) c.moveDirTo(out);
+    else if (c.vel && c.vel.x * c.vel.x + c.vel.z * c.vel.z > 1) out.copy(c.vel);
+    else out.copy(c.fwd);
+    out.y = 0;
+    const l = Math.hypot(out.x, out.z) || 1;
+    out.x /= l;
+    out.z /= l;
+    return out;
+  }
+  function velN(c, out) {
+    velOf(c, out);
+    if (c.cNudge) {
+      out.x += c.cNudge.x;
+      out.z += c.cNudge.z;
+    }
+    return out;
+  }
+  /** c가 받는 속도 변화 _n × j → 진행 방향은 speed, 옆은 cNudge. latOnly = 옆 성분만 (나란히·비스듬히 비빔: 앞 속도는 안 뺏김) */
+  function kick(c, j, latOnly) {
+    const f = flatDir(c, _fa);
+    let dvf = (_n.x * f.x + _n.z * f.z) * j;
+    const lx = _n.x * j - f.x * dvf, lz = _n.z * j - f.z * dvf;
+    if (latOnly) dvf = 0;
+    if (dvf) {
+      if (c.grounded && c.moveDir) {
+        c.speed += dvf;
+        c.moveDirTo(c.vel).multiplyScalar(c.speed);
+      } else {
+        c.vel.x += f.x * dvf;
+        c.vel.z += f.z * dvf;
+      }
+    }
+    if (c.up && c.up.y < 0.7) return; // 벽·루프(자석 도로) 위: 옆 밀림 없음 (수평으로 밀면 벽에서 떨어짐), 위치만 떼어 냄
+    if (!c.cNudge) c.cNudge = new THREE.Vector3();
+    (c._nPos || (c._nPos = new THREE.Vector3())).copy(c.pos);
+    const k = CC.latShare ?? 1;
+    c.cNudge.x += lx * k;
+    c.cNudge.z += lz * k;
+    const m = Math.hypot(c.cNudge.x, c.cNudge.z), mx = CC.nudgeMax ?? 6;
+    if (m > mx) c.cNudge.multiplyScalar(mx / m);
+  }
+  function softContact(a, b, bStatic, share, sideHit, depth) {
+    velN(a, _va);
+    if (bStatic) _vb.copy(b.fwd).multiplyScalar(b.speed || 0);
+    else velN(b, _vb);
+    const rel = _va.dot(_n) - _vb.dot(_n);
+    // 들이받은 쪽이 더 많이 밀려남: 닿는 쪽으로 움직이던 몫(ca, cb)만큼 몫을 옮김 (contact.aggr, 0.5면 ±25%p)
+    //   → 비스듬히 파고들면 파고든 차가 옆으로 미끄러지듯 밀려나고, 맞은 차는 살짝만 밀림 (예전엔 맞은 차가 길 밖까지 밀려났음)
+    //   (앞뒤 방향 = 두 차 앞 방향의 평균 d. d 방향 속도는 빼고 봄 → 뒤에서 박는 경우는 거의 안 바뀜)
+    if (!bStatic && a.fwd.x * b.fwd.x + a.fwd.z * b.fwd.z > 0.5) {
+      let dx = a.fwd.x + b.fwd.x, dz = a.fwd.z + b.fwd.z;
+      const dl = Math.hypot(dx, dz) || 1;
+      dx /= dl;
+      dz /= dl;
+      const nd = _n.x * dx + _n.z * dz; // n의 앞뒤 성분
+      const ca = Math.max(0, -(_va.x * _n.x + _va.z * _n.z - (_va.x * dx + _va.z * dz) * nd));
+      const cb = Math.max(0, _vb.x * _n.x + _vb.z * _n.z - (_vb.x * dx + _vb.z * dz) * nd);
+      if (ca + cb > 0.5) share = Math.min(0.9, Math.max(0.1, share + (ca / (ca + cb) - 0.5) * (CC.aggr ?? 0.5)));
+    }
+    a.pos.addScaledVector(_n, depth * share);
+    if (!bStatic) b.pos.addScaledVector(_n, -depth * (1 - share));
+    const sa0 = a.speed, sb0 = b.speed || 0;
+    if (sideHit) {
+      // 나란히 비빔: 앞 속도는 두 차 모두 아주 조금만 (contact.scrub, 닿은 스텝마다)
+      const keep = 1 - (CC.scrub ?? SIDE_SCRUB);
+      a.speed *= keep;
+      if (a.grounded && a.moveDir) a.moveDirTo(a.vel).multiplyScalar(a.speed);
+      if (!bStatic) {
+        b.speed *= keep;
+        if (b.grounded && b.moveDir) b.moveDirTo(b.vel).multiplyScalar(b.speed);
+      }
+    }
+    if (rel < 0) {
+      // 거의 같은 쪽을 보는 두 차(앞 방향 차이 37° 안): 똑바로 뒤에서 박은 경우(밀어내는 방향이 앞뒤 성분 70% 넘음)만 앞 속도를 주고받고,
+      //   나란히·비스듬히 파고든 경우는 옆으로만 밀어냄 (예전엔 비스듬히 밀면 두 차 모두 스텝마다 앞 속도를 잃어 0.3초에 20~35 km/h 느려졌음)
+      const par = Math.abs(a.fwd.x * b.fwd.x + a.fwd.z * b.fwd.z) > 0.8;
+      const fa = flatDir(a, _fa), nf = Math.abs(_n.x * fa.x + _n.z * fa.z);
+      const latOnly = par && (sideHit || nf < 0.7);
+      const jAll = -(1 + (latOnly ? CC.rest ?? 0.15 : CC.restRear ?? 0)) * rel;
+      kick(a, jAll * share, latOnly);
+      if (!bStatic) kick(b, -jAll * (1 - share), latOnly);
+      if (rel < -6) {
+        // 흔들림·소리는 0.4초에 한 번만 (계속 비비면 스텝마다 울렸음)
+        if (!(a._bumpT > a.simT - 0.4)) {
+          stats.hard++;
+          a.events.push('bump');
+          a._bumpT = a.simT;
+        }
+        if (!bStatic && !(b._bumpT > b.simT - 0.4)) {
+          b.events.push('bump');
+          b._bumpT = b.simT;
+        }
+      }
+    }
+    if (a === car || b === car) {
+      stats.pDv = (stats.pDv || 0) + (a === car ? a.speed - sa0 : b.speed - sb0);
+      if (!bStatic) stats.bDv = (stats.bDv || 0) + (a === car ? b.speed - sb0 : a.speed - sa0);
+    }
+  }
+  /** 매 스텝: 옆으로 밀리는 속도만큼 위치를 옮기고 줄임. 벽 쪽이면 그 성분은 버림 (레일은 car.keepInsideRail이 다음 스텝에 막음) */
+  function applyNudge(c, dt) {
+    const n = c.cNudge;
+    if (!n || (n.x === 0 && n.z === 0)) return;
+    const m = Math.hypot(n.x, n.z);
+    const jumped = c._nPos && c._nPos.distanceToSquared(c.pos) > 225; // 복귀·순간이동 (한 스텝에 15 m 넘게) → 밀림 없앰
+    if (m < 0.03 || jumped) {
+      n.set(0, 0, 0);
+      return;
+    }
+    const step = m * dt;
+    _wd.set(n.x / m, 0, n.z / m);
+    const tr = c.track || track;
+    const hit = tr.castRay(_wo.copy(c.pos).addScaledVector(c.up, 0.6), _wd, step + 1.2);
+    if (hit && hit.normal && Math.abs(hit.normal.y) < 0.5) {
+      // 벽: 벽으로 들어가는 성분을 없앰
+      const nx = hit.normal.x, nz = hit.normal.z, nl = Math.hypot(nx, nz) || 1;
+      const into = (n.x * nx + n.z * nz) / nl;
+      if (into < 0) {
+        n.x -= (nx / nl) * into;
+        n.z -= (nz / nl) * into;
+      }
+    } else {
+      c.pos.x += n.x * dt;
+      c.pos.z += n.z * dt;
+    }
+    n.multiplyScalar(Math.exp(-(CC.nudgeDecay ?? 5) * dt));
+    (c._nPos || (c._nPos = new THREE.Vector3())).copy(c.pos);
   }
 
   const stats = { contacts: 0, hard: 0 }; // 테스트용: 차끼리 닿은 수, 세게 부딪힌 수
@@ -426,6 +573,7 @@ export async function createRaceSystem(o) {
     if (x !== me) {
       const st = x.driver && x.driver.state;
       if (MASTER || (x.cuDraft || 0) > 0.01 || (st && (st.paceMul > 1.001 || st.calm))) return 0;
+      if (st && st.closeOn && st.eq && st.eq.keep > 1.001) return 0; // 접전(bots.js CLOSE)으로 이미 당겨지는 봇은 견인 없음 (겹치지 않게)
     }
     const g = gapBetween(lead, x, time);
     const sec = g.laps ? 99 : g.sec || 0;
@@ -490,10 +638,10 @@ export async function createRaceSystem(o) {
             if (dx * dx + dy * dy + dz * dz > 3600) continue;
             const fl = Math.hypot(bc.fwd.x, bc.fwd.z) || 1, fx = bc.fwd.x / fl, fz = bc.fwd.z / fl;
             if (Math.abs(dy) > 4 && !(b.offMain && e.offMain)) continue; // 한쪽은 하늘, 한쪽은 땅
-            others.push({ progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep });
+            others.push({ progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep, fin: !!e.finished });
             continue;
           }
-          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos });
+          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos, fin: !!e.finished });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
@@ -516,6 +664,7 @@ export async function createRaceSystem(o) {
     // 차끼리 충돌 (플레이어 + 봇), 온라인 상대는 움직이지 않는 벽처럼 (내 차만 밀림)
     // 완주한 봇은 (천천히 돌며 길을 막으므로) 다른 차와 부딪히지 않음
     const bodies = [car, ...bots.filter((b) => !b.finished).map((b) => b.car)];
+    if (NOSPIN) for (const c of bodies) applyNudge(c, dt);
     for (let i = 0; i < bodies.length; i++) for (let k = i + 1; k < bodies.length; k++) collide(bodies[i], bodies[k], false);
     for (const e of opponents.entries) {
       if (!e.remote || !e.target) continue;
@@ -604,8 +753,10 @@ export async function createRaceSystem(o) {
    * 어려움: 사람이 sec초 넘게 앞서면 upMul + 보이지 않는 슬립스트림 upDraft, 봇이 secDown초 넘게 앞서면 downMul
    * 보통: 없음 (항상 1)
    */
+  // 접전(bots.js CLOSE)이 켜져 있으면 예전 따라잡기(쉬움 slowMul·어려움 upMul/upDraft)는 안 씀: 사람 기준 당기기·늦추기를 bots.js 무리 유지가 대신 함 (겹치지 않게)
+  const CLOSE_ON = CLOSE.on && !!level.close && PACK.on && PACK.keep.on;
   function catchUp(time, racing) {
-    const cu = level.catchUp;
+    const cu = CLOSE_ON ? null : level.catchUp;
     const lead = racing && (cu || MASTER) ? leadHuman() : null;
     for (const b of bots) {
       const st = b.driver.state;
@@ -613,6 +764,11 @@ export async function createRaceSystem(o) {
       if (MASTER) {
         if (racing && !b.finished) ({ want, draft } = masterKeeper(b, time, lead));
         else if (b.mH) masterHelp(b, (b.mH = 0), false);
+      } else if (CLOSE_ON && racing && !b.finished) {
+        // 접전: 사람보다 띠(close.behind)+draftAt초 넘게 뒤처진 봇에게만 보이지 않는 슬립스트림 (단계 close.draft 최대, 1.5초에 걸쳐 커짐)
+        const C = level.close;
+        const d0 = C.behind + (C.draftAt ?? 1);
+        if (C.draft && st.closeOn && st.closeSec > d0) draft = Math.min(1, (st.closeSec - d0) / 1.5) * C.draft;
       } else if (lead && !b.finished) {
         if (cu.aheadM) {
           const d = (b.progress - lead.progress) * L; // + = 봇이 앞

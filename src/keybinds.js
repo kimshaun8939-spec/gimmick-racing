@@ -24,6 +24,7 @@ export const ACTIONS = [
   { group: '레이스', id: 'respawn', label: '도로로 복귀', desc: '길을 벗어났거나 뒤집혔을 때', def: ['KeyR', null] },
   { group: '레이스', id: 'restart', label: '처음부터 다시', desc: '', def: ['Enter', null] },
   { group: '레이스', id: 'menu', label: '메뉴 · 일시정지', desc: 'Esc는 항상 메뉴 (보조 키만 바꿀 수 있어요)', def: ['Escape', null], lock: [0] },
+  { group: '도움 · 화면', id: 'camView', label: '시점 바꾸기', desc: '기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석', def: ['KeyV', null] },
   { group: '도움 · 화면', id: 'racingLine', label: '레이싱 라인 켜기/끄기', desc: '', def: ['KeyL', null] },
   { group: '도움 · 화면', id: 'sound', label: '소리 끄기/켜기', desc: '', def: ['KeyN', null] },
   { group: '도움 · 화면', id: 'map', label: '다음 맵으로', desc: '', def: ['KeyM', null] },
@@ -33,7 +34,7 @@ const BY_ID = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 /** 예전 코드가 쓰던 "기본 키 이름" → 행동 (input.wasPressed('KeyR') → 복귀 키가 눌렸나) */
 export const LEGACY = {
   Enter: 'restart', KeyM: 'map', KeyR: 'respawn', KeyT: 'gearbox', KeyN: 'sound', KeyL: 'racingLine',
-  KeyE: 'booster', KeyX: 'shiftUp', KeyZ: 'shiftDown',
+  KeyE: 'booster', KeyX: 'shiftUp', KeyZ: 'shiftDown', KeyV: 'camView',
 };
 
 /** 바꿀 수 없는 키 (메뉴·브라우저용) */

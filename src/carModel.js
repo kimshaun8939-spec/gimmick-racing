@@ -1013,6 +1013,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
   let disposed = false;
   return {
     root,
+    /** 1인칭 시점용 (camViews.js, 2026-11-12): 부품 자리(A.helmet = 운전자 머리), 헬멧, 기울기 그룹 */
+    fp: { A, helmet, body },
     /** 이 차의 모습 설정 (style, 색 등) */
     look,
     /** 장면에서 빼고 지오메트리·재질·텍스처를 정리 (홈 화면에서 차를 바꿀 때) */

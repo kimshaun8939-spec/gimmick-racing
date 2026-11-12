@@ -24,6 +24,8 @@ export const SETTING_DEFS = [
     options: [[0, '끔'], [0.5, '약하게'], [1, '보통'], [1.5, '강하게']], def: 1 },
   { group: '화면·그래픽', key: 'shake', label: '화면 흔들림', desc: '부딪힘·착지·연석에서 카메라 떨림', type: 'choice',
     options: [[0, '끔'], [0.5, '약하게'], [1, '보통']], def: 1 },
+  { group: '화면·그래픽', key: 'camView', label: '시점', desc: () => `달리는 중 ${keybinds.main('camView')} 키로도 바꿔요 · 보닛·운전석 = 1인칭 (흔들림이 줄어요)`, type: 'choice',
+    options: [['chase', '기본'], ['near', '가까이'], ['far', '멀리'], ['bonnet', '보닛'], ['cockpit', '운전석']], def: 'chase' },
   { group: '화면·그래픽', key: 'fov', label: '시야 넓이', desc: '카메라가 보는 범위', type: 'choice',
     options: [[-6, '좁게'], [0, '보통'], [6, '넓게']], def: 0 },
 
@@ -74,6 +76,8 @@ export const SETTING_DEFS = [
 
   { group: '표시', key: 'unit', label: '속도 단위', desc: '', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
+  { group: '표시', key: 'mirror', label: '백미러', desc: '자동 = 다른 차가 바로 뒤에 붙으면 화면 위에 작은 백미러가 내려와요 · 항상 = 상대가 있는 레이스에서 늘 보임', type: 'choice',
+    options: [['auto', '자동'], ['on', '항상'], ['off', '끔']], def: 'auto' },
   { group: '표시', key: 'showFps', label: 'FPS 보기', desc: '1초에 몇 장 그리는지', type: 'toggle', def: false },
 ];
 
@@ -334,7 +338,7 @@ export function createControlsPage(opts = {}) {
       ${row('<kbd>◀ ●▶</kbd>', '조향', '화면 왼쪽 아무 데나 손가락을 대고 옆으로 끈 만큼 꺾여요 (설정에서 ◀ ▶ 버튼·기울이기로 바꿀 수 있어요)')}
       ${row('<kbd>▲</kbd><kbd>▼</kbd>', '가속 · 브레이크', '오른쪽 아래 큰 버튼 · 작은 버튼')}
       ${row('<kbd>💨</kbd>', '드리프트', '비행기일 땐 ⬆ 상승 · ⬇ 하강 버튼이 생겨요')}
-      ${row('<kbd>↺</kbd><kbd>☰</kbd>', '복귀 · 메뉴', '오른쪽 위 작은 버튼')}
+      ${row('<kbd>👁</kbd><kbd>↺</kbd><kbd>☰</kbd>', '시점 · 복귀 · 메뉴', '오른쪽 위 작은 버튼')}
       </section>`
       : '';
     el.innerHTML = `${touchSec}
@@ -359,6 +363,7 @@ export function createControlsPage(opts = {}) {
     </section>
     <section><h3>그 밖에</h3>
       ${row(K('gearbox'), '자동 ↔ 수동 변속', '수동: ' + k1('shiftUp') + ' 올림 · ' + k1('shiftDown') + ' 내림')}
+      ${row(K('camView'), '시점 바꾸기', '기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석 (설정에서도)')}
       ${row(K('racingLine'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
       ${row(K('sound'), '소리 끄기/켜기')}
       ${row(K('map'), '다음 맵으로')}
@@ -368,7 +373,7 @@ export function createControlsPage(opts = {}) {
       ${row(pad.html('throttle') + pad.html('brake'), '가속 · 브레이크', '트리거를 밟은 만큼')}
       ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}
       ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '아이템 사용 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
-      ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')}`)}
+      ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')} · 시점 ${pad.html('camView')}`)}
       ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 처음부터 다시', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
     </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
