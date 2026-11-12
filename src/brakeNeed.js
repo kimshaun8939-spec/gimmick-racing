@@ -2,7 +2,7 @@
 //   지금 타는 차의 속도 계획(car._lineProfile = racingLine.profile(lineCarModel))은 '최대 브레이크'로 줄이는 계획이라
 //   속도가 조금만 줄어도 '브레이크 구간'이 생김. 그런데 W만 떼도(엔진 브레이크 + 공기 저항) 그만큼 줄일 수 있으면 브레이크는 이득이 거의 없음.
 //   → 같은 계획을 'W만 떼기(리프트)'의 감속으로 다시 계산해서, 코너마다 브레이크로 아끼는 시간(gain, 초)을 셈.
-//   kind: 'brake' (브레이크가 확실히 이득, gain ≥ BRAKE_GAIN), 'lift' (W만 살짝 떼면 됨), 'flat' (그대로 밟고 통과)
+//   kind: 'brake' (브레이크가 확실히 이득, gain ≥ BRAKE_GAIN), 'lift' (W를 잠깐 떼면 됨(톡)), 'flat' (그대로 밟고 통과)
 //   판단은 이 차 기준 (차를 바꾸면 cfg가 바뀌므로 그대로 따라감). 시험 `.debug/academy_test.js` brakeTable()
 
 export const BRAKE_GAIN = 0.12; // 브레이크로 이만큼(초) 넘게 아끼면 '브레이크 코너'

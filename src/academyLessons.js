@@ -192,8 +192,9 @@ function cornerRec(ctx, P) {
       const m = P.dist(idx), v = Math.abs(car.speed), brk = car.brk, thr = car.thr;
       const lat = car.trackInfo.lateral * P.side; // + = 안쪽
       const st = (car.steerIn || 0) * P.side; // + = 안쪽으로 꺾음
+      // S 톡톡의 누름·뗌 사이도 이어서 합산 (연속으로 밟을 필요 없음).
       if (m > P.dB - 40 && m < P.dA + 3 && brk > 0.04 && brk < 0.8 && st > 0.16) X.trailT += dt;
-      if (m > P.dB - 40 && m < P.dA && brk >= 0.8 && st > 0.45) X.hardTurnT += dt;
+      if (m > P.dB - 40 && m < P.dA && brk >= 0.8 && st > 0.16) X.hardTurnT += dt;
       if (m > P.dB - 200 && m < P.dX && brk > 0.05) X.lastBrkD = m;
       if (m > P.dB - 200 && m < P.dA) X.brkMax = Math.max(X.brkMax, brk);
       if (brk > 0.6 && m > P.dB - 200 && m < P.dB + 0.35 * (P.dA - P.dB)) (X.steerSum += Math.abs(car.steerIn || 0)), X.steerN++; // 브레이크 앞부분(직선)에서만: 라인 자체가 꺾이기 시작하는 뒷부분은 빼고
@@ -230,7 +231,7 @@ function exitWhy(ctx, c) {
   if (c.noBrake === false) return '에이펙스 뒤에 브레이크를 밟았어요';
   if (c.thrAvg != null && c.thrAvg < (k.exitThrottle ?? 0.75)) return `에이펙스를 지나면 ${ctx.kbd('throttle')}를 더 일찍, 꾹`;
   if (c.latErr != null && c.latErr > (k.exitTol ?? 2.5)) return '탈출에서 바깥쪽까지 넓게 (라인을 따라)';
-  if (c.ratio != null && c.ratio < (k.exitSpeedRatio ?? 0.8)) return '너무 느려요. 브레이크를 조금 덜';
+  if (c.ratio != null && c.ratio < (k.exitSpeedRatio ?? 0.8)) return '너무 느려요. 브레이크 키를 더 일찍 떼요';
   return '잔디에 닿았어요';
 }
 const row = (id, ok, title, text) => ({ id, ok, title, text });
@@ -265,7 +266,7 @@ function stripOf(list) {
 
 // ------------------------------------------------------------------ 레슨들
 const DRV_TXT = {
-  rwd: '이 차는 <b>뒷바퀴 굴림</b>이라 W를 확 떼면 꼬리가 조금 더 돌아요. 천천히 떼면 부드러워요.',
+  rwd: '이 차는 <b>뒷바퀴 굴림</b>이라 W를 떼면 꼬리가 조금 더 돌아요. 코너 앞에서 잠깐 떼고 다시 눌러 봐요.',
   fwd: '이 차는 <b>앞바퀴 굴림</b>이라 코너에서 W를 세게 밟으면 앞이 바깥으로 밀려요. 탈출에선 핸들을 풀면서 밟아요.',
   awd: '이 차는 <b>네 바퀴 굴림</b>이라 떼거나 밟아도 차분한 편이에요.',
 };
@@ -280,7 +281,7 @@ RUN.brake = {
   intro: (ctx, c) => `
     <p>코너 전 <b>직선 끝</b>에서 <b>한 번에 세게</b> 밟고, 코너에 들어가기 전에 속도를 다 줄여요. 늦으면 밖으로 밀리고, 일찍이면 시간을 버려요.</p>
     ${steps([['①', `직선에서는 ${ctx.kbd('throttle')} 끝까지`], ['②', `라인이 <b style="color:#ff6b5e">빨개지면</b> ${ctx.kbd('brake')} 꾹`], ['③', '핸들은 <b>곧게</b> (꺾으며 꾹 = 밀림)'], ['④', '코너 속도만큼만 줄이기']])}
-    ${why(`브레이크를 밟으면 무게가 <b>앞바퀴</b>로 쏠려서 앞이 땅을 꽉 눌러요 → 잘 서고, 핸들도 잘 들어요. 그래서 <b>곧게 세게</b> 줄이고 꺾기 시작할 때 살살 풀어요.`)}
+    ${why(`브레이크를 밟으면 무게가 <b>앞바퀴</b>로 쏠려서 앞이 땅을 꽉 눌러요 → 잘 서고, 핸들도 잘 들어요. 그래서 <b>곧게 세게</b> 줄이고 꺾기 시작할 때는 브레이크 키를 짧게 톡톡 누르다가 떼요.`)}
     <p class="tut-tip">💡 '적당히 밟는' 습관이 있다면: 이번엔 <b>더 늦게, 더 세게, 더 짧게</b> 밟아 봐요. 짧고 센 브레이크가 더 빨라요. 도로 옆 <b>150 · 100 · 50</b> 표지판도 도와줘요.</p>`,
   plan: (ctx, c) => {
     const P = basePlan(ctx, c, runUp(ctx, c));
@@ -321,10 +322,10 @@ RUN.trail = {
   demo: true,
   spot: (ctx) => ctx.spots.trail,
   intro: (ctx, c) => `
-    <p>브레이크를 <b>직선에서 거의 다</b> 끝내고, 꺾기 시작할 때 <b>조금만 남겨</b> 두었다가 에이펙스 쪽으로 가며 <b>스르르</b> 풀어요. 이게 트레일 브레이킹이에요.</p>
-    ${steps([['①', `직선에서 ${ctx.kbd('brake')} 세게`], ['②', `꺾으면서 ${ctx.kbd('brake')} <b>살짝 남기기</b>`], ['③', '에이펙스 전에 다 떼기'], ['④', `에이펙스 뒤 ${ctx.kbd('throttle')} 꾹`]])}
-    ${why(`가속하는 동안엔 앞바퀴 무게가 가벼워져서 <b>핸들이 덜 들어요</b>. 반대로 브레이크를 살짝 남기면 앞이 눌려서 <b>더 잘 돌아요</b>. 대신 꺾으면서 <b>세게</b> 밟으면 앞바퀴가 미끄러져 밖으로 밀려요.`)}
-    <p class="tut-tip">💡 코너 입구에서 차가 바깥으로 밀린다면 → 브레이크를 한 번에 다 떼지 말고 <b>조금 남긴 채</b> 꺾어 보세요.</p>`,
+    <p>속도는 <b>직선에서 거의 다</b> 줄이고, 꺾기 시작할 때 브레이크 키를 <b>톡톡 (짧게 여러 번)</b> 누르다가 에이펙스 전에 떼요. 이게 트레일 브레이킹이에요.</p>
+    ${steps([['①', `직선에서 ${ctx.kbd('brake')} 세게`], ['②', `꺾으면서 ${ctx.kbd('brake')} <b>톡톡 (짧게 여러 번)</b>`], ['③', '에이펙스 전에 다 떼기'], ['④', `에이펙스 뒤 ${ctx.kbd('throttle')} 꾹`]])}
+    ${why(`가속하는 동안엔 앞바퀴 무게가 가벼워져서 <b>핸들이 덜 들어요</b>. 반대로 브레이크 키를 짧게 톡톡 누르면 앞이 눌려서 <b>더 잘 돌아요</b>. 대신 꺾으면서 <b>세게</b> 밟으면 앞바퀴가 미끄러져 밖으로 밀려요.`)}
+    <p class="tut-tip">💡 코너 입구에서 차가 바깥으로 밀린다면 → 꺾기 시작할 때 브레이크 키를 바로 끝내지 말고 <b>약 0.1초씩 짧게 한두 번 더</b> 눌러 보세요. 키보드는 반만 누를 수 없으니 눌렀다 떼기를 반복해요.</p>`,
   plan: (ctx, c) => {
     const P = cornerPlan(ctx.game, c, runUp(ctx, c));
     P.driver = () => lineDriver(ctx.game, { look: 0.15 }); // 넓은 연석 위 에이펙스: 너무 멀리 보면 안쪽 잔디까지 깎음
@@ -338,54 +339,58 @@ RUN.trail = {
       { id: 'gas', a: P.dA + 8, b: 1e9, ts: 1 },
     ];
     P.momentAt = (m) => P.moments.find((x) => m >= x.a && m < x.b) || P.moments[0];
-    P.strip = stripOf([['straight', '직선'], ['brake', '세게'], ['trail', '살짝 남기기'], ['apex', '에이펙스'], ['gas', '가속']]);
+    P.strip = stripOf([['straight', '직선'], ['brake', '세게'], ['trail', '브레이크 톡톡'], ['apex', '에이펙스'], ['gas', '가속']]);
     const B = ctx.kbd('brake'), S = ctx.kbd(P.turnKey), T = ctx.kbd('throttle');
     P.texts = (id, coach) =>
       coach
-        ? { straight: [`${T} 꾹`, ''], brake: [`${B} 세게!`, '곧게'], trail: [`${S} + ${B} 살짝`, '조금 남기고 꺾기'], apex: ['브레이크 다 떼기', '안쪽에 붙기'], gas: [`${T} 꾹!`, ''] }[id]
+        ? { straight: [`${T} 꾹`, ''], brake: [`${B} 세게!`, '곧게'], trail: [`${S} + ${B} 톡톡`, '짧게 눌렀다 떼기'], apex: ['브레이크 다 떼기', '안쪽에 붙기'], gas: [`${T} 꾹!`, ''] }[id]
         : {
             straight: [`직선에서는 ${T} 꾹`, `코너 <b>바깥(${P.outName})</b>에서 들어갈 준비`],
             brake: [`먼저 직선에서 ${B} 세게!`, '속도는 여기서 거의 다 줄여요'],
-            trail: [`꺾으면서 ${B}는 <b>살짝만</b> 남기기`, '앞바퀴가 눌려서 차 머리가 안쪽으로 잘 들어가요'],
+            trail: [`꺾으면서 ${B} <b>톡톡 (짧게 여러 번)</b>`, '앞바퀴가 눌려서 차 머리가 안쪽으로 잘 들어가요'],
             apex: ['에이펙스 전에 브레이크 다 떼기', `${P.inName} 연석을 스쳐요`],
             gas: [`이제 ${T} 꾹!`, '핸들을 풀면서'],
           }[id];
-    // 시범: 브레이크 순간엔 세게, 꺾기 순간엔 0.25에서 0으로 줄이며 남김
+    // 시범: 직선에서는 세게, 꺾을 때는 S를 0.1초 누르고 0.22초 떼는 톡톡 입력.
+    let trailStart = null;
     P.demoCtl = (c, cur, car) => {
       if (!cur) return;
       const v = car.speed;
+      if (cur.id !== 'trail') trailStart = null;
       if (cur.id === 'brake') {
         // 계획 속도보다 빠를 때만 세게 (예전엔 꼭짓점 속도까지 다 줄여서 에이펙스가 느렸음)
         const va = car.lineSpeed((car.trackInfo.index + Math.round((v * 0.3) / P.ds)) % P.N);
         if (v > va + 0.4 && v > P.vMin + 2) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
       }
       if (cur.id === 'trail') {
-        const k = clamp((P.dA - 6 - P.dist(car.trackInfo.index % P.N)) / Math.max(10, P.dA - 6 - bEnd), 0, 1);
+        if (trailStart == null) trailStart = ctx.race.time;
+        const tap = (ctx.race.time - trailStart) % 0.32 < 0.1; // 물리 시간: 슬로 모션에서도 같은 운전
         const vt = car.lineSpeed((car.trackInfo.index + Math.round((v * 0.25) / P.ds)) % P.N);
-        // 계획 속도보다 빠를 때만 조금 더, 계획 속도 근처면 아주 살짝 남기기(보이게), 계획보다 느려지면 브레이크를 떼고 액셀을 살짝 (에이펙스가 너무 느렸음)
-        c.throttle = v < vt - 1 ? 0.3 : 0;
-        c.brake = v > vt + 0.3 ? Math.max(Math.min(c.brake, 0.6), 0.25 * k) : v > vt - 0.3 ? 0.04 + 0.05 * k : 0; // 계획 속도보다 빠를 때만 조금 더, 아니면 아주 살짝 (보이게)
+        // 계획보다 느려지면 브레이크를 떼고 W를 눌러 속도를 회복. 키 그림도 이 0/1 입력을 그대로 보여 줌.
+        c.throttle = v < vt - 1 ? 1 : 0;
+        c.brake = v >= vt - 1 && tap ? 1 : 0;
       }
       if (cur.id === 'apex') c.brake = 0;
     };
     return P;
   },
-  task: (ctx, P) => `${ctx.cname(P.c)}: 직선에서 ${ctx.K('brake')} 세게 → 꺾으면서 <b>살짝 남기기</b> → 에이펙스 전에 떼기`,
-  goals: ['브레이크 시점', '꺾으며 살짝 남기기', '에이펙스 전에 떼기', '에이펙스'],
+  task: (ctx, P) => `${ctx.cname(P.c)}: 직선에서 ${ctx.K('brake')} 세게 → 꺾으면서 ${ctx.K('brake')} <b>톡톡</b> → 에이펙스 전에 떼기`,
+  goals: ['브레이크 시점', '꺾으며 브레이크 톡톡', '에이펙스 전에 떼기', '에이펙스'],
   cue: (P, id) => ({ straight: 'throttle', brake: 'brake', trail: P.turnKey, apex: null, gas: 'throttle' })[id],
   judge(ctx, P) {
     const R = cornerRec(ctx, P);
     return {
       step: R.step,
-      prog: () => [R.drill.R.brakeD != null, R.X.trailT > 0.3, R.X.lastBrkD != null && R.drill.R.passApexT != null && R.X.lastBrkD <= P.dA + 2, !!R.drill.R.apex],
+      prog: () => [R.drill.R.brakeD != null, R.X.trailT >= 0.24 && R.X.hardTurnT < 0.35, R.X.lastBrkD != null && R.drill.R.passApexT != null && R.X.lastBrkD <= P.dA + 2, !!R.drill.R.apex],
       result() {
         const { res, by } = R.rows();
         const X = R.X;
         const rows = [by.brake];
-        if (X.trailT >= 0.3 && X.hardTurnT < 0.35) rows.push(row('trail', 'ok', '꺾으며 살짝 남기기', `좋아요! ${t1(X.trailT)}초 동안 브레이크를 남기며 꺾었어요`));
-        else if (X.hardTurnT >= 0.35) rows.push(row('trail', 'meh', '꺾으며 살짝 남기기', '꺾으면서 너무 세게 밟았어요 → 앞이 밀려요. 꺾을 땐 살짝만'));
-        else if (X.trailT >= 0.1) rows.push(row('trail', 'meh', '꺾으며 살짝 남기기', `남긴 시간이 짧아요 (${t1(X.trailT)}초). 핸들을 돌리기 시작할 때까지 살짝 더`));
-        else rows.push(row('trail', 'bad', '꺾으며 살짝 남기기', `꺾기 전에 브레이크를 다 뗐어요. 꺾기 시작할 때 ${ctx.kbd('brake')}를 조금 남겨요`));
+        // 약 0.1초씩 두 번 누르면 페달 상승·하강을 합쳐 약 0.28~0.3초. 프레임 오차를 허용해 0.24초부터 ✓.
+        if (X.trailT >= 0.24 && X.hardTurnT < 0.35) rows.push(row('trail', 'ok', '꺾으며 브레이크 톡톡', `좋아요! 꺾으며 브레이크를 짧게 썼어요 (합계 ${t1(X.trailT)}초)`));
+        else if (X.hardTurnT >= 0.35) rows.push(row('trail', 'meh', '꺾으며 브레이크 톡톡', `꺾으면서 너무 세게 밟았어요 → 앞이 밀려요. ${ctx.kbd('brake')}를 꾹 누르지 말고 짧게 눌렀다 떼요`));
+        else if (X.trailT >= 0.1) rows.push(row('trail', 'meh', '꺾으며 브레이크 톡톡', `짧게 쓴 시간이 부족해요 (합계 ${t1(X.trailT)}초). 꺾기 시작할 때 ${ctx.kbd('brake')}를 짧게 한두 번 더 눌러요`));
+        else rows.push(row('trail', 'bad', '꺾으며 브레이크 톡톡', `꺾으며 브레이크를 쓴 시간이 부족해요. 꺾기 시작할 때 ${ctx.kbd('brake')}를 약 0.1초씩 톡톡 눌러요`));
         const passed = R.drill.R.passApexT != null;
         if (!passed) rows.push(row('release', 'bad', '에이펙스 전에 떼기', '에이펙스까지 못 갔어요'));
         else if (X.lastBrkD != null && X.lastBrkD > P.dA + 2) rows.push(row('release', 'bad', '에이펙스 전에 떼기', '에이펙스를 지나서도 밟았어요. 안쪽 연석에 닿기 전엔 다 떼요'));
@@ -405,7 +410,7 @@ RUN.lift = {
     <p>브레이크까지는 필요 없는 <b>빠른 코너</b>에서는 ${ctx.kbd('throttle')}를 <b>잠깐 떼기만</b> 해도 차 머리가 안쪽으로 조여져요. 라인 밖으로 나갈 것 같을 때 W를 톡 떼는 그 느낌이 바로 이 기술이에요!</p>
     ${steps([['①', `코너 앞에서 ${ctx.kbd('throttle')} 톡 떼기`], ['②', `${ctx.kbd(c.side > 0 ? 'right' : 'left')} 꺾기 (브레이크 없이)`], ['③', '머리가 안쪽으로 들어오면'], ['④', `다시 ${ctx.kbd('throttle')} 꾹`]])}
     ${why(`W를 떼면 무게가 <b>앞으로</b> 쏠려 앞바퀴가 눌리고 <b>더 잘 돌아요</b>. 밟고 있으면 앞이 들려서 덜 돌아요. 오래 꾹 밟다가 코너 한가운데서 <b>확</b> 떼면 뒤가 가벼워져 <b>꼬리가 살짝</b> 돌아요(리프트오프). ${drvTxt(ctx)}`)}
-    <p class="tut-tip">💡 W를 <b>자주</b> 떼야 한다면 = 코너에 너무 빨리 들어간 거예요. 그땐 조금 일찍 살짝 브레이크가 더 빨라요.</p>`,
+    <p class="tut-tip">💡 W를 <b>자주</b> 떼야 한다면 = 코너에 너무 빨리 들어간 거예요. 그땐 코너 앞에서 브레이크 키를 짧게 톡 누르는 게 더 빨라요.</p>`,
   plan: (ctx, c) => {
     const P = cornerPlan(ctx.game, c, runUp(ctx, c));
     P.driver = () => lineDriver(ctx.game, { look: 0.14 }); // 아주 빠른 스위퍼: 멀리 보면 안쪽을 깎아 잔디로 (0.2 → 동, 0.12~0.14 → 은)
@@ -566,7 +571,7 @@ RUN.chain = {
         ? { straight: [`${T} 꾹`, ''], c1: [`${ctx.cname(a)} · ${P.brakeKind === 'brake' ? B : P.brakeKind === 'lift' ? '톡 떼기' : '그대로'}`, ''], apex1: ['에이펙스 → 탈출', ''], link: [a.side === b.side ? '밖으로 너무 나가지 않기' : `${out2}에 자리 잡기`, ''], apex2: [`${ctx.cname(b)} 에이펙스`, ''], gas: [`${T} 꾹!`, ''] }[id]
         : {
             straight: [`두 코너를 한 번에!`, `${ctx.cname(a)} 다음 바로 ${ctx.cname(b)}`],
-            c1: [`${ctx.cname(a)}: ${P.brakeKind === 'brake' ? `${B}로 차분하게` : P.brakeKind === 'lift' ? `${T}를 살짝 떼고 (브레이크 없이)` : `브레이크 없이 그대로`}`, '첫 코너는 욕심내지 않기'],
+            c1: [`${ctx.cname(a)}: ${P.brakeKind === 'brake' ? `${B}로 차분하게` : P.brakeKind === 'lift' ? `${T}를 잠깐 떼고 (톡, 브레이크 없이)` : `브레이크 없이 그대로`}`, '첫 코너는 욕심내지 않기'],
             apex1: ['에이펙스 → 깔끔한 탈출', '여기서 밀리면 다음 코너도 늦어져요'],
             link: [a.side === b.side ? '바깥 끝까지 나가지 말고' : `다음 코너 바깥(${out2})으로`, `${ctx.cname(b)}에 들어갈 자리를 만들어요`],
             apex2: [`${ctx.cname(b)} 에이펙스`, '안쪽 연석을 스쳐요'],

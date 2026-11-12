@@ -139,7 +139,7 @@ export function cornerPlan(game, c, before = 330) {
   };
   const bEnd = dB + Math.max(8, 0.3 * (dA - dB));
   const gEnd = dA + Math.max(28, 0.6 * (dX - dA));
-  // 이 차로 이 코너에 브레이크가 정말 필요한가 (brakeNeed.js): 'brake' | 'lift' (W만 살짝 떼기) | 'flat' (그대로)
+  // 이 차로 이 코너에 브레이크가 정말 필요한가 (brakeNeed.js): 'brake' | 'lift' (W 잠깐 떼기(톡)) | 'flat' (그대로)
   //   (사용자 요청 2026-11-13 "브레이크 안 밟고 가는 게 빠른 구간에서 브레이크를 밟으라고 함")
   P.need = needOf(car, tr, c);
   P.brakeKind = P.need ? P.need.kind : 'brake';
@@ -183,16 +183,16 @@ export function momentText(P, id, coach = false) {
       return {
         straight: [`${T} 꾹 · 바깥(${P.outName})으로`, ''],
         approach: lift ? ['곧 코너…', '브레이크는 필요 없어요'] : ['곧 코너…', '그대로 밟고 가요'],
-        brake: lift ? [`${T}만 살짝 떼기`, `${B}는 안 밟아요`] : ['그대로 꾹!', `${B} 없이`],
-        turn: [`${S} 꺾기`, lift ? `${T}는 살짝만` : ''],
+        brake: lift ? [`${T} 잠깐 떼기(톡)`, `${B}는 안 밟아요`] : ['그대로 꾹!', `${B} 없이`],
+        turn: [`${S} 꺾기`, lift ? `${T} 잠깐 떼기(톡)` : ''],
         apex: ['안쪽에 붙기', `${P.inName} 연석`],
         gas: [`${T} 꾹!`, '핸들을 풀면서'],
         out: ['바깥으로 넓게', ''],
       }[id];
     return {
       straight: [`직선에서는 ${T} 끝까지 꾹!`, `코너 <b>바깥쪽(${P.outName})</b>에 붙어서 달려요 ${O}`],
-      approach: lift ? ['곧 코너!', `이 코너는 <b>브레이크 없이</b> ${T}만 살짝 떼면 충분해요`] : ['곧 코너!', `이 코너는 <b>브레이크 없이 그대로</b> 지나가요`],
-      brake: lift ? [`${T}만 살짝 떼기 — 브레이크 없이`, '브레이크를 밟으면 오히려 느려져요'] : ['브레이크 없이 그대로!', `이 차는 ${T}를 밟은 채로 돌 수 있어요`],
+      approach: lift ? ['곧 코너!', `이 코너는 <b>브레이크 없이</b> ${T}만 잠깐 떼면 돼요(톡)`] : ['곧 코너!', `이 코너는 <b>브레이크 없이 그대로</b> 지나가요`],
+      brake: lift ? [`${T} 잠깐 떼기(톡) — 브레이크 없이`, '브레이크를 밟으면 오히려 느려져요'] : ['브레이크 없이 그대로!', `이 차는 ${T}를 밟은 채로 돌 수 있어요`],
       turn: [`핸들 꺾기 ${S}`, `${P.inName}으로 부드럽게`],
       apex: ['에이펙스 — 안쪽에 붙기', `${P.inName} 연석(빨강·흰 줄)을 스쳐요`],
       gas: [`에이펙스를 지나면 가속 ${T}`, '핸들을 풀면서 끝까지 꾹'],
@@ -469,7 +469,7 @@ export function createDrill(game, P) {
         const title = lift ? `${keyCap('throttle').main}만 떼기 (브레이크 없이)` : '브레이크 없이 그대로';
         if (R.offT > 0.4) rows.push({ id: 'brake', ok: 'bad', title, text: `너무 빨리 들어가서 도로 밖으로 나갔어요. ${kbd('throttle')}를 조금 더 일찍 떼요` });
         else if (R.brakeD == null) rows.push({ id: 'brake', ok: 'ok', title, text: lift ? `좋아요! 브레이크 없이 ${kbd('throttle')}만 떼고 지나갔어요` : '좋아요! 브레이크 없이 그대로 지나갔어요' });
-        else rows.push({ id: 'brake', ok: 'meh', title, text: lift ? `여기선 브레이크가 필요 없어요 (밟으면 느려져요). ${kbd('throttle')}만 살짝 떼면 충분해요` : '여기선 브레이크가 필요 없어요 (밟으면 느려져요). 그대로 밟고 돌아요' });
+        else rows.push({ id: 'brake', ok: 'meh', title, text: lift ? `여기선 브레이크가 필요 없어요 (밟으면 느려져요). ${kbd('throttle')}만 잠깐 떼면 돼요(톡)` : '여기선 브레이크가 필요 없어요 (밟으면 느려져요). 그대로 밟고 돌아요' });
       } else {
         const title = '브레이크 시점';
         if (R.brakeD == null) {
@@ -496,7 +496,7 @@ export function createDrill(game, P) {
         if (R.apex) rows.push({ id: 'apex', ok: 'ok', title, text: R.apex === 'apexPerfect' ? '완벽한 에이펙스!' : '에이펙스 성공!' });
         else if (R.apexBest === -Infinity) rows.push({ id: 'apex', ok: 'bad', title, text: '에이펙스까지 못 갔어요' });
         else if (R.apexBest < need) rows.push({ id: 'apex', ok: R.apexBest > need - 1.5 ? 'meh' : 'bad', title, text: `안쪽 연석까지 ${(need - R.apexBest).toFixed(1)} m 모자라요. 더 ${P.inName}으로 붙어요` });
-        else rows.push({ id: 'apex', ok: 'meh', title, text: '안쪽은 좋았는데 너무 느렸어요. 브레이크를 조금 덜' });
+        else rows.push({ id: 'apex', ok: 'meh', title, text: '안쪽은 좋았는데 너무 느렸어요. 브레이크 키를 더 일찍 떼요' });
       }
       // 4) 탈출 가속
       {
@@ -510,7 +510,7 @@ export function createDrill(game, P) {
           if (c.noBrake === false) why = '에이펙스 뒤에 브레이크를 밟았어요';
           else if (c.thrAvg != null && c.thrAvg < (ck.exitThrottle ?? 0.75)) why = `에이펙스를 지나면 ${kbd('throttle')}를 더 일찍, 꾹`;
           else if (c.latErr != null && c.latErr > (ck.exitTol ?? 2.5)) why = '바깥쪽까지 넓게 나가요 (라인을 따라)';
-          else if (c.ratio != null && c.ratio < (ck.exitSpeedRatio ?? 0.8)) why = '너무 느려요. 브레이크를 조금 덜';
+          else if (c.ratio != null && c.ratio < (ck.exitSpeedRatio ?? 0.8)) why = '너무 느려요. 브레이크 키를 더 일찍 떼요';
           rows.push({ id: 'gas', ok: c.thrAvg >= 0.6 && c.noBrake ? 'meh' : 'bad', title, text: why + dl });
         }
       }

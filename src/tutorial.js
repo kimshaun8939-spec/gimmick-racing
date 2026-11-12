@@ -740,7 +740,7 @@ export function startTutorial(game) {
     if (c.noBrake === false) return '에이펙스 뒤에 브레이크를 밟았어요';
     if (c.thrAvg != null && c.thrAvg < (k.exitThrottle ?? 0.75)) return '탈출에서 액셀을 더 일찍, 꾹 밟아요';
     if (c.latErr != null && c.latErr > (k.exitTol ?? 2.5)) return '바깥쪽까지 넓게 나가요 (라인을 따라)';
-    if (c.ratio != null && c.ratio < (k.exitSpeedRatio ?? 0.8)) return '너무 느려요. 브레이크를 조금 덜';
+    if (c.ratio != null && c.ratio < (k.exitSpeedRatio ?? 0.8)) return '너무 느려요. 브레이크 키를 더 일찍 떼요';
     return '잔디에 닿았어요';
   }
 
