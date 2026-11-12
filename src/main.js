@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { buildTrack } from './track.js';
 import { Car } from './car.js';
 import { createCarModel } from './carModel.js';
+import { initCarLighting } from './carLighting.js';
 import { createKeyboardInput, emptyControls } from './input.js';
 import { createHud } from './hud.js';
 import { buildScenery } from './scenery.js';
@@ -125,6 +126,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+initCarLighting(renderer, mapName); // 자동차 전용 반사. 풍경·광원·도시의 야경 반사는 그대로 둔다.
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#cfe7fb'); // 하늘은 scenery.js의 하늘 돔이 그림

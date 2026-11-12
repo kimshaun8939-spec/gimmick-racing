@@ -36,6 +36,8 @@
 //     빠르게 날면(16~60m/s) 날개 끝에서 비행운이 길게 뻗음. 기울기와 기수 각도는 물리가 정한 방향(car.up/fwd)을 그대로 따름
 //   배 모드가 아닌데 물에 빠지면(car.sink 0~1) 차가 기수를 숙이며 물속으로 가라앉음
 import * as THREE from 'three';
+import { buildWheel } from './carWheels.js';
+import { applyCarLighting } from './carLighting.js';
 import { buildF1 } from './carBody_f1.js';
 import { buildGT } from './carBody_gt.js';
 import { buildRally } from './carBody_rally.js';
@@ -356,25 +358,26 @@ export function createCarModel(lookOrColor = '#e8463a') {
   // 가속 모드 차체 빛: 어두운 차체(파랑 등)는 주황빛이 너무 세게 보이므로 밝기에 맞춰 줄임 (빨간 F1 = 1)
   const glowK = Math.min(1, Math.max(0.35, baseColor.getHSL({}).l / 0.56));
   const armorColor = new THREE.Color('#3a3f4a');
-  const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.28, metalness: 0.45, emissive: '#000000' });
-  const accent = new THREE.MeshStandardMaterial({ color: look.accent, roughness: 0.3, metalness: 0.3 });
+  const paint = new THREE.MeshPhysicalMaterial({ color, roughness: 0.31, metalness: 0.24, clearcoat: 0.85, clearcoatRoughness: 0.22, emissive: '#000000' });
+  const accent = new THREE.MeshStandardMaterial({ color: look.accent, roughness: 0.36, metalness: 0.12 });
   const trim = new THREE.MeshStandardMaterial({ color: look.trim, roughness: 0.35, metalness: 0.55 });
-  const carbon = new THREE.MeshStandardMaterial({ color: '#16181d', roughness: 0.55, metalness: 0.4 });
+  const carbon = new THREE.MeshStandardMaterial({ color: '#20242b', roughness: 0.64, metalness: 0.12 });
   const dark = new THREE.MeshStandardMaterial({ color: '#0b0c0f', roughness: 0.9 });
   const rubber = new THREE.MeshStandardMaterial({ color: '#1a1b1f', roughness: 0.85 });
-  const metal = new THREE.MeshStandardMaterial({ color: '#4a505c', roughness: 0.35, metalness: 0.85 });
+  const metal = new THREE.MeshStandardMaterial({ color: '#a1a9b4', roughness: 0.38, metalness: 0.82 });
   const glowGreen = new THREE.MeshStandardMaterial({ color: '#d9ffd0', emissive: '#7dff6a', emissiveIntensity: 1.2, roughness: 0.3 });
   const darkMetal = new THREE.MeshStandardMaterial({ color: '#2b2f37', roughness: 0.3, metalness: 0.9, side: THREE.DoubleSide });
-  const glass = new THREE.MeshStandardMaterial({ color: '#1a2431', roughness: 0.06, metalness: 0.75, transparent: true, opacity: 0.8 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: '#233d50', roughness: 0.16, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.1, transparent: true, opacity: 0.91, depthWrite: false });
   const lamp = new THREE.MeshStandardMaterial({ color: '#fffaf0', emissive: '#fff1c8', emissiveIntensity: 1.4, roughness: 0.2 });
   const lampYellow = new THREE.MeshStandardMaterial({ color: '#fff3b0', emissive: '#ffd84a', emissiveIntensity: 1.5, roughness: 0.2 });
   const glowTrim = new THREE.MeshBasicMaterial({ color: new THREE.Color(look.trim).lerp(new THREE.Color('#ffffff'), 0.35) });
   const helmetMat = new THREE.MeshStandardMaterial({ color: look.helmet, roughness: 0.25, metalness: 0.2 });
-  const rimMat = new THREE.MeshStandardMaterial({ color: look.rim, metalness: 0.8, roughness: 0.35 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(look.rim).lerp(new THREE.Color('#aab2bd'), 0.16), metalness: 0.76, roughness: 0.3 });
   const tailMat = new THREE.MeshStandardMaterial({ color: '#ff2a2a', emissive: '#ff1a1a', emissiveIntensity: 1.2 });
   const numTex = numberTexture(String(look.number ?? '7'), look.numberBg || '#f3f4f6', look.numberFg || '#14161b');
   const numMat = new THREE.MeshStandardMaterial({ map: numTex, roughness: 0.4 });
   const M = { paint, accent, trim, carbon, dark, rubber, metal, darkMetal, glowGreen, glass, lamp, lampYellow, glowTrim, helmetMat, rimMat, tailMat, numMat };
+  applyCarLighting(M);
   // 달리는 동안 값이 바뀌는 재질 (차체 빛·브레이크등·초록 빛) → 묶어 그리기에서 다른 재질과 섞지 않음 (staticBatch.js batchLocal, 렉 줄이기 2)
   for (const m of [paint, glowGreen, tailMat]) m.userData.live = true;
 
@@ -402,7 +405,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   wingShape.lineTo(3.25, -0.4);
   wingShape.lineTo(3.25, -0.75);
   wingShape.lineTo(0, -1.1);
-  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.06, bevelEnabled: false }).rotateX(Math.PI / 2);
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.045, bevelEnabled: true, bevelSize: 0.016, bevelThickness: 0.012, bevelSegments: 2, steps: 1 }).rotateX(Math.PI / 2);
   // 날개 윗면 무늬: 앞전과 나란한 흰 줄, 뒷전을 따라 카본 플랩 (윗면 y=0 바로 위에 얇게)
   const band = (pts, y) => {
     const sh = new THREE.Shape();
@@ -591,10 +594,10 @@ export function createCarModel(lookOrColor = '#e8463a') {
   root.add(underglow);
 
   // ------------------------------------------------------------------ 배 모드 부품 (평소엔 숨어 있음)
-  // 선체: 모노코크보다 넓은 욕조 모양, 앞은 뾰족하게 들린 뱃머리. 위는 흰색, 아래는 빨간색, 가장자리에 파란 줄
-  const hullWhite = new THREE.MeshStandardMaterial({ color: '#f4f6f8', roughness: 0.35, metalness: 0.1 });
-  const hullRed = new THREE.MeshStandardMaterial({ color: '#d8322a', roughness: 0.45, metalness: 0.1 });
-  const hullBlue = new THREE.MeshStandardMaterial({ color: '#1f6fd1', roughness: 0.4, metalness: 0.2 });
+  // 차체 도장·카본 하부·원래 포인트 색을 이어받는 수륙양용 하부 패널.
+  const hullWhite = paint;
+  const hullRed = carbon;
+  const hullBlue = accent;
   const HULL = [
     { z: 3.02, w: 0.03, h: 0.05, y: 0.3 },
     { z: 2.75, w: 0.3, h: 0.13, y: 0.23 },
@@ -725,7 +728,6 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   // ------------------------------------------------------------------ 바퀴 + 서스펜션
   const WHEELS = A.wheels; // [x, z, 앞바퀴?, 반지름, 타이어 폭, 서스펜션 안쪽 x]
-  const wallMat = look.wall ? new THREE.MeshStandardMaterial({ color: look.wall, roughness: 0.6 }) : null;
   // 위·아래 위시본 (A자 모양 막대 2쌍). 길이 1 기준으로 만들고 바퀴 위치에 맞춰 늘림
   const wishboneGeo = (() => {
     const parts = [];
@@ -743,19 +745,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
     root.add(steer);
     const spin = new THREE.Group();
     steer.add(spin);
-    add(new THREE.CylinderGeometry(r, r, wd, 22).rotateZ(Math.PI / 2), rubber, 0, 0, 0, spin);
+    buildWheel(add, spin, steer, M, look, r, wd, side);
     // 오프로드 타이어: 둘레에 울퉁불퉁한 돌기
     if (look.tire === 'knobby') add(knobGeometry(r, wd), rubber, 0, 0, 0, spin);
-    // 타이어 옆면 색 띠 + 휠
-    if (wallMat)
-      for (const s of [-1, 1]) {
-        add(new THREE.TorusGeometry(r * 0.8, 0.018, 4, 26).rotateY(Math.PI / 2), wallMat, s * (wd / 2 + 0.002), 0, 0, spin).castShadow = false;
-      }
-    add(new THREE.CylinderGeometry(r * 0.62, r * 0.62, wd + 0.01, 16).rotateZ(Math.PI / 2), rimMat, 0, 0, 0, spin);
-    const cover = add(new THREE.CylinderGeometry(r * 0.5, r * 0.5, wd + 0.02, 10).rotateZ(Math.PI / 2), carbon, 0, 0, 0, spin);
-    cover.castShadow = false;
-    // 회전이 보이도록 바퀴 커버에 흰 표시
-    add(new THREE.BoxGeometry(wd + 0.03, r * 0.12, r * 0.6), accent, 0, r * 0.3, 0, spin).castShadow = false;
     // 평소 서스펜션 (검은 막대)
     const susp = new THREE.Mesh(wishboneGeo, carbon);
     susp.position.set(side * inner, r, z);
@@ -896,6 +888,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   /** 비행 모드 진행도 p에 맞춰 부품 배치. air: 0=땅(날개 살짝 들림), 1=비행 중 */
   function poseFly(p, air) {
+    if (shell.poseFly) shell.poseFly(p);
     const sWing = easeOutBack(stage(p, 0.0, 0.55)); // 날개 펼침
     const sTail = easeOutBack(stage(p, 0.25, 0.7)); // 수평 꼬리날개
     const sFin = easeOutBack(stage(p, 0.35, 0.8)); // 수직 꼬리날개
@@ -1177,8 +1170,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
       // 가속 모드는 차체에 주황빛이 맥박처럼, 비행 모드는 하늘색이 은은하게 (부스터는 초록 부품이 빛나므로 차체 색은 유지)
       if (accelP > 0) paint.emissive.copy(MODE_COLORS.accel).multiplyScalar(accelP * (0.05 + 0.03 * Math.sin(time * 10)) * glowK);
       else paint.emissive.setRGB(0, 0, 0);
-      // 브레이크등 (밟으면 밝게), 아니면 비상등 깜빡임
-      tailMat.emissiveIntensity = car.brk > 0.05 ? 3.2 : Math.sin(time * 12) > 0 ? 1.2 : 0.3;
+      // 평소에는 은은한 후미등, 브레이크를 밟으면 밝아진다.
+      tailMat.emissiveIntensity = car.brk > 0.05 ? 2.6 : 0.65;
 
       // 변신 순간 효과
       if (fxT < 1) {

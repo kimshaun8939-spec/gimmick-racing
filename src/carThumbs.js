@@ -32,7 +32,7 @@ let srcHashPromise = null;
 function modelSrcHash() {
   if (!srcHashPromise) {
     // carModel.js + 차체 파일들(carBody_*.js) 내용을 모두 합쳐서 해시
-    const FILES = ['carModel', ...['f1', 'gt', 'rally', 'proto', 'rocket', 'buggy', 'hatch', 'muscle', 'hyper', 'kart', 'roadster', 'truck', 'ev', 'wedge', 'van'].map((x) => 'carBody_' + x)];
+    const FILES = ['carModel', 'carWheels', 'carLighting', ...['f1', 'gt', 'rally', 'proto', 'rocket', 'buggy', 'hatch', 'muscle', 'hyper', 'kart', 'roadster', 'truck', 'ev', 'wedge', 'van'].map((x) => 'carBody_' + x)];
     srcHashPromise = Promise.all(FILES.map((f) => fetch(new URL(`./${f}.js`, import.meta.url)).then((r) => (r.ok ? r.text() : ''))))
       .then((a) => a.join('|'))
       .then((t) => (t ? hash(t) + t.length.toString(36) : 'x'))
