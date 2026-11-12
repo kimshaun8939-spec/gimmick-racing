@@ -4,6 +4,7 @@
 //   - 레벨은 profile.js (완주하면 XP). 잠금은 홈 화면 차 고르기에서만 막음 (게임 주소 ?car= 는 안 막음, 봇은 잠긴 차도 탐)
 //   약속(다른 파일이 쓰는 이름): isCarUnlocked(carId) → true/false, carUnlockLevel(carId) → 필요한 레벨 (없으면 0)
 import { profile } from './profile.js';
+import { academy, licenseMeta } from './academyStore.js'; // 드라이빙 아카데미 라이선스 색 (2026-11-12)
 
 const PAINT_KEY = 'gimmick.paint';
 const SEEN_KEY = 'gimmick.seenLevel';
@@ -21,6 +22,11 @@ export const PAINTS = [
   { id: 8, name: '네온 라임', level: 12, body: '#b6ff2e', accent: '#14161b', trim: '#a04bff', nb: '#14161b', nf: '#b6ff2e' },
   { id: 9, name: '황금', level: 15, body: '#e8b931', accent: '#15161a', trim: '#ffffff', nb: '#15161a', nf: '#e8b931' },
   { id: 10, name: '은하 보라', level: 18, body: '#6a35d9', accent: '#35e0ff', trim: '#ffb21a', nb: '#35e0ff', nf: '#2a1466' },
+  // 라이선스 색 (드라이빙 아카데미 시험에 붙으면 열림, 레벨과 상관없음). license = 'C' | 'B' | 'A' | 'S'
+  { id: 11, name: '아카데미 하늘', level: 0, license: 'C', body: '#3fb4ff', accent: '#0d1830', trim: '#ffffff', nb: '#0d1830', nf: '#7fd1ff' },
+  { id: 12, name: '서킷 민트', level: 0, license: 'B', body: '#20d39a', accent: '#0f1a17', trim: '#f4f8f6', nb: '#0f1a17', nf: '#7dff9a' },
+  { id: 13, name: '레이스 오렌지', level: 0, license: 'A', body: '#ff8a1f', accent: '#1a1410', trim: '#2a6bff', nb: '#1a1410', nf: '#ffb84a' },
+  { id: 14, name: '마스터 크롬 핑크', level: 0, license: 'S', body: '#f2f3f7', accent: '#ff3fb4', trim: '#16171c', nb: '#16171c', nf: '#ff7ad8' },
 ];
 
 // 차마다 필요한 레벨 (cars.json에서 읽음). 못 읽으면 모두 열림
@@ -51,7 +57,16 @@ export const carUnlockLevel = (carId) => carLevels[carId] || 0;
 export const isCarUnlocked = (carId) => currentLevel() >= carUnlockLevel(carId);
 
 export const paintOf = (id) => PAINTS.find((p) => p.id === Number(id)) || PAINTS[0];
-export const isPaintUnlocked = (id) => currentLevel() >= paintOf(id).level;
+export const isPaintUnlocked = (id) => {
+  const p = paintOf(id);
+  if (p.license) return academy.hasLicense(p.license);
+  return currentLevel() >= p.level;
+};
+/** 잠긴 색 안내 글자 ('Lv.5' / 'C 라이선스') */
+export const paintLockText = (id) => {
+  const p = paintOf(id);
+  return p.license ? `${(licenseMeta(p.license) || {}).name || p.license + ' 라이선스'}` : `Lv.${p.level}`;
+};
 function readPaints() {
   try {
     const j = JSON.parse(localStorage.getItem(PAINT_KEY) || '{}');
@@ -88,12 +103,12 @@ export function unlockedBetween(from, to) {
     .filter((id) => carLevels[id] > from && carLevels[id] <= to)
     .sort((a, b) => carLevels[a] - carLevels[b])
     .map((id) => carNames[id]);
-  const paints = PAINTS.filter((p) => p.level > from && p.level <= to).map((p) => p.name);
+  const paints = PAINTS.filter((p) => !p.license && p.level > from && p.level <= to).map((p) => p.name);
   return { cars, paints };
 }
 /** 다음에 열리는 것 (없으면 null) { level, text } */
 export function nextUnlock(level = currentLevel()) {
-  const lv = [...Object.values(carLevels), ...PAINTS.map((p) => p.level)].filter((v) => v > level).sort((a, b) => a - b)[0];
+  const lv = [...Object.values(carLevels), ...PAINTS.filter((p) => !p.license).map((p) => p.level)].filter((v) => v > level).sort((a, b) => a - b)[0];
   if (!lv) return null;
   const u = unlockedBetween(lv - 1, lv);
   const names = [...u.cars.map((n) => `🚗 ${n}`), ...u.paints.map((n) => `🎨 ${n}`)];

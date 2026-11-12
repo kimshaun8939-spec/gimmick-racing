@@ -44,7 +44,15 @@ export function lineDriver(game, o = {}) {
     const i0 = (car.trackInfo ? car.trackInfo.index : tr.nearest(car.pos).index) % N;
     const v = Math.max(8, Math.abs(car.speed));
     const j = (i0 + Math.round((6 + v * (o.look ?? 0.12)) / ds)) % N;
-    let dx = L.x[j] - car.pos.x, dz = L.z[j] - car.pos.z;
+    let tx = L.x[j], tz = L.z[j];
+    // 아카데미(슬립스트림): 라인에서 옆으로 o.offset m (함수면 매 프레임 물어봄, + = 오른쪽)
+    const off = typeof o.offset === 'function' ? o.offset() : o.offset || 0;
+    if (off) {
+      const sm = tr.sampleAt(j / N);
+      tx += sm.right.x * off;
+      tz += sm.right.z * off;
+    }
+    let dx = tx - car.pos.x, dz = tz - car.pos.z;
     const l = Math.hypot(dx, dz) || 1;
     dx /= l;
     dz /= l;
@@ -54,7 +62,7 @@ export function lineDriver(game, o = {}) {
     const ff = (-L.curvature[jf] * v * v) / (o.lat || 24);
     c.steer = clamp(ff + (o.fb ?? 3) * Math.atan2(cross, dot), -1, 1);
     const lead = (i0 + Math.round((v * 0.25) / ds)) % N;
-    const target = prof.speed[lead];
+    const target = prof.speed[lead] * (o.speedMul || 1);
     if (car.speed > target + 0.4) (c.throttle = 0), (c.brake = Math.min(1, (car.speed - target) / 3));
     return c;
   };
@@ -89,14 +97,16 @@ export function cornerPlan(game, c, before = 330) {
   };
   const bEnd = dB + Math.max(8, 0.3 * (dA - dB));
   const gEnd = dA + Math.max(28, 0.6 * (dX - dA));
-  // 순간들: [시작 m, 끝 m) · 시범 슬로 모션 배수 · 큰 글자
+  // 순간들: [시작 m, 끝 m) · 큰 글자. 시범은 진짜 속도(1배)로 달리고,
+  // 놓치면 안 되는 순간(브레이크 시작·에이펙스→가속)에만 실제 시간 약 1.4초 짧게 느려짐 (pulse)
+  // (사용자 요청 2026-11-12 "전부 슬로 말고 놓치면 안 되는 부분만", 예전엔 진입 110 m 전부터 탈출까지 0.18~0.6배)
   P.moments = [
     { id: 'straight', a: -1e9, b: dB - 110, ts: 1, chip: '직선' },
-    { id: 'approach', a: dB - 110, b: dB - 0.3 * vB, ts: 0.6, chip: '직선' },
-    { id: 'brake', a: dB - 0.3 * vB, b: bEnd, ts: 0.3, freeze: 0.1, chip: '브레이크' },
-    { id: 'turn', a: bEnd, b: dA - 10, ts: 0.3, chip: '핸들' },
-    { id: 'apex', a: dA - 10, b: dA + 6, ts: 0.18, chip: '에이펙스' },
-    { id: 'gas', a: dA + 6, b: gEnd, ts: 0.25, chip: '가속' },
+    { id: 'approach', a: dB - 110, b: dB - 0.3 * vB, ts: 1, chip: '직선' },
+    { id: 'brake', a: dB - 0.3 * vB, b: bEnd, ts: 1, pulse: { ts: 0.3, sec: 1.4, freeze: 0.1, freezeSec: 0.45 }, chip: '브레이크' },
+    { id: 'turn', a: bEnd, b: dA - 10, ts: 1, chip: '핸들' },
+    { id: 'apex', a: dA - 10, b: dA + 6, ts: 1, pulse: { ts: 0.3, sec: 1.4 }, chip: '에이펙스' },
+    { id: 'gas', a: dA + 6, b: gEnd, ts: 1, chip: '가속' },
     { id: 'out', a: gEnd, b: 1e9, ts: 1, chip: '탈출' },
   ];
   P.momentAt = (m) => P.moments.find((x) => m >= x.a && m < x.b) || P.moments[0];
@@ -105,6 +115,11 @@ export function cornerPlan(game, c, before = 330) {
 
 /** 순간마다 글자 (시범 = 설명, 따라 하기 = 짧은 신호) */
 export function momentText(P, id, coach = false) {
+  // 드라이빙 아카데미(academy.js)는 레슨마다 글자를 바꿈: P.texts(id, coach) → [큰 글자, 작은 글자] (없으면 아래 기본)
+  if (P.texts) {
+    const r = P.texts(id, coach);
+    if (r) return r;
+  }
   const T = kbd('throttle'), B = kbd('brake'), S = kbd(P.turnKey), O = kbd(P.outKey);
   if (coach) {
     return {
@@ -173,10 +188,11 @@ export function createCoachUI(root) {
       $('.td-badge').innerHTML = html;
     },
     /** 순간 띠: 직선 › 브레이크 › 핸들 › 에이펙스 › 가속 */
-    strip(cur) {
-      const ids = ['straight', 'brake', 'turn', 'apex', 'gas', 'out'];
-      const names = { straight: '직선', brake: '브레이크', turn: '핸들', apex: '에이펙스', gas: '가속', out: '탈출' };
-      const c = cur === 'approach' ? 'straight' : cur;
+    strip(cur, spec) {
+      // spec (아카데미 레슨마다 다른 띠): { ids: [...], names: { id: 이름 }, alias: { 순간 id: 띠 id } }
+      const ids = (spec && spec.ids) || ['straight', 'brake', 'turn', 'apex', 'gas', 'out'];
+      const names = (spec && spec.names) || { straight: '직선', brake: '브레이크', turn: '핸들', apex: '에이펙스', gas: '가속', out: '탈출' };
+      const c = (spec && spec.alias && spec.alias[cur]) || (cur === 'approach' ? 'straight' : cur);
       const ci = ids.indexOf(c);
       const h = ids.map((x, j) => `<span class="${j < ci ? 'past' : j === ci ? 'cur' : ''}">${names[x]}</span>`).join('<i>›</i>');
       if (h !== lastStrip) $('.td-strip').innerHTML = lastStrip = h;
@@ -246,8 +262,8 @@ export function createCoachUI(root) {
  */
 export function createDemo(game, P, ui, place) {
   const car = game.car;
-  let ts = 1, cur = null, freezeT = 0, age = 0, endT = 0;
-  const drive = lineDriver(game);
+  let ts = 1, cur = null, pulseT = 0, age = 0, endT = 0;
+  const drive = P.driver ? P.driver() : lineDriver(game); // 아카데미: 레슨마다 다른 운전사 (봇 운전사 등)
   let lastCtl = null;
   return {
     start() {
@@ -255,7 +271,8 @@ export function createDemo(game, P, ui, place) {
       // '지금 브레이크!' 글자가 뜨면 바로 브레이크 (예전엔 계획 지점까지 0.3초 동안 W가 켜진 채라 글자와 키가 어긋나 보였음)
       game.controlsOverride = () => {
         const c = drive();
-        if (cur && cur.id === 'brake' && car.speed > P.vMin + 1) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
+        if (P.demoCtl) P.demoCtl(c, cur, car); // 아카데미: 순간마다 조작 바꾸기 (리프트오프 = W 떼기, 트레일 = 브레이크 남기기 등)
+        else if (cur && cur.id === 'brake' && car.speed > P.vMin + 1) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
         return (lastCtl = c);
       };
       game.timeScale = ts = 1;
@@ -263,7 +280,7 @@ export function createDemo(game, P, ui, place) {
       age = 0;
       endT = 0;
       ui.show('demo');
-      ui.badge(`🎬 시범 주행 · T${P.c.num}`);
+      ui.badge(P.badge || `🎬 시범 주행 · T${P.c.num}`);
       ui.cue(null);
     },
     stop() {
@@ -280,20 +297,23 @@ export function createDemo(game, P, ui, place) {
       const mo = P.momentAt(m);
       if (!cur || mo.id !== cur.id) {
         cur = mo;
-        freezeT = mo.freeze ? 0.9 : 0; // 브레이크 순간은 처음 0.9초 거의 멈춤
+        pulseT = 0; // 이 순간에 들어온 뒤 지난 실제 시간 (pulse 슬로 모션용)
         const [t, s] = momentText(P, mo.id);
         ui.caption(t, s, mo.id);
-        ui.strip(mo.id);
+        ui.strip(mo.id, P.strip);
       }
       let want = cur.ts;
-      if (freezeT > 0) (freezeT -= dt), (want = cur.freeze);
-      ts += (want - ts) * Math.min(1, dt * (want < ts ? 10 : 5));
+      pulseT += dt;
+      const pu = cur.pulse;
+      if (pu && pulseT < pu.sec) want = pu.freeze && pulseT < pu.freezeSec ? pu.freeze : pu.ts; // 브레이크 순간은 처음 0.45초 거의 멈칫
+      ts += (want - ts) * Math.min(1, dt * (want < ts ? 9 : 4)); // 들어갈 땐 빠르게, 나올 땐 약 0.5초에 걸쳐 부드럽게 1배로
       game.timeScale = ts;
       ui.slow(ts);
       // 키 그림은 지금 누르는 키(명령) 기준: 차의 페달 값은 천천히 바뀌어서 '지금 브레이크!'에도 W가 잠깐 켜져 보였음
       ui.keys(lastCtl ? lastCtl.throttle : car.thr, lastCtl ? lastCtl.brake : car.brk, lastCtl ? lastCtl.steer : car.steerIn, dt, 0.2); // 깜빡임 방지 시간은 실제 시간 (슬로 모션 0.1×에서 W가 1.5초 남아 있었음)
       ui.pedals(car.thr, car.brk, car.speed, car.lineSpeed(idx));
-      if (m > P.end) {
+      if (P.done ? P.done(m, dt) : m > P.end) {
+        // 아카데미: P.done(m, dt)로 끝 조건을 바꿀 수 있음 (비행 = 착륙 뒤 등)
         endT += dt;
         if (endT > 0.6) return 'done';
       }

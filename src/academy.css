@@ -1,0 +1,215 @@
+/* 드라이빙 아카데미 (2026-11-12): 홈 화면 '🎓 드라이빙 아카데미'(?menu=academy) + 게임 속 레슨 카드·성적표·라이선스 (src/academy.js)
+   홈 디자인 가족(menu.css hx-* · --sf-* · --r-* 변수)을 그대로 씀. 게임 속 카드는 튜토리얼 틀(#tutorial .tut-*)에 덧붙임 */
+
+/* ------------------------------------------------------------------ 홈: 메인 타일 4개 · 드라이버 배지 · 순위표 배지 */
+#home .hx-grid.hx-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 560px) { #home .hx-grid.hx-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#home .hx-aclic:empty { display: none; }
+#home .hx-aclic { display: grid; place-items: center; margin-left: -4px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)); }
+.ac-lic { display: inline-grid; place-items: center; vertical-align: -3px; margin: 0 2px 0 5px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55)); }
+
+/* ------------------------------------------------------------------ 홈: 아카데미 화면 */
+#home .h-view[data-view="academy"] .ax { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.ax-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ax-title { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px; }
+.ax-title .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 26px; flex-shrink: 0;
+  background: conic-gradient(from 210deg, #ffcf3f88, #ff9a2e88, #c79bff88, #5fd0ff88, #ffcf3f88); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 8px 22px rgba(0, 0, 0, 0.4); }
+.ax-title b { display: block; font-family: var(--gm-title); font-weight: 400; font-style: italic; font-size: 30px; line-height: 1.05; letter-spacing: 0.01em; }
+.ax-title small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--gm-dim); font-weight: 700; }
+.ax-sum { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ax-sum > span { display: inline-flex; align-items: center; gap: 4px; padding: 6px 11px; border-radius: 999px; background: var(--sf-2, rgba(255, 255, 255, 0.06)); border: 1px solid var(--sf-line, rgba(255, 255, 255, 0.09)); font-size: 13px; font-weight: 800; }
+.ax-sum > span b { font-size: 15px; }
+.ax-sum .n { color: var(--gm-dim); }
+.ax-sum .lic { padding: 2px 6px; }
+.ax-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; }
+.ax-lessons, .ax-side { min-height: 0; overflow: auto; padding: 12px 14px 14px; scrollbar-width: thin; }
+.ax-group + .ax-group { margin-top: 14px; }
+.ax-group h3 { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 12.5px; letter-spacing: 0.08em; color: var(--gm-accent); font-weight: 900; }
+.ax-group h3 span { font-size: 15px; }
+.ax-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 10px; }
+
+#home .gm-btn.ax-card { --mc: rgba(255, 255, 255, 0.16); position: relative; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 8px; padding: 7px 7px 10px; text-align: left; white-space: normal; border-radius: var(--r-lg, 16px); overflow: hidden;
+  transition: transform 0.18s var(--ease, ease), border-color 0.18s, box-shadow 0.18s; }
+#home .gm-btn.ax-card:hover, #home .gm-btn.ax-card:focus { transform: translateY(-2px); border-color: var(--gm-accent); box-shadow: 0 0 0 1px var(--gm-accent), 0 12px 26px rgba(0, 0, 0, 0.45); }
+#home .ax-card.m1 { --mc: #d9935a; } #home .ax-card.m2 { --mc: #cfd8e3; } #home .ax-card.m3 { --mc: #ffd24a; }
+#home .ax-card.m1, #home .ax-card.m2, #home .ax-card.m3 { border-color: color-mix(in srgb, var(--mc) 55%, transparent); background: linear-gradient(120deg, color-mix(in srgb, var(--mc) 16%, transparent), transparent 60%), var(--sf-2, rgba(22, 30, 54, 0.75)); }
+.ax-art { display: block; width: 100%; border-radius: 11px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.ax-art svg { display: block; width: 100% !important; height: auto; max-height: none; margin: 0; border-radius: 0; }
+.ax-tx { min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 0 4px; }
+.ax-tx b { display: flex; align-items: center; gap: 5px; font-size: 14.5px; font-weight: 900; line-height: 1.2; }
+.ax-tx b i { font-style: normal; font-size: 14px; }
+.ax-tx small { font-size: 11.5px; color: #c6d0e2; font-weight: 600; line-height: 1.3; }
+.ax-tx em { font-style: normal; font-size: 10.5px; color: var(--gm-dim); font-weight: 700; margin-top: 2px; }
+.ax-medal { position: absolute; right: 12px; top: 12px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; background: rgba(8, 12, 24, 0.72); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px rgba(0, 0, 0, 0.4); }
+.ax-medal i { font-style: normal; font-size: 11px; color: #dfe6f3; }
+#home .ax-card.m3 .ax-medal { filter: drop-shadow(0 0 8px #ffd24a99); animation: axGlint 3.2s ease-in-out infinite; }
+@keyframes axGlint { 0%, 80%, 100% { transform: none; } 88% { transform: rotate(-12deg) scale(1.15); } }
+
+.ax-sh { margin: 0 0 10px; font-size: 13px; font-weight: 900; letter-spacing: 0.06em; color: var(--gm-accent); }
+.ax-sh small { display: block; margin-top: 2px; font-size: 11px; color: var(--gm-dim); letter-spacing: 0; font-weight: 700; }
+.ax-lic { --lc: #fff; position: relative; padding: 10px 11px 11px; border-radius: 16px; background: linear-gradient(135deg, color-mix(in srgb, var(--lc) 14%, transparent), transparent 55%), rgba(255, 255, 255, 0.035); border: 1px solid color-mix(in srgb, var(--lc) 35%, transparent); overflow: hidden; }
+.ax-lic + .ax-lic { margin-top: 9px; }
+.ax-lic.locked { filter: saturate(0.4); opacity: 0.72; }
+.ax-lic.have::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.16) 48%, transparent 60%); transform: translateX(-100%); animation: axShine 4.5s ease-in-out infinite; }
+@keyframes axShine { 0%, 60% { transform: translateX(-100%); } 85%, 100% { transform: translateX(100%); } }
+.ax-lhead { display: flex; align-items: center; gap: 10px; }
+.ax-lhead > div { flex: 1; min-width: 0; }
+.ax-lhead b { display: block; font-size: 15px; font-weight: 900; }
+.ax-lhead b small { font-size: 11.5px; color: var(--lc); font-weight: 900; margin-left: 3px; }
+.ax-lhead span { display: block; font-size: 11.5px; color: var(--gm-dim); font-weight: 700; }
+.ax-pass { font-style: normal; font-size: 11.5px; font-weight: 900; color: #10131c; background: var(--gm-green); border-radius: 999px; padding: 3px 8px; }
+.ax-tasks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 8px 0 6px; }
+.ax-tasks span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 3px 5px; border-radius: 10px; background: rgba(0, 0, 0, 0.22); font-size: 17px; text-align: center; }
+.ax-tasks small { font-size: 10px; font-weight: 800; color: #c6d0e2; line-height: 1.2; word-break: keep-all; }
+.ax-tasks i { position: absolute; right: 2px; top: 1px; font-style: normal; font-size: 12px; }
+.ax-rule { font-size: 11px; color: var(--gm-dim); font-weight: 700; }
+.ax-rule b { color: #fff; }
+.ax-rew { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11.5px; font-weight: 800; color: #dfe6f3; }
+.ax-rew .sw { width: 14px; height: 14px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+#home .gm-btn.ax-go { width: 100%; margin-top: 8px; justify-content: center; }
+.ax-foot { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.ax-car { font-size: 12px; color: var(--gm-dim); font-weight: 700; }
+
+@media (max-width: 1000px) {
+  .ax-body { grid-template-columns: 1fr; overflow: auto; }
+  .ax-lessons, .ax-side { overflow: visible; }
+}
+@media (max-width: 720px), (max-height: 520px) {
+  #home .h-view[data-view="academy"] .ax { position: static; }
+  .ax-title b { font-size: 22px; }
+  .ax-title small { display: none; }
+  .ax-title .ic { width: 38px; height: 38px; font-size: 20px; border-radius: 11px; }
+  .ax-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 7px; }
+  #home .gm-btn.ax-card { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; min-height: 60px; padding: 6px 8px 6px 6px; gap: 8px; }
+  .ax-art { width: 76px; }
+  .ax-tx { padding-right: 30px; }
+  .ax-medal { right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; font-size: 18px; }
+  .ax-tx small { display: none; }
+  .ax-body { display: block; }
+  .ax-side { margin-top: 10px; }
+  .ax-car { display: none; }
+  .ax-lic .ax-tasks small { font-size: 9.5px; }
+}
+
+/* ------------------------------------------------------------------ 게임 속: 설명 카드 */
+#tutorial.acad .tut-card.ac-card { width: min(780px, calc(100vw - 32px)); }
+#tutorial.acad .tut-top { min-height: 30px; }
+.ac-crumb { flex: 1; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; font-size: 12px; font-weight: 800; color: var(--gm-dim); }
+.ac-crumb .ac-best { color: #dfe6f3; }
+.ac-crumb .ac-exam { display: inline-flex; align-items: center; gap: 4px; color: #fff; margin-right: 4px; }
+.ac-crumb > i { font-style: normal; min-width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-size: 11px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); }
+.ac-crumb > i.cur { border-color: var(--gm-accent); color: var(--gm-accent); box-shadow: 0 0 8px rgba(255, 207, 63, 0.4); }
+.ac-crumb > i.ok { background: rgba(125, 255, 106, 0.16); border-color: rgba(125, 255, 106, 0.5); }
+.ac-crumb > i.bad { background: rgba(255, 75, 58, 0.16); border-color: rgba(255, 75, 58, 0.5); }
+.ac-intro { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 16px; align-items: start; }
+.ac-art svg { display: block; width: 100%; height: auto; max-height: none; margin: 2px 0 0; border-radius: 14px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.ac-txt > p:first-child { margin-top: 0; }
+.ac-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 8px 0; }
+.ac-steps > div { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--gm-line); font-size: 13px; font-weight: 800; line-height: 1.35; }
+.ac-steps span { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; color: #10131c; background: var(--gm-accent); }
+.ac-steps em { font-style: normal; color: #e6ecf7; }
+.ac-why { margin: 10px 0 2px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, rgba(95, 208, 255, 0.12), rgba(95, 208, 255, 0.03)); border: 1px solid rgba(95, 208, 255, 0.28); }
+.ac-why > b { font-size: 12.5px; color: #9fe3ff !important; letter-spacing: 0.02em; }
+.ac-why p { margin: 4px 0 0 !important; font-size: 13.5px; line-height: 1.6; }
+.ac-goalrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 12.5px; }
+.ac-goalrow > b { color: var(--gm-dim) !important; font-weight: 800; margin-right: 2px; }
+.ac-goalrow > span { padding: 4px 9px; border-radius: 999px; font-weight: 800; background: rgba(125, 255, 106, 0.08); border: 1px solid rgba(125, 255, 106, 0.28); }
+.ac-goalrow > em { font-style: normal; color: var(--gm-dim); font-weight: 700; margin-left: auto; }
+.ac-examnote { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 207, 63, 0.09); border: 1px solid rgba(255, 207, 63, 0.3); font-size: 13.5px; font-weight: 700; }
+
+/* 성적표: 메달 원반 */
+.ac-medal { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 2px 0 6px; }
+.ac-medal .disc { --m1: #3a4256; --m2: #1d2333; position: relative; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, var(--m1), var(--m2)); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.5); animation: acDrop 0.55s cubic-bezier(0.2, 1.3, 0.4, 1) backwards; overflow: hidden; }
+.ac-medal .disc span { font-size: 46px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45)); }
+.ac-medal .disc::after { content: ""; position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.45) 50%, transparent 60%); transform: translateX(-120%); animation: acSweep 2.4s 0.6s ease-in-out infinite; }
+.ac-medal.bronze .disc { --m1: #f0b07a; --m2: #7a4424; box-shadow: 0 0 0 4px #d9935a66, 0 0 36px #d9935a66; }
+.ac-medal.silver .disc { --m1: #f4f8ff; --m2: #6c7a8e; box-shadow: 0 0 0 4px #cfd8e366, 0 0 36px #cfd8e366; }
+.ac-medal.gold .disc { --m1: #fff3a8; --m2: #b07a12; box-shadow: 0 0 0 4px #ffd24a77, 0 0 44px #ffd24a88; }
+.ac-medal.none .disc::after { display: none; }
+.ac-medal .lbl { font-family: var(--gm-title); font-style: italic; font-size: 26px; line-height: 1.1; }
+.ac-medal .lbl small { display: block; font-family: "Pretendard", "Malgun Gothic", sans-serif; font-style: normal; font-size: 13px; font-weight: 800; color: var(--gm-dim); margin-top: 3px; }
+@keyframes acDrop { from { transform: translateY(-30px) scale(0.6) rotate(-25deg); opacity: 0; } }
+@keyframes acSweep { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+.ac-save, .ac-examres { margin-top: 8px; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; font-weight: 800; background: rgba(255, 255, 255, 0.05); }
+.ac-save .xp { color: #7dffb0; }
+.ac-examres.ok { color: #c9ffd0; background: rgba(125, 255, 106, 0.12); }
+.ac-examres.bad { color: #ffc9c0; background: rgba(255, 75, 58, 0.12); }
+#tutorial.acad .tut-btns { flex-wrap: wrap; }
+#tutorial.acad .tut-btns kbd { margin-left: 4px; }
+
+/* 시험 결과: 큰 라이선스 */
+.ac-licwin { display: flex; align-items: center; gap: 18px; margin: 4px 0 10px; }
+.ac-licbig { position: relative; flex-shrink: 0; animation: acLic 0.9s cubic-bezier(0.2, 1.25, 0.35, 1) backwards; filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.5)); }
+.ac-licbig::before { content: ""; position: absolute; inset: -18px; border-radius: 50%; background: conic-gradient(from 0deg, transparent, rgba(255, 220, 120, 0.45), transparent 30%, rgba(160, 220, 255, 0.4), transparent 60%, rgba(255, 160, 230, 0.4), transparent); animation: acSpin 6s linear infinite; z-index: -1; filter: blur(6px); }
+.ac-licbig .shine { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); mix-blend-mode: overlay; animation: acSweep 2.6s 0.9s ease-in-out infinite; clip-path: polygon(50% 5%, 90% 20%, 90% 55%, 50% 95%, 10% 55%, 10% 20%); }
+@keyframes acLic { from { transform: scale(0.3) rotate(-30deg); opacity: 0; } }
+@keyframes acSpin { to { transform: rotate(360deg); } }
+.ac-lictx b { display: block; font-family: var(--gm-title); font-weight: 400; font-style: italic; font-size: 26px; }
+.ac-lictx > span { display: block; color: var(--gm-dim); font-weight: 700; font-size: 13.5px; }
+.ac-rew { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.ac-rew li { font-size: 13.5px; font-weight: 700; padding: 5px 10px; border-radius: 9px; background: rgba(255, 255, 255, 0.05); }
+.ac-rew li.xp { color: #7dffb0; font-weight: 900; }
+
+/* 달리는 중 판: 한 바퀴 시험 시계 */
+.ac-lapclock { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: baseline; gap: 4px 8px; margin-top: 8px; padding: 7px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); font-size: 12px; font-weight: 800; color: var(--gm-dim); }
+.ac-lapclock b { font-size: 16px; color: #fff; font-variant-numeric: tabular-nums; }
+.ac-lapclock.over b:first-of-type { color: #ff8a7a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-medal .disc, .ac-medal .disc::after, .ac-licbig, .ac-licbig::before, .ac-licbig .shine, .ax-lic.have::after, #home .ax-card.m3 .ax-medal { animation: none !important; }
+}
+
+/* 휴대폰 가로 (767×360 등) · 좁은 화면 */
+@media (max-width: 760px) {
+  .ac-intro { grid-template-columns: 1fr; gap: 6px; }
+  .ac-art svg { max-height: 150px; width: auto; max-width: 100%; margin: 0 auto; }
+  .ac-steps { grid-template-columns: 1fr 1fr; }
+}
+@media (max-height: 520px) {
+  #tutorial.acad .tut-card.ac-card { width: min(860px, calc(100vw - 16px)); padding: 10px 14px 12px; }
+  #tutorial.acad .tut-hero { margin: 6px 0 4px; }
+  #tutorial.acad .tut-hero .tut-ic { width: 38px; height: 38px; font-size: 20px; border-radius: 11px; }
+  #tutorial.acad .tut-hero h2 { font-size: 21px; }
+  #tutorial.acad .tut-body { font-size: 13px; line-height: 1.5; }
+  .ac-intro { grid-template-columns: 200px minmax(0, 1fr); gap: 10px; }
+  .ac-art svg { max-height: none; width: 100%; }
+  .ac-steps > div { padding: 4px 6px; font-size: 11.5px; }
+  .ac-steps span { width: 18px; height: 18px; font-size: 10px; }
+  .ac-why { padding: 6px 9px; margin-top: 6px; }
+  .ac-why p { font-size: 12px; line-height: 1.45; }
+  #tutorial.acad .tut-tip { font-size: 11.5px; padding: 5px 8px; margin: 6px 0; }
+  .ac-goalrow { margin-top: 6px; font-size: 11px; }
+  .ac-goalrow > em { display: none; }
+  #tutorial.acad .tut-btns { margin-top: 8px; gap: 6px; }
+  #tutorial.acad .tut-btns .gm-btn { padding: 7px 11px; font-size: 13px; }
+  /* 낮은 화면(휴대폰 가로): 카드 글이 길어도 아래 버튼 줄은 늘 보이게 */
+  #tutorial.acad .ac-card .tut-btns { position: sticky; bottom: -12px; z-index: 2; margin: 8px -14px -12px; padding: 10px 14px 10px;
+    background: linear-gradient(180deg, rgba(12, 17, 32, 0), rgba(12, 17, 32, 0.97) 34%); }
+  .ac-medal { gap: 10px; margin: 0; }
+  .ac-medal .disc { width: 54px; height: 54px; }
+  .ac-medal .disc span { font-size: 30px; }
+  .ac-medal .lbl { font-size: 18px; }
+  .ac-licwin { gap: 12px; }
+  .ac-licbig svg { width: 84px; height: 84px; }
+  .ac-crumb .ac-best { display: none; }
+}
+@media (max-width: 520px) {
+  .ac-intro { grid-template-columns: 1fr; }
+  .ac-steps { grid-template-columns: 1fr; }
+}
+
+/* 설명 글 속 키 (튜토리얼 2의 큰 키 그림을 글줄 크기로) */
+#tutorial.acad .ac-intro .td-k, #tutorial.acad .ac-examnote .td-k, #tutorial.acad .tdr-tip .td-k { min-width: 22px; height: 22px; font-size: 12px; padding: 0 5px; vertical-align: 1px; border-radius: 6px; }
+
+/* 휴대폰 가로(낮은 화면): 따라 하기 판을 위쪽에 작게 (설명 글은 숨기고 목표는 칩 한 줄, 버튼 작게) — 터치 조향·페달 자리와 안 겹치게 */
+@media (max-height: 520px) {
+  #tutorial.acad .tut-panel.ac-panel { top: 54px !important; bottom: auto; left: 6px; right: auto; width: auto; max-width: min(300px, 40vw); padding: 6px 8px; }
+  body.touch-on #tutorial.acad .tut-panel.ac-panel { left: calc(50% - min(150px, 20vw)); max-width: min(300px, 40vw); }
+  #tutorial.acad .ac-panel .tut-pb, #tutorial.acad .ac-panel .tut-hint:empty { display: none; }
+  #tutorial.acad .ac-panel .tut-ph { margin: 0 0 3px; font-size: 12px; }
+  #tutorial.acad .ac-panel .tut-goals { display: flex; flex-wrap: wrap; gap: 3px; margin: 3px 0; }
+  #tutorial.acad .ac-panel .tut-goals .g { font-size: 10.5px; padding: 1px 6px; gap: 3px; }
+  #tutorial.acad .ac-panel .tut-pbtns { flex-wrap: wrap; margin-top: 3px; gap: 4px; }
+  #tutorial.acad .ac-panel .tut-pbtns .gm-btn { min-height: 28px; padding: 3px 8px; font-size: 11.5px; }
+  #tutorial.acad .ac-panel .tut-pbtns .gm-btn .k { display: none; }
+}

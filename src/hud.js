@@ -1,4 +1,5 @@
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
+import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
 
 export function fmtTime(sec) {
@@ -523,7 +524,7 @@ export function createHud(track) {
       el.results.innerHTML = `<div class="res${standHtml || ch ? ' wide' : ''}${ch && ch.final ? ' final' : ''}">
         <div class="res-head">
         <div class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</div><h2>${title}</h2>
-        <div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}</div>
+        <div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div>
         <div class="total">${fmtTime(total)}</div>
         <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>

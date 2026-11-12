@@ -15,9 +15,11 @@ import { records, fmtTime } from './records.js';
 import { online } from './online.js';
 import { createCarModel } from './carModel.js';
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 카드의 진짜 차 사진
-import { profile } from './profile.js'; // 드라이버 카드 (레벨·라이선스·XP)
+import { profile } from './profile.js'; // 드라이버 카드 (레벨·티어·XP)
 import * as unlocks from './unlocks.js'; // 레벨 잠금(차)·색 고르기 (차고)
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
+import { LESSONS, LICENSES, GROUPS, academy, lessonMeta, licenseChip, MEDALS, MEDAL_NAMES } from './academyStore.js'; // 드라이빙 아카데미 (2026-11-12)
+import { academyArt, licenseBadge } from './academyArt.js';
 
 export const VERSION = 'v0.9 · 2026.11';
 /** 운전 도움을 켜고 낸 기록 표시 */
@@ -62,6 +64,14 @@ export async function runHome() {
     ln.dataset.garage = '1';
     document.head.appendChild(ln);
   }
+  if (!document.getElementById('acadcss')) {
+    // 드라이빙 아카데미 화면 (2026-11-12, src/academy.css)
+    const ln = document.createElement('link');
+    ln.rel = 'stylesheet';
+    ln.id = 'acadcss';
+    ln.href = 'src/academy.css';
+    document.head.appendChild(ln);
+  }
   unlocks.registerCars(cars);
   let myLevel = unlocks.currentLevel();
   const isOpen = (id) => unlocks.isCarUnlocked(id);
@@ -103,7 +113,7 @@ export async function runHome() {
       <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">기믹 <em>레이싱</em></div><div class="sub">GIMMICK RACING</div></div></div>
       <div class="h-icons">
         <button class="gm-btn hx-driver h-name" data-act="name" data-nav title="이름 바꾸기 (레이스·순위표에 보여요)">
-          <span class="hx-lic"></span>
+          <span class="hx-lic"></span><span class="hx-aclic"></span>
           <span class="hx-dinfo"><b class="nm"></b><small class="lv"></small><span class="hx-xp"><i></i></span><small class="st"></small></span>
         </button>
         <div class="hx-util">
@@ -120,6 +130,7 @@ export async function runHome() {
     <div class="h-view" data-view="controls"></div>
     <div class="h-view" data-view="records"></div>
     <div class="h-view" data-view="mode"></div>
+    <div class="h-view" data-view="academy"></div>
     <div class="h-foot"><span>${VERSION} · 기믹 레이싱 · Three.js</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
     <div class="h-launch"><div class="ld" id="hLaunch"></div></div>
     <div class="h-toast" id="hToast"></div>`;
@@ -160,10 +171,11 @@ export async function runHome() {
       <!-- 차·맵·방식 고르기 타일은 없앰 (사용자 요청 2026-11-11): 레이스 시작 → 차 → 맵 → 방식 순서로 차례대로 -->
       <div class="hx-steps"><span><b>1</b> 차</span><i>›</i><span><b>2</b> 맵</span><i>›</i><span><b>3</b> 방식</span><i>›</i><span><b>▶</b> 출발</span></div>
       <div class="hx-sec"><span>더 보기</span></div>
-      <div class="h-menu hx-grid">
+      <div class="h-menu hx-grid hx-4">
+        <button class="gm-btn h-item hx-tile" data-go="academy" data-nav style="--tc:#ffcf3f"><span class="ic">🎓</span><span class="t"><b>아카데미</b><small>레슨 · 메달 · 라이선스</small></span></button>
         <button class="gm-btn h-item hx-tile" data-act="multi" data-nav style="--tc:#5fd0ff"><span class="ic">🌐</span><span class="t"><b>온라인</b><small>친구와 같이 달리기</small></span></button>
         <button class="gm-btn h-item hx-tile" data-go="records" data-nav style="--tc:#c79bff"><span class="ic">🏆</span><span class="t"><b>${online.enabled ? '기록 · 순위표' : '내 기록'}</b><small>${online.enabled ? '온라인 순위 · 내 최고' : '맵마다 최고 기록'}</small></span></button>
-        <button class="gm-btn h-item hx-tile" data-act="tutorial" data-nav style="--tc:#7dff6a"><span class="ic">🎓</span><span class="t"><b>튜토리얼</b><small>빠르게 달리는 법</small></span></button>
+        <button class="gm-btn h-item hx-tile" data-act="tutorial" data-nav style="--tc:#7dff6a"><span class="ic">🚦</span><span class="t"><b>튜토리얼</b><small>빠르게 달리는 법</small></span></button>
       </div>
     </div>
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
@@ -473,7 +485,7 @@ export async function runHome() {
       box.querySelector('.gx-swatches').innerHTML = unlocks.PAINTS.map((p) => {
         const ok = unlocks.isPaintUnlocked(p.id);
         const body = p.body || c.look0.body || '#e8463a', acc = p.accent || c.look0.accent || '#f3f4f6';
-        return `<button type="button" class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>🔒</i><small>Lv.${p.level}</small>`}</button>`;
+        return `<button type="button" class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : p.license ? ` · 드라이빙 아카데미 ${esc(unlocks.paintLockText(p.id))}로 열려요` : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>${p.license ? '🎓' : '🔒'}</i><small>${p.license ? esc(p.license) : `Lv.${p.level}`}</small>`}</button>`;
       }).join('');
     }
     const nx = unlocks.nextUnlock(myLevel);
@@ -487,7 +499,7 @@ export async function runHome() {
     const p = unlocks.paintOf(pid);
     if (!unlocks.isPaintUnlocked(p.id)) {
       uiSound('back');
-      return toast(`🔒 '${p.name}' 색은 레벨 ${p.level}에 열려요 (지금 Lv.${myLevel})`);
+      return toast(p.license ? `🎓 '${p.name}' 색은 드라이빙 아카데미 ${unlocks.paintLockText(p.id)} 시험에 붙으면 열려요` : `🔒 '${p.name}' 색은 레벨 ${p.level}에 열려요 (지금 Lv.${myLevel})`);
     }
     unlocks.setPaint(c.id, p.id);
     c.look = unlocks.applyPaint(c.look0, c.id);
@@ -770,7 +782,7 @@ export async function runHome() {
           const cls = [i < 3 ? `r${i + 1} podium` : '', mine ? 'me' : ''].join(' ').trim();
           const rank = i < 3 ? `<span class="ol-medal">${i === 0 ? '<i class="crown">👑</i>' : ''}<b>${i + 1}</b></span>` : `<span class="ol-num">${i + 1}</span>`;
           return `<li class="${cls}" style="--i:${i}">${rank}
-            <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}</small></span></span>
+            <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${r.license ? licenseChip(r.license, 18) : mine && academy.top() ? licenseChip(academy.top(), 18) : ''}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}</small></span></span>
             <span class="ol-time"><strong>${fmtTime(r.total)}</strong>${r.assist ? ASSIST_TAG : ''}<small>${i === 0 ? (r.best_lap && lapsN > 1 ? `최고 랩 ${fmtTime(r.best_lap)}` : '1위') : `+${(r.total - first).toFixed(3)}`}</small></span>
             <button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button></li>`;
         })
@@ -780,6 +792,56 @@ export async function runHome() {
       if (seq === olSeq) board.innerHTML = '<div class="none">순위표를 불러오지 못했어요 (인터넷 확인)</div>';
     }
   }
+
+  // ------------------------------------------------------------------ 드라이빙 아카데미 (2026-11-12, ?menu=academy)
+  //   레슨 카드(그림·내 메달) + 라이선스 시험 C → B → A → S. 진행은 게임 쪽 src/academy.js, 저장은 academyStore.js
+  function renderAcademy() {
+    const sum = academy.summary();
+    const top = academy.top();
+    const mapName = (id) => (mapOf(id) && mapOf(id).title) || id;
+    const lessonCard = (l) => {
+      const md = academy.medalOf(l.id);
+      return `<button class="gm-btn ax-card m${md}" data-act="acLesson" data-id="${l.id}" data-nav>
+        <span class="ax-art">${academyArt(l.art)}</span>
+        <span class="ax-tx"><b><i>${l.icon}</i>${esc(l.name)}</b><small>${esc(l.short)}</small><em>🗺️ ${esc(mapName(l.map))}${l.extra && l.extra.bots ? ' · 🚗 연습 상대' : ''} · 약 ${l.mins}분</em></span>
+        <span class="ax-medal" title="${MEDAL_NAMES[md]}">${md ? MEDALS[md] : '<i>▶</i>'}</span></button>`;
+    };
+    const groups = GROUPS.map((g) => {
+      const ls = LESSONS.filter((l) => l.group === g.id);
+      return ls.length ? `<section class="ax-group"><h3><span>${g.icon}</span>${esc(g.name)}</h3><div class="ax-grid">${ls.map(lessonCard).join('')}</div></section>` : '';
+    }).join('');
+    const licCard = (lv, i) => {
+      const have = academy.hasLicense(lv.id);
+      const can = academy.canTake(lv.id);
+      const tasks = lv.tasks
+        .map((t) => {
+          const lm = lessonMeta(t);
+          const md = LESSONS.some((x) => x.id === t) ? academy.medalOf(t) : 0;
+          return `<span title="${esc(lm.name)}${md ? ` · 내 레슨 ${MEDAL_NAMES[md]}` : ''}">${lm.icon}<small>${esc(lm.name)}</small>${md ? `<i>${MEDALS[md]}</i>` : ''}</span>`;
+        })
+        .join('');
+      const paint = unlocks.paintOf(lv.paint);
+      return `<div class="ax-lic ${have ? 'have' : can ? 'open' : 'locked'}" style="--lc:${lv.color}">
+        <div class="ax-lhead">${licenseBadge(lv.id, { size: 46 })}<div><b>${esc(lv.name)} <small>${esc(lv.sub)}</small></b><span>${esc(lv.desc)}</span></div>${have ? '<em class="ax-pass">✓ 합격</em>' : ''}</div>
+        <div class="ax-tasks">${tasks}</div>
+        <div class="ax-rule">과제마다 기회 2번 · 모두 <b>${MEDALS[lv.need]} ${MEDAL_NAMES[lv.need]}</b> 이상이면 합격</div>
+        <div class="ax-rew"><span class="sw" style="--c:${(paint && paint.body) || '#fff'}"></span>${esc((paint && paint.name) || '')} 색 · +${lv.xp} XP · 배지</div>
+        <button class="gm-btn ${!have && can ? 'primary' : ''} ax-go" data-act="acExam" data-lic="${lv.id}" data-nav>${have ? '↺ 다시 보기' : can ? '시험 보기 ›' : `🔒 ${esc(LICENSES[i - 1].name)} 먼저`}</button></div>`;
+    };
+    views.academy.innerHTML = `
+      <div class="ax">
+        <div class="ax-head">
+          <div class="ax-title"><span class="ic">🎓</span><div><b>드라이빙 아카데미</b><small>설명 → 시범 주행 → 따라 하기 → 성적표 · 메달을 모으고 라이선스를 따요</small></div></div>
+          <div class="ax-sum"><span>🥇 <b>${sum.gold}</b></span><span>🥈 <b>${sum.silver}</b></span><span>🥉 <b>${sum.bronze}</b></span><span class="n">레슨 ${sum.done}/${sum.total}</span>${top ? `<span class="lic">${licenseChip(top, 24)}</span>` : ''}</div>
+        </div>
+        <div class="ax-body">
+          <div class="ax-lessons h-panel">${groups}</div>
+          <div class="ax-side h-panel"><h3 class="ax-sh">🪪 라이선스 시험 <small>아무것도 잠그지 않아요 · 보상은 배지·색·XP</small></h3>${LICENSES.map(licCard).join('')}</div>
+        </div>
+        <div class="ax-foot"><button class="gm-btn" data-go="main" data-nav>‹ 뒤로</button><span class="ax-car">🏎️ ${esc(carOf(carId).name)}(으)로 연습해요 · 차는 '레이스 시작'에서 바꿔요</span></div>
+      </div>`;
+  }
+  window.addEventListener('gimmick:academy', () => view === 'academy' && renderAcademy());
 
   // ------------------------------------------------------------------ 화면 바꾸기
   let view = 'main';
@@ -811,6 +873,7 @@ export async function runHome() {
     }
     if (name === 'map') refreshRecords();
     if (name === 'car') startThumbs();
+    if (name === 'academy') renderAcademy();
     refreshSummary();
     if (focus) {
       const target =
@@ -861,7 +924,7 @@ export async function runHome() {
       ph.hidden = false;
     }
   }
-  /** 드라이버 카드: 라이선스 아이콘 · 레벨 · XP 막대 · 레이스/우승 수 */
+  /** 드라이버 카드: 티어 아이콘 · 레벨 · XP 막대 · 레이스/우승 수 */
   function showDriver() {
     const box = $('.hx-driver');
     if (!box) return;
@@ -869,13 +932,19 @@ export async function runHome() {
     try {
       p = profile.get();
     } catch {}
-    if (!p) p = { level: 1, title: '루키 라이선스', icon: '🔰', color: '#8fd3ff', pct: 0, have: 0, need: 200, races: 0, wins: 0 };
+    if (!p) p = { level: 1, title: '루키 티어', icon: '🔰', color: '#8fd3ff', pct: 0, have: 0, need: 200, races: 0, wins: 0 };
     box.style.setProperty('--lc', p.color || '#8fd3ff');
     box.querySelector('.hx-lic').textContent = p.icon || '🔰';
     box.querySelector('.lv').textContent = `Lv.${p.level} ${p.title}`;
     box.querySelector('.hx-xp i').style.width = `${Math.round((p.pct || 0) * 100)}%`;
     box.querySelector('.hx-xp').title = `다음 레벨까지 ${p.have} / ${p.need} XP`;
     box.querySelector('.st').textContent = `레이스 ${p.races || 0} · 우승 ${p.wins || 0}`;
+    {
+      // 드라이빙 아카데미 라이선스 배지 (가장 높은 것)
+      const top = academy.top();
+      const el = box.querySelector('.hx-aclic');
+      if (el) el.innerHTML = top ? licenseChip(top, 26) : '';
+    }
     const nx = unlocks.nextUnlock(p.level);
     if (nx) box.title = `다음 해금: Lv.${nx.level} ${nx.text}\n(누르면 이름 바꾸기)`;
   }
@@ -1177,6 +1246,22 @@ export async function runHome() {
     const act = b.dataset.act;
     if (act === 'start') view === 'mode' ? start() : view === 'main' ? show('car') : show('mode'); // 메인의 레이스 시작 = 1단계 차 고르기부터
     else if (act === 'tutorial') startTutorial();
+    else if (act === 'acLesson') {
+      const lm = lessonMeta(b.dataset.id);
+      if (lm) launch(raceUrl(lm.map, carId, { academy: lm.id, ...(lm.extra || {}) }), `🎓 ${lm.name}`, `드라이빙 아카데미 · ${carOf(carId).name}`);
+    } else if (act === 'acExam') {
+      const lv = LICENSES.find((x) => x.id === b.dataset.lic);
+      if (!lv) return;
+      if (!academy.canTake(lv.id)) {
+        uiSound('back');
+        return toast(`🔒 ${LICENSES[LICENSES.indexOf(lv) - 1].name}을 먼저 따요`);
+      }
+      try {
+        sessionStorage.setItem('gimmick.academy.exam', JSON.stringify({ lic: lv.id, i: 0, tries: 0, results: [] }));
+      } catch {}
+      const lm = lessonMeta(lv.tasks[0]);
+      launch(raceUrl(lm.map, carId, { academy: 'exam', lic: lv.id, task: 0, ...(lm.extra || {}) }), `🎓 ${lv.name} 시험`, `${lv.sub} · ${carOf(carId).name}`);
+    }
     else if (act === 'multi') openLobby({ map: mapId, car: carId });
     else if (act === 'mute') {
       settings.set('muted', !settings.get('muted'));
@@ -1344,7 +1429,7 @@ export async function runHome() {
   refreshModes();
   const startView = params.get('menu');
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
-  else show(['car', 'map', 'settings', 'controls', 'records', 'mode'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
+  else show(['car', 'map', 'settings', 'controls', 'records', 'mode', 'academy'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
   // ------------------------------------------------------------------ 레이스 준비 단계 표시 (2026-11-11: 레이스 시작 → 1 차 → 2 맵 → 3 방식 → 출발)
   //   누르면 그 단계로 바로 갈 수 있음 (앞 단계로 돌아가기)
   for (const [v, n] of [['car', 1], ['map', 2], ['mode', 3]]) {

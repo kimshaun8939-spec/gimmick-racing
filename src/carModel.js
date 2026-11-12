@@ -825,6 +825,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   let spikeP = 0; // 스파이크(부스터) 변신 진행도 0~1
   let lastForm = null;
   let accelP = 0; // 가속 모드 변신 진행도 0~1
+  let drsP = 0; // DRS(진짜, src/drs.js의 car.drs) 뒷날개 윗판 열림 0~1 (2026-11-12)
   let boatP = 0; // 배 모드 변신 진행도 0~1
   let chopPh = 0, boatRoll = 0; // 배: 물결 타기 위상, 안쪽으로 눕는 정도 (2026-11-10)
   let flyP = 0; // 비행 모드 변신 진행도 0~1
@@ -864,7 +865,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
       n.g.position.z = A.nitro.z + A.nitro.dz * sPipe;
       n.g.scale.setScalar(0.5 + 0.5 * Math.max(0.001, sPipe));
     }
-    drs.rotation.x = A.drsRest - 0.33 * sDrs;
+    // 2026-11-12 drs: 가속 모드는 윗판을 조금만 (예전 0.33 → 0.1), 진짜 DRS(car.drs)는 크게 열림 → 뒤에서 보면 날개 틈이 확 벌어짐
+    drs.rotation.x = A.drsRest - 0.1 * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
     underglow.visible = sGlow > 0.01;
     underglow.material.opacity = sGlow * (0.5 + 0.12 * Math.sin(time * 7));
   }
@@ -1048,12 +1050,14 @@ export function createCarModel(lookOrColor = '#e8463a') {
       const gearUp = flyOn && !!car.flying;
       if (instant) {
         accelP = accelOn ? 1 : 0;
+        drsP = (car.drs || 0) > 0.5 ? 1 : 0;
         boatP = boatOn ? 1 : 0;
         flyP = flyOn ? 1 : 0;
         gearP = gearUp ? 1 : 0;
       } else {
         // 변신이 눈에 보이게 천천히 (가속 0.75초 / 풀기 0.5초, 배 0.7 / 0.5, 비행 0.6 / 0.45)
         accelP = clamp01(accelP + (accelOn ? dt / 0.75 : -dt / 0.5));
+        drsP = clamp01(drsP + ((car.drs || 0) > 0.5 ? dt / 0.2 : -dt / 0.15));
         boatP = clamp01(boatP + (boatOn ? dt / 0.7 : -dt / 0.5));
         flyP = clamp01(flyP + (flyOn ? dt / 0.6 : -dt / 0.45));
         gearP = clamp01(gearP + (gearUp ? dt / 0.45 : -dt / 0.45));

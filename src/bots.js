@@ -68,11 +68,14 @@ BOT_LEVELS.master = {
 //   단계마다 띠(초)와 세기가 다름: 쉬움 = 앞선 봇을 세게 늦춤(이기기 쉬움), 어려움·마스터 = 띠가 넓고 약함(잘 달려야 이김, 못 달리면 앞 봇이 2~3초 앞에서 계속 달림)
 //   raceSystem의 예전 따라잡기(쉬움 slowMul·어려움 upMul/upDraft)는 이게 켜져 있으면 안 씀 (겹치지 않게). 마스터 도움은 그대로, 견인은 이걸로 빨라지는 봇은 안 받음
 //   사람이 없거나(봇끼리) 사람이 완주했으면 예전 봇 무리 가운데 기준. 점프 근처·저중력·비행 중에는 빨라지지 않음 (PACK.keep과 같음)
-//   주소 &close=0 이면 끔 (예전 그대로)
-export const CLOSE = { on: true };
+//   2026-11-12 drs: 기본 끔 (사용자 "멈춰 주는 게 아니라 시스템으로" → 눈에 보이는 DRS·슬립스트림 기차·견인으로 바꿈, src/drs.js). 주소 &close=1이면 켬
+export const CLOSE = { on: false };
+// 봇 목표 최고 속도에 슬립스트림·견인·DRS 몫을 더하기 (2026-11-12 drs). &botaero=0 = 예전처럼 안 더함 (비교 시험용)
+let BOT_AERO = true;
 try {
   const q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
-  if (q.get('close') === '0') CLOSE.on = false;
+  if (q.get('close') === '1') CLOSE.on = true;
+  if (q.get('botaero') === '0') BOT_AERO = false;
 } catch {}
 //   draft = 띠보다 draftAt초(기본 1) 넘게 뒤처진 봇에게 (1.5초에 걸쳐 커짐) 주는 보이지 않는 슬립스트림 최대 (raceSystem cuDraft, 예전 어려움 upDraft와 같은 것; 속도 계획 표가 없는 맵(화산)에서도 실제로 빨라지게)
 BOT_LEVELS.easy.close = { ahead: 0.6, behind: 0.8, up: 0.12, down: 0.15, kUp: 0.06, kDown: 0.08 };
@@ -820,11 +823,15 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const kB = Math.min(1.03, (level.brakeK ?? 0.95) * Math.min(1, k) * (1 + 0.05 * lateBrake));
     const reach = Math.round(Math.min(500, (speed * speed) / (2 * kB * gHere * cm.aBrake(30)) + 10) / ds);
     let tgt = Infinity;
+    // 슬립스트림(기차)·견인·슬링샷·DRS로 차 최고 속도가 올라가면 목표 속도도 같이 (사람과 똑같이 효과를 받게, 2026-11-12 drs)
+    //   직선(계획 속도가 최고 속도의 75~95%)일수록 다 받고 코너는 그대로. 예전엔 계획 속도 × k가 직선 상한이라 봇은 슬립스트림을 받아도 직선에서 더 빨라지지 않았음
+    const aeroTop = BOT_AERO && car.aeroTopMul ? car.aeroTopMul(true) : 1;
     for (let q = 0; q <= reach; q += q < 8 ? 1 : 3) {
       const iq = W(lead + q);
       const free = boosting && prof.speed[iq] >= vTop * 0.97 && !prof.brake[iq];
       if (free) continue;
       let vq = prof.speed[iq] * k;
+      if (aeroTop > 1.001 && !prof.brake[iq]) vq *= 1 + (aeroTop - 1) * clamp((prof.speed[iq] / vTop - 0.75) / 0.2, 0, 1);
       if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq) * (jumpTraffic ? 1 : jumpK));
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
       if (allow < tgt) tgt = allow;
@@ -836,9 +843,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if (sBrake && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - sBrake * st.satur);
     st.satur = 0;
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
-    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul));
+    //   (aeroTop: 위 슬립스트림·견인·DRS 몫, 상한에도 같이)
+    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul) * aeroTop);
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
-    else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) tgt = Math.min(tgt, vTop * st.paceMul * eq.topMul);
+    else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) tgt = Math.min(tgt, vTop * st.paceMul * eq.topMul * aeroTop);
     // 앞이 막혀 2초 넘게 거의 멈춰 있으면: 1.5초 동안은 앞차를 신경 쓰지 않고 밀고 나감 (영원히 기다리지 않게)
     if (follow < 3 && Math.abs(speed) < 3 && ctx.since > 1) st.blockedT += dt;
     else st.blockedT = Math.max(0, st.blockedT - dt);

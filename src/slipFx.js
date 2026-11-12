@@ -121,6 +121,13 @@ export function createSlipFx(o = {}) {
   }
   const pct = box && box.querySelector('em'), fill = box && box.querySelector('.sl-bar i'), tip = box && box.querySelector('.sl-tip');
   const twFill = tow && tow.querySelector('.tw-bar i');
+  // 견인 3차 (2026-11-12): 세기 % 글자 (멀수록 커지는 게 보이게)
+  let twPct = tow && tow.querySelector('.tw-pct');
+  if (tow && !twPct) {
+    twPct = document.createElement('em');
+    twPct.className = 'tw-pct';
+    tow.appendChild(twPct);
+  }
   let shown = { on: null, pct: -1, ready: null, tow: -1, towOn: null, lines: -1 };
   function setHud(draft, charge, towK, towOn) {
     const on = draft > 0.12 || charge > 0.05;
@@ -149,6 +156,7 @@ export function createSlipFx(o = {}) {
     if (tq !== shown.tow && twFill) {
       shown.tow = tq;
       twFill.style.width = tq + '%';
+      if (twPct) twPct.textContent = tq + '%';
     }
     if (tow) tow.classList.toggle('off', !towOn);
   }

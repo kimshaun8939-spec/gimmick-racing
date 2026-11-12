@@ -76,6 +76,8 @@ const LOAD_TIPS = [
   '바다에 닿으면 자동으로 배로 변신해요',
   'L 키로 레이싱 라인을 켜고 끌 수 있어요 (초록 밟기 · 빨강 브레이크)',
   '길을 벗어나면 R 키로 도로에 돌아와요',
+  'DRS: 도로의 감지선에서 앞차와 1초 안이면 다음 직선에서 뒷날개가 열려 더 빨라져요',
+  '앞차 바로 뒤에 붙으면 슬립스트림! 여러 대가 줄지어 있으면 더 세요',
 ];
 const ld = (id, text) => {
   const e = document.getElementById(id);
@@ -343,7 +345,7 @@ function startIntro() {
   intro.on = false;
   hud.intro(null);
   const g = window.game;
-  if (intro.played || FREE || ONLINE || !raceSys.bots.length || params.get('intro') === '0' || params.get('tutorial')) return;
+  if (intro.played || FREE || ONLINE || !raceSys.bots.length || params.get('intro') === '0' || params.get('tutorial') || params.get('academy')) return;
   if (g && g.car && (g.paused || g.controlsOverride)) return;
   intro.played = true;
   const order = raceSys.standings(); // 그리드 앞쪽 차부터
@@ -1092,7 +1094,7 @@ function frame(now, manual = false) {
   if (input.actionPressed('camView') && !menuHold && race.phase !== 'finished' && !(window.game && window.game.tutorial && window.game.tutorial.phase === 'demo')) {
     const v = camViews.cycle();
     settings.set('camView', v.id);
-    hud.toast(`${v.icon} 시점: ${v.name} (${keyLabel('camView', 'V')})`);
+    hud.toast(`${v.icon} 시점: ${v.name}${document.body.classList.contains('touch-on') ? '' : ` (${keyLabel('camView', 'V')})`}`); // 터치 조작 중엔 키 이름 안 보임
   }
 
   if (race.phase === 'countdown') {
@@ -1370,4 +1372,6 @@ window.game = {
 };
 // 튜토리얼 (?tutorial=1, src/tutorial.js), 멀티플레이 (?room=코드, src/netRace.js): 주소에 있을 때만 불러옴
 if (params.get('tutorial')) import('./tutorial.js').then((m) => m.startTutorial(window.game)).catch((e) => console.warn('튜토리얼 불러오기 실패', e));
+// 드라이빙 아카데미 (?academy=<레슨> 또는 academy=exam, src/academy.js, 2026-11-12). academyStore.js도 스스로 시작하지만 여기서 바로 부름 (한 번만 켜짐)
+else if (params.get('academy')) import('./academy.js').then((m) => m.startAcademy(window.game)).catch((e) => console.warn('아카데미 불러오기 실패', e));
 if (params.get('room')) import('./netRace.js').then((m) => m.startNetRace(window.game, params)).catch((e) => console.warn('멀티플레이 불러오기 실패', e));

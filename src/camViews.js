@@ -56,6 +56,7 @@ export function createCamViews(o) {
   const { camera, model, car } = o;
   const eyeC = new THREE.Vector3(0, 1.0, -0.2); // 운전석 눈 (차 기준: x 왼쪽+, y 위, z 앞)
   const eyeB = new THREE.Vector3(0, 0.85, 1.2); // 보닛 카메라
+  let bonnetLookDown = 0.7;
   const info = { meshes: 0, hideC: 0, hideB: 0, frontZ: 0, hoodY: 0 };
 
   // ------------------------------------------------------------------ 불러올 때: 부품 나누기 (batchLocal 전에 불러야 함)
@@ -98,10 +99,15 @@ export function createCamViews(o) {
     }
     info.cowl = isFinite(cowl) ? +cowl.toFixed(2) : null;
     if (isFinite(cowl)) eyeC.y = Math.max(eyeC.y, Math.min(cowl + 0.16, h[1] + 0.3));
-    // 보닛 카메라 자리: 운전석과 차 맨 앞 사이 가운데쯤, 그 자리 차체 꼭대기 + 22 cm
-    let frontZ = eyeC.z + 1.5;
+    // 보닛 카메라 기본 자리: 운전석과 앞끝 사이 가운데쯤, 그 자리 차체 꼭대기 + 22 cm
+    // 앞끝은 실제 꼭짓점으로 따로 재야 짧은 밴에 가짜 1.5 m 노즈가 생기지 않음.
+    let frontZ = -Infinity;
     for (const it of list) if (it.vis && !it.fx) for (let i = 0; i < it.pts.length; i += 3) if (Math.abs(it.pts[i]) < 1.2 && it.pts[i + 2] > frontZ) frontZ = it.pts[i + 2];
-    const zb = eyeC.z + 0.5 * (frontZ - eyeC.z);
+    if (!isFinite(frontZ)) frontZ = eyeC.z + 1.5;
+    const noseLength = Math.max(0, frontZ - eyeC.z);
+    const shortNose = 1 - smoothK(noseLength, 1.6, 2.3);
+    // 긴 차의 기존 자리는 유지. 짧은 차는 실제 앞끝을 써서 지붕/코가 눈앞에 남도록 뒤로.
+    const zb = eyeC.z + 0.5 * Math.max(1.5, noseLength);
     let hoodY = -Infinity;
     for (const it of list) {
       if (!it.vis || it.fx) continue;
@@ -110,6 +116,30 @@ export function createCamViews(o) {
     }
     if (!isFinite(hoodY)) hoodY = eyeC.y - 0.35;
     eyeB.set(0, hoodY + 0.22, zb);
+    if (shortNose > 0) {
+      eyeB.z = eyeC.z + 0.5 * noseLength - 0.45 * shortNose;
+      eyeB.y += 0.03 * shortNose;
+      // 뒤로 옮긴 자리의 지붕·핸들·짐 위로 여유 확보 (차 기준 18 cm 반경, 위로 22 cm).
+      // 꼭짓점만 재면 큰 지붕 판의 가운데를 놓칠 수 있으므로 실제 면에 아래로 레이를 쏨.
+      const solids = list.filter((it) => it.vis && !it.fx).map((it) => it.m);
+      const topY = Math.max(eyeB.y, ...list.filter((it) => it.vis && !it.fx).map((it) => it.box.max.y)) + 1;
+      const ray = new THREE.Raycaster();
+      const down = new THREE.Vector3(0, -1, 0).transformDirection(root.matrixWorld);
+      const origin = new THREE.Vector3(), hitLocal = new THREE.Vector3();
+      for (const dx of [-0.18, 0, 0.18]) for (const dz of [-0.18, 0, 0.18]) {
+        origin.set(eyeB.x + dx, topY, eyeB.z + dz).applyMatrix4(root.matrixWorld);
+        ray.set(origin, down);
+        const hit = ray.intersectObjects(solids, false)[0];
+        if (hit) {
+          hitLocal.copy(hit.point).applyMatrix4(inv);
+          eyeB.y = Math.max(eyeB.y, hitLocal.y + 0.22);
+        }
+      }
+      // 내려다보는 각도는 최대 약 9도: 짧은 코를 화면 아래에 조금 보이게 하면서 길은 넓게 남김.
+      bonnetLookDown = lerp(0.7, 3.1, shortNose);
+    }
+    info.noseLength = +noseLength.toFixed(2);
+    info.shortNose = +shortNose.toFixed(2);
     info.frontZ = +frontZ.toFixed(2);
     info.hoodY = +hoodY.toFixed(2);
     // 삼각형마다: 이 카메라 앞을 가리나 (눈 높이보다 높고 눈보다 앞, 또는 눈 바로 옆)
@@ -207,7 +237,7 @@ export function createCamViews(o) {
     _f.set(0, 0, 1).applyQuaternion(_q);
     _u.set(0, 1, 0).applyQuaternion(_q);
     p.up.copy(_u);
-    p.look.copy(p.pos).addScaledVector(_f, 20).addScaledVector(_u, id === 'cockpit' ? -0.9 : -0.7);
+    p.look.copy(p.pos).addScaledVector(_f, 20).addScaledVector(_u, id === 'cockpit' ? -0.9 : -bonnetLookDown);
   }
   function famTarget() {
     return BY[eff].fp ? BY.chase : BY[eff];

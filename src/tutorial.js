@@ -486,7 +486,7 @@ export function startTutorial(game) {
       });
       add({
         id: 'follow', ic: '🏎️', chip: '따라 하기', title: '이제 따라 해 보세요!',
-        kind: 'drill', corner: DC, slowDefault: true,
+        kind: 'drill', corner: DC, slowDefault: false, // 사용자 요청 2026-11-12: 슬로 모션은 🐢 천천히를 직접 고를 때만
         card: () => `<p>방금 본 <b>${cname(DC)} 코너</b>를 직접 달려 봐요. 같은 자리에서 시작해요.</p>${steps4(DC)}
           <p class="tut-tip">💡 처음엔 코너 근처가 <b>🐢 천천히</b> 흘러가요. 화면 위 글자와 <b>깜빡이는 키</b>를 따라 하세요. 끝나면 <b>성적표</b>가 나와요.</p>`,
         go: '따라 하기 시작',
@@ -690,13 +690,15 @@ export function startTutorial(game) {
       id: 'modes', ic: '🏆', chip: '레이스 방식', title: '이제 진짜 레이스!', info: true,
       card: () => `${SVG.modes}<p>홈에서 <b>레이스 시작</b>을 누르면 방식을 골라요. 봇 수·실력, 고스트는 설정에서도 바꿀 수 있어요.</p>
         <p class="tut-tip">💡 기록을 줄이는 순서: ① 코너 전 바깥으로 → ② 직선에서 브레이크 → ③ 에이펙스 → ④ 에이펙스 뒤 일찍 액셀</p>
-        <p class="tut-tip">🎥 달리는 중 ${K('camView')} 로 시점을 바꿀 수 있어요 (기본 · 가까이 · 멀리 · 보닛 · 운전석).</p>`,
+        <p class="tut-tip">🎥 달리는 중 ${K('camView')} 로 시점을 바꿀 수 있어요 (기본 · 가까이 · 멀리 · 보닛 · 운전석).</p>
+        <p class="tut-tip">🟩 레이스에서 뒤처지면: 도로의 <b>DRS DETECTION</b> 선에서 앞차와 1초 안이면 다음 <b>DRS ZONE</b> 직선에서 뒷날개가 열려 빨라져요 · 앞차 뒤에 붙으면 💨 슬립스트림.</p>`,
       go: '다음',
     });
     add({
       id: 'done', ic: '🎉', chip: '끝', title: '튜토리얼 완료!', info: true, final: true,
       card: () => `<div class="tut-summary">${STEPS.filter((x) => !x.info).map((x) => `<span class="${doneSet.has(x.id) ? 'ok' : 'skip'}">${doneSet.has(x.id) ? '✓' : '–'} ${esc(x.chip)}</span>`).join('')}</div>
         <p>이제 마음껏 달려 보세요! 처음엔 <b>봇 실력 '쉬움'</b>이 좋아요. 언제든 홈의 <b>튜토리얼</b>로 다시 볼 수 있어요.</p>
+        <button class="gm-btn tut-next-ac" data-goto="academy"><span class="ic">🎓</span><span><b>다음은 드라이빙 아카데미</b><small>브레이크 포인트·트레일 브레이킹·연석·슬립스트림·DRS… 레슨 11개로 메달을 모으고 라이선스 C → S를 따요</small></span><i>›</i></button>
         <div class="tut-choices"><button class="gm-btn primary" data-goto="race">🏁 봇 레이스</button><button class="gm-btn" data-goto="time">⏱️ 타임 어택</button><button class="gm-btn" data-goto="free">🧭 자유 연습</button><button class="gm-btn" data-goto="home">🏠 홈으로</button></div>`,
       go: '봇 레이스 시작',
       onGo: () => goTo('race'),
@@ -1027,7 +1029,7 @@ export function startTutorial(game) {
   function goTo(where) {
     const carId = game.carId || 'f1';
     stopAuto();
-    if (['race', 'time', 'free', 'home'].includes(where)) {
+    if (['race', 'time', 'free', 'home', 'academy'].includes(where)) {
       try {
         localStorage.setItem(TUT_KEY, 'done');
       } catch {}
@@ -1038,6 +1040,7 @@ export function startTutorial(game) {
       : where === 'gp' ? raceUrl('gp', carId, { tutorial: 1, tstep: params.get('tret') || 'accel' })
       : where === 'race' || where === 'time' ? raceUrl('gp', carId, { mode: where, botLevel: where === 'race' ? 'easy' : null })
       : where === 'free' ? raceUrl('gp', carId)
+      : where === 'academy' ? homeUrl('academy') // 드라이빙 아카데미 (2026-11-12)
       : homeUrl();
     location.href = url;
   }

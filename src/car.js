@@ -155,6 +155,9 @@ export class Car {
     // 견인·슬링샷 (2026-11-12, raceSystem이 넣어 줌): tow 0~1 = 1등에게 많이 뒤처짐 → 공기 저항 ↓·최고 속도·힘 살짝 ↑ (cfg.tow)
     //   slingT = 슬링샷 남은 시간 (충전된 슬립스트림에서 옆으로 빠짐), assistDraft = 봇 따라잡기의 보이지 않는 슬립스트림 (예전 세기)
     this.tow = this.slingT = this.assistDraft = 0;
+    // DRS (2026-11-12, src/drs.js가 넣어 줌): 0~1 = 뒷날개 윗판 열림 → 공기 저항 −drs.dragCut·최고 속도 +drs.topGain (cfg.drs)
+    //   draftTrain = 슬립스트림 기차 (내 앞차도 그 앞차 뒤에 붙어 있으면 1, 셋째면 2) → 슬립스트림 효과 × (1 + draft.trainGain × draftTrain)
+    this.drs = this.draftTrain = 0;
     this.latG = 0; // 옆 가속 (m/s², + = 오른쪽으로 도는 중) → 차체 기울기 (carModel)
     this.lonG = 0; // 앞뒤 가속 (m/s², + 가속, - 브레이크) → 차체 앞뒤 숙임
     this.tyreSlip = 0; // 0~1 타이어가 비명을 지르는 정도 (미끄러짐·헛돎·앞 밀림·바퀴 잠김·드리프트) → 타이어 소리
@@ -229,6 +232,7 @@ export class Car {
     this.driftAngle = this.driftHold = this.driftLoss = this.exitRefund = 0;
     this.draft = 0;
     this.tow = this.slingT = this.assistDraft = 0;
+    this.drs = this.draftTrain = 0;
     this.itemBoostT = this.itemSlowT = 0; // 아이템전: 부스터·전기 충격 남은 시간 (items.js가 넣음)
     if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
@@ -290,6 +294,20 @@ export class Car {
    *      차의 위(up) = 바닥 면 방향, 앞(fwd) = 그 면에 눕힌 방향 (예전엔 위를 늘 하늘로 해서 경사·뱅크에서 기울어 있었음)
    *   4) 속도: 레이싱 라인 속도의 80%로 굴러가며 시작 (예전과 같음)
    */
+  /** 슬립스트림·기차·견인·슬링샷·DRS로 올라간 최고 속도 배수 (physics와 봇 목표 속도가 같이 씀; 봇은 noAssist = 마스터 보이지 않는 도움은 빼고, 예전 그대로) */
+  aeroTopMul(noAssist = false) {
+    const cfg = this.cfg, DR = cfg.draft || {}, TW = cfg.tow || {};
+    const drK = Math.min(1, this.draft || 0), adK = noAssist ? 0 : Math.min(1, this.assistDraft || 0), twK = Math.min(1, this.tow || 0);
+    const trK = 1 + Math.min(2, this.draftTrain || 0) * (DR.trainGain ?? 0);
+    let m = 1;
+    const top = Math.max(drK * (DR.topGain ?? 0.04) * trK, adK * (DR.assistTopGain ?? 0.04));
+    if (top > 0) m *= 1 + top;
+    if (twK > 0) m *= 1 + (TW.topGain ?? 0) * twK;
+    if (this.slingT > 0) m *= 1 + (DR.slingTop ?? 0.06);
+    if (this.drs > 0) m *= 1 + (cfg.drs?.topGain ?? 0.04) * Math.min(1, this.drs);
+    return m;
+  }
+
   respawnOnRoad() {
     const tr = this.track, S = tr.samples, M = S.length - 1, ds = tr.length / M;
     const line = tr.racingLine;
@@ -695,12 +713,7 @@ export class Car {
     //   견인(tow)·슬링샷(slingT)은 따로 곱함 (raceSystem이 넣어 줌, data/car.json draft·tow)
     const DR = cfg.draft || {}, TW = cfg.tow || {};
     const drK = Math.min(1, this.draft || 0), adK = Math.min(1, this.assistDraft || 0), twK = Math.min(1, this.tow || 0);
-    if (!flyGround) {
-      const top = Math.max(drK * (DR.topGain ?? 0.04), adK * (DR.assistTopGain ?? 0.04));
-      if (top > 0) maxSpeed *= 1 + top;
-      if (twK > 0) maxSpeed *= 1 + (TW.topGain ?? 0) * twK;
-      if (this.slingT > 0) maxSpeed *= 1 + (DR.slingTop ?? 0.06);
-    }
+    if (!flyGround) maxSpeed *= this.aeroTopMul();
     // 아이템전: 부스터 = 최고 속도 ↑, 전기 충격 = 최고 속도 ↓ (items.js가 시간을 넣음)
     const IT = cfg.items || {};
     if (this.itemBoostT > 0 && !flyGround) maxSpeed *= IT.boostTop ?? 1.22;
@@ -780,7 +793,9 @@ export class Car {
     }
     // 공기 저항 + 구름 저항. 슬립스트림(앞차 바로 뒤, car.draft 0~1)이면 공기 저항이 draft.dragCut만큼 줄어듦
     //   봇 따라잡기의 보이지 않는 슬립스트림(assistDraft)은 예전 세기(assistDragCut), 진짜 슬립스트림과 겹치면 큰 쪽만. 견인은 따로 곱함
-    const draftK = (1 - Math.max(drK * (DR.dragCut ?? 0.3), adK * (DR.assistDragCut ?? 0.3))) * (twK > 0 ? 1 - (TW.dragCut ?? 0) * twK : 1);
+    const trK = 1 + Math.min(2, this.draftTrain || 0) * (DR.trainGain ?? 0); // 슬립스트림 기차
+    const drsK = this.drs > 0 ? 1 - (cfg.drs?.dragCut ?? 0.25) * Math.min(1, this.drs) : 1; // DRS
+    const draftK = (1 - Math.min(0.75, Math.max(drK * (DR.dragCut ?? 0.3) * trK, adK * (DR.assistDragCut ?? 0.3)))) * (twK > 0 ? 1 - (TW.dragCut ?? 0) * twK : 1) * drsK;
     dec += cfg.aero.drag * v * v * draftK + cfg.aero.rolling;
     f += drive * dt;
     f = Math.sign(f) * Math.max(0, Math.abs(f) - dec * dt); // 저항은 속도를 0까지만 줄임

@@ -79,7 +79,7 @@ async function call(path, opts = {}) {
     const res = await fetch(`${ONLINE_URL.replace(/\/+$/, '')}/rest/v1/${path}`, { ...opts, headers: { ...headers(), ...(opts.headers || {}) }, signal: ctl.signal });
     const txt = await res.text();
     const data = txt ? JSON.parse(txt) : null;
-    if (!res.ok) throw new Error((data && (data.message || data.hint)) || `서버 오류 ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error((data && (data.message || data.hint)) || `서버 오류 ${res.status}`), { code: data && data.code, details: data && data.details, hint: data && data.hint, status: res.status });
     return data;
   } finally {
     clearTimeout(tm);
@@ -116,7 +116,35 @@ async function ensure() {
 }
 const sameName = (a, b) => String(a || '').replace(/\s+/g, '').toLowerCase() === String(b || '').replace(/\s+/g, '').toLowerCase();
 
+const LICENSE_LEVELS = ['C', 'B', 'A', 'S'];
+let licenseRpcMissing = false; // SQL이 없으면 이 페이지를 새로 열 때까지 다시 보내지 않음
+const licenseBoardMissing = new Set();
+const validLicense = (level) => LICENSE_LEVELS.includes(level) ? level : null;
+function missingLicenseSchema(err) {
+  const message = [err.message, err.details, err.hint].filter(Boolean).join(' ');
+  return /license|records_with_license/i.test(message) &&
+    (/^(42703|42P01|PGRST204|PGRST205)$/.test(err.code || '') ||
+      /does not exist|could not find|schema cache|unknown (column|table)/i.test(message));
+}
+
+/** 최고 라이선스를 전송 → 서버의 현재 등급 또는 null. 계정·서버 함수가 없으면 조용히 건너뜀. */
+export async function setLicense(level) {
+  const m = readId();
+  if (!validLicense(level) || !m || !online.enabled || licenseRpcMissing) return null;
+  try {
+    return validLicense(await rpc('gr_set_license', { p_id: m.id, p_secret: m.secret, p_license: level }));
+  } catch (err) {
+    const message = [err.message, err.details, err.hint].filter(Boolean).join(' ');
+    if (/^(PGRST202|42883)$/.test(err.code || '') ||
+        (/gr_set_license/i.test(message) && /does not exist|could not find|schema cache|unknown function/i.test(message))) {
+      licenseRpcMissing = true;
+    }
+    return null;
+  }
+}
+
 export const online = {
+  setLicense,
   get enabled() {
     return !!fake() || !!(ONLINE_URL && ONLINE_KEY);
   },
@@ -227,8 +255,22 @@ export const online = {
   /** 순위표: 맵 전체(사람마다 가장 빠른 기록 하나) 또는 car를 주면 그 차만. 빠른 순서 */
   async board(map, car = null, limit = 50) {
     if (!this.enabled) return [];
-    const q = `select=player_id,nickname,car,total,laps,best_lap,assist,updated_at&map=eq.${encodeURIComponent(map)}${car ? `&car=eq.${encodeURIComponent(car)}` : ''}&order=total.asc&limit=${limit}`;
-    return (await select(car ? 'records' : 'leaderboard', q)) || [];
+    const fields = 'player_id,nickname,car,total,laps,best_lap,assist,updated_at';
+    const filters = '&map=eq.' + encodeURIComponent(map) +
+      (car ? '&car=eq.' + encodeURIComponent(car) : '') + '&order=total.asc&limit=' + limit;
+    const table = car ? 'records_with_license' : 'leaderboard';
+    let rows;
+    if (!licenseBoardMissing.has(table)) {
+      try {
+        rows = await select(table, 'select=' + fields + ',license' + filters);
+      } catch (err) {
+        if (!missingLicenseSchema(err)) throw err;
+        licenseBoardMissing.add(table);
+      }
+    }
+    // SQL 적용 전 서버: 원래 조회로 되돌리고 배지는 null로 맞춤.
+    if (rows === undefined) rows = await select(car ? 'records' : 'leaderboard', 'select=' + fields + filters);
+    return (rows || []).map((row) => ({ ...row, license: validLicense(row.license) }));
   },
   /** 다른 사람(또는 나)의 고스트 JSON 문자열 (없으면 null) */
   async ghost(map, car, playerId) {

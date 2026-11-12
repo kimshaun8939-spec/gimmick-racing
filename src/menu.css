@@ -1957,3 +1957,14 @@ body #lobby .lb-mycar .lb-cars { grid-auto-rows: max-content; }
 .gm-welcome .wl-err { display: none; margin-top: 8px; padding: 7px 10px; border-radius: 9px; background: rgba(255, 75, 58, 0.15); border: 1px solid rgba(255, 75, 58, 0.45); color: #ffb0a6; font-size: 13px; font-weight: 800; }
 .gm-welcome .wl-err.on { display: block; animation: gmPop 0.25s ease-out; }
 .gm-welcome.busy .btns { opacity: 0.55; pointer-events: none; }
+
+/* 튜토리얼 끝 카드: '다음은 드라이빙 아카데미' (2026-11-12, academy) */
+.tut-next-ac { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 10px 14px; text-align: left;
+  border-color: rgba(255, 207, 63, 0.55); background: linear-gradient(100deg, rgba(255, 207, 63, 0.16), rgba(255, 207, 63, 0.03) 70%); }
+.tut-next-ac .ic { font-size: 26px; line-height: 1; }
+.tut-next-ac b { display: block; color: #ffd75a; font-size: 15px; }
+.tut-next-ac small { display: block; opacity: 0.78; font-size: 12px; line-height: 1.35; margin-top: 2px; }
+.tut-next-ac > span:nth-child(2) { flex: 1; min-width: 0; }
+.tut-next-ac i { font-style: normal; font-size: 22px; opacity: 0.7; }
+/* 라이선스 배지 (게임 결과 화면에서도 쓰므로 여기에도, academy.css와 같은 값) */
+.ac-lic { display: inline-grid; place-items: center; vertical-align: -3px; margin: 0 2px 0 5px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55)); }

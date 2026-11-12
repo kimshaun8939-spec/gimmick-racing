@@ -1,5 +1,6 @@
-// 드라이버 프로필: 경험치(XP)·레벨·라이선스 (2026-11-10, 카트 게임 분석 → "계속 하고 싶게 만드는 성장")
-//   아무것도 잠그지 않음 (차·맵은 처음부터 다 열려 있음). 달릴수록 레벨과 라이선스 이름만 올라감
+// 드라이버 프로필: 경험치(XP)·레벨·티어 (2026-11-10, 카트 게임 분석 → "계속 하고 싶게 만드는 성장")
+//   아무것도 잠그지 않음 (차·맵은 처음부터 다 열려 있음). 달릴수록 레벨과 티어 이름만 올라감
+//   (2026-11-12 사용자 요청: 예전 이름 '라이선스' → '티어'. '라이선스'는 드라이빙 아카데미 시험(academy.js)에 씀)
 //   저장: localStorage `gimmick.profile` { xp, races, wins, podiums }
 //   받는 신호: window 이벤트 `gimmick:raceDone` detail { map, car, mode, place, total, time }
 //     (main.js가 완주 때 보냄. 기록을 저장할 수 있는 진짜 플레이일 때만)
@@ -24,13 +25,13 @@ function combined(p) {
   return { ...p, xp: p.xp + o.xp, races: p.races + o.races, wins: p.wins + o.wins, podiums: p.podiums + o.podiums, local: p.xp, devices: o.devices };
 }
 const TIERS = [
-  { lv: 1, title: '루키 라이선스', icon: '🔰', color: '#8fd3ff' },
-  { lv: 3, title: '브론즈 라이선스', icon: '🥉', color: '#d9935a' },
-  { lv: 6, title: '실버 라이선스', icon: '🥈', color: '#cfd8e3' },
-  { lv: 10, title: '골드 라이선스', icon: '🥇', color: '#ffd24a' },
-  { lv: 15, title: '플래티넘 라이선스', icon: '💠', color: '#7ef0e0' },
-  { lv: 20, title: '다이아 라이선스', icon: '💎', color: '#9db4ff' },
-  { lv: 30, title: '레전드 라이선스', icon: '👑', color: '#ff8ad8' },
+  { lv: 1, title: '루키 티어', icon: '🔰', color: '#8fd3ff' },
+  { lv: 3, title: '브론즈 티어', icon: '🥉', color: '#d9935a' },
+  { lv: 6, title: '실버 티어', icon: '🥈', color: '#cfd8e3' },
+  { lv: 10, title: '골드 티어', icon: '🥇', color: '#ffd24a' },
+  { lv: 15, title: '플래티넘 티어', icon: '💠', color: '#7ef0e0' },
+  { lv: 20, title: '다이아 티어', icon: '💎', color: '#9db4ff' },
+  { lv: 30, title: '레전드 티어', icon: '👑', color: '#ff8ad8' },
 ];
 const needFor = (lv) => 200 + (lv - 1) * 80; // 이 레벨에서 다음 레벨까지 필요한 XP
 
@@ -106,6 +107,20 @@ export const profile = {
     const after = describe(combined(p));
     return { gained, before, after, levelUp: after.level > before.level, tierUp: after.title !== before.title };
   },
+  /** 레이스가 아닌 보상 XP (드라이빙 아카데미 메달·라이선스, 2026-11-12). 레이스 수는 안 늘어남. 돌려주는 값은 award와 같음 */
+  bonus(xp) {
+    const p = load();
+    const before = describe(combined(p));
+    const gained = Math.max(0, Math.round(Number(xp) || 0));
+    p.xp += gained;
+    save(p);
+    const after = describe(combined(p));
+    const r = { gained, before, after, levelUp: after.level > before.level, tierUp: after.title !== before.title };
+    try {
+      if (typeof window !== 'undefined' && gained) window.dispatchEvent(new CustomEvent('gimmick:xp', { detail: r })); // online.syncXp가 서버에 올림
+    } catch {}
+    return r;
+  },
   reset() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ xp: 0, races: 0, wins: 0, podiums: 0, seeded: true })); // 지우면 예전 기록 XP를 또 받으므로 0으로 저장
@@ -129,7 +144,7 @@ function pill(r) {
   const a = r.after;
   el.innerHTML =
     `<span style="color:#7dffb0">+${r.gained} XP</span> · <span style="color:${a.color}">${a.icon} Lv.${a.level} ${a.title}</span>` +
-    (r.tierUp ? ' · <span style="color:#ffd24a">새 라이선스!</span>' : r.levelUp ? ' · <span style="color:#ffd24a">레벨 업!</span>' : '') +
+    (r.tierUp ? ' · <span style="color:#ffd24a">새 티어!</span>' : r.levelUp ? ' · <span style="color:#ffd24a">레벨 업!</span>' : '') +
     `<span style="display:block;margin-top:6px;height:5px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden">` +
     `<span style="display:block;height:100%;width:${Math.round(a.pct * 100)}%;background:${a.color}"></span></span>`;
   requestAnimationFrame(() => {
@@ -151,4 +166,10 @@ if (typeof window !== 'undefined' && !window.__gimmickProfileHooked) {
       window.dispatchEvent(new CustomEvent('gimmick:xp', { detail: r }));
     } catch {}
   });
+}
+/** 다른 화면에서도 XP 알림을 띄울 때 (드라이빙 아카데미) */
+export function showXpPill(r) {
+  try {
+    if (r && r.after) pill(r);
+  } catch {}
 }
