@@ -17,7 +17,37 @@
       "name": "레드 포뮬러",
       "tag": "FORMULA · 균형형",
       "desc": "기본 F1 머신. 빠른 가속과 다운포스로 어디서나 무난하게 빨라요. 배 모드가 등급에서 가장 빨라서 바닷가 코스에 강해요!",
-      "stats": { "speed": 4, "accel": 4, "handling": 2, "grip": 3, "boost": 3, "offroad": 1, "boat": 3, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 4,
+        "accel": 4,
+        "handling": 2,
+        "grip": 3,
+        "boost": 3,
+        "offroad": 1,
+        "boat": 3,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 71,
+          "accel": 70,
+          "handling": 32,
+          "grip": 59,
+          "brake": 61,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 28
+        },
+        "metrics": {
+          "topKmh": 250,
+          "zero100Sec": 2.14,
+          "lateral150": 20.6,
+          "downforce": 1.51,
+          "brake100M": 15,
+          "offroadKeep": 38,
+          "boatKmh": 193
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "f1", "body": "#e8463a" },
       "tune": {
         "feel": { "roll": 0.7, "pitch": 0.8, "spring": 140, "damp": 0.75 },
@@ -37,7 +67,37 @@
       "name": "블루 프로토",
       "tag": "LE MANS PROTO · 접지력",
       "desc": "르망 프로토타입. 다운포스가 아주 커서 코너에 꽉 붙어 돌아요. 코너가 이어지는 정글 유적에서 등급 최강, 대신 출발은 조금 느려요.",
-      "stats": { "speed": 4, "accel": 4, "handling": 3, "grip": 4, "boost": 2, "offroad": 1, "boat": 1, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 4,
+        "accel": 4,
+        "handling": 3,
+        "grip": 4,
+        "boost": 2,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 66,
+          "accel": 51,
+          "handling": 37,
+          "grip": 71,
+          "brake": 91,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 244,
+          "zero100Sec": 2.33,
+          "lateral150": 22.2,
+          "downforce": 2.12,
+          "brake100M": 12,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "proto", "body": "#0f6fd1", "accent": "#eef4ff", "trim": "#ffd400", "number": "8" },
       "tune": {
         "sound": { "_설명": "하이브리드 V6 프로토타입: 매끈하고 높은 소리 + 전기 모터 휘잉, 팝 적음", "cyl": 6, "amps": [1, 0.95, 0.98, 0.94, 0.99, 0.96], "offs": [0, 0.01, -0.01, 0.01, 0, -0.01], "fBase": 54, "fRange": 190, "pulse": 0.75, "saw": 1.35, "sub": 0.8, "grit": 2.4, "bright": 1.2, "tex": 0.8, "eqFreq": 200, "eqGain": 5, "turbo": 0.35, "electric": 1, "pops": 0.5, "squeal": 0.85, "squealPitch": 1.2, "squealVib": 0.6, "squealNoise": 0.7, "_타이어": "넓은 슬릭: 매끈하고 높은 휘익, 떨림 적음" },
@@ -62,7 +122,37 @@
       "name": "제니스 하이퍼",
       "tag": "HYPERCAR · 최고 속도",
       "desc": "W16 엔진의 하이퍼카. 긴 직선에서는 아무도 못 따라오지만, 무겁고 브레이크가 길어서 코너가 많은 맵은 힘들어요.",
-      "stats": { "speed": 5, "accel": 5, "handling": 2, "grip": 2, "boost": 4, "offroad": 1, "boat": 1, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 5,
+        "accel": 5,
+        "handling": 2,
+        "grip": 2,
+        "boost": 4,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 95,
+          "accel": 86,
+          "handling": 29,
+          "grip": 34,
+          "brake": 32,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 280,
+          "zero100Sec": 1.99,
+          "lateral150": 17.5,
+          "downforce": 0.95,
+          "brake100M": 19,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "hyper", "body": "#4a2391", "accent": "#0e0f13", "trim": "#ff9a1f", "rim": "#16171b", "helmet": "#ff9a1f", "number": "16", "numberBg": "#0e0f13", "numberFg": "#ff9a1f" },
       "tune": {
         "sound": { "_설명": "W16 하이퍼카: 아주 매끈하고 두꺼운 고음 + 쿼드 터보 휘슬, 팝 적음", "cyl": 12, "amps": [1, 0.97, 0.99, 0.96, 1, 0.98, 0.97, 0.99, 0.96, 1, 0.98, 0.97], "offs": [0, 0.01, -0.01, 0.005, 0, -0.005, 0.01, 0, -0.01, 0.005, 0, -0.005], "fBase": 50, "fRange": 205, "pulse": 0.6, "saw": 1.45, "sub": 1.1, "grit": 2.2, "drive": 1.05, "bright": 1.25, "tex": 1.1, "eqFreq": 170, "eqGain": 6, "turbo": 0.6, "turboMax": 1.4, "pops": 0.6, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.88, "squealVib": 1.0, "squealNoise": 1.1, "_타이어": "아주 넓은 타이어: 굵고 낮은 끼이이익" },
@@ -88,7 +178,37 @@
       "name": "로켓 드래그",
       "tag": "ROCKET DRAGSTER · 가속·부스터",
       "desc": "등에 로켓을 단 드래그스터. 출발 가속이 가장 세고 직선이 길수록 빨라서 네온 시티에서 등급 최강! 대신 핸들이 예민하고 뒤가 잘 미끄러지는 까다로운 차예요.",
-      "stats": { "speed": 4, "accel": 5, "handling": 3, "grip": 2, "boost": 5, "offroad": 1, "boat": 1, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 4,
+        "accel": 5,
+        "handling": 3,
+        "grip": 2,
+        "boost": 5,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 87,
+          "accel": 99,
+          "handling": 72,
+          "grip": 39,
+          "brake": 44,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 271,
+          "zero100Sec": 1.89,
+          "lateral150": 18.1,
+          "downforce": 0.95,
+          "brake100M": 17,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "rocket", "body": "#ff6a13", "accent": "#fafafa", "trim": "#7b2cff", "number": "1" },
       "tune": {
         "sound": { "_설명": "드래그 레이서: 아주 거칠고 울렁이는 V8 + 부스터 때 로켓 굉음", "cyl": 8, "amps": [1, 0.5, 1, 0.48, 0.98, 0.55, 0.95, 0.5], "offs": [0, 0.12, -0.06, 0.1, 0.03, -0.1, 0.07, -0.05], "fBase": 40, "fRange": 140, "pulse": 1.2, "saw": 0.8, "sub": 1.3, "grit": 4, "drive": 1.25, "bright": 0.95, "eqFreq": 120, "eqGain": 7, "pops": 2, "boostRoar": 1, "volume": 1.05, "squeal": 1.3, "squealPitch": 0.95, "squealVib": 1.3, "squealNoise": 1.2, "_타이어": "드래그 타이어: 크고 거친 비명" },
@@ -114,7 +234,37 @@
       "name": "볼트 EV",
       "tag": "ELECTRIC CONCEPT · 즉시 가속·비행",
       "desc": "전기 모터 콘셉트카. 밟는 순간 힘이 다 나오고 변속이 거의 없어요. 가볍고 접지가 고르게 걸려서 달 중력 기지에서 등급 최강, 비행 모드도 가장 빨라요.",
-      "stats": { "speed": 3, "accel": 5, "handling": 3, "grip": 3, "boost": 3, "offroad": 1, "boat": 1, "fly": 5, "drift": 2 },
+      "stats": {
+        "speed": 3,
+        "accel": 5,
+        "handling": 3,
+        "grip": 3,
+        "boost": 3,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 5,
+        "drift": 2,
+        "score100": {
+          "speed": 69,
+          "accel": 43,
+          "handling": 37,
+          "grip": 54,
+          "brake": 58,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 248,
+          "zero100Sec": 2.43,
+          "lateral150": 20,
+          "downforce": 1.36,
+          "brake100M": 15,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "ev", "body": "#f2f5f8", "accent": "#18e0c8", "trim": "#18e0c8", "rim": "#20242b", "number": "E", "numberBg": "#18e0c8", "numberFg": "#0d1117" },
       "tune": {
         "sound": { "_설명": "전기 모터: 폭발음이 거의 없고 높은 휘잉 + 인버터 윙윙, 팝 없음", "cyl": 4, "amps": [1, 1, 1, 1], "offs": [0, 0, 0, 0], "fBase": 70, "fRange": 300, "pulse": 0.08, "saw": 0.35, "sub": 0.35, "grit": 0.6, "drive": 0.6, "bright": 1.5, "tex": 0.4, "eqFreq": 900, "eqGain": 4, "whine": 2.2, "whineMul": 6, "electric": 4, "pops": 0, "volume": 0.85, "squeal": 0.9, "squealPitch": 1.28, "squealVib": 0.7, "squealNoise": 0.6, "_타이어": "저소음 전기차 타이어: 가늘고 높은 삐익" },
@@ -139,7 +289,37 @@
       "name": "썬더 GT",
       "tag": "GRAND TOURER · 최고 속도",
       "desc": "무겁고 힘센 그랜드 투어러. 직선에서는 등급에서 가장 빨라서 네온 시티 최강이지만, 출발이 느리고 코너에서 뒤가 잘 미끄러져요.",
-      "stats": { "speed": 5, "accel": 4, "handling": 1, "grip": 1, "boost": 4, "offroad": 1, "boat": 1, "fly": 1, "drift": 3 },
+      "stats": {
+        "speed": 5,
+        "accel": 4,
+        "handling": 1,
+        "grip": 1,
+        "boost": 4,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 3,
+        "score100": {
+          "speed": 99,
+          "accel": 52,
+          "handling": 20,
+          "grip": 26,
+          "brake": 20,
+          "drift": 34,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 285,
+          "zero100Sec": 2.32,
+          "lateral150": 16.5,
+          "downforce": 0.6,
+          "brake100M": 21,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "gt", "body": "#1d3a8a", "accent": "#f4f5f7", "trim": "#c9a227", "rim": "#c9a227", "number": "23" },
       "tune": {
         "sound": { "_설명": "큰 배기량 V8 GT: 낮고 굵고 울렁임이 큼, 슈퍼차저 윙윙, 팝 많음", "cyl": 8, "amps": [1, 0.55, 0.95, 0.5, 1, 0.6, 0.9, 0.52], "offs": [0, 0.1, -0.05, 0.08, 0.02, -0.09, 0.06, -0.04], "fBase": 36, "fRange": 118, "pulse": 1.15, "saw": 0.7, "sub": 1.5, "grit": 3.4, "drive": 1.15, "bright": 0.8, "eqFreq": 110, "eqGain": 8, "whine": 1, "whineMul": 7.5, "pops": 1.6, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.85, "squealVib": 1.2, "squealNoise": 1.0, "_타이어": "넓은 뒤 타이어: 낮게 우는 소리" },
@@ -166,7 +346,37 @@
       "name": "스톰 랠리",
       "tag": "RALLY · 가속·핸들링",
       "desc": "가볍고 날쌘 랠리 해치백. 출발과 코너가 빠르고 다운포스 날개를 달아 그랑프리·달 기지처럼 긴 코스에서 꾸준히 빨라요. 최고 속도는 낮아요.",
-      "stats": { "speed": 1, "accel": 3, "handling": 5, "grip": 4, "boost": 1, "offroad": 3, "boat": 1, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 1,
+        "accel": 3,
+        "handling": 5,
+        "grip": 4,
+        "boost": 1,
+        "offroad": 3,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 21,
+          "accel": 67,
+          "handling": 76,
+          "grip": 84,
+          "brake": 87,
+          "drift": 44,
+          "offroad": 62,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 190,
+          "zero100Sec": 2.16,
+          "lateral150": 23.8,
+          "downforce": 0.98,
+          "brake100M": 12,
+          "offroadKeep": 62,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "rally", "body": "#f5c518", "accent": "#18191c", "trim": "#1fb85a", "rim": "#f1f1f1", "number": "5" },
       "tune": {
         "sound": { "_설명": "터보 직렬 4기통 랠리: 높고 거친 '브아앙', 평소에도 터보 휘슬, 떼면 '피식'과 탁탁 팝", "cyl": 4, "amps": [1, 0.9, 0.97, 0.88], "offs": [0, 0.02, -0.01, 0.015], "fBase": 58, "fRange": 205, "pulse": 0.9, "saw": 1.25, "sub": 0.6, "grit": 3.2, "drive": 1.1, "bright": 1.35, "tex": 1.5, "eqFreq": 260, "eqGain": 5, "turbo": 0.85, "turboMax": 1.3, "pops": 1.4, "squeal": 0.7, "squealPitch": 1.05, "squealVib": 1.5, "squealNoise": 1.8, "_타이어": "자갈 타이어: 끼익보다 쉬익·자글자글" },
@@ -194,7 +404,37 @@
       "name": "블랙 머슬",
       "tag": "MUSCLE · 직선 가속·드리프트",
       "desc": "슈퍼차저 V8 머슬카. 힘이 넘쳐서 바퀴가 잘 헛돌고 꼬리가 쉽게 미끄러져요. 드리프트로 코너를 도는 맛이 최고!",
-      "stats": { "speed": 4, "accel": 4, "handling": 2, "grip": 1, "boost": 3, "offroad": 1, "boat": 1, "fly": 1, "drift": 4 },
+      "stats": {
+        "speed": 4,
+        "accel": 4,
+        "handling": 2,
+        "grip": 1,
+        "boost": 3,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 4,
+        "score100": {
+          "speed": 81,
+          "accel": 54,
+          "handling": 32,
+          "grip": 20,
+          "brake": 24,
+          "drift": 65,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 264,
+          "zero100Sec": 2.3,
+          "lateral150": 15.7,
+          "downforce": 0.39,
+          "brake100M": 20,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "muscle", "body": "#16171b", "accent": "#e8b931", "trim": "#e8b931", "rim": "#b9bec7", "number": "69", "numberBg": "#e8b931", "numberFg": "#16171b" },
       "tune": {
         "sound": { "_설명": "슈퍼차저 빅블록 V8: 가장 낮고 울렁임이 크며 슈퍼차저 윙윙이 큼, 팝 많음", "cyl": 8, "amps": [1, 0.45, 1, 0.42, 0.97, 0.5, 0.94, 0.46], "offs": [0, 0.14, -0.06, 0.11, 0.03, -0.12, 0.08, -0.06], "fBase": 30, "fRange": 104, "pulse": 1.3, "saw": 0.6, "sub": 1.8, "grit": 3.8, "drive": 1.25, "bright": 0.75, "tex": 1.3, "eqFreq": 95, "eqGain": 9, "whine": 1.6, "whineMul": 8, "pops": 2.1, "volume": 1.1, "squeal": 1.45, "squealPitch": 0.75, "squealVib": 1.4, "squealNoise": 1.3, "_타이어": "타이어 연기: 아주 크고 낮게 우우웅" },
@@ -220,7 +460,37 @@
       "name": "포뮬러 주니어",
       "tag": "FORMULA JUNIOR · 코너·민첩",
       "desc": "가벼운 입문 포뮬러. 힘은 작지만 코너에서 꽉 붙고 핸들이 날카로워요. 코너가 많은 맵에서 강하고, 가벼워서 비행 모드도 빨라요.",
-      "stats": { "speed": 2, "accel": 3, "handling": 4, "grip": 5, "boost": 2, "offroad": 1, "boat": 1, "fly": 3, "drift": 2 },
+      "stats": {
+        "speed": 2,
+        "accel": 3,
+        "handling": 4,
+        "grip": 5,
+        "boost": 2,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 3,
+        "drift": 2,
+        "score100": {
+          "speed": 34,
+          "accel": 26,
+          "handling": 61,
+          "grip": 99,
+          "brake": 90,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 206,
+          "zero100Sec": 2.65,
+          "lateral150": 25.7,
+          "downforce": 2.22,
+          "brake100M": 12,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "f1", "body": "#12a150", "accent": "#f5f7f2", "trim": "#0f1a14", "rim": "#f5f7f2", "wall": "#f5f7f2", "helmet": "#ffd23a", "number": "3", "numberBg": "#f5f7f2", "numberFg": "#12a150" },
       "tune": {
         "sound": { "_설명": "고회전 직렬 4기통 포뮬러: 높고 날카로운 '위이잉', 깔끔", "cyl": 4, "amps": [1, 0.96, 0.98, 0.95], "offs": [0, 0.01, -0.01, 0.01], "fBase": 62, "fRange": 235, "pulse": 0.8, "saw": 1.3, "sub": 0.55, "grit": 2.6, "drive": 1, "bright": 1.35, "tex": 1, "eqFreq": 280, "eqGain": 5, "pops": 0.9, "squeal": 0.9, "squealPitch": 1.3, "squealVib": 0.9, "squealNoise": 0.8, "_타이어": "작은 타이어: 짧게 삑삑" },
@@ -247,7 +517,37 @@
       "name": "바하 트로피",
       "tag": "TROPHY TRUCK · 잔디·물",
       "desc": "사막 경주용 트로피 트럭. 잔디·연석·물 위에서도 거의 안 느려지고 배 모드가 가장 빨라서 바닷가 코스 최강! 대신 무겁고 힘이 약해 코너가 많은 맵은 힘들어요.",
-      "stats": { "speed": 3, "accel": 3, "handling": 1, "grip": 1, "boost": 3, "offroad": 5, "boat": 5, "fly": 1, "drift": 4 },
+      "stats": {
+        "speed": 3,
+        "accel": 3,
+        "handling": 1,
+        "grip": 1,
+        "boost": 3,
+        "offroad": 5,
+        "boat": 5,
+        "fly": 1,
+        "drift": 4,
+        "score100": {
+          "speed": 56,
+          "accel": 49,
+          "handling": 20,
+          "grip": 28,
+          "brake": 23,
+          "drift": 65,
+          "offroad": 99,
+          "boat": 99
+        },
+        "metrics": {
+          "topKmh": 233,
+          "zero100Sec": 2.35,
+          "lateral150": 16.8,
+          "downforce": 0.27,
+          "brake100M": 20,
+          "offroadKeep": 86,
+          "boatKmh": 244
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "truck", "body": "#ff7a1a", "accent": "#1b1d22", "trim": "#f2f2f2", "rim": "#1b1d22", "number": "7", "numberBg": "#1b1d22", "numberFg": "#ff7a1a", "tire": "knobby" },
       "tune": {
         "sound": { "_설명": "트로피 트럭 V8: 거칠고 덜컹이는 낮은 소리, 흡기 바람 큼", "cyl": 8, "amps": [1, 0.6, 0.92, 0.55, 0.98, 0.62, 0.88, 0.57], "offs": [0, 0.09, -0.04, 0.07, 0.02, -0.08, 0.05, -0.03], "fBase": 34, "fRange": 112, "pulse": 1.2, "saw": 0.7, "sub": 1.6, "grit": 3.9, "drive": 1.2, "bright": 0.85, "tex": 1.8, "eqFreq": 120, "eqGain": 7, "pops": 1.3, "volume": 1.05, "squeal": 0.6, "squealPitch": 0.7, "squealVib": 1.6, "squealNoise": 2.0, "_타이어": "울퉁불퉁 오프로드 타이어: 낮은 웅웅 + 흙 긁는 소리" },
@@ -277,7 +577,37 @@
       "name": "드리프트 버기",
       "tag": "BUGGY · 드리프트·오프로드",
       "desc": "울퉁불퉁 큰 바퀴의 모래 버기. 드리프트가 길고 쉽고, 잔디 위에서도 거의 안 느려져요. 가벼워서 달 중력 기지에서 등급 최강!",
-      "stats": { "speed": 2, "accel": 2, "handling": 2, "grip": 2, "boost": 2, "offroad": 5, "boat": 2, "fly": 1, "drift": 5 },
+      "stats": {
+        "speed": 2,
+        "accel": 2,
+        "handling": 2,
+        "grip": 2,
+        "boost": 2,
+        "offroad": 5,
+        "boat": 2,
+        "fly": 1,
+        "drift": 5,
+        "score100": {
+          "speed": 32,
+          "accel": 23,
+          "handling": 44,
+          "grip": 39,
+          "brake": 33,
+          "drift": 99,
+          "offroad": 94,
+          "boat": 38
+        },
+        "metrics": {
+          "topKmh": 203,
+          "zero100Sec": 2.69,
+          "lateral150": 18.1,
+          "downforce": 0.2,
+          "brake100M": 18,
+          "offroadKeep": 82,
+          "boatKmh": 200
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "buggy", "body": "#2fb35c", "accent": "#f4f4f4", "trim": "#1b1c1f", "number": "4" },
       "tune": {
         "sound": { "_설명": "공랭 2기통 버기: 통통 튀는 낮은 박자, 덜그럭거리는 질감", "cyl": 2, "amps": [1, 0.8], "offs": [0, 0.18], "fBase": 26, "fRange": 95, "pulse": 1.25, "saw": 0.55, "sub": 0.9, "grit": 3.6, "drive": 1.1, "bright": 1.1, "tex": 1.8, "eqFreq": 180, "eqGain": 4, "pops": 0.9, "squeal": 0.7, "squealPitch": 1.1, "squealVib": 1.6, "squealNoise": 1.9, "_타이어": "모래 타이어: 쉬익 섞인 가벼운 끼익" },
@@ -303,7 +633,37 @@
       "name": "포켓 카트",
       "tag": "KART · 민첩·접지",
       "desc": "작고 낮은 레이싱 카트. 핸들을 꺾는 대로 휙휙 돌아서 코너가 많은 정글 유적 최강. 가벼워서 비행도 날렵해요. 최고 속도는 가장 낮아요.",
-      "stats": { "speed": 1, "accel": 2, "handling": 5, "grip": 4, "boost": 1, "offroad": 1, "boat": 1, "fly": 3, "drift": 2 },
+      "stats": {
+        "speed": 1,
+        "accel": 2,
+        "handling": 5,
+        "grip": 4,
+        "boost": 1,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 3,
+        "drift": 2,
+        "score100": {
+          "speed": 20,
+          "accel": 24,
+          "handling": 99,
+          "grip": 77,
+          "brake": 99,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 189,
+          "zero100Sec": 2.68,
+          "lateral150": 22.9,
+          "downforce": 1.24,
+          "brake100M": 12,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "kart", "body": "#ffd21f", "accent": "#1b6dff", "trim": "#16181d", "rim": "#f2f2f2", "helmet": "#1b6dff", "number": "11", "numberBg": "#ffffff", "numberFg": "#1b6dff" },
       "tune": {
         "sound": { "_설명": "2행정 단기통 카트: 높고 앵앵거리는 '앵~', 덜덜 떨림", "cyl": 1, "amps": [1], "offs": [0], "fBase": 72, "fRange": 270, "pulse": 1.1, "saw": 1.0, "sub": 0.35, "grit": 4.2, "drive": 1.15, "bright": 1.4, "tex": 2.2, "eqFreq": 420, "eqGain": 5, "pops": 0.5, "volume": 0.95, "squeal": 1.0, "squealPitch": 1.55, "squealVib": 1.1, "squealNoise": 0.6, "_타이어": "아주 작은 타이어: 높은 삐이익" },
@@ -329,7 +689,37 @@
       "name": "시티 핫해치",
       "tag": "HOT HATCH · 안정·쉬움",
       "desc": "작은 터보 해치백. 뒤가 아주 안정적이라 실수해도 잘 안 돌아요. 터보 힘이 세서 긴 그랑프리에서 등급 최강, 처음 운전한다면 가장 쉬운 차예요.",
-      "stats": { "speed": 2, "accel": 3, "handling": 2, "grip": 2, "boost": 2, "offroad": 2, "boat": 1, "fly": 1, "drift": 1 },
+      "stats": {
+        "speed": 2,
+        "accel": 3,
+        "handling": 2,
+        "grip": 2,
+        "boost": 2,
+        "offroad": 2,
+        "boat": 1,
+        "fly": 1,
+        "drift": 1,
+        "score100": {
+          "speed": 38,
+          "accel": 46,
+          "handling": 35,
+          "grip": 43,
+          "brake": 52,
+          "drift": 20,
+          "offroad": 41,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 211,
+          "zero100Sec": 2.39,
+          "lateral150": 18.6,
+          "downforce": 0.6,
+          "brake100M": 16,
+          "offroadKeep": 50,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "hatch", "body": "#e83b6f", "accent": "#ffffff", "trim": "#1c1d22", "rim": "#ffffff", "number": "22", "numberBg": "#ffffff", "numberFg": "#e83b6f" },
       "tune": {
         "sound": { "_설명": "작은 터보 4기통: 가볍고 부드러운 '부웅' + 터보 휘슬, 떼면 피식", "cyl": 4, "amps": [1, 0.93, 0.97, 0.92], "offs": [0, 0.015, -0.01, 0.01], "fBase": 56, "fRange": 175, "pulse": 0.85, "saw": 1.1, "sub": 0.65, "grit": 2.6, "drive": 0.95, "bright": 1.15, "tex": 1.2, "eqFreq": 240, "eqGain": 4, "turbo": 0.6, "pops": 0.7, "volume": 0.95, "squeal": 1.0, "squealPitch": 1.2, "squealVib": 0.9, "squealNoise": 0.9, "_타이어": "평범한 타이어: 또렷한 끼익" },
@@ -356,7 +746,37 @@
       "name": "레트로 로드스터",
       "tag": "ROADSTER · 가벼움·드리프트",
       "desc": "지붕 없는 1960년대 스타일 로드스터. 가볍고 꼬리가 살짝 흘러서 드리프트를 배우기 좋아요. 엔진이 세져서 직선이 긴 네온 시티에서 등급 최강!",
-      "stats": { "speed": 4, "accel": 4, "handling": 3, "grip": 2, "boost": 2, "offroad": 1, "boat": 1, "fly": 1, "drift": 4 },
+      "stats": {
+        "speed": 4,
+        "accel": 4,
+        "handling": 3,
+        "grip": 2,
+        "boost": 2,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 4,
+        "score100": {
+          "speed": 62,
+          "accel": 57,
+          "handling": 47,
+          "grip": 26,
+          "brake": 26,
+          "drift": 55,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 240,
+          "zero100Sec": 2.27,
+          "lateral150": 16.5,
+          "downforce": 0.21,
+          "brake100M": 20,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "roadster", "body": "#1f6f5c", "accent": "#f3ecd8", "trim": "#d7d9dc", "rim": "#d7d9dc", "number": "62", "numberBg": "#f3ecd8", "numberFg": "#1f6f5c" },
       "tune": {
         "sound": { "_설명": "옛날 직렬 6기통: 매끈하고 따뜻한 '부르릉', 떼면 탁탁 팝", "cyl": 6, "amps": [1, 0.9, 0.96, 0.88, 0.98, 0.91], "offs": [0, 0.03, -0.02, 0.025, 0.01, -0.02], "fBase": 42, "fRange": 145, "pulse": 1.0, "saw": 1.05, "sub": 1.0, "grit": 3.0, "drive": 1.05, "bright": 0.95, "tex": 1.3, "eqFreq": 150, "eqGain": 6, "pops": 1.5, "squeal": 1.2, "squealPitch": 1.05, "squealVib": 1.2, "squealNoise": 1.0, "_타이어": "가벼운 뒷바퀴굴림: 길게 노래하는 끼이이익" },
@@ -381,7 +801,37 @@
       "name": "팜 픽업",
       "tag": "PICKUP · 튼튼함·물",
       "desc": "농장에서 온 튼튼한 픽업트럭. 잔디와 연석을 신경 쓰지 않고, 배 모드가 빨라서 바닷가 코스에서 등급 최강. 무거워서 출발과 코너는 느려요.",
-      "stats": { "speed": 2, "accel": 2, "handling": 1, "grip": 1, "boost": 2, "offroad": 4, "boat": 5, "fly": 1, "drift": 2 },
+      "stats": {
+        "speed": 2,
+        "accel": 2,
+        "handling": 1,
+        "grip": 1,
+        "boost": 2,
+        "offroad": 4,
+        "boat": 5,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 40,
+          "accel": 20,
+          "handling": 20,
+          "grip": 26,
+          "brake": 31,
+          "drift": 37,
+          "offroad": 84,
+          "boat": 85
+        },
+        "metrics": {
+          "topKmh": 213,
+          "zero100Sec": 2.74,
+          "lateral150": 16.5,
+          "downforce": 0.29,
+          "brake100M": 19,
+          "offroadKeep": 76,
+          "boatKmh": 234
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      },
       "look": { "style": "truck", "body": "#4d8fd6", "accent": "#f4f1e8", "trim": "#c7ccd3", "rim": "#f4f1e8", "number": "9", "numberBg": "#f4f1e8", "numberFg": "#4d8fd6", "variant": "pickup" },
       "tune": {
         "sound": { "_설명": "픽업 V6: 굵고 느긋한 '그르릉', 고르지 않은 박자", "cyl": 6, "amps": [1, 0.7, 0.93, 0.66, 0.97, 0.72], "offs": [0, 0.08, -0.04, 0.06, 0.02, -0.06], "fBase": 36, "fRange": 115, "pulse": 1.15, "saw": 0.75, "sub": 1.4, "grit": 3.3, "drive": 1.1, "bright": 0.85, "tex": 1.4, "eqFreq": 120, "eqGain": 7, "pops": 1.0, "squeal": 0.85, "squealPitch": 0.8, "squealVib": 1.3, "squealNoise": 1.5, "_타이어": "두꺼운 트럭 타이어: 낮고 탁한 소리" },
@@ -403,11 +853,191 @@
         "camera": { "topKmh": 230 }
       }
     },
-    {"id": "cube", "class": "C", "unlockLevel": 2, "name": "꼬마 큐브밴", "tag": "CUBE VAN · 안정·쉬움", "desc": "네모난 꼬마 밴. 지붕에 짐을 싣고도 씩씩하게 달려요. 앞바퀴 굴림이라 잘 안 돌고, 브레이크가 좋아 실수해도 금방 멈춰요. 키가 커서 코너에서 많이 기울어요.", "stats": {"speed": 2, "accel": 3, "handling": 2, "grip": 3, "boost": 2, "offroad": 2, "boat": 1, "fly": 1, "drift": 1}, "look": {"style": "van", "body": "#37b6c9", "accent": "#fff6e0", "trim": "#ff8a3c", "rim": "#fff6e0", "helmet": "#ff8a3c", "number": "12", "numberBg": "#fff6e0", "numberFg": "#37b6c9"}, "tune": {"_성격": "핫해치 바탕: 최고 속도·엔진 조금↓, 브레이크·옆 접지 조금↑, 키가 커서 많이 기움", "sound": {"cyl": 4, "amps": [1, 0.93, 0.97, 0.92], "offs": [0, 0.015, -0.01, 0.01], "fBase": 51.52, "fRange": 164.5, "pulse": 0.85, "saw": 1.1, "sub": 0.78, "grit": 2.6, "drive": 0.95, "bright": 1.035, "tex": 1.2, "eqFreq": 240, "eqGain": 4, "turbo": 0.6, "pops": 0.7, "volume": 0.95, "squeal": 1.0, "squealPitch": 1.2, "squealVib": 0.9, "squealNoise": 0.9}, "maxSpeed": 47.4, "brake": 37, "steerRate": 2.45, "steerLat": 19, "grip": 11, "offroad": {"maxSpeedFactor": 0.5, "drag": 0.22, "gripFactor": 0.72}, "drivetrain": "fwd", "engine": {"power": 293, "turbo": {"share": 0.3, "lag": 0.4}}, "gears": [13, 21.5, 29.5, 37, 44, 52], "aero": {"drag": 0.00134, "downforce": 0.66}, "feel": {"roll": 1.35, "pitch": 1.15, "spring": 60, "damp": 0.5}, "tire": {"traction": 18, "brakeGrip": 23, "lateral": 23.2, "rearGrip": 1.55, "rearSwing": 0.18, "yawResponse": 9, "powerPush": 0.35, "liftOff": 0.45, "tuckMax": 0.22}, "drift": {"grip": 3.0, "baseTurn": 1.0}, "camera": {"topKmh": 220}}},
-    {"id": "scorpion", "class": "C", "unlockLevel": 4, "name": "모래 전갈", "tag": "DUNE BUGGY · 드리프트·잔디", "desc": "사막을 달리던 모래색 버기. 드리프트 버기보다 직선이 조금 빠르고 묵직해요. 잔디와 연석을 겁내지 않고, 꼬리를 흔들며 코너를 돌아요.", "stats": {"speed": 2, "accel": 2, "handling": 2, "grip": 2, "boost": 2, "offroad": 5, "boat": 2, "fly": 1, "drift": 4}, "look": {"style": "buggy", "body": "#d9a441", "accent": "#2a2118", "trim": "#c0392b", "rim": "#2a2118", "helmet": "#c0392b", "number": "13", "numberBg": "#2a2118", "numberFg": "#d9a441", "tire": "knobby"}, "tune": {"_성격": "드리프트 버기 바탕: 최고 속도 조금↑, 가속·핸들 조금↓, 꼬리가 조금 덜 흔들림", "sound": {"cyl": 2, "amps": [1, 0.8], "offs": [0, 0.18], "fBase": 29.12, "fRange": 102.6, "pulse": 1.25, "saw": 0.55, "sub": 0.9, "grit": 3.96, "drive": 1.1, "bright": 1.012, "tex": 1.8, "eqFreq": 180, "eqGain": 4, "pops": 0.9, "squeal": 0.7, "squealPitch": 1.1, "squealVib": 1.6, "squealNoise": 1.9}, "maxSpeed": 47.2, "steerRate": 2.5, "steerLat": 19.9, "grip": 8.5, "offroad": {"maxSpeedFactor": 0.82, "drag": 0.06, "gripFactor": 0.95}, "engine": {"power": 266}, "gears": [11.1, 18.6, 26.0, 33.4, 40.9, 50.1], "aero": {"drag": 0.00127, "downforce": 0.24}, "feel": {"roll": 1.0, "pitch": 1.0, "spring": 50, "damp": 0.4}, "tire": {"traction": 14, "lateral": 23.8, "rearGrip": 1.1, "rearSwing": 0.33, "yawResponse": 10, "powerSlide": 0.45, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.3}, "drift": {"minSpeed": 10, "grip": 1.8, "slipDrag": 0.45, "baseTurn": 1.3, "steerTurn": 0.75, "highSpeedLat": 34, "holdAngle": [0.3, 0.95], "spinAngle": 1.35, "exitKeep": 0.6, "exitAngle": 0.75}, "modes": {"boat": {"thrust": 27.4, "maxSpeed": 56.6}}, "camera": {"topKmh": 230}}},
-    {"id": "midnight", "class": "B", "unlockLevel": 6, "name": "미드나잇 쿠페", "tag": "NIGHT COUPE · 직선·묵직함", "desc": "밤거리를 달리는 보랏빛 쿠페. 썬더 GT보다 최고 속도는 조금 낮지만 꼬리가 덜 미끄러져서 다루기 쉬워요. 긴 직선이 있는 맵에서 믿음직해요.", "stats": {"speed": 5, "accel": 4, "handling": 2, "grip": 2, "boost": 4, "offroad": 1, "boat": 1, "fly": 1, "drift": 3}, "look": {"style": "gt", "body": "#2a1a4a", "accent": "#ff4fa3", "trim": "#35e0ff", "rim": "#35e0ff", "helmet": "#ff4fa3", "number": "77", "numberBg": "#ff4fa3", "numberFg": "#1a1030"}, "tune": {"_성격": "썬더 GT 바탕: 최고 속도·엔진 조금↓(공기 저항↑), 다운포스·옆 접지 조금↑, 꼬리 덜 흔들림", "sound": {"cyl": 8, "amps": [1, 0.55, 0.95, 0.5, 1, 0.6, 0.9, 0.52], "offs": [0, 0.1, -0.05, 0.08, 0.02, -0.09, 0.06, -0.04], "fBase": 38.88, "fRange": 125.08, "pulse": 1.15, "saw": 0.7, "sub": 1.5, "grit": 3.4, "drive": 1.15, "bright": 0.92, "eqFreq": 110, "eqGain": 8, "whine": 1, "whineMul": 7.5, "pops": 1.28, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.85, "squealVib": 1.2, "squealNoise": 1.0}, "maxSpeed": 63.4, "brake": 31, "steerRate": 2.3, "steerLat": 18.6, "steerLatDownforce": 0.2, "grip": 7.5, "engine": {"power": 415}, "gears": [16.2, 26.4, 36.5, 46.7, 56.8, 68.0], "aero": {"drag": 0.00086, "downforce": 0.72}, "feel": {"roll": 1.0, "pitch": 1.0, "spring": 80, "damp": 0.55}, "tire": {"traction": 12.4, "brakeGrip": 19, "lateral": 21.9, "rearGrip": 1.1, "rearSwing": 0.3, "yawResponse": 8, "powerSlide": 0.28, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.28}, "input": {"steerRise": 3.0}, "drift": {"grip": 2.1, "baseTurn": 1.0}, "camera": {"topKmh": 280}}},
-    {"id": "blizzard", "class": "B", "unlockLevel": 8, "name": "블리자드 랠리", "tag": "SNOW RALLY · 코너·잔디", "desc": "눈길 대회에서 온 하얀 랠리카. 스톰 랠리보다 최고 속도가 조금 높고 출발은 살짝 느려요. 네 바퀴 굴림이라 코너에서 끈끈하게 붙어요.", "stats": {"speed": 2, "accel": 3, "handling": 5, "grip": 4, "boost": 1, "offroad": 3, "boat": 1, "fly": 1, "drift": 2}, "look": {"style": "rally", "body": "#f4f8fb", "accent": "#1e6fd9", "trim": "#ff6a1a", "rim": "#1e2a3a", "helmet": "#ff6a1a", "number": "21", "numberBg": "#1e6fd9", "numberFg": "#ffffff"}, "tune": {"_성격": "스톰 랠리 바탕: 최고 속도 조금↑(공기 저항↓), 엔진·출발·조향 한계 조금↓, 터보 지연 조금 김", "sound": {"cyl": 4, "amps": [1, 0.9, 0.97, 0.88], "offs": [0, 0.02, -0.01, 0.015], "fBase": 54.52, "fRange": 196.8, "pulse": 0.9, "saw": 1.25, "sub": 0.6, "grit": 3.2, "drive": 1.1, "bright": 1.282, "tex": 1.5, "eqFreq": 260, "eqGain": 5, "turbo": 1.062, "turboMax": 1.3, "pops": 1.4, "squeal": 0.7, "squealPitch": 1.05, "squealVib": 1.5, "squealNoise": 1.8}, "maxSpeed": 44.2, "brake": 37, "steerRate": 2.9, "steerLat": 20.8, "grip": 11, "offroad": {"maxSpeedFactor": 0.62, "drag": 0.16, "gripFactor": 0.82}, "drivetrain": "awd", "engine": {"power": 310, "turbo": {"share": 0.28, "lag": 0.32}}, "gears": [11, 18, 25, 32, 39, 48], "aero": {"drag": 0.00144, "downforce": 1.05}, "feel": {"roll": 1.25, "pitch": 1.2, "spring": 60, "damp": 0.45}, "tire": {"traction": 17.0, "brakeGrip": 25, "lateral": 23.3, "rearGrip": 1.15, "yawResponse": 12, "liftOff": 0.4, "powerSlide": 0.4, "tuck": 2.0, "tuckMax": 0.3}, "input": {"steerRise": 4.0, "steerRiseHighSpeed": 0.35}, "drift": {"baseTurn": 1.25, "holdAngle": [0.3, 0.85], "spinAngle": 1.25}, "camera": {"topKmh": 220}}},
-    {"id": "razor", "class": "A", "unlockLevel": 11, "name": "레이저 웨지", "tag": "WEDGE SUPERCAR · 직선·날카로움", "desc": "종이접기처럼 각진 쐐기 슈퍼카. 낮고 뾰족한 코로 바람을 가르며 긴 직선에서 무섭게 빨라요. 제니스 하이퍼보다 코너가 조금 편하지만 최고 속도는 살짝 낮아요.", "stats": {"speed": 5, "accel": 4, "handling": 2, "grip": 3, "boost": 4, "offroad": 1, "boat": 1, "fly": 1, "drift": 2}, "look": {"style": "wedge", "body": "#c81e3a", "accent": "#111317", "trim": "#ffb21a", "rim": "#d9dde3", "helmet": "#ffb21a", "number": "88", "numberBg": "#111317", "numberFg": "#ffb21a"}, "tune": {"_성격": "제니스 하이퍼 바탕: 뒷바퀴 굴림, 최고 속도·엔진·출발 조금↓, 다운포스·브레이크·핸들 조금↑", "sound": {"cyl": 12, "amps": [1, 0.97, 0.99, 0.96, 1, 0.98, 0.97, 0.99, 0.96, 1, 0.98, 0.97], "offs": [0, 0.01, -0.01, 0.005, 0, -0.005, 0.01, 0, -0.01, 0.005, 0, -0.005], "fBase": 55.0, "fRange": 225.5, "pulse": 0.6, "saw": 1.45, "sub": 1.1, "grit": 2.75, "drive": 1.05, "bright": 1.5, "tex": 1.1, "eqFreq": 170, "eqGain": 6, "turbo": 0.6, "turboMax": 1.4, "pops": 0.96, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.88, "squealVib": 1.0, "squealNoise": 1.1}, "maxSpeed": 62.4, "brake": 32.5, "steerRate": 2.45, "steerLat": 18.1, "grip": 9.5, "engine": {"power": 408, "turbo": {"share": 0.22, "lag": 0.35}}, "gears": [15.8, 25.7, 36.6, 47.5, 57.4, 67.3], "aero": {"drag": 0.00089, "downforce": 1.12}, "feel": {"roll": 0.8, "pitch": 0.9, "spring": 120, "damp": 0.7}, "tire": {"traction": 13.2, "brakeGrip": 20, "lateral": 23.4, "rearGrip": 1.25, "yawResponse": 9, "liftOff": 0.35, "powerSlide": 0.3, "tuckMax": 0.18}, "input": {"steerRise": 3.1}, "drivetrain": "rwd", "camera": {"topKmh": 290}}},
-    {"id": "nova", "class": "A", "unlockLevel": 14, "name": "노바 프로토", "tag": "GOLD PROTOTYPE · 코너·끈끈함", "desc": "검정과 금빛의 내구 레이스 머신. 블루 프로토와 형제 차로, 직선이 조금 더 빠른 대신 급한 코너에서는 살짝 덜 붙어요. 가장 높은 레벨의 보상!", "stats": {"speed": 4, "accel": 4, "handling": 3, "grip": 4, "boost": 2, "offroad": 1, "boat": 1, "fly": 1, "drift": 2}, "look": {"style": "proto", "body": "#15161a", "accent": "#e8b931", "trim": "#e8b931", "rim": "#e8b931", "wall": "#e8b931", "helmet": "#e8b931", "number": "1", "numberBg": "#e8b931", "numberFg": "#15161a"}, "tune": {"_성격": "블루 프로토 바탕: 최고 속도·엔진 조금↑, 다운포스·옆 접지·브레이크 조금↓", "sound": {"cyl": 6, "amps": [1, 0.95, 0.98, 0.94, 0.99, 0.96], "offs": [0, 0.01, -0.01, 0.01, 0, -0.01], "fBase": 50.22, "fRange": 197.6, "pulse": 0.75, "saw": 1.35, "sub": 1.0, "grit": 2.4, "bright": 1.2, "tex": 0.8, "eqFreq": 200, "eqGain": 5, "turbo": 0.35, "electric": 0.6, "pops": 0.5, "squeal": 0.85, "squealPitch": 1.2, "squealVib": 0.6, "squealNoise": 0.7}, "maxSpeed": 60.4, "brake": 36, "steerLat": 17.9, "steerLatDownforce": 0.45, "grip": 11, "engine": {"power": 344}, "gears": [15.2, 25.2, 34.7, 44.2, 53.6, 65.2], "aero": {"drag": 0.00113, "downforce": 1.98}, "feel": {"roll": 0.65, "pitch": 0.75, "spring": 150, "damp": 0.8}, "tire": {"traction": 13.8, "brakeGrip": 25, "lateral": 23.8, "rearGrip": 1.35, "yawResponse": 10, "powerSlide": 0.2, "liftOff": 0.3, "tuckMax": 0.13}, "booster": {"duration": 2.4}, "camera": {"topKmh": 260}}}
+    {"id": "cube", "class": "C", "unlockLevel": 2, "name": "꼬마 큐브밴", "tag": "CUBE VAN · 안정·쉬움", "desc": "네모난 꼬마 밴. 지붕에 짐을 싣고도 씩씩하게 달려요. 앞바퀴 굴림이라 잘 안 돌고, 브레이크가 좋아 실수해도 금방 멈춰요. 키가 커서 코너에서 많이 기울어요.", "stats": {
+        "speed": 2,
+        "accel": 3,
+        "handling": 2,
+        "grip": 3,
+        "boost": 2,
+        "offroad": 2,
+        "boat": 1,
+        "fly": 1,
+        "drift": 1,
+        "score100": {
+          "speed": 36,
+          "accel": 44,
+          "handling": 33,
+          "grip": 45,
+          "brake": 55,
+          "drift": 20,
+          "offroad": 41,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 208,
+          "zero100Sec": 2.41,
+          "lateral150": 18.9,
+          "downforce": 0.66,
+          "brake100M": 15,
+          "offroadKeep": 50,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "van", "body": "#37b6c9", "accent": "#fff6e0", "trim": "#ff8a3c", "rim": "#fff6e0", "helmet": "#ff8a3c", "number": "12", "numberBg": "#fff6e0", "numberFg": "#37b6c9"}, "tune": {"_성격": "핫해치 바탕: 최고 속도·엔진 조금↓, 브레이크·옆 접지 조금↑, 키가 커서 많이 기움", "sound": {"cyl": 4, "amps": [1, 0.93, 0.97, 0.92], "offs": [0, 0.015, -0.01, 0.01], "fBase": 51.52, "fRange": 164.5, "pulse": 0.85, "saw": 1.1, "sub": 0.78, "grit": 2.6, "drive": 0.95, "bright": 1.035, "tex": 1.2, "eqFreq": 240, "eqGain": 4, "turbo": 0.6, "pops": 0.7, "volume": 0.95, "squeal": 1.0, "squealPitch": 1.2, "squealVib": 0.9, "squealNoise": 0.9}, "maxSpeed": 47.4, "brake": 37, "steerRate": 2.45, "steerLat": 19, "grip": 11, "offroad": {"maxSpeedFactor": 0.5, "drag": 0.22, "gripFactor": 0.72}, "drivetrain": "fwd", "engine": {"power": 293, "turbo": {"share": 0.3, "lag": 0.4}}, "gears": [13, 21.5, 29.5, 37, 44, 52], "aero": {"drag": 0.00134, "downforce": 0.66}, "feel": {"roll": 1.35, "pitch": 1.15, "spring": 60, "damp": 0.5}, "tire": {"traction": 18, "brakeGrip": 23, "lateral": 23.2, "rearGrip": 1.55, "rearSwing": 0.18, "yawResponse": 9, "powerPush": 0.35, "liftOff": 0.45, "tuckMax": 0.22}, "drift": {"grip": 3.0, "baseTurn": 1.0}, "camera": {"topKmh": 220}}},
+    {"id": "scorpion", "class": "C", "unlockLevel": 4, "name": "모래 전갈", "tag": "DUNE BUGGY · 드리프트·잔디", "desc": "사막을 달리던 모래색 버기. 드리프트 버기보다 직선이 조금 빠르고 묵직해요. 잔디와 연석을 겁내지 않고, 꼬리를 흔들며 코너를 돌아요.", "stats": {
+        "speed": 2,
+        "accel": 2,
+        "handling": 2,
+        "grip": 2,
+        "boost": 2,
+        "offroad": 5,
+        "boat": 2,
+        "fly": 1,
+        "drift": 4,
+        "score100": {
+          "speed": 35,
+          "accel": 21,
+          "handling": 41,
+          "grip": 37,
+          "brake": 34,
+          "drift": 93,
+          "offroad": 94,
+          "boat": 38
+        },
+        "metrics": {
+          "topKmh": 207,
+          "zero100Sec": 2.72,
+          "lateral150": 17.9,
+          "downforce": 0.24,
+          "brake100M": 18,
+          "offroadKeep": 82,
+          "boatKmh": 200
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "buggy", "body": "#d9a441", "accent": "#2a2118", "trim": "#c0392b", "rim": "#2a2118", "helmet": "#c0392b", "number": "13", "numberBg": "#2a2118", "numberFg": "#d9a441", "tire": "knobby"}, "tune": {"_성격": "드리프트 버기 바탕: 최고 속도 조금↑, 가속·핸들 조금↓, 꼬리가 조금 덜 흔들림", "sound": {"cyl": 2, "amps": [1, 0.8], "offs": [0, 0.18], "fBase": 29.12, "fRange": 102.6, "pulse": 1.25, "saw": 0.55, "sub": 0.9, "grit": 3.96, "drive": 1.1, "bright": 1.012, "tex": 1.8, "eqFreq": 180, "eqGain": 4, "pops": 0.9, "squeal": 0.7, "squealPitch": 1.1, "squealVib": 1.6, "squealNoise": 1.9}, "maxSpeed": 47.2, "steerRate": 2.5, "steerLat": 19.9, "grip": 8.5, "offroad": {"maxSpeedFactor": 0.82, "drag": 0.06, "gripFactor": 0.95}, "engine": {"power": 266}, "gears": [11.1, 18.6, 26.0, 33.4, 40.9, 50.1], "aero": {"drag": 0.00127, "downforce": 0.24}, "feel": {"roll": 1.0, "pitch": 1.0, "spring": 50, "damp": 0.4}, "tire": {"traction": 14, "lateral": 23.8, "rearGrip": 1.1, "rearSwing": 0.33, "yawResponse": 10, "powerSlide": 0.45, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.3}, "drift": {"minSpeed": 10, "grip": 1.8, "slipDrag": 0.45, "baseTurn": 1.3, "steerTurn": 0.75, "highSpeedLat": 34, "holdAngle": [0.3, 0.95], "spinAngle": 1.35, "exitKeep": 0.6, "exitAngle": 0.75}, "modes": {"boat": {"thrust": 27.4, "maxSpeed": 56.6}}, "camera": {"topKmh": 230}}},
+    {"id": "midnight", "class": "B", "unlockLevel": 6, "name": "미드나잇 쿠페", "tag": "NIGHT COUPE · 직선·묵직함", "desc": "밤거리를 달리는 보랏빛 쿠페. 썬더 GT보다 최고 속도는 조금 낮지만 꼬리가 덜 미끄러져서 다루기 쉬워요. 긴 직선이 있는 맵에서 믿음직해요.", "stats": {
+        "speed": 5,
+        "accel": 4,
+        "handling": 2,
+        "grip": 2,
+        "boost": 4,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 3,
+        "score100": {
+          "speed": 94,
+          "accel": 58,
+          "handling": 20,
+          "grip": 28,
+          "brake": 23,
+          "drift": 34,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 278,
+          "zero100Sec": 2.26,
+          "lateral150": 16.7,
+          "downforce": 0.72,
+          "brake100M": 20,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "gt", "body": "#2a1a4a", "accent": "#ff4fa3", "trim": "#35e0ff", "rim": "#35e0ff", "helmet": "#ff4fa3", "number": "77", "numberBg": "#ff4fa3", "numberFg": "#1a1030"}, "tune": {"_성격": "썬더 GT 바탕: 최고 속도·엔진 조금↓(공기 저항↑), 다운포스·옆 접지 조금↑, 꼬리 덜 흔들림", "sound": {"cyl": 8, "amps": [1, 0.55, 0.95, 0.5, 1, 0.6, 0.9, 0.52], "offs": [0, 0.1, -0.05, 0.08, 0.02, -0.09, 0.06, -0.04], "fBase": 38.88, "fRange": 125.08, "pulse": 1.15, "saw": 0.7, "sub": 1.5, "grit": 3.4, "drive": 1.15, "bright": 0.92, "eqFreq": 110, "eqGain": 8, "whine": 1, "whineMul": 7.5, "pops": 1.28, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.85, "squealVib": 1.2, "squealNoise": 1.0}, "maxSpeed": 63.4, "brake": 31, "steerRate": 2.3, "steerLat": 18.6, "steerLatDownforce": 0.2, "grip": 7.5, "engine": {"power": 415}, "gears": [16.2, 26.4, 36.5, 46.7, 56.8, 68.0], "aero": {"drag": 0.00086, "downforce": 0.72}, "feel": {"roll": 1.0, "pitch": 1.0, "spring": 80, "damp": 0.55}, "tire": {"traction": 12.4, "brakeGrip": 19, "lateral": 21.9, "rearGrip": 1.1, "rearSwing": 0.3, "yawResponse": 8, "powerSlide": 0.28, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.28}, "input": {"steerRise": 3.0}, "drift": {"grip": 2.1, "baseTurn": 1.0}, "camera": {"topKmh": 280}}},
+    {"id": "blizzard", "class": "B", "unlockLevel": 8, "name": "블리자드 랠리", "tag": "SNOW RALLY · 코너·잔디", "desc": "눈길 대회에서 온 하얀 랠리카. 스톰 랠리보다 최고 속도가 조금 높고 출발은 살짝 느려요. 네 바퀴 굴림이라 코너에서 끈끈하게 붙어요.", "stats": {
+        "speed": 2,
+        "accel": 3,
+        "handling": 5,
+        "grip": 4,
+        "boost": 1,
+        "offroad": 3,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 24,
+          "accel": 63,
+          "handling": 76,
+          "grip": 81,
+          "brake": 88,
+          "drift": 44,
+          "offroad": 62,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 194,
+          "zero100Sec": 2.2,
+          "lateral150": 23.3,
+          "downforce": 1.05,
+          "brake100M": 12,
+          "offroadKeep": 62,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "rally", "body": "#f4f8fb", "accent": "#1e6fd9", "trim": "#ff6a1a", "rim": "#1e2a3a", "helmet": "#ff6a1a", "number": "21", "numberBg": "#1e6fd9", "numberFg": "#ffffff"}, "tune": {"_성격": "스톰 랠리 바탕: 최고 속도 조금↑(공기 저항↓), 엔진·출발·조향 한계 조금↓, 터보 지연 조금 김", "sound": {"cyl": 4, "amps": [1, 0.9, 0.97, 0.88], "offs": [0, 0.02, -0.01, 0.015], "fBase": 54.52, "fRange": 196.8, "pulse": 0.9, "saw": 1.25, "sub": 0.6, "grit": 3.2, "drive": 1.1, "bright": 1.282, "tex": 1.5, "eqFreq": 260, "eqGain": 5, "turbo": 1.062, "turboMax": 1.3, "pops": 1.4, "squeal": 0.7, "squealPitch": 1.05, "squealVib": 1.5, "squealNoise": 1.8}, "maxSpeed": 44.2, "brake": 37, "steerRate": 2.9, "steerLat": 20.8, "grip": 11, "offroad": {"maxSpeedFactor": 0.62, "drag": 0.16, "gripFactor": 0.82}, "drivetrain": "awd", "engine": {"power": 310, "turbo": {"share": 0.28, "lag": 0.32}}, "gears": [11, 18, 25, 32, 39, 48], "aero": {"drag": 0.00144, "downforce": 1.05}, "feel": {"roll": 1.25, "pitch": 1.2, "spring": 60, "damp": 0.45}, "tire": {"traction": 17.0, "brakeGrip": 25, "lateral": 23.3, "rearGrip": 1.15, "yawResponse": 12, "liftOff": 0.4, "powerSlide": 0.4, "tuck": 2.0, "tuckMax": 0.3}, "input": {"steerRise": 4.0, "steerRiseHighSpeed": 0.35}, "drift": {"baseTurn": 1.25, "holdAngle": [0.3, 0.85], "spinAngle": 1.25}, "camera": {"topKmh": 220}}},
+    {"id": "razor", "class": "A", "unlockLevel": 11, "name": "레이저 웨지", "tag": "WEDGE SUPERCAR · 직선·날카로움", "desc": "종이접기처럼 각진 쐐기 슈퍼카. 낮고 뾰족한 코로 바람을 가르며 긴 직선에서 무섭게 빨라요. 제니스 하이퍼보다 코너가 조금 편하지만 최고 속도는 살짝 낮아요.", "stats": {
+        "speed": 5,
+        "accel": 4,
+        "handling": 2,
+        "grip": 3,
+        "boost": 4,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 90,
+          "accel": 64,
+          "handling": 32,
+          "grip": 38,
+          "brake": 36,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 274,
+          "zero100Sec": 2.19,
+          "lateral150": 18,
+          "downforce": 1.12,
+          "brake100M": 18,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "wedge", "body": "#c81e3a", "accent": "#111317", "trim": "#ffb21a", "rim": "#d9dde3", "helmet": "#ffb21a", "number": "88", "numberBg": "#111317", "numberFg": "#ffb21a"}, "tune": {"_성격": "제니스 하이퍼 바탕: 뒷바퀴 굴림, 최고 속도·엔진·출발 조금↓, 다운포스·브레이크·핸들 조금↑", "sound": {"cyl": 12, "amps": [1, 0.97, 0.99, 0.96, 1, 0.98, 0.97, 0.99, 0.96, 1, 0.98, 0.97], "offs": [0, 0.01, -0.01, 0.005, 0, -0.005, 0.01, 0, -0.01, 0.005, 0, -0.005], "fBase": 55.0, "fRange": 225.5, "pulse": 0.6, "saw": 1.45, "sub": 1.1, "grit": 2.75, "drive": 1.05, "bright": 1.5, "tex": 1.1, "eqFreq": 170, "eqGain": 6, "turbo": 0.6, "turboMax": 1.4, "pops": 0.96, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.88, "squealVib": 1.0, "squealNoise": 1.1}, "maxSpeed": 62.4, "brake": 32.5, "steerRate": 2.45, "steerLat": 18.1, "grip": 9.5, "engine": {"power": 408, "turbo": {"share": 0.22, "lag": 0.35}}, "gears": [15.8, 25.7, 36.6, 47.5, 57.4, 67.3], "aero": {"drag": 0.00089, "downforce": 1.12}, "feel": {"roll": 0.8, "pitch": 0.9, "spring": 120, "damp": 0.7}, "tire": {"traction": 13.2, "brakeGrip": 20, "lateral": 23.4, "rearGrip": 1.25, "yawResponse": 9, "liftOff": 0.35, "powerSlide": 0.3, "tuckMax": 0.18}, "input": {"steerRise": 3.1}, "drivetrain": "rwd", "camera": {"topKmh": 290}}},
+    {"id": "nova", "class": "A", "unlockLevel": 14, "name": "노바 프로토", "tag": "GOLD PROTOTYPE · 코너·끈끈함", "desc": "검정과 금빛의 내구 레이스 머신. 블루 프로토와 형제 차로, 직선이 조금 더 빠른 대신 급한 코너에서는 살짝 덜 붙어요. 가장 높은 레벨의 보상!", "stats": {
+        "speed": 4,
+        "accel": 4,
+        "handling": 3,
+        "grip": 4,
+        "boost": 2,
+        "offroad": 1,
+        "boat": 1,
+        "fly": 1,
+        "drift": 2,
+        "score100": {
+          "speed": 68,
+          "accel": 50,
+          "handling": 37,
+          "grip": 66,
+          "brake": 87,
+          "drift": 30,
+          "offroad": 20,
+          "boat": 20
+        },
+        "metrics": {
+          "topKmh": 247,
+          "zero100Sec": 2.34,
+          "lateral150": 21.6,
+          "downforce": 1.98,
+          "brake100M": 12,
+          "offroadKeep": 38,
+          "boatKmh": 187
+        },
+        "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 드리프트=유지각 폭×회전/접지×(1+탈출유지), 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
+      }, "look": {"style": "proto", "body": "#15161a", "accent": "#e8b931", "trim": "#e8b931", "rim": "#e8b931", "wall": "#e8b931", "helmet": "#e8b931", "number": "1", "numberBg": "#e8b931", "numberFg": "#15161a"}, "tune": {"_성격": "블루 프로토 바탕: 최고 속도·엔진 조금↑, 다운포스·옆 접지·브레이크 조금↓", "sound": {"cyl": 6, "amps": [1, 0.95, 0.98, 0.94, 0.99, 0.96], "offs": [0, 0.01, -0.01, 0.01, 0, -0.01], "fBase": 50.22, "fRange": 197.6, "pulse": 0.75, "saw": 1.35, "sub": 1.0, "grit": 2.4, "bright": 1.2, "tex": 0.8, "eqFreq": 200, "eqGain": 5, "turbo": 0.35, "electric": 0.6, "pops": 0.5, "squeal": 0.85, "squealPitch": 1.2, "squealVib": 0.6, "squealNoise": 0.7}, "maxSpeed": 60.4, "brake": 36, "steerLat": 17.9, "steerLatDownforce": 0.45, "grip": 11, "engine": {"power": 344}, "gears": [15.2, 25.2, 34.7, 44.2, 53.6, 65.2], "aero": {"drag": 0.00113, "downforce": 1.98}, "feel": {"roll": 0.65, "pitch": 0.75, "spring": 150, "damp": 0.8}, "tire": {"traction": 13.8, "brakeGrip": 25, "lateral": 23.8, "rearGrip": 1.35, "yawResponse": 10, "powerSlide": 0.2, "liftOff": 0.3, "tuckMax": 0.13}, "booster": {"duration": 2.4}, "camera": {"topKmh": 260}}}
   ]
 }

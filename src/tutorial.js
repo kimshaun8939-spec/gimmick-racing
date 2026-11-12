@@ -51,6 +51,7 @@ export function startTutorial(game) {
   }
   const params = new URLSearchParams(location.search);
   const boatOnly = params.get('tutorial') === 'boat';
+  const quick = !boatOnly && params.get('quick') !== '0';
   const car = game.car, track = game.track, race = game.race;
   const line = track.racingLine || (game.lineFx && game.lineFx.line) || null;
   const N = line ? line.N : 1;
@@ -205,10 +206,10 @@ export function startTutorial(game) {
       <div class="tut-btns"><button class="gm-btn" data-t="prev">‹ 이전</button><span class="sp"></span><button class="gm-btn" data-t="skip">건너뛰기</button><button class="gm-btn primary" data-t="go"></button></div>
     </div></div>
     <div class="tut-panel">
-      <div class="tut-ph"><span class="tut-chip"></span><span class="tut-pt"></span></div>
+      <div class="tut-mission"><div class="tut-ph"><span class="tut-chip"></span><span class="tut-pt"></span></div>
       <div class="tut-pb"></div>
       <div class="tut-goals"></div>
-      <div class="tut-hint"></div>
+      <div class="tut-hint"></div></div>
       <div class="tut-pbtns"><button class="gm-btn small" data-t="retry">↺ 다시 <span class="k"></span></button><button class="gm-btn small" data-t="demo">▶ 시범</button><button class="gm-btn small" data-t="slow">🐢 천천히</button><button class="gm-btn small" data-t="card">? 설명</button><button class="gm-btn small" data-t="skip">건너뛰기 ›</button></div>
     </div>
     <div class="tut-burst"><div class="ok">✓</div><div class="tx"></div><div class="sub"></div></div>`;
@@ -358,7 +359,7 @@ export function startTutorial(game) {
   } else {
     // ---------------- 그랑프리: 처음 하는 사람용 전체 과정 (2026-11-12 다시 만듦: 작은 단계 + 시범 주행 + 따라 하기)
     add({
-      id: 'welcome', ic: '🏁', chip: '시작', title: '기믹 레이싱에 온 걸 환영해요!', info: true,
+      id: 'welcome', ic: '🏁', chip: '시작', title: '첫 출발, 같이 해 봐요!', info: true,
       card: () => `<p>약 <b>7분</b> 동안 운전하는 법부터 <b>진짜 레이스처럼 코너 도는 법</b>까지 하나씩 해 봐요. 게임을 처음 해도 괜찮아요!</p>
         <ul class="tut-list"><li>🎮 출발 · 가속 · 핸들 · 브레이크</li><li>🟩 라인 색 읽기</li><li>🎬 시범 주행 (슬로 모션)</li><li>🏎️ 따라 하기 → 성적표</li><li>💨 드리프트 · 변신</li><li>🧭 복귀 · 메뉴</li></ul>
         <p class="tut-tip">💡 막혀도 괜찮아요: 실패하면 <b>그 자리로 자동으로 돌아가고</b>, 도움말이 떠요. 미션마다 <b>건너뛰기</b>도 있어요. ${K('restart')} = 그 미션 다시.</p>
@@ -419,9 +420,12 @@ export function startTutorial(game) {
       goals: ['도로 안에서 200 m 달리기'],
       keys: true,
       setup(s) {
-        if (again && mem.steer != null) placeRolling(mem.steer, 0, 22);
+        // 입문 첫 핸들 연습은 출발 직후 급한 굽이를 피해 넓고 완만한 구간에서.
+        if (quick && SPOT.straight) placeRolling(SPOT.straight.i0, 0, 22);
+        else if (again && mem.steer != null) placeRolling(mem.steer, 0, 22);
         else if (race.phase !== 'racing') game.resetRace();
-        s.i0 = mem.steer = idxNow();
+        // placeAt 직후 trackInfo는 한 물리 스텝 동안 예전 자리일 수 있어 연습 시작 인덱스를 직접 사용.
+        s.i0 = mem.steer = quick && SPOT.straight ? SPOT.straight.i0 : again && mem.steer != null ? mem.steer : idxNow();
         s.off = 0;
       },
       update(dt, s) {
@@ -729,6 +733,20 @@ export function startTutorial(game) {
     });
   }
 
+  // 입문 코스: 필수 조작만. 정교한 코너·드리프트는 아카데미에서 이어 해요.
+  if (quick) {
+    const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'forms', 'accel', 'fly', 'respawn', 'done']);
+    for (let i = STEPS.length - 1; i >= 0; i--) if (!keep.has(STEPS[i].id)) STEPS.splice(i, 1);
+    const intro = STEPS.find((x) => x.id === 'welcome');
+    if (intro) intro.card = () => '<p>딱 필요한 것만, <b>약 3~5분</b> 함께 달려 봐요.</p><div class="nq-roadmap"><span>① 불이 꺼지면 출발</span><span>② 핸들은 짧게 톡톡</span><span>③ 빨강은 브레이크</span><span>④ 차가 알아서 변신!</span></div><p class="tut-tip">막히면 건너뛰어도 괜찮아요. 레이스는 시험이 아니에요. 마치면 넓은 빙하 코스에서 쉬운 봇 3대와 첫 레이스!</p>';
+    const endStep = STEPS.find((x) => x.id === 'done');
+    if (endStep) {
+      endStep.title = '이제 출발할 준비 끝!';
+      endStep.go = '첫 레이스 시작';
+      endStep.card = () => '<div class="nq-finish">🏁<b>다음 목적지: 빙하 하이웨이</b><span>넓은 도로 · 쉬운 봇 3대 · 레이싱 라인 켬</span></div><p>순위보다 <b>코너를 하나씩 완성하는 재미</b>부터! 초록이면 가속, 빨강이면 브레이크. 변신은 자동이에요.</p><div class="tut-choices"><button class="gm-btn primary" data-goto="race">첫 레이스로 →</button><button class="gm-btn" data-goto="academy">🎓 아카데미 둘러보기</button><button class="gm-btn" data-goto="home">홈으로</button></div>';
+    }
+  }
+
   /** 코너 요령 4칸 (바깥 → 브레이크 → 꺾기·에이펙스 → 가속) */
   function steps4(c) {
     const out = c.side > 0 ? '왼쪽' : '오른쪽', turn = c.side > 0 ? 'right' : 'left';
@@ -800,7 +818,7 @@ export function startTutorial(game) {
     cardFrame(s);
     $('.tut-card').classList.remove('tdr');
     $('.tut-card h2').textContent = s.title;
-    const text = Object.hasOwn(TUTORIAL_TEXT, s.id) ? TUTORIAL_TEXT[s.id] : null;
+    const text = !(quick && ['welcome', 'done', 'forms'].includes(s.id)) && Object.hasOwn(TUTORIAL_TEXT, s.id) ? TUTORIAL_TEXT[s.id] : null;
     $('.tut-card').classList.toggle('ac-short-frame', !!text);
     if (text) {
       // 예전 카드 안의 이동 버튼도 보존 (완료·배 연습·아카데미 등). 긴 글은 넣지 않음.
@@ -1071,11 +1089,12 @@ export function startTutorial(game) {
         localStorage.setItem(TUT_KEY, 'done');
       } catch {}
     }
-    setLast({ map: 'gp', car: carId });
+    if (where === 'race') { settings.set('racingLine', true); settings.set('gearbox', 'auto'); }
+    setLast({ map: where === 'race' ? 'glacier' : 'gp', car: where === 'race' ? 'f1' : carId });
     const url =
       where === 'boat' ? raceUrl('sea', carId, { tutorial: 'boat', tret: STEPS[cur + 1] ? STEPS[cur + 1].id : 'accel' })
       : where === 'gp' ? raceUrl('gp', carId, { tutorial: 1, tstep: params.get('tret') || 'accel' })
-      : where === 'race' || where === 'time' ? raceUrl('gp', carId, { mode: where, botLevel: where === 'race' ? 'easy' : null })
+      : where === 'race' || where === 'time' ? raceUrl(where === 'race' ? 'glacier' : 'gp', where === 'race' ? 'f1' : carId, { mode: where, botLevel: where === 'race' ? 'easy' : null, bots: where === 'race' ? 3 : 0, rookie: where === 'race' ? 1 : null, intro: 0 })
       : where === 'free' ? raceUrl('gp', carId)
       : where === 'academy' ? homeUrl('academy') // 드라이빙 아카데미 (2026-11-12)
       : homeUrl();

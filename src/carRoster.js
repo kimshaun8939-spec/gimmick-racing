@@ -7,7 +7,8 @@
 //   const cfg = await loadCarConfig('muscle'); // 게임용 전체 설정 (car.json + tune, cfg.look, cfg.carId)
 //   const model = createCarModel(cfg.look);
 
-import { registerCars, applyPaint } from './unlocks.js'; // 레벨 잠금·색 고르기
+import { registerCars, applyPaint, getCostume, isCostumeUnlocked } from './unlocks.js';
+import { applyCostume } from './carCostumes.js'; // 레벨 잠금·색 고르기
 
 export const DEFAULT_CAR_ID = 'f1';
 
@@ -60,6 +61,13 @@ function findCar(roster, id) {
   );
 }
 
+/** 100점 형식과 예전 1~5 형식을 함께 읽음. 로비의 기존 stats 값은 그대로 보존. */
+export function statScore(stats, key) {
+  const precise = stats?.score100?.[key];
+  const value = Number.isFinite(precise) ? precise : Number(stats?.[key] || 0) * (stats?.scale === 100 ? 1 : 20);
+  return Math.round(Math.max(0, Math.min(100, value)));
+}
+
 /** 홈 화면용 차 목록 (성능 값 tune은 빼고). class = 차 등급 id (listClasses 참고) */
 export async function listCars() {
   const roster = await loadRoster();
@@ -108,6 +116,8 @@ export async function loadCarConfig(id, opts = {}) {
   if (opts.paint === true || (first && opts.paint !== false)) {
     try {
       cfg.look = applyPaint(cfg.look, cfg.carId);
+      const costume = getCostume(cfg.carId);
+      if (costume && isCostumeUnlocked(cfg.carId, costume)) cfg.look = applyCostume({ ...cfg.look, carId: cfg.carId }, costume);
     } catch {}
   }
   return cfg;

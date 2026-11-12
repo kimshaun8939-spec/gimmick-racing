@@ -162,3 +162,35 @@ body.touch-on .td-keys { bottom: auto; top: 46%; transform: translateX(-50%) sca
   .td.follow .td-ped { display: none; }
   body.touch-on .td.follow .td-keys { display: none; }
 }
+
+/* night-ui: short first-drive lessons */
+.nq-roadmap { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:18px 0; }
+.nq-roadmap span { padding:16px 12px; border:1px solid #52647d; background:#152337; border-radius:12px; font-size:14px; font-weight:800; color:#d7e9ff; }
+.nq-finish { display:grid; gap:12px; text-align:center; padding:20px 10px; font-size:44px; }
+.nq-finish b { font-size:23px; color:#ffe099; }
+.nq-finish span { font-size:12px; color:#a9c2db; }
+@media(max-width:480px) { .nq-roadmap { grid-template-columns:1fr; gap:6px; } .nq-roadmap span { padding:12px; font-size:12px; } .nq-finish b { font-size:18px; } }
+
+/* night-qa: 가로 휴대폰에서도 설명 아래의 진행 버튼을 항상 보여 줌 */
+@media (max-height: 560px) {
+  #tutorial:not(.acad) .tut-card:not(.tdr) { display: flex; flex-direction: column; overflow: hidden; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-top,
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-hero,
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-btns { flex: none; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 6px; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-hero { margin: 8px 0; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-hero .tut-ic { width: 36px; height: 36px; font-size: 22px; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-hero h2 { font-size: 23px; }
+  #tutorial:not(.acad) .tut-card:not(.tdr) > .tut-btns { margin-top: 10px; padding-top: 8px; border-top: 1px solid #ffffff16; }
+}
+
+/* night-qa: 낮은 화면 실습에서도 다시/설명/건너뛰기는 화면 안에 */
+@media (max-height: 520px) {
+ #tutorial .tut-panel:not(.tdc) { display: flex; flex-direction: column; max-height: calc(100dvh - 190px); padding: 9px 12px; }
+ #tutorial .tut-panel:not(.tdc) .tut-mission { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
+ #tutorial .tut-panel:not(.tdc) .tut-pbtns { flex: none; flex-wrap: wrap; margin-top: 7px; gap: 5px; }
+ #tutorial .tut-panel:not(.tdc) .tut-pbtns .gm-btn { padding: 5px 8px; min-height: 32px; font-size: 11px; }
+ #tutorial .tut-panel:not(.tdc) .tut-pb { font-size: 12px; line-height: 1.5; margin: 5px 0; }
+ #tutorial .tut-panel:not(.tdc) .tut-goals .g { font-size: 11px; gap: 6px; }
+ body.touch-on #tutorial .tut-panel:not(.tdc) { top: 54px!important; }
+}

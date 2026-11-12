@@ -14,7 +14,7 @@ import * as THREE from 'three';
  *  shake: 부딪힘·연석 흔들림 배율 / buzz: 고속 잔떨림 배율 / fp: 1인칭 */
 export const CAM_VIEWS = [
   { id: 'chase', name: '기본', icon: '🎥' },
-  { id: 'near', name: '가까운 추격', icon: '🎥', back: 0.62, up: 0.74, look: 0.85, lookUp: 0.92, fov: 2 },
+  { id: 'near', name: '가까운 추격', icon: '🎥', back: 0.78, up: 0.9, look: 0.9, lookUp: 0.92, fov: 2 },
   { id: 'far', name: '먼 추격', icon: '🎥', back: 1.6, up: 1.55, look: 1.3, lookUp: 1.2, fov: -5, fovSpeed: 0.9 },
   { id: 'bonnet', name: '보닛', icon: '🏎️', fp: true, fov: -3, fovSpeed: 0.75, shake: 0.45, buzz: 0.7 },
   { id: 'cockpit', name: '운전석', icon: '🧑‍✈️', fp: true, fov: 0, fovSpeed: 0.6, shake: 0.35, buzz: 0.5 },
@@ -23,6 +23,7 @@ const BY = Object.fromEntries(CAM_VIEWS.map((v) => [v.id, v]));
 const LAYER = { all: 5, noCock: 6, noBon: 7, none: 8 };
 const CAR_BITS = (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8);
 const HIDE = { cockpit: (1 << 6) | (1 << 8), bonnet: (1 << 7) | (1 << 8) };
+const COCKPIT_BIT = 1 << 9; // 완전한 좌우 한 쌍의 1인칭 전용 실내
 const BLEND = 0.45; // 1인칭 ↔ 추격 섞는 시간 (초)
 
 const smooth = (x) => x * x * (3 - 2 * x);
@@ -66,11 +67,12 @@ export function createCamViews(o) {
     const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
     const A = model.fp && model.fp.A;
     const h = (A && A.helmet) || [0, 0.93, -0.3];
-    eyeC.set(h[0], h[1] + 0.1, h[2] + 0.22); // 헬멧 가운데보다 조금 위·앞 (눈)
+    if (model.fp?.eye) eyeC.copy(model.fp.eye);
+    else eyeC.set(h[0], h[1] + 0.1, h[2] + 0.22); // 헬멧 가운데보다 조금 위·앞 (눈)
     const list = [];
     const v = new THREE.Vector3(), m4 = new THREE.Matrix4();
     root.traverse((m) => {
-      if (!m.isMesh || !m.geometry || !m.geometry.attributes.position) return;
+      if (!m.isMesh || !m.geometry || !m.geometry.attributes.position || m.userData.fpInterior) return;
       let vis = true;
       for (let q = m; q && q !== root; q = q.parent) if (!q.visible) vis = false;
       const mats = Array.isArray(m.material) ? m.material : [m.material];
@@ -98,7 +100,7 @@ export function createCamViews(o) {
       }
     }
     info.cowl = isFinite(cowl) ? +cowl.toFixed(2) : null;
-    if (isFinite(cowl)) eyeC.y = Math.max(eyeC.y, Math.min(cowl + 0.16, h[1] + 0.3));
+    if (!model.fp?.eye && isFinite(cowl)) eyeC.y = Math.max(eyeC.y, Math.min(cowl + 0.16, h[1] + 0.3));
     // 보닛 카메라 기본 자리: 운전석과 앞끝 사이 가운데쯤, 그 자리 차체 꼭대기 + 22 cm
     // 앞끝은 실제 꼭짓점으로 따로 재야 짧은 밴에 가짜 1.5 m 노즈가 생기지 않음.
     let frontZ = -Infinity;
@@ -146,11 +148,12 @@ export function createCamViews(o) {
     //   한 부품 안에서 갈리면(F1 몸통 = 낮은 노즈 + 높은 운전석 테두리) 가리는 삼각형만 떼어 자식 메시로 만들어 다른 레이어에
     const CLASS_LAYER = [LAYER.all, LAYER.noCock, LAYER.noBon, LAYER.none];
     const blocks = (x, y, z, e, top, back, r) => (y > e.y - top && z > e.z - back) || (x - e.x) ** 2 + (y - e.y) ** 2 + (z - e.z) ** 2 < r * r;
+    const cockBlock = (x,y,z) => blocks(x,y,z,eyeC,.23,.25,.32) || (z > eyeC.z-.4 && z < eyeC.z+.9 && y > eyeC.y-.47);
     const triClass = (p, a, b, c) => {
       let hc = false, hb = false;
       for (const i of [a, b, c]) {
         const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
-        if (!hc && blocks(x, y, z, eyeC, 0.06, 0.25, 0.25)) hc = true;
+        if (!hc && cockBlock(x,y,z)) hc = true;
         if (!hb && blocks(x, y, z, eyeB, 0.04, 0.1, 0.18)) hb = true;
       }
       return (hc ? 1 : 0) + (hb ? 2 : 0);
@@ -210,14 +213,16 @@ export function createCamViews(o) {
       if (L & HIDE.cockpit) info.hideC++;
       if (L & HIDE.bonnet) info.hideB++;
     }
-    camera.layers.mask |= CAR_BITS;
+    camera.layers.mask = (camera.layers.mask | CAR_BITS) & ~COCKPIT_BIT;
     if (o.sun && o.sun.shadow && o.sun.shadow.camera) o.sun.shadow.camera.layers.mask |= CAR_BITS;
   }
 
   // ------------------------------------------------------------------ 상태
   let sel = 'chase'; // 고른 시점 (설정)
   let eff = 'chase', prev = 'chase', t = BLEND; // 지금 쓰는 시점 (결과 화면 등에서는 기본), 섞기
-  const dist = { back: 1, up: 1, look: 1, lookUp: 1 }; // main.js cameraTarget이 곱해 씀
+  const wheelZ = (model.fp?.A?.wheels || []).map(w => w[1]);
+  const carScale = wheelZ.length ? THREE.MathUtils.clamp((Math.max(...wheelZ)-Math.min(...wheelZ))/3.1, .78, 1.14) : 1;
+  const dist = { back: carScale, up: Math.sqrt(carScale), look: 1, lookUp: 1 }; // main.js cameraTarget이 곱해 씀
   const out = { fovAdd: 0, fovSpeedK: 1, shakeMul: 1, fpK: 0 };
   const pA = { pos: new THREE.Vector3(), look: new THREE.Vector3(), up: new THREE.Vector3() };
   const pB = { pos: new THREE.Vector3(), look: new THREE.Vector3(), up: new THREE.Vector3() };
@@ -225,7 +230,8 @@ export function createCamViews(o) {
   let buzzT = 0;
 
   function setMask(hide) {
-    camera.layers.mask = (camera.layers.mask | CAR_BITS) & ~hide;
+    camera.layers.mask = ((camera.layers.mask | CAR_BITS) & ~hide) & ~COCKPIT_BIT;
+    if (hide === HIDE.cockpit && eff === 'cockpit') camera.layers.mask |= COCKPIT_BIT;
   }
   /** 1인칭 자세 (차 모델 root에 딱 붙음: 차가 기울고 뱅크하면 같이) */
   function fpPose(id, p) {
@@ -244,8 +250,8 @@ export function createCamViews(o) {
   }
   function snapDist() {
     const f = famTarget();
-    dist.back = f.back ?? 1;
-    dist.up = f.up ?? 1;
+    dist.back = (f.back ?? 1) * carScale;
+    dist.up = (f.up ?? 1) * Math.sqrt(carScale);
     dist.look = f.look ?? 1;
     dist.lookUp = f.lookUp ?? 1;
   }
@@ -317,8 +323,8 @@ export function createCamViews(o) {
       const P = BY[prev], C = BY[eff];
       // 추격 거리 배율 (기본·가까이·멀리끼리는 이것만 부드럽게 바뀜)
       const f = famTarget(), k = 1 - Math.exp(-6 * dt);
-      dist.back = lerp(dist.back, f.back ?? 1, k);
-      dist.up = lerp(dist.up, f.up ?? 1, k);
+      dist.back = lerp(dist.back, (f.back ?? 1) * carScale, k);
+      dist.up = lerp(dist.up, (f.up ?? 1) * Math.sqrt(carScale), k);
       dist.look = lerp(dist.look, f.look ?? 1, k);
       dist.lookUp = lerp(dist.lookUp, f.lookUp ?? 1, k);
       // 시야·흔들림 값 섞기

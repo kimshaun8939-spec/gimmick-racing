@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ko">
 <head>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2724%27 fill=%27%23ffcc45%27/%3E%3Ctext x=%2750%27 y=%2772%27 text-anchor=%27middle%27 font-size=%2770%27%3E🏁%3C/text%3E%3C/svg%3E">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>기믹 레이싱</title>
@@ -334,8 +335,10 @@
     // 새로 올린 게임이 브라우저에 남은 예전 파일(캐시) 때문에 안 바뀌던 것 막기 (2026-11-13)
     //   deploy.sh가 version.json을 만듦 → 버전이 바뀌었으면 파일을 한 번 새로 받아 캐시를 바꾼 뒤 시작
     try {
-      const r = await fetch('version.json', { cache: 'no-store' });
-      if (r.ok) {
+      // 로컬 서버에는 배포용 version.json이 없으므로 요청하지 않음. 공개 주소의 캐시 갱신은 유지.
+      const localDev = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+      const r = localDev ? null : await fetch('version.json', { cache: 'no-store' });
+      if (r?.ok) {
         const ver = await r.json();
         let old = null; try { old = localStorage.getItem('gimmick.ver'); } catch {}
         if (ver.v && ver.v !== old) {

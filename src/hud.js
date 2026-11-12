@@ -1,4 +1,9 @@
 import { keybinds } from './keybinds.js';
+import { nextUnlock } from './unlocks.js';
+import { profile, showXpPill } from './profile.js';
+import { touchWanted } from './touch.js';
+import { pad as gamepad } from './gamepad.js';
+import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
@@ -86,6 +91,28 @@ function confetti(box, n = 70) {
 }
 
 export function createHud(track) {
+  const route = new URLSearchParams(location.search);
+  let firstReady = false, firstComplete = false;
+  try { firstReady = localStorage.getItem('gimmick.firstRun') === 'ready'; firstComplete = !!localStorage.getItem('gimmick.firstComplete'); } catch {}
+  const rookie = !route.has('tutorial') && !route.has('academy') && !firstComplete && (route.get('rookie') === '1' || firstReady);
+  const rookieHint = rookie ? document.createElement('div') : null;
+  if (rookieHint) { rookieHint.className = 'nr-hints'; rookieHint.hidden = true; rookieHint.setAttribute('aria-live', 'polite'); document.body.appendChild(rookieHint); }
+  let rookieText = '';
+  const rookieKey = (id) => gamepad.usingPad() && gamepad.get(id) != null ? gamepad.html(id) : touchWanted() ? ({ throttle: '▲ 가속', brake: '▼ 브레이크', respawn: '↺ 복귀' })[id] : keybinds.html(id, 1);
+  function firstHints(s) {
+    if (!rookieHint) return;
+    if (firstComplete) { rookieHint.hidden = true; return; }
+    const active = !document.getElementById('results')?.classList.contains('on');
+    const show = active && (s.countdown || s.time < 38);
+    rookieHint.hidden = !show;
+    if (!show) return;
+    const text = s.countdown ? '<b>불이 모두 꺼지면 출발!</b>지금은 가속에서 손을 떼고 기다려요.'
+      : s.time < 10 ? '<b>첫 코너까지 천천히 익혀요</b>' + rookieKey('throttle') + ' 가속 · 핸들은 짧게 톡톡'
+      : s.time < 24 ? '<b>도로의 색이 브레이크 타이밍이에요</b>🟢 가속 · 🟡 가속 놓기 · 🔴 ' + rookieKey('brake') + ' 브레이크'
+      : '<b>변신은 차가 알아서 해요</b>길을 벗어나면 ' + rookieKey('respawn') + ' 복귀 · 메뉴에서 언제든 쉬어요';
+    if (text !== rookieText) { rookieHint.innerHTML = text; rookieText = text; }
+  }
+
   const el = {
     lap: $('lap'), time: $('time'), best: $('best'), speed: $('speed'),
     driftFill: $('driftFill'), driftAng: $('driftAng'), driftWin: $('driftWin'), driftNeedle: $('driftNeedle'), big: $('bigText'), toast: $('toast'),
@@ -217,6 +244,7 @@ export function createHud(track) {
 
   return {
     update(s) {
+      firstHints(s);
       el.lap.textContent = s.label || `LAP ${s.lap}/${s.laps}`;
       el.time.textContent = fmtTime(s.time);
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
@@ -480,6 +508,14 @@ export function createHud(track) {
      * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next | home | car)
      */
     showResults(lapTimes, best, info = {}) {
+      if (rookieHint) rookieHint.hidden = true;
+      let firstNext = '';
+      if (rookie && !firstComplete) {
+        firstComplete = true;
+        try { localStorage.setItem('gimmick.firstComplete', '1'); localStorage.setItem('gimmick.firstRun', 'done'); } catch {}
+        const next = nextUnlock(profile.get().level);
+        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음엔 어디로?</b><p>코너 하나가 편해질 때마다 레이스가 더 재밌어져요.</p><div class="nr-next-links"><a class="gm-btn" href="?menu=academy">🎓 아카데미<small>브레이크 레슨으로 더 빠르게</small></a><a class="gm-btn" href="?menu=map">🗺️ 새 맵 구경<small>바다와 하늘에서도 달려요</small></a><a class="gm-btn" href="?menu=car">🏎️ 내 차고<small>' + (next ? 'Lv.' + next.level + ' · ' + escH(next.text) : '다른 차의 운전 감각 느껴 보기') + '</small></a></div></div>';
+      }
       const nextBtn = (o) => {
         const lbl = String(o.nextLabel || '다음 맵').replace(/\s*›\s*$/, '');
         const arrow = /홈으로/.test(lbl) ? '' : '<span class="ic r">›</span>';
@@ -531,6 +567,8 @@ export function createHud(track) {
         <div class="online" data-online></div>
         </div>
         <div class="res-scroll">
+        ${firstNext}
+        ${metaResultsHtml(info.meta)}
         ${podRows ? podiumHtml(podRows, ch && ch.final ? 'season' : '') : ''}
         ${ch && ch.final ? champBlock : ''}
         ${standHtml}
@@ -558,6 +596,10 @@ export function createHud(track) {
         }),
       );
       el.results.classList.add('on');
+      if (info.meta) {
+        playMetaCelebration(el.results.querySelector('.res'), info.meta.celebration);
+        showXpPill({ gained: info.meta.xp + info.meta.raceXp, after: info.meta.profile, levelUp: info.meta.profile.level > info.meta.beforeLevel, tierUp: false });
+      }
       if (info.position === 1 || (ch && ch.final && ch.table[0] && ch.table[0].isPlayer)) confetti(el.results.querySelector('.res'), ch && ch.final ? 120 : 70);
       // 결과 화면 위에 남은 안내 글자는 지움
       el.toast.style.opacity = 0;

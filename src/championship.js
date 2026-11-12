@@ -17,7 +17,7 @@ const KEY = 'gimmick.champ';
 /** F1 점수: 1위 25, 2위 18, ... 8위 4 */
 export const POINTS = [25, 18, 15, 12, 10, 8, 6, 4];
 /** 기본 시즌 맵 순서 */
-export const CHAMP_MAPS = ['gp', 'sea', 'neon', 'moon', 'jungle', 'volcano', 'glacier'];
+export const CHAMP_MAPS = ["glacier","sea","jungle","neon","mirage","foundry","moon","gp","volcano"];
 /** 등급마다 기본 차 (carId를 안 주면) */
 const CLASS_CAR = { A: 'f1', B: 'gt', C: 'hatch' };
 
@@ -58,7 +58,7 @@ export function lastChamp() {
  */
 export function startChamp(o = {}) {
   const set = readSettings();
-  const maps = (Array.isArray(o.maps) && o.maps.length ? o.maps : CHAMP_MAPS).slice(0, 8);
+  const maps = (Array.isArray(o.maps) && o.maps.length ? o.maps : CHAMP_MAPS).slice(0, CHAMP_MAPS.length);
   const carId = o.carId || CLASS_CAR[o.classId] || 'f1';
   const bots = Math.max(1, Math.min(7, (o.bots ?? set.bots ?? 5) | 0 || 5));
   const s = {

@@ -51,3 +51,62 @@
 }
 .h-carcard.gx-locked .pic::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit; background: repeating-linear-gradient(135deg, rgba(255, 207, 63, 0.10) 0 6px, transparent 6px 14px); }
 .h-carlist.dense .h-carcard .gx-lock { right: 4px; bottom: 4px; padding: 2px 6px; font-size: 10.5px; }
+
+/* night-ui · class letter badges & 100-point performance */
+#home .h-classtabs { display: grid; grid-auto-flow: row; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; padding: 4px; border-radius: 14px; flex-shrink: 0; }
+#home .h-ctab { display: grid; grid-template-columns: 31px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 9px 7px; min-height: 57px; text-align: left; border-radius: 10px; white-space: normal; }
+.nc-badge { display: inline-grid; place-items: center; flex-shrink: 0; width: 31px; height: 34px; border-radius: 7px; background: color-mix(in srgb,var(--cc,#b8c8dd) 15%,#172237); border: 1px solid color-mix(in srgb,var(--cc,#b8c8dd) 60%,transparent); color: var(--cc,#d4e0ef); font: 950 23px/1 system-ui,sans-serif; font-style: italic; }
+#home .h-ctab[data-ctab="all"] .nc-badge { font-size: 11px; letter-spacing: -.05em; font-style: normal; }
+#home .h-ctab .nc-copy { min-width: 0; display: grid; gap: 5px; }
+#home .h-ctab .nc-copy b { font-size: 12px; line-height: 1; white-space: nowrap; }
+#home .h-ctab .nc-copy em { font-size: 9px; line-height: 1.3; color: #97a9c1; font-style: normal; word-break: keep-all; }
+#home .h-ctab > small { margin: 0; padding: 0; background: none; font-size: 10px; color: #93a6bf; align-self: start; }
+#home .h-ctab.on .nc-badge { background: #152136; }
+#home .h-ctab.on .nc-copy em, #home .h-ctab.on > small { color: #445470; }
+#home .h-classchip { gap: 9px; }
+#home .h-classchip > .nc-badge { font-size: 21px; }
+#home .h-classchip > i, #home .h-cgroup > i { display: none; }
+.ns-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 5px; font-size: 13px; }
+.ns-heading b small { color: #9eafc8; font-size: 10px; font-weight: 600; margin-left: 6px; }
+.ns-heading .ns-compare { font-size: 10px; padding: 7px 10px; border-radius: 8px; }
+.ns-reference { color: #9dd6fc; font-size: 11px; line-height: 1.4; }
+#home .h-stats { gap: 10px; padding: 14px; }
+#home .ns-stat { grid-template-columns: minmax(97px,1.25fr) minmax(30px,1fr) 38px; gap: 8px; min-height: 30px; }
+#home .ns-stat .ns-label { font-size: 12px; line-height: 1.25; }
+#home .ns-stat .ns-label small { display: block; font-size: 9px; color: #99acc5; font-weight: 500; margin-top: 4px; letter-spacing: -.02em; }
+#home .ns-stat .bar { display: block; height: 8px; overflow: hidden; border-radius: 3px; background: #ffffff12; }
+#home .ns-stat .bar i.on { display: block; height: 100%; transform: none; border-radius: 3px; animation: none; box-shadow: none; background: linear-gradient(90deg,color-mix(in srgb,var(--cc,#ffcf3f) 65%,#172236),var(--cc,#ffcf3f)); }
+#home .ns-stat .v { font: 850 24px/1.1 system-ui,sans-serif; color: #edf4ff; }
+#home .ns-stat.top .v { color: var(--cc,#ffcf3f); }
+#home .ns-stat .v small { display: block; font-size: 10px; margin-top: 3px; color: #8ca2bc; }
+#home .ns-stat .v .up { color: #88e6b2; }
+#home .ns-stat .v .down { color: #ffaaa1; }
+.ns-method { font-size: 10px; color: #93a6c0; line-height: 1.7; }
+.ns-method summary { cursor: pointer; padding: 6px 0; }
+.ns-method p { margin: 8px 0; color: #a8bad0; }
+@media (max-width: 719px) { #home .h-classtabs { grid-template-columns: repeat(2,minmax(0,1fr)); } #home .h-ctab { min-height: 58px; padding: 8px; } #home .h-ctab .nc-copy b { font-size: 13px; } #home .ns-stat { grid-template-columns: minmax(112px,1.2fr) minmax(40px,1fr) 40px; } }
+
+#home .h-ctab > small { display:block; opacity:.8; }
+
+.ns-estimate { font-size:10px; line-height:1.6; color:#99acc3; word-break:keep-all; }
+
+/* night-meta: auto columns from menu.css must not create implicit extra columns. */
+#home .h-classtabs { grid-auto-columns: auto; grid-auto-flow: row; grid-template-columns: repeat(2,minmax(0,1fr)); }
+#home .h-ctab { grid-template-columns: 28px minmax(0,1fr); gap:6px; min-height:48px; padding:7px 6px; position:relative; }
+#home .h-ctab .nc-badge { width:27px;height:30px;font-size:21px; }
+#home .h-ctab .nc-copy { gap:0; }
+#home .h-ctab .nc-copy b { font-size:12px;line-height:1.5; }
+#home .h-ctab .nc-copy em, #home .h-ctab > small { display:none; }
+#home .nm-classhelp { color:#a4b5cd;font-size:11px;line-height:1.5;min-height:17px;margin:2px 4px 7px; }
+
+/* night-qa: 레벨업 보상 목록만 스크롤하고 확인/차고 버튼은 남김 */
+.gx-newsbox { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); overflow: hidden; }
+.gx-newsbox > :not(ul) { flex-shrink: 0; }
+.gx-newsbox > ul { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+@media (max-height: 520px) {
+ .gx-newsbox { padding: 12px 18px; }
+ .gx-burst { font-size: 28px; }
+ .gx-newsbox h3 { font-size: 25px; margin-top: 4px; }
+ .gx-newsbox li { font-size: 13px; padding: 6px 10px; }
+ .gx-nx { margin-bottom: 8px; }
+}

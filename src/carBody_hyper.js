@@ -73,7 +73,7 @@ export function kf(keys) {
  * 바퀴를 감싸는 펜더 (아래가 바퀴 모양으로 둥글게 파인 덩어리).
  * f(z) → [z, 반폭, 윗면 높이, 가운데 x, 아랫면 높이, 각진 정도]
  */
-export function pod(wz, r, f, zF, zR, { gap = 0.045, seg = 16, nF = 4, nR = 4, arc = 8 } = {}) {
+export function pod(wz, r, f, zF, zR, { gap = 0.045, seg = 12, nF = 3, nR = 3, arc = 8 } = {}) {
   const Rr = r + gap;
   const zs = [];
   for (let i = 0; i < nF; i++) zs.push(zF + ((wz + Rr - zF) * i) / nF);
@@ -101,7 +101,7 @@ export function hoop(s, rad = 0.02, a0 = 0, a1 = Math.PI, seg = 14, grow = 0.01)
       s.z,
     ));
   }
-  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg * 2, rad, 5, false);
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), seg, rad, 5, false);
 }
 /** 날개 판 (가로로 긴 유선형). half = 반폭, chord = 앞뒤 길이, th = 두께, droop = 끝이 처지는 정도 */
 export function foil(half, chord, th, droop = 0, seg = 12) {
@@ -154,7 +154,7 @@ export function buildHyper({ add, body, M, look }) {
   add(loft([
     R(2.92, 0.4, 0.17, 0.29, 4), R(2.55, 0.58, 0.15, 0.43, 4), R(1.72, 0.62, 0.15, 0.55, 4), R(1.0, 0.8, 0.15, 0.62, 4),
     R(0.4, 0.95, 0.16, 0.65, 4), R(-0.45, 0.93, 0.16, 0.68, 4), R(-1.3, 0.78, 0.18, 0.72, 4), R(-2.3, 0.76, 0.2, 0.7, 4), R(-2.66, 0.7, 0.27, 0.62, 4),
-  ], 24), paint, 0, 0, 0);
+  ], 16), paint, 0, 0, 0);
 
   // --- 펜더 4개 (바퀴 위로 둥글게 솟음)
   const fF = (s) => kf([
@@ -272,7 +272,7 @@ export function buildHyper({ add, body, M, look }) {
     KS.put(accent, sidePlate([[-2.16, 1.3], [-2.74, 1.42], [-2.76, 1.08], [-2.5, 1.0], [-2.2, 1.06]], 0.035, s * 0.97));
     KS.put(neon, bx(0.04, 0.016, 0.6, s * 0.97, 1.372, -2.45, 0.2));
     const neck = new THREE.CatmullRomCurve3([new THREE.Vector3(s * 0.38, 0.66, -1.98), new THREE.Vector3(s * 0.38, 1.12, -2.08), new THREE.Vector3(s * 0.38, 1.33, -2.2), new THREE.Vector3(s * 0.38, 1.29, -2.4)]);
-    const tube = new THREE.TubeGeometry(neck, 12, 0.035, 6, false);
+    const tube = new THREE.TubeGeometry(neck, 8, 0.035, 5, false);
     tube.scale(0.55, 1, 1).translate(s * 0.38 * 0.45, 0, 0);
     KS.put(carbon, tube);
     KS.put(metal, rodGeometry(new THREE.Vector3(s * 0.38, 0.7, -2.2), new THREE.Vector3(s * 0.38, 1.2, -2.38), 0.012));

@@ -36,7 +36,8 @@
 //     빠르게 날면(16~60m/s) 날개 끝에서 비행운이 길게 뻗음. 기울기와 기수 각도는 물리가 정한 방향(car.up/fwd)을 그대로 따름
 //   배 모드가 아닌데 물에 빠지면(car.sink 0~1) 차가 기수를 숙이며 물속으로 가라앉음
 import * as THREE from 'three';
-import { buildWheel } from './carWheels.js';
+import { buildWheel } from './carBody_wheels.js';
+import { buildCockpit } from './carBody_cockpit.js';
 import { applyCarLighting } from './carLighting.js';
 import { buildF1 } from './carBody_f1.js';
 import { buildGT } from './carBody_gt.js';
@@ -53,6 +54,8 @@ import { buildTruck } from './carBody_truck.js';
 import { buildEV } from './carBody_ev.js';
 import { buildWedge } from './carBody_wedge.js';
 import { buildVan } from './carBody_van.js';
+import { applyCostume, dressCar } from './carCostumes.js';
+import { buildRacingBoat } from './carBody_boat.js';
 
 const DRIFT_COLORS = [0xffffff, 0x4fc3ff, 0xff9a2e];
 const FORM_COLORS = { spike: new THREE.Color('#7dff6a') };
@@ -81,7 +84,7 @@ const easeInOut = (x) => x * x * (3 - 2 * x);
  * 단면을 이어 붙인 매끈한 몸통 (노즈, 사이드포드, 엔진 커버).
  * sections: 앞에서 뒤 순서로 [{ z, w: 반폭, h: 반높이, y: 중심 높이, n: 각진 정도(2=타원, 클수록 네모) }]
  */
-export function loft(sections, M = 20) {
+export function loft(sections, M = 12) {
   const pos = [];
   const idx = [];
   const ring = (s) => {
@@ -208,7 +211,7 @@ export function archGeo(rIn, rOut, width, a0 = -0.1) {
   const a1 = Math.PI - a0;
   s.absarc(0, 0, rOut, a0, a1, false);
   s.absarc(0, 0, rIn, a1, a0, true);
-  return new THREE.ExtrudeGeometry(s, { depth: width, bevelEnabled: false, curveSegments: 22 })
+  return new THREE.ExtrudeGeometry(s, { depth: width, bevelEnabled: false, curveSegments: 8 })
     .rotateY(Math.PI / 2)
     .translate(-width / 2, 0, 0);
 }
@@ -251,8 +254,8 @@ const BASE_ANCHORS = {
 export function makeHelmet(add, body, M) {
   const helmet = new THREE.Group();
   body.add(helmet);
-  add(new THREE.SphereGeometry(0.17, 16, 12), M.helmetMat, 0, 0, 0, helmet);
-  const visorBand = add(new THREE.SphereGeometry(0.172, 16, 6, Math.PI * 0.18, Math.PI * 0.64, Math.PI * 0.38, Math.PI * 0.16), M.dark, 0, 0, 0, helmet);
+  add(new THREE.SphereGeometry(0.17, 12, 8), M.helmetMat, 0, 0, 0, helmet);
+  const visorBand = add(new THREE.SphereGeometry(0.172, 12, 4, Math.PI * 0.18, Math.PI * 0.64, Math.PI * 0.38, Math.PI * 0.16), M.dark, 0, 0, 0, helmet);
   visorBand.castShadow = false;
   add(new THREE.BoxGeometry(0.02, 0.02, 0.3), M.accent, 0, 0.165, -0.02, helmet);
   return helmet;
@@ -348,7 +351,8 @@ function knobGeometry(r, wd) {
 }
 
 export function createCarModel(lookOrColor = '#e8463a') {
-  const look = normalizeLook(lookOrColor);
+  const normalized = normalizeLook(lookOrColor);
+  const look = normalized.costume ? applyCostume(normalized, normalized.costume) : normalized;
   const color = look.body;
   const root = new THREE.Group(); // 위치와 방향
   const body = new THREE.Group(); // 기울기 연출
@@ -358,6 +362,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   // 가속 모드 차체 빛: 어두운 차체(파랑 등)는 주황빛이 너무 세게 보이므로 밝기에 맞춰 줄임 (빨간 F1 = 1)
   const glowK = Math.min(1, Math.max(0.35, baseColor.getHSL({}).l / 0.56));
   const armorColor = new THREE.Color('#3a3f4a');
+  const costumeWhite = new THREE.Color('#ffffff');
   const paint = new THREE.MeshPhysicalMaterial({ color, roughness: 0.31, metalness: 0.24, clearcoat: 0.85, clearcoatRoughness: 0.22, emissive: '#000000' });
   const accent = new THREE.MeshStandardMaterial({ color: look.accent, roughness: 0.36, metalness: 0.12 });
   const trim = new THREE.MeshStandardMaterial({ color: look.trim, roughness: 0.35, metalness: 0.55 });
@@ -391,6 +396,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   // ------------------------------------------------------------------ 차체 (차 종류마다 다름) + 변신 부품 자리(A)
   const shell = (BUILDERS[look.style] || buildF1)({ add, body, root, M, look });
+  const shellMeshes = [];
+  body.traverse(m => { if (m.isMesh && (m.material === paint || m.material === accent)) shellMeshes.push(m); });
   const { helmet, fWing, spoiler, drs } = shell;
   const A = { ...BASE_ANCHORS, ...shell.A };
 
@@ -515,11 +522,11 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const g = new THREE.Group(); // 부스터 전체 (z = 0이 부스터 뒤끝)
     body.add(g);
     // 몸통 + 둥근 앞머리 + 흡입구
-    add(new THREE.CylinderGeometry(BR, BR, 1.2, 16).rotateX(Math.PI / 2), metal, 0, 0, 0.6, g);
-    add(new THREE.SphereGeometry(BR, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2), metal, 0, 0, 1.2, g);
+    add(new THREE.CylinderGeometry(BR, BR, 1.2, 12).rotateX(Math.PI / 2), metal, 0, 0, 0.6, g);
+    add(new THREE.SphereGeometry(BR, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2), metal, 0, 0, 1.2, g);
     add(new THREE.CylinderGeometry(BR * 0.55, BR * 0.55, 0.04, 12).rotateX(Math.PI / 2), dark, 0, 0, 1.2 + BR * 0.98, g);
     // 빛나는 띠 2줄 + 옆 받침대
-    for (const z of [0.25, 0.85]) add(new THREE.TorusGeometry(BR + 0.005, 0.025, 6, 20), glowGreen, 0, 0, z, g);
+    for (const z of [0.25, 0.85]) add(new THREE.TorusGeometry(BR + 0.005, 0.025, 4, 12), glowGreen, 0, 0, z, g);
     add(new THREE.BoxGeometry(0.16, 0.08, 0.8), darkMetal, -side * 0.12, -0.1, 0.6, g);
     // 위쪽 안정판 (뒤로 젖혀진 지느러미)
     const finS = new THREE.Shape();
@@ -533,7 +540,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const nozzle = new THREE.Group();
     g.add(nozzle);
     add(new THREE.CylinderGeometry(BR * 0.75, BR * 1.25, 0.34, 18, 1, true).rotateX(Math.PI / 2), darkMetal, 0, 0, -0.17, nozzle);
-    add(new THREE.TorusGeometry(BR * 1.25, 0.022, 6, 20), glowGreen, 0, 0, -0.34, nozzle);
+    add(new THREE.TorusGeometry(BR * 1.25, 0.022, 4, 12), glowGreen, 0, 0, -0.34, nozzle);
     const glow = add(new THREE.CircleGeometry(BR * 0.8, 16).rotateY(Math.PI), coreMat, 0, 0, -0.05, nozzle);
     glow.castShadow = false;
     // 불꽃 (바깥 초록 + 안쪽 흰빛)
@@ -556,6 +563,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const nitroOuter = new THREE.MeshBasicMaterial({ color: '#ff8a3a', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
   const nitroCore = new THREE.MeshBasicMaterial({ color: '#bfe4ff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   const nitroDisc = new THREE.MeshBasicMaterial({ color: '#e6f4ff' });
+  if (look.costume) { accelGlow.color.set(look.accent); accelGlow.emissive.set(look.trim); nitroOuter.color.set(look.trim); }
   // 사이드포드 위 통풍구 (아가미처럼 뒤로 누우며 솟음)
   const ventGeo = new THREE.BoxGeometry(0.3, 0.1, 0.05).translate(0, 0.05, 0);
   const vents = [];
@@ -576,7 +584,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     g.position.set(side * A.nitro.x, A.nitro.y, A.nitro.z);
     body.add(g);
     add(new THREE.CylinderGeometry(0.065, 0.075, 0.42, 12).rotateX(Math.PI / 2), darkMetal, 0, 0, 0, g);
-    add(new THREE.TorusGeometry(0.075, 0.02, 6, 16), accelGlow, 0, 0, -0.21, g).castShadow = false;
+    add(new THREE.TorusGeometry(0.075, 0.02, 4, 12), accelGlow, 0, 0, -0.21, g).castShadow = false;
     add(new THREE.CircleGeometry(0.055, 12).rotateY(Math.PI), nitroDisc, 0, 0, -0.19, g).castShadow = false;
     // 불꽃 (바깥 주황 + 안쪽 청백)
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 1.3, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.65), nitroOuter);
@@ -588,32 +596,17 @@ export function createCarModel(lookOrColor = '#e8463a') {
   // 바닥 언더글로우 (땅에 깔리는 주황 빛)
   const underglow = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, 5.2).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: glowTex, color: '#ff7a2e', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: glowTex, color: look.costume ? look.trim : '#ff7a2e', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   underglow.position.y = 0.035;
   root.add(underglow);
 
   // ------------------------------------------------------------------ 배 모드 부품 (평소엔 숨어 있음)
   // 차체 도장·카본 하부·원래 포인트 색을 이어받는 수륙양용 하부 패널.
-  const hullWhite = paint;
-  const hullRed = carbon;
-  const hullBlue = accent;
-  const HULL = [
-    { z: 3.02, w: 0.03, h: 0.05, y: 0.3 },
-    { z: 2.75, w: 0.3, h: 0.13, y: 0.23 },
-    { z: 2.3, w: 0.62, h: 0.18, y: 0.17 },
-    { z: 1.6, w: 0.86, h: 0.21, y: 0.12 },
-    { z: 0.6, w: 0.96, h: 0.22, y: 0.1 },
-    { z: -1.1, w: 0.96, h: 0.22, y: 0.1 },
-    { z: -2.0, w: 0.9, h: 0.2, y: 0.12 },
-    { z: -2.32, w: 0.84, h: 0.18, y: 0.14 },
-  ];
   const hull = new THREE.Group();
   const HULL_FULL = [1, 1, 1, 0];
   body.add(hull);
-  add(loft(HULL.map((s) => ({ ...s, n: 2.4 })), 24), hullWhite, 0, 0, 0, hull);
-  add(loft(HULL.map((s) => ({ z: s.z, w: s.w + 0.012, h: s.h * 0.55, y: s.y - s.h * 0.5, n: 2.4 })), 24), hullRed, 0, 0, 0, hull);
-  add(loft(HULL.map((s) => ({ z: s.z, w: s.w + 0.014, h: 0.02, y: s.y + s.h * 0.35, n: 2.4 })), 24), hullBlue, 0, 0, 0, hull).castShadow = false;
+  buildRacingBoat({ add, hull, M, look, A, loft });
 
   // 선외기 2개: 선미(트랜섬) 뒤 경첩에 매달림. 경첩 회전(rotation.x)으로 들어 올리거나 물속에 내림
   const motorMat = new THREE.MeshStandardMaterial({ color: '#23272e', roughness: 0.4, metalness: 0.5 });
@@ -652,10 +645,11 @@ export function createCarModel(lookOrColor = '#e8463a') {
   });
 
   // 물보라 (뱃머리 양옆) + 항적 (뒤에 남는 흰 물결)
-  const sprayMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sprayMat = new THREE.MeshBasicMaterial({ map: glowTex, side: THREE.DoubleSide, color: '#ffffff', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
   const sprays = [-1, 1].map((side) => {
-    const m = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.9, 8, 1, true).translate(0, 0.45, 0), sprayMat);
-    m.position.set(side * 0.7, 0.05, 2.0);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.2).translate(0, 0.4, 0), sprayMat);
+    const bs = A.hull || HULL_FULL;
+    m.position.set(side * .7 * bs[0], .05 * bs[1], 2 * bs[2] + (bs[3] || 0));
     m.rotation.set(-0.6, 0, -side * 0.9);
     m.userData.side = side;
     body.add(m);
@@ -665,21 +659,22 @@ export function createCarModel(lookOrColor = '#e8463a') {
     new THREE.PlaneGeometry(2.2, 5).rotateX(-Math.PI / 2).translate(0, 0, -2.5),
     new THREE.MeshBasicMaterial({ map: glowTex, color: '#ffffff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
-  wake.position.set(0, 0.06, -2.2);
+  wake.position.set(0, .06, -2.2 * (A.hull?.[2] || 1) + (A.hull?.[3] || 0));
   root.add(wake);
 
   // ------------------------------------------------------------------ 비행 모드: 제트 엔진, 항법등, 비행운 (날개 뿌리에 붙음)
   const jetOuter = new THREE.MeshBasicMaterial({ color: '#5fb4ff', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
   const jetCore = new THREE.MeshBasicMaterial({ color: '#eef8ff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   const jetDisc = new THREE.MeshBasicMaterial({ color: '#cfeaff' });
+  if (look.costume) { jetOuter.color.set(look.trim); jetDisc.color.set(look.accent); }
   const navRed = new THREE.MeshBasicMaterial({ color: '#ff2a2a' });
   const navGreen = new THREE.MeshBasicMaterial({ color: '#2aff6a' });
   const strobeMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   for (const m of [navRed, navGreen, strobeMat]) m.userData.live = true;
   const trailMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
   const jetGeos = {
-    body: new THREE.CylinderGeometry(0.17, 0.14, 0.9, 16).rotateX(Math.PI / 2), // 앞이 굵음
-    lip: new THREE.TorusGeometry(0.17, 0.03, 6, 18),
+    body: new THREE.CylinderGeometry(0.17, 0.14, 0.9, 12).rotateX(Math.PI / 2), // 앞이 굵음
+    lip: new THREE.TorusGeometry(0.17, 0.03, 4, 12),
     intake: new THREE.CircleGeometry(0.15, 14),
     blade: new THREE.BoxGeometry(0.03, 0.27, 0.02),
     nozzle: new THREE.CylinderGeometry(0.13, 0.1, 0.2, 14, 1, true).rotateX(Math.PI / 2),
@@ -687,7 +682,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     flame: new THREE.ConeGeometry(0.1, 1.4, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.7),
     core: new THREE.ConeGeometry(0.055, 0.9, 8, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.45),
     pylon: new THREE.BoxGeometry(0.05, 0.14, 0.6),
-    nav: new THREE.SphereGeometry(0.065, 8, 6),
+    nav: new THREE.SphereGeometry(0.065, 6, 4),
     trail: new THREE.ConeGeometry(0.07, 1, 6, 1, true).rotateX(Math.PI / 2).translate(0, 0, -0.5), // 끝이 앞(날개 끝), 뒤로 갈수록 넓어짐
   };
   for (const wg of wings) {
@@ -778,10 +773,10 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   // 변신 순간: 퍼지는 고리 + 빛기둥 + 튀는 파편
   const fxMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.12, 8, 32).rotateX(Math.PI / 2), fxMat());
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.12, 4, 16).rotateX(Math.PI / 2), fxMat());
   ring.position.y = 0.7;
   root.add(ring);
-  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 8, 24, 1, true).translate(0, 4, 0), fxMat());
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 8, 12, 1, true).translate(0, 4, 0), fxMat());
   root.add(pillar);
   const shardGeo = new THREE.TetrahedronGeometry(0.18);
   const shards = Array.from({ length: 22 }, () => {
@@ -869,18 +864,25 @@ export function createCarModel(lookOrColor = '#e8463a') {
     drs.rotation.x = A.drsRest - 0.1 * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
     underglow.visible = sGlow > 0.01;
     underglow.material.opacity = sGlow * (0.5 + 0.12 * Math.sin(time * 7));
+    if (costumeFx?.luxury && boatP < .1 && flyP < .1) {
+      underglow.visible = true;
+      underglow.material.opacity = Math.max(underglow.material.opacity, .065 + .015 * Math.sin(time * 1.3));
+    }
   }
 
   /** 배 모드 진행도 p에 맞춰 부품 배치. tilt: 선외기 각도 (0 근처=물속, 클수록 들어 올림) */
   /** 바퀴 접기 q: 0=평소, 1=수평으로 눕혀 차체 쪽으로 접어 올림 (배 모드, 비행 중 착륙 장치) */
-  function poseWheels(q) {
+  function poseWheels(q, boat = 0) {
     const sFold = easeInOut(stage(q, 0.0, 0.8)); // 바퀴가 수평으로 눕혀짐
     const sTuck = easeOutBack(stage(q, 0.18, 1.0)); // 차체 쪽으로 접혀 올라감
     for (const w of wheels) {
       // 앞바퀴는 좁은 노즈 옆으로, 뒷바퀴는 사이드포드 위로 비켜 접힘
       const tk = w.front ? A.tuck.f : A.tuck.r;
-      const ax = THREE.MathUtils.lerp(w.ax, tk[0], sTuck);
-      const y = THREE.MathUtils.lerp(w.r, tk[1], sTuck);
+      const stow = easeInOut(stage(boat, .18, .75));
+      const ax = THREE.MathUtils.lerp(w.ax, THREE.MathUtils.lerp(tk[0], Math.min(.4, w.ax * .48), stow), sTuck);
+      const y = THREE.MathUtils.lerp(w.r, THREE.MathUtils.lerp(tk[1], .28, stow), sTuck);
+      w.steer.visible = boat < .76;
+      w.susp.visible = boat < .68;
       w.steer.position.set(w.side * ax, y, w.z);
       w.steer.rotation.z = w.side * (Math.PI / 2) * sFold; // 아래쪽이 바깥으로 들리며 눕혀짐
       w.susp.position.y = y;
@@ -931,6 +933,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
     // 변신 중 차체가 살짝 들썩임 (변신할 때만)
     if (transformingIn) body.position.y += Math.sin(p * Math.PI) * 0.25;
   }
+
+  const costumeFx = dressCar({ root, body, A, shell, M, look, add, wheels, shellMeshes, loft });
+  const cockpit = buildCockpit({ body, A, M, look, add });
 
   // 처음엔 모드 부품을 숨겨 둠 (첫 sync 전)
   poseAccel(0, 0);
@@ -1006,7 +1011,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
     for (const s of seams) s.visible = p > 0.05;
     glowGreen.emissiveIntensity = 0.8 + 0.6 * p;
-    paint.color.copy(baseColor).lerp(armorColor, 0.15 * sArmor);
+    paint.color.copy(look.costume ? costumeWhite : baseColor).lerp(armorColor, 0.15 * sArmor);
 
     // 변신 중 차체가 살짝 들썩임 (변신할 때만)
     body.position.y = transformingIn ? Math.sin(p * Math.PI) * 0.35 : 0;
@@ -1016,7 +1021,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   return {
     root,
     /** 1인칭 시점용 (camViews.js, 2026-11-12): 부품 자리(A.helmet = 운전자 머리), 헬멧, 기울기 그룹 */
-    fp: { A, helmet, body },
+    fp: { A, helmet, body, eye: cockpit.eye, interior: cockpit.interior },
     /** 이 차의 모습 설정 (style, 색 등) */
     look,
     /** 장면에서 빼고 지오메트리·재질·텍스처를 정리 (홈 화면에서 차를 바꿀 때) */
@@ -1030,10 +1035,12 @@ export function createCarModel(lookOrColor = '#e8463a') {
         if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) mats.add(m);
       });
       for (const g of geos) g.dispose();
+      const textures = new Set();
       for (const m of mats) {
-        if (m.map) m.map.dispose();
+        for (const key of ['map', 'roughnessMap', 'metalnessMap']) if (m[key]) textures.add(m[key]);
         m.dispose();
       }
+      for (const texture of textures) texture.dispose();
     },
     /** 물리 상태(Car)를 보고 모양을 맞춥니다. dt=1이면 즉시 맞춤 */
     sync(car, dt, time) {
@@ -1127,7 +1134,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
       // 접힌 바퀴(배 모드, 비행 중)는 멈추고 조향도 풀림
       wheelAngle += (car.forwardSpeed / 0.4) * dt * (1 - wheelQ);
-      poseWheels(wheelQ);
+      poseWheels(wheelQ, boatP);
       for (const w of wheels) {
         w.spin.rotation.x = wheelAngle;
         if (w.front) w.steer.rotation.y = -car.steerVisual * 0.42 * (1 - wheelQ);
@@ -1159,6 +1166,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       // 주행 모드 (스파이크가 정한 body.position.y에 더함)
       poseAccel(accelP, time);
       // 선외기: 물 위에선 물속으로 내리고(살짝 트림), 땅이나 공중에선 들어 올림
+      costumeFx?.update(time, boatP);
       poseBoat(boatP, boatOn, THREE.MathUtils.lerp(1.25, 0.08, waterK));
       // 변신하는 동안 차체가 살짝 들렸다가 "철컥" 내려앉음 (흔들림 없이 한 번)
       if (clunkT < 1) {
@@ -1173,8 +1181,11 @@ export function createCarModel(lookOrColor = '#e8463a') {
         sweep.material.opacity = 0.7 * Math.sin(Math.PI * sweepT);
       }
 
+      cockpit.wheel.rotation.z = -(car.steerVisual || 0) * 0.55;
+
       // 가속 모드는 차체에 주황빛이 맥박처럼, 비행 모드는 하늘색이 은은하게 (부스터는 초록 부품이 빛나므로 차체 색은 유지)
       if (accelP > 0) paint.emissive.copy(MODE_COLORS.accel).multiplyScalar(accelP * (0.05 + 0.03 * Math.sin(time * 10)) * glowK);
+      else if (costumeFx?.luxury) paint.emissive.set('#000000');
       else paint.emissive.setRGB(0, 0, 0);
       // 평소에는 은은한 후미등, 브레이크를 밟으면 밝아진다.
       tailMat.emissiveIntensity = car.brk > 0.05 ? 2.6 : 0.65;
@@ -1246,12 +1257,12 @@ export function createCarModel(lookOrColor = '#e8463a') {
         s.visible = showSpray;
         // 카빙하면 바깥쪽(도는 반대쪽) 물보라가 크게 솟음 (s.userData.side: +1 = 왼쪽)
         const outer = Math.sign(car.yawRate || 0) === s.userData.side ? 1 : 0.35;
-        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane + 0.6 * cv * outer) * (0.85 + Math.random() * 0.3));
+        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane + 0.6 * cv * outer) * (0.85 + Math.random() * 0.3) * Math.min(1, A.hull?.[2] || 1));
       }
       const wakeK = float * Math.min(1, spd / 15 + push * 0.3);
       wake.visible = wakeK > 0.02;
       wake.material.opacity = 0.55 * wakeK;
-      wake.scale.set(1 + 0.3 * plane, 1, 0.5 + plane);
+      wake.scale.set((1 + .3 * plane) * (A.hull?.[0] || 1), 1, (.5 + plane) * (A.hull?.[2] || 1));
 
       // 제트 엔진: 엔진이 다 나온 뒤 점화. 가속 페달에 비례해 길어지고, 부스트 중엔 더 길게. 팬은 늘 돌고 페달을 밟으면 빨라짐
       const jetLit = flyP > 0.85;

@@ -4,6 +4,7 @@
 //   - 레벨은 profile.js (완주하면 XP). 잠금은 홈 화면 차 고르기에서만 막음 (게임 주소 ?car= 는 안 막음, 봇은 잠긴 차도 탐)
 //   약속(다른 파일이 쓰는 이름): isCarUnlocked(carId) → true/false, carUnlockLevel(carId) → 필요한 레벨 (없으면 0)
 import { profile } from './profile.js';
+import { listCostumes } from './carCostumes.js';
 import { academy, licenseMeta } from './academyStore.js'; // 드라이빙 아카데미 라이선스 색 (2026-11-12)
 
 const PAINT_KEY = 'gimmick.paint';
@@ -60,6 +61,7 @@ export const paintOf = (id) => PAINTS.find((p) => p.id === Number(id)) || PAINTS
 export const isPaintUnlocked = (id) => {
   const p = paintOf(id);
   if (p.license) return academy.hasLicense(p.license);
+  try { if (JSON.parse(localStorage.getItem('gimmick.meta') || '{}').owned?.['paint:' + p.id]) return true; } catch {} // night-meta: 일반 색 코인 선구매 (라이선스 색 제외)
   return currentLevel() >= p.level;
 };
 /** 잠긴 색 안내 글자 ('Lv.5' / 'C 라이선스') */
@@ -124,4 +126,27 @@ export function takeLevelNews() {
   } catch {}
   if (now <= seen) return null;
   return { from: seen, to: now, ...unlockedBetween(seen, now) };
+}
+
+// 코스튬 API 추가: 기존 페인트/차 해금 함수는 그대로 유지.
+const COSTUME_KEY = 'gimmick.costume';
+export function isCostumeUnlocked(carId, id, level = currentLevel()) {
+  if (!id || id === 'default') return true;
+  const c = listCostumes(carId).find(c => c.id === id);
+  return !!c && Number(level) >= c.unlockLevel;
+}
+export function getCostume(carId) {
+  try { const id = JSON.parse(localStorage.getItem(COSTUME_KEY) || '{}')?.[carId]; return listCostumes(carId).some(c => c.id === id) ? id : ''; } catch { return ''; }
+}
+export function setCostume(carId, id = '') {
+  id = id === 'default' ? '' : id;
+  if (!isCostumeUnlocked(carId, id)) return false;
+  try {
+    const raw = JSON.parse(localStorage.getItem(COSTUME_KEY) || '{}');
+    const saved = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    if (id) saved[carId] = id; else delete saved[carId];
+    localStorage.setItem(COSTUME_KEY, JSON.stringify(saved));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('gimmick:costume', { detail: { carId, id } }));
+    return true;
+  } catch { return false; }
 }

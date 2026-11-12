@@ -50,7 +50,7 @@ function shellGeometry() {
     const u = THREE.MathUtils.clamp((a[0] - z) / (a[0] - b[0]), 0, 1), t = u * u * (3 - 2 * u);
     return a.slice(1).map((n, j) => THREE.MathUtils.lerp(n, b[j + 1], t));
   };
-  const pos = [], idx = [], N = 112;
+  const pos = [], idx = [], N = 36;
   const ring = [[0, 1], [.48, .99], [.78, .97], [.95, .86], [1, .63], [1, 0], [.69, 0], [.58, 0], [0, 0],
     [-.58, 0], [-.69, 0], [-1, 0], [-1, .63], [-.95, .86], [-.78, .97], [-.48, .99]];
   for (let i = 0; i <= N; i++) {
@@ -96,16 +96,16 @@ function softBox(w, h, d, x, y, z, radius = .025, rx = 0, ry = 0) {
   sh.lineTo(-a, h / 2); sh.quadraticCurveTo(-w / 2, h / 2, -w / 2, b);
   sh.lineTo(-w / 2, -b); sh.quadraticCurveTo(-w / 2, -h / 2, -a, -h / 2);
   return new THREE.ExtrudeGeometry(sh, { depth: d - 2 * r, steps: 1, bevelEnabled: true,
-    bevelSize: r, bevelThickness: r, bevelSegments: 2, curveSegments: 3 })
+    bevelSize: r, bevelThickness: r, bevelSegments: 1, curveSegments: 2 })
     .translate(0, 0, -d / 2 + r).rotateX(rx).rotateY(ry).translate(x, y, z);
 }
 
-function smoothLoft(sections, sides = 32) {
+function smoothLoft(sections, sides = 12) {
   const dense = [];
   for (let i = 0; i < sections.length - 1; i++) {
     const a = sections[i], b = sections[i + 1];
-    for (let j = 0; j < 5; j++) {
-      const t = j / 5, u = t * t * (3 - 2 * t), s = {};
+    for (let j = 0; j < 2; j++) {
+      const t = j / 2, u = t * t * (3 - 2 * t), s = {};
       for (const k of ['w', 'h', 'y', 'x', 'n']) s[k] = THREE.MathUtils.lerp(a[k] || 0, b[k] || 0, u);
       s.z = THREE.MathUtils.lerp(a.z, b.z, t); dense.push(s);
     }

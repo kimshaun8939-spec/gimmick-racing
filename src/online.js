@@ -32,7 +32,7 @@ function deviceId() {
 function localProfile() {
   try {
     const j = JSON.parse(localStorage.getItem('gimmick.profile') || 'null');
-    if (j && typeof j.xp === 'number') return { xp: Math.floor(j.xp), races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0 };
+    if (j && typeof j.xp === 'number') return { xp: Math.max(0, Math.floor(j.xp) - Math.max(0, Number(j._adminBoost?.xp) || 0)), races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0 };
   } catch {}
   return null;
 }

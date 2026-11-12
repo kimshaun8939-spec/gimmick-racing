@@ -1,0 +1,1240 @@
+{
+  "f1": [
+    {
+      "id": "f1-heritage",
+      "name": "클래식 그랑프리",
+      "desc": "이탈리아 레드 · 아이보리 더블 스트라이프 · 크롬 배기",
+      "unlockLevel": 5,
+      "pattern": "heritage",
+      "brand": "AUREL",
+      "kit": "classic",
+      "look": {
+        "body": "#a80816",
+        "accent": "#f0f0e8",
+        "trim": "#d1a044",
+        "rim": "#6d7883",
+        "helmet": "#f0f0e8",
+        "number": "27",
+        "numberBg": "#a80816",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "lowWing",
+        "sidepipes"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "f1-magma",
+      "name": "용암 코어",
+      "desc": "무광 흑요석 · 뒤로 흐르는 용암 불꽃 · 샤크핀",
+      "unlockLevel": 15,
+      "pattern": "magma",
+      "brand": "IGNIS",
+      "kit": "fins",
+      "look": {
+        "body": "#100e12",
+        "accent": "#e82805",
+        "trim": "#ff9b13",
+        "rim": "#6d7883",
+        "helmet": "#e82805",
+        "number": "07",
+        "numberBg": "#100e12",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "shark",
+        "wideWing"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "f1-sakura",
+      "name": "벚꽃 질주",
+      "desc": "자주빛 진주 도장 · 한 쌍의 벚꽃 리본 · 분할 날개",
+      "unlockLevel": 25,
+      "pattern": "petal",
+      "brand": "HANAMI",
+      "kit": "aero",
+      "look": {
+        "body": "#1d1029",
+        "accent": "#c70e60",
+        "trim": "#f0e4ea",
+        "rim": "#6d7883",
+        "helmet": "#c70e60",
+        "number": "17",
+        "numberBg": "#1d1029",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "petalWing"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "f1-sovereign",
+      "name": "황제의 카본",
+      "desc": "무광 카본 블랙 · 샴페인 골드 핀라인 · 3단 날개",
+      "unlockLevel": 40,
+      "pattern": "carbon",
+      "brand": "REGALIA",
+      "kit": "crown",
+      "look": {
+        "body": "#070b10",
+        "accent": "#aa7422",
+        "trim": "#d5b568",
+        "rim": "#aa7422",
+        "helmet": "#aa7422",
+        "number": "01",
+        "numberBg": "#070b10",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "tripleWing",
+        "spine",
+        "discs"
+      ],
+      "finish": "satin"
+    }
+  ],
+  "proto": [
+    {
+      "id": "proto-endurance",
+      "name": "24시 내구 레이서",
+      "desc": "헤리티지 블루 · 오렌지 레이싱 스트라이프 · 롱테일",
+      "unlockLevel": 6,
+      "pattern": "heritage",
+      "brand": "HOUR24",
+      "kit": "aero",
+      "look": {
+        "body": "#1379a4",
+        "accent": "#ef4d06",
+        "trim": "#e9ebdf",
+        "rim": "#6d7883",
+        "helmet": "#ef4d06",
+        "number": "24",
+        "numberBg": "#1379a4",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "longtail",
+        "scoop"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "proto-abyss",
+      "name": "심해 탐사정",
+      "desc": "심해 네이비 · 청록 정밀 회로선 · 쌍 수직핀",
+      "unlockLevel": 17,
+      "pattern": "circuit",
+      "brand": "BATHYS",
+      "kit": "fins",
+      "look": {
+        "body": "#041525",
+        "accent": "#009da8",
+        "trim": "#c9dce5",
+        "rim": "#6d7883",
+        "helmet": "#009da8",
+        "number": "08",
+        "numberBg": "#041525",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "twinFins",
+        "wide"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "proto-orbital",
+      "name": "은하 탐사",
+      "desc": "진주 실버 · 네이비 임무 띠 · 폐쇄형 고리 날개",
+      "unlockLevel": 28,
+      "pattern": "cosmos",
+      "brand": "ORBITAL",
+      "kit": "orbit",
+      "look": {
+        "body": "#c8cdd2",
+        "accent": "#111d55",
+        "trim": "#ed5914",
+        "rim": "#6d7883",
+        "helmet": "#111d55",
+        "number": "09",
+        "numberBg": "#c8cdd2",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "ringWing",
+        "discs"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "proto-blackstar",
+      "name": "블랙스타 LM",
+      "desc": "블랙 사파이어 · 바이올렛 스트라이프 · 이중 날개",
+      "unlockLevel": 38,
+      "pattern": "carbon",
+      "brand": "VOID LM",
+      "kit": "crown",
+      "look": {
+        "body": "#080b18",
+        "accent": "#381696",
+        "trim": "#9b83e6",
+        "rim": "#381696",
+        "helmet": "#381696",
+        "number": "00",
+        "numberBg": "#080b18",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "doubleWing",
+        "shark",
+        "wide"
+      ],
+      "finish": "satin"
+    }
+  ],
+  "hyper": [
+    {
+      "id": "hyper-velvet",
+      "name": "벨벳 모나크",
+      "desc": "버건디 진주 도장 · 샴페인 스피어 · 낮은 덕테일",
+      "unlockLevel": 8,
+      "pattern": "chevron",
+      "brand": "MONARCH",
+      "kit": "aero",
+      "look": {
+        "body": "#53051c",
+        "accent": "#b38237",
+        "trim": "#e7dcc0",
+        "rim": "#6d7883",
+        "helmet": "#b38237",
+        "number": "16",
+        "numberBg": "#53051c",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "ducktail",
+        "scoop",
+        "wide"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "hyper-serpent",
+      "name": "에메랄드 바이퍼",
+      "desc": "브리티시 그린 · 에메랄드 창끝 · 크롬 사이드 배기",
+      "unlockLevel": 18,
+      "pattern": "scales",
+      "brand": "VIPER",
+      "kit": "fins",
+      "look": {
+        "body": "#013722",
+        "accent": "#08b55d",
+        "trim": "#b5c9b5",
+        "rim": "#08b55d",
+        "helmet": "#08b55d",
+        "number": "06",
+        "numberBg": "#013722",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "shark",
+        "twinWing",
+        "sidepipes"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "hyper-chrome",
+      "name": "크롬 미라지",
+      "desc": "스모크 크롬 · 미드나잇 더블 스트라이프 · 고리 날개",
+      "unlockLevel": 29,
+      "pattern": "chrome",
+      "brand": "MIRAGE",
+      "kit": "orbit",
+      "look": {
+        "body": "#7e8c9a",
+        "accent": "#041139",
+        "trim": "#c1d3df",
+        "rim": "#6d7883",
+        "helmet": "#041139",
+        "number": "99",
+        "numberBg": "#7e8c9a",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "ringWing",
+        "discs"
+      ],
+      "finish": "chrome"
+    },
+    {
+      "id": "hyper-prism",
+      "name": "프리즘 오버드라이브",
+      "desc": "블랙 오팔 · 청록 프리즘 블레이드 · 분할 날개",
+      "unlockLevel": 39,
+      "pattern": "prism",
+      "brand": "SPECTRA",
+      "kit": "crown",
+      "look": {
+        "body": "#100923",
+        "accent": "#007e9e",
+        "trim": "#b7cad7",
+        "rim": "#6d7883",
+        "helmet": "#007e9e",
+        "number": "03",
+        "numberBg": "#100923",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "splitWing",
+        "wide",
+        "spine"
+      ],
+      "finish": "pearl"
+    }
+  ],
+  "rocket": [
+    {
+      "id": "rocket-salt",
+      "name": "솔트플랫 레코드",
+      "desc": "솔트 실버 · 레코드 레드 스트라이프 · 유선형 카울",
+      "unlockLevel": 7,
+      "pattern": "heritage",
+      "brand": "LANDSPEED",
+      "kit": "classic",
+      "look": {
+        "body": "#d8dbd6",
+        "accent": "#bb1014",
+        "trim": "#18222d",
+        "rim": "#6d7883",
+        "helmet": "#bb1014",
+        "number": "01",
+        "numberBg": "#d8dbd6",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "streamliner",
+        "cowling"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "rocket-inferno",
+      "name": "인페르노 로켓",
+      "desc": "블랙 체리 · 뒤로 뻗는 인페르노 불꽃 · 쌍 테일핀",
+      "unlockLevel": 16,
+      "pattern": "flame",
+      "brand": "INFERNO",
+      "kit": "fins",
+      "look": {
+        "body": "#17070b",
+        "accent": "#de2b09",
+        "trim": "#f79717",
+        "rim": "#6d7883",
+        "helmet": "#de2b09",
+        "number": "66",
+        "numberBg": "#17070b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "twinFins",
+        "sidepipes"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "rocket-apollo",
+      "name": "아폴로 테스트 파일럿",
+      "desc": "실버 화이트 · 네이비 임무 띠 · 항공 테일핀",
+      "unlockLevel": 27,
+      "pattern": "cosmos",
+      "brand": "APOGEE",
+      "kit": "orbit",
+      "look": {
+        "body": "#c5ccd0",
+        "accent": "#12233c",
+        "trim": "#ec4c0b",
+        "rim": "#6d7883",
+        "helmet": "#12233c",
+        "number": "11",
+        "numberBg": "#c5ccd0",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "rocketFins",
+        "discs"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "rocket-plasma",
+      "name": "플라즈마 드래곤",
+      "desc": "딥 인디고 · 바이올렛 플라즈마 · 3단 날개",
+      "unlockLevel": 37,
+      "pattern": "circuit",
+      "brand": "DRAGON",
+      "kit": "crown",
+      "look": {
+        "body": "#090c21",
+        "accent": "#4e19b3",
+        "trim": "#10aecc",
+        "rim": "#6d7883",
+        "helmet": "#4e19b3",
+        "number": "X1",
+        "numberBg": "#090c21",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "tripleWing",
+        "spine"
+      ],
+      "finish": "pearl"
+    }
+  ],
+  "volt": [
+    {
+      "id": "volt-vector",
+      "name": "벡터 팩토리",
+      "desc": "레이싱 그린 · 실버 전류선 · 밀폐형 터빈 휠",
+      "unlockLevel": 9,
+      "pattern": "circuit",
+      "brand": "VECTOR",
+      "kit": "aero",
+      "look": {
+        "body": "#052b24",
+        "accent": "#d8ded8",
+        "trim": "#b3d623",
+        "rim": "#6d7883",
+        "helmet": "#d8ded8",
+        "number": "E1",
+        "numberBg": "#052b24",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "ducktail",
+        "discs"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "volt-ion",
+      "name": "이온 블루",
+      "desc": "코발트 블루 · 이온 블레이드 · 쌍 수직핀",
+      "unlockLevel": 19,
+      "pattern": "chevron",
+      "brand": "ION LAB",
+      "kit": "fins",
+      "look": {
+        "body": "#022578",
+        "accent": "#00a0d0",
+        "trim": "#d6e1e9",
+        "rim": "#6d7883",
+        "helmet": "#00a0d0",
+        "number": "E7",
+        "numberBg": "#022578",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "twinFins",
+        "wide"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "volt-aurora",
+      "name": "오로라 스트림",
+      "desc": "블랙 펄 · 오로라 에메랄드 리본 · 고리 날개",
+      "unlockLevel": 30,
+      "pattern": "prism",
+      "brand": "AURORA",
+      "kit": "orbit",
+      "look": {
+        "body": "#031820",
+        "accent": "#00976f",
+        "trim": "#b7d6cf",
+        "rim": "#6d7883",
+        "helmet": "#00976f",
+        "number": "E9",
+        "numberBg": "#031820",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "ringWing",
+        "discs"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "volt-singularity",
+      "name": "싱귤래리티",
+      "desc": "블랙 크롬 · 티타늄 더블 스트라이프 · 정밀 라임광",
+      "unlockLevel": 40,
+      "pattern": "carbon",
+      "brand": "SINGULAR",
+      "kit": "crown",
+      "look": {
+        "body": "#070b12",
+        "accent": "#aebac8",
+        "trim": "#94c51b",
+        "rim": "#aebac8",
+        "helmet": "#aebac8",
+        "number": "E0",
+        "numberBg": "#070b12",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "splitWing",
+        "wide",
+        "spine"
+      ],
+      "finish": "chrome"
+    }
+  ],
+  "razor": [
+    {
+      "id": "razor-retro",
+      "name": "레트로 터보 88",
+      "desc": "번트 오렌지 · 차콜 웨이브 · 루버 윙",
+      "unlockLevel": 10,
+      "pattern": "sunset",
+      "brand": "TURBO88",
+      "kit": "classic",
+      "look": {
+        "body": "#b53507",
+        "accent": "#131723",
+        "trim": "#c9b990",
+        "rim": "#6d7883",
+        "helmet": "#131723",
+        "number": "88",
+        "numberBg": "#b53507",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "slattedWing",
+        "sidepipes"
+      ],
+      "finish": "gloss"
+    },
+    {
+      "id": "razor-ronin",
+      "name": "네온 로닌",
+      "desc": "무광 가지색 · 크림슨 궤적 · 이중 날개",
+      "unlockLevel": 20,
+      "pattern": "circuit",
+      "brand": "RONIN",
+      "kit": "fins",
+      "look": {
+        "body": "#120c1e",
+        "accent": "#b80b32",
+        "trim": "#d7d8dd",
+        "rim": "#6d7883",
+        "helmet": "#b80b32",
+        "number": "04",
+        "numberBg": "#120c1e",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "doubleWing",
+        "scoop"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "razor-glacier",
+      "name": "빙하의 칼날",
+      "desc": "딥 글레이셔 · 실버 칼날 · 분할 에어로 윙",
+      "unlockLevel": 31,
+      "pattern": "shard",
+      "brand": "ICEWORKS",
+      "kit": "aero",
+      "look": {
+        "body": "#073956",
+        "accent": "#aabfc9",
+        "trim": "#00a7cd",
+        "rim": "#6d7883",
+        "helmet": "#aabfc9",
+        "number": "21",
+        "numberBg": "#073956",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "shardWing",
+        "wide"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "razor-obsidian",
+      "name": "옵시디언 GT",
+      "desc": "옵시디언 블랙 · 크림슨 창끝 · 브론즈 트림",
+      "unlockLevel": 39,
+      "pattern": "scales",
+      "brand": "OBSIDIAN",
+      "kit": "crown",
+      "look": {
+        "body": "#120b13",
+        "accent": "#b81711",
+        "trim": "#b78b43",
+        "rim": "#b81711",
+        "helmet": "#b81711",
+        "number": "88",
+        "numberBg": "#120b13",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "tripleWing",
+        "spine"
+      ],
+      "finish": "satin"
+    }
+  ],
+  "nova": [
+    {
+      "id": "nova-solar",
+      "name": "솔라 플레어",
+      "desc": "웜 카본 · 솔라 오렌지 불꽃 · 흡기구와 와이드 바디",
+      "unlockLevel": 12,
+      "pattern": "flame",
+      "brand": "HELIOS",
+      "kit": "aero",
+      "look": {
+        "body": "#23120b",
+        "accent": "#df4804",
+        "trim": "#d1b078",
+        "rim": "#6d7883",
+        "helmet": "#df4804",
+        "number": "01",
+        "numberBg": "#23120b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "scoop",
+        "wide"
+      ],
+      "finish": "satin"
+    },
+    {
+      "id": "nova-lunar",
+      "name": "루나 패트롤",
+      "desc": "문스톤 실버 · 건메탈 임무 띠 · 고리 날개",
+      "unlockLevel": 22,
+      "pattern": "cosmos",
+      "brand": "SELENE",
+      "kit": "orbit",
+      "look": {
+        "body": "#b8c4cd",
+        "accent": "#182633",
+        "trim": "#a27a2d",
+        "rim": "#6d7883",
+        "helmet": "#182633",
+        "number": "12",
+        "numberBg": "#b8c4cd",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "parts": [
+        "ringWing",
+        "discs"
+      ],
+      "finish": "chrome"
+    },
+    {
+      "id": "nova-supernova",
+      "name": "초신성 펄스",
+      "desc": "플럼 진주 도장 · 초신성 오렌지 리본 · 쌍 테일핀",
+      "unlockLevel": 33,
+      "pattern": "prism",
+      "brand": "SUPERNOVA",
+      "kit": "fins",
+      "look": {
+        "body": "#28072b",
+        "accent": "#e75206",
+        "trim": "#c4b5c7",
+        "rim": "#6d7883",
+        "helmet": "#e75206",
+        "number": "V8",
+        "numberBg": "#28072b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "twinFins",
+        "splitWing"
+      ],
+      "finish": "pearl"
+    },
+    {
+      "id": "nova-eclipse",
+      "name": "이클립스 로열",
+      "desc": "로열 퍼플 · 앤티크 골드 스트라이프 · 3단 날개",
+      "unlockLevel": 40,
+      "pattern": "carbon",
+      "brand": "ECLIPSE",
+      "kit": "crown",
+      "look": {
+        "body": "#150a26",
+        "accent": "#a57a2d",
+        "trim": "#d5bf8a",
+        "rim": "#a57a2d",
+        "helmet": "#a57a2d",
+        "number": "01",
+        "numberBg": "#150a26",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "parts": [
+        "tripleWing",
+        "shark",
+        "discs"
+      ],
+      "finish": "pearl"
+    }
+  ],
+  "gt": [
+    {
+      "id": "gt-velocity",
+      "name": "벨로시티 GT3",
+      "desc": "애틀랜틱 블루 · 실버 레이스 스트라이프 · GT3 와이드 윙",
+      "unlockLevel": 8,
+      "pattern": "heritage",
+      "brand": "VELOCITY",
+      "kit": "aero",
+      "parts": [
+        "wide",
+        "doubleWing"
+      ],
+      "look": {
+        "body": "#064171",
+        "accent": "#d6e3e6",
+        "trim": "#eb4c0c",
+        "rim": "#6d7883",
+        "helmet": "#d6e3e6",
+        "number": "23",
+        "numberBg": "#064171",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    },
+    {
+      "id": "gt-sundown",
+      "name": "선다운 크루저",
+      "desc": "보르도 레드 · 노을 리본 · 크롬 사이드 배기",
+      "unlockLevel": 24,
+      "pattern": "sunset",
+      "brand": "SUNDOWN",
+      "kit": "classic",
+      "parts": [
+        "ducktail",
+        "sidepipes"
+      ],
+      "look": {
+        "body": "#50101c",
+        "accent": "#d34c08",
+        "trim": "#d5b47a",
+        "rim": "#6d7883",
+        "helmet": "#d34c08",
+        "number": "80",
+        "numberBg": "#50101c",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "pearl"
+    }
+  ],
+  "rally": [
+    {
+      "id": "rally-expedition",
+      "name": "익스페디션 RX",
+      "desc": "포레스트 그린 · 한 줄의 탐험대 블록 띠 · 와이드 펜더",
+      "unlockLevel": 6,
+      "pattern": "digital",
+      "brand": "TRAIL RX",
+      "kit": "aero",
+      "parts": [
+        "wide",
+        "scoop"
+      ],
+      "look": {
+        "body": "#153c30",
+        "accent": "#a3b99c",
+        "trim": "#e66a11",
+        "rim": "#6d7883",
+        "helmet": "#a3b99c",
+        "number": "05",
+        "numberBg": "#153c30",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    },
+    {
+      "id": "rally-thunder",
+      "name": "썬더볼트 WRC",
+      "desc": "로열 블루 · 옐로 랠리 궤적 · 이중 날개",
+      "unlockLevel": 23,
+      "pattern": "circuit",
+      "brand": "STORM RX",
+      "kit": "fins",
+      "parts": [
+        "doubleWing",
+        "wide"
+      ],
+      "look": {
+        "body": "#082574",
+        "accent": "#e7b714",
+        "trim": "#e4e6df",
+        "rim": "#6d7883",
+        "helmet": "#e7b714",
+        "number": "72",
+        "numberBg": "#082574",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "gloss"
+    }
+  ],
+  "muscle": [
+    {
+      "id": "muscle-hotrod",
+      "name": "체리 봄 핫로드",
+      "desc": "체리 레드 · 전통 핫로드 불꽃 · 크롬 배기",
+      "unlockLevel": 15,
+      "pattern": "flame",
+      "brand": "CHERRY BOMB",
+      "kit": "classic",
+      "parts": [
+        "ducktail",
+        "sidepipes"
+      ],
+      "look": {
+        "body": "#5c0615",
+        "accent": "#d6350a",
+        "trim": "#e3a544",
+        "rim": "#6d7883",
+        "helmet": "#d6350a",
+        "number": "69",
+        "numberBg": "#5c0615",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    }
+  ],
+  "junior": [
+    {
+      "id": "junior-apex",
+      "name": "에이펙스 아카데미",
+      "desc": "아카데미 블루 · 화이트 에이펙스 띠 · 이중 날개",
+      "unlockLevel": 5,
+      "pattern": "chevron",
+      "brand": "APEX LAB",
+      "kit": "aero",
+      "parts": [
+        "doubleWing"
+      ],
+      "look": {
+        "body": "#082d78",
+        "accent": "#e1e7e8",
+        "trim": "#ee4709",
+        "rim": "#6d7883",
+        "helmet": "#e1e7e8",
+        "number": "03",
+        "numberBg": "#082d78",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    }
+  ],
+  "trophy": [
+    {
+      "id": "trophy-baja",
+      "name": "바하 데저트 팀",
+      "desc": "무광 슬레이트 · 데저트 오렌지 블록 띠 · 루프 장비",
+      "unlockLevel": 18,
+      "pattern": "digital",
+      "brand": "BAJA 1000",
+      "kit": "aero",
+      "parts": [
+        "wide",
+        "rallyPod"
+      ],
+      "look": {
+        "body": "#17262b",
+        "accent": "#bd621b",
+        "trim": "#dac899",
+        "rim": "#6d7883",
+        "helmet": "#bd621b",
+        "number": "07",
+        "numberBg": "#17262b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    }
+  ],
+  "buggy": [
+    {
+      "id": "buggy-dune",
+      "name": "듄 서퍼",
+      "desc": "듄 오렌지 · 딥 오션 리본 · 오프로드 장비",
+      "unlockLevel": 10,
+      "pattern": "sunset",
+      "brand": "DUNE SURF",
+      "kit": "classic",
+      "parts": [
+        "rallyPod"
+      ],
+      "look": {
+        "body": "#bc4a06",
+        "accent": "#112d32",
+        "trim": "#d7c9a7",
+        "rim": "#6d7883",
+        "helmet": "#112d32",
+        "number": "04",
+        "numberBg": "#bc4a06",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    }
+  ],
+  "kart": [
+    {
+      "id": "kart-comet",
+      "name": "코멧 레이서",
+      "desc": "딥 블루 · 코멧 오렌지 임무 띠 · 낮은 날개",
+      "unlockLevel": 3,
+      "pattern": "cosmos",
+      "brand": "COMET K",
+      "kit": "aero",
+      "parts": [
+        "lowWing"
+      ],
+      "look": {
+        "body": "#0a2771",
+        "accent": "#e45f0a",
+        "trim": "#e2e5df",
+        "rim": "#6d7883",
+        "helmet": "#e45f0a",
+        "number": "11",
+        "numberBg": "#0a2771",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    },
+    {
+      "id": "kart-candy",
+      "name": "캔디 팝 스프린트",
+      "desc": "베리 펄 · 체리 핑크 리본 · 꽃잎 분할 날개",
+      "unlockLevel": 20,
+      "pattern": "petal",
+      "brand": "CANDY POP",
+      "kit": "orbit",
+      "parts": [
+        "petalWing",
+        "discs"
+      ],
+      "look": {
+        "body": "#5c083c",
+        "accent": "#dc146c",
+        "trim": "#e4dce4",
+        "rim": "#6d7883",
+        "helmet": "#dc146c",
+        "number": "88",
+        "numberBg": "#5c083c",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "pearl"
+    }
+  ],
+  "hatch": [
+    {
+      "id": "hatch-checkmate",
+      "name": "체크메이트 컵",
+      "desc": "차콜 블랙 · 화이트 컵 스트라이프 · 와이드 바디",
+      "unlockLevel": 7,
+      "pattern": "heritage",
+      "brand": "CHECKMATE",
+      "kit": "aero",
+      "parts": [
+        "wide",
+        "doubleWing"
+      ],
+      "look": {
+        "body": "#141820",
+        "accent": "#dce0df",
+        "trim": "#d71d3e",
+        "rim": "#6d7883",
+        "helmet": "#dce0df",
+        "number": "22",
+        "numberBg": "#141820",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    }
+  ],
+  "roadster": [
+    {
+      "id": "roadster-tour",
+      "name": "리비에라 투어",
+      "desc": "페트롤 그린 · 크림 더블 스트라이프 · 클래식 크롬 배기",
+      "unlockLevel": 14,
+      "pattern": "heritage",
+      "brand": "RIVIERA",
+      "kit": "classic",
+      "parts": [
+        "sidepipes",
+        "lowWing"
+      ],
+      "look": {
+        "body": "#073b3d",
+        "accent": "#d9d6bd",
+        "trim": "#b28c46",
+        "rim": "#6d7883",
+        "helmet": "#d9d6bd",
+        "number": "62",
+        "numberBg": "#073b3d",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    }
+  ],
+  "pickup": [
+    {
+      "id": "pickup-rescue",
+      "name": "오션 레스큐",
+      "desc": "레스큐 오렌지 · 화이트 해안 경계 띠 · 루프 램프",
+      "unlockLevel": 11,
+      "pattern": "chevron",
+      "brand": "COAST 09",
+      "kit": "classic",
+      "parts": [
+        "rallyPod"
+      ],
+      "look": {
+        "body": "#c64a08",
+        "accent": "#d9e0df",
+        "trim": "#123540",
+        "rim": "#6d7883",
+        "helmet": "#d9e0df",
+        "number": "09",
+        "numberBg": "#c64a08",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    }
+  ],
+  "cube": [
+    {
+      "id": "cube-surf",
+      "name": "서프 클럽 배달부",
+      "desc": "딥 티얼 · 샌드 서프 리본 · 루프 롱보드",
+      "unlockLevel": 4,
+      "pattern": "sunset",
+      "brand": "SURF CLUB",
+      "kit": "classic",
+      "parts": [
+        "roofboard"
+      ],
+      "look": {
+        "body": "#03605b",
+        "accent": "#d4c5a0",
+        "trim": "#c84a1c",
+        "rim": "#6d7883",
+        "helmet": "#d4c5a0",
+        "number": "12",
+        "numberBg": "#03605b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "gloss"
+    },
+    {
+      "id": "cube-pixel",
+      "name": "픽셀 아케이드",
+      "desc": "아케이드 퍼플 · 큰 청록 계단 띠 · 터빈 휠",
+      "unlockLevel": 26,
+      "pattern": "digital",
+      "brand": "PIXEL RUN",
+      "kit": "orbit",
+      "parts": [
+        "rallyPod",
+        "discs"
+      ],
+      "look": {
+        "body": "#1b103e",
+        "accent": "#099d9a",
+        "trim": "#c9c6d1",
+        "rim": "#6d7883",
+        "helmet": "#099d9a",
+        "number": "64",
+        "numberBg": "#1b103e",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "satin"
+    }
+  ],
+  "scorpion": [
+    {
+      "id": "scorpion-safari",
+      "name": "사파리 정찰대",
+      "desc": "올리브 카본 · 사파리 골드 창끝 · 정찰대 장비",
+      "unlockLevel": 16,
+      "pattern": "scales",
+      "brand": "SAFARI 13",
+      "kit": "classic",
+      "parts": [
+        "rallyPod"
+      ],
+      "look": {
+        "body": "#343320",
+        "accent": "#a88334",
+        "trim": "#d9cbb0",
+        "rim": "#a88334",
+        "helmet": "#a88334",
+        "number": "13",
+        "numberBg": "#343320",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": false,
+      "finish": "satin"
+    }
+  ],
+  "midnight": [
+    {
+      "id": "midnight-shinobi",
+      "name": "시노비 나이트런",
+      "desc": "미드나잇 퍼플 · 크림슨 검날 · 분할 날개",
+      "unlockLevel": 30,
+      "pattern": "prism",
+      "brand": "SHINOBI",
+      "kit": "fins",
+      "parts": [
+        "splitWing",
+        "wide"
+      ],
+      "look": {
+        "body": "#0d0b1b",
+        "accent": "#9e0c4d",
+        "trim": "#a4b6c8",
+        "rim": "#6d7883",
+        "helmet": "#9e0c4d",
+        "number": "77",
+        "numberBg": "#0d0b1b",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "pearl"
+    }
+  ],
+  "blizzard": [
+    {
+      "id": "blizzard-polar",
+      "name": "폴라 레스큐 RX",
+      "desc": "폴라 네이비 · 아이스 실버 칼날 · 구조대 장비",
+      "unlockLevel": 22,
+      "pattern": "shard",
+      "brand": "POLAR RX",
+      "kit": "aero",
+      "parts": [
+        "rallyPod",
+        "wide"
+      ],
+      "look": {
+        "body": "#0d3150",
+        "accent": "#cbdbe0",
+        "trim": "#ed6c0b",
+        "rim": "#6d7883",
+        "helmet": "#cbdbe0",
+        "number": "21",
+        "numberBg": "#0d3150",
+        "numberFg": "#e8e9e2",
+        "wall": null
+      },
+      "glow": true,
+      "finish": "satin"
+    }
+  ]
+}

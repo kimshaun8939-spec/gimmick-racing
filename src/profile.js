@@ -20,6 +20,11 @@ function others() {
   return null;
 }
 function combined(p) {
+  // night-meta: 테스트 XP는 지정 계정의 화면에서만. 일반 기기의 실제 XP와 섞어 올리지 않음.
+  if (p._adminBoost?.owner) {
+    let id = null; try { id = JSON.parse(localStorage.getItem('gimmick.online') || 'null')?.id; } catch {}
+    if (id !== p._adminBoost.owner) p = { ...p, xp: Math.max(0, p.xp - (Number(p._adminBoost.xp) || 0)) };
+  }
   const o = others();
   if (!o) return { ...p, local: p.xp, devices: 1 };
   return { ...p, xp: p.xp + o.xp, races: p.races + o.races, wins: p.wins + o.wins, podiums: p.podiums + o.podiums, local: p.xp, devices: o.devices };
@@ -51,7 +56,7 @@ function load() {
   try {
     const raw = localStorage.getItem(KEY);
     const j = JSON.parse(raw || 'null');
-    if (j && typeof j.xp === 'number') return { xp: j.xp, races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0, seeded: true };
+    if (j && typeof j.xp === 'number') return { xp: j.xp, races: j.races || 0, wins: j.wins || 0, podiums: j.podiums || 0, seeded: true, ...(j._adminBoost?.owner ? { _adminBoost: j._adminBoost } : {}) };
     if (raw == null) {
       const p = { xp: seedFromRecords(), races: 0, wins: 0, podiums: 0, seeded: true };
       localStorage.setItem(KEY, JSON.stringify(p)); // 다시는 안 하게 바로 저장

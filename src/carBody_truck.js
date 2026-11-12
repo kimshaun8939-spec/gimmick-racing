@@ -140,7 +140,7 @@ export function buildTruck({ add, body, M, look }) {
     for (const side of [-1, 1]) {
       deco(lamp, 0.26, 0.06, 0.03, side * 0.56, y0 + 0.33, 2.625);
       deco(lampYellow, 0.26, 0.025, 0.03, side * 0.56, y0 + 0.265, 2.625);
-      add(new THREE.TorusGeometry(0.04, 0.013, 6, 12), accent, side * 0.42, y0 + 0.02, 2.66).rotation.y = Math.PI / 2;
+      add(new THREE.TorusGeometry(0.04, 0.013, 4, 8), accent, side * 0.42, y0 + 0.02, 2.66).rotation.y = Math.PI / 2;
     }
     // 스키드 플레이트 (앞 아래 비스듬한 쇠판 + 볼트 줄)
     box(metal, 1.3, 0.03, 0.8, 0, y0 - 0.1, 2.38, -0.42, 0, 0, fWing);
@@ -156,7 +156,7 @@ export function buildTruck({ add, body, M, look }) {
     for (const x of [-0.42, -0.14, 0.14, 0.42]) {
       add(new THREE.CylinderGeometry(0.105, 0.09, 0.09, 14).rotateX(Math.PI / 2), carbon, x, y0 + 0.74, 2.66, fWing);
       add(new THREE.CircleGeometry(0.085, 14), lamp, x, y0 + 0.74, 2.708, fWing).castShadow = false;
-      add(new THREE.TorusGeometry(0.092, 0.011, 5, 14), metal, x, y0 + 0.74, 2.706, fWing).castShadow = false;
+      add(new THREE.TorusGeometry(0.092, 0.011, 4, 10), metal, x, y0 + 0.74, 2.706, fWing).castShadow = false;
     }
     // 지붕 조명 막대 (카본 집 + 전구 6개) + 지붕 흡기구 + 안테나(깃발)
     box(carbon, 1.56, 0.12, 0.14, 0, y0 + 1.29, 0.3);
@@ -173,7 +173,7 @@ export function buildTruck({ add, body, M, look }) {
     spare.position.set(0, y0 + 0.72, -1.72);
     spare.rotation.x = Math.PI / 2 - 0.55;
     body.add(spare);
-    add(new THREE.TorusGeometry(0.34, 0.15, 10, 22), rubber, 0, 0, 0, spare);
+    add(new THREE.TorusGeometry(0.34, 0.15, 7, 16), rubber, 0, 0, 0, spare);
     add(new THREE.CylinderGeometry(0.2, 0.2, 0.2, 14).rotateX(Math.PI / 2), M.rimMat, 0, 0, 0, spare);
     add(new THREE.CylinderGeometry(0.07, 0.07, 0.24, 8).rotateX(Math.PI / 2), dark, 0, 0, 0, spare);
     box(trim, 0.07, 1.0, 0.02, 0, 0, 0.155, 0, 0, 0.78, spare).castShadow = false;

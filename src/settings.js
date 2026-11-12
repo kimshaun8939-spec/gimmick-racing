@@ -112,6 +112,10 @@ function load() {
 /** 설정 저장소 (하나만 만들어 같이 씀) */
 function createStore() {
   const values = load();
+  // 첫 레이스 링크 전용: main.js가 설정에서 읽는 봇 수에도 적용. 다른 레이스에는 영향 없음.
+  const firstParams = new URLSearchParams(location.search);
+  const firstRace = firstParams.get('rookie') === '1' && firstParams.get('mode') === 'race';
+  if (firstRace) Object.assign(values, { bots: 3, botLevel: 'easy', racingLine: true, gearbox: 'auto', steerRamp: 'smooth', brakeAssist: 'light', steerAssist: 'light', tcs: true, ghost: 'off', sectors: false, mirror: 'off' });
   const listeners = new Set();
   const save = () => {
     try {

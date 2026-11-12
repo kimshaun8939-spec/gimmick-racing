@@ -955,7 +955,7 @@ export function crystalClusterGeo(seed) {
   const list = [];
   const n = 5 + Math.floor(r() * 4);
   for (let k = 0; k < n; k++) {
-    const g = new THREE.OctahedronGeometry(0.22 + r() * 0.18, 0).toNonIndexed();
+    const g = new THREE.OctahedronGeometry(0.22 + r() * 0.18, 0);
     g.scale(1, 2.2 + r() * 1.8, 1);
     g.rotateZ((r() - 0.5) * 1.1);
     g.rotateY(r() * TAU);

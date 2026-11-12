@@ -37,6 +37,7 @@ import { createMirror } from './mirror.js'; // 백미러: 뒤에 차가 붙으�
 import { createCornerReport } from './cornerReport.js';
 import { online } from './online.js';
 import { createItems } from './items.js'; // 아이템전 (?mode=item)
+import { createMetaTracker } from './meta.js';
 import './profile.js'; // 완주 이벤트(gimmick:raceDone)를 듣고 경험치 표시
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
@@ -50,7 +51,7 @@ async function loadJSON(url) {
 // 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 홈·Esc 메뉴에서 바꿈 (M 키는 2026-11-13에 없앰)
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
 // 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
-const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json', volcano: 'data/volcano.json', glacier: 'data/glacier.json' };
+const MAPS = { glacier: 'data/glacier.json', sea: 'data/sea.json', jungle: 'data/jungle.json', neon: 'data/neon.json', mirage: 'data/mirage.json', foundry: 'data/foundry.json', moon: 'data/moon.json', gp: 'data/grandprix.json', volcano: 'data/volcano.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
@@ -86,6 +87,8 @@ const ld = (id, text) => {
 };
 ld('ldMap', mapMeta().title);
 const MAP_TIPS = {
+  mirage: ['모래폭풍 안에서는 청록 비콘과 노면 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요'],
+  foundry: ['25 m 고가는 다른 도로와 교차해요. 난간을 따라 공장 위를 가로지르세요', '민트 ↑ 벨트는 가속, 황색 ↓ 벨트는 감속해요. 160 m 앞 안내를 보고 민트 쪽을 골라요', '회전 이송대는 중앙을 곧게 지나면 빨라요. 가장자리는 회전 방향으로 밀려요', '용광로 사발은 18° 경사예요. 도로 안쪽을 따라 부드럽게 돌고 마지막 코너 전에 감속하세요', '황색 횡이송 벨트는 오른쪽으로 밀어요. 큰 화살표를 보고 왼쪽 조향으로 중심을 잡아요'],
   volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'],
   glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '1 km 직선 끝 T1이 가장 좋은 추월 지점: 늦게 브레이크!', '길이 넓으니 큰 스위퍼는 연석까지 넓게 쓰세요. 눈밭은 미끄럽고 느려요'],
 };
@@ -316,7 +319,10 @@ const race = {
   lastT: 0,
 };
 
+const metaRun = createMetaTracker({ phase: () => race.phase, level: () => raceSys.level, excluded: () => !!(FREE || params.get('academy') || params.get('tutorial')) });
+
 function resetRace() {
+  metaRun.reset();
   if (replay.active) replay.stop();
   replay.reset();
   cornerRep.reset(cornerBest.snapshot());
@@ -600,6 +606,7 @@ function checkModeChange() {
 }
 function handleEvents() {
   for (const e of car.events) {
+    metaRun.event(e, car);
     // 카메라 흔들림은 예전의 절반쯤 (사용자 요청: 진동 줄이기)
     if (e === 'land') hud.shake(0.12);
     if (e === 'bump') hud.shake(0.2);
@@ -678,6 +685,7 @@ function stepWorld(controls) {
   // 봇 운전·차끼리 충돌·순위 기록 (봇·상대가 없으면 거의 아무것도 안 함)
   if (race.phase !== 'countdown') race.clock += FIXED_DT; // 내가 완주한 뒤에도 흐르는 레이스 시계 (봇 완주 시간)
   raceSys.step(FIXED_DT, race.phase, race.clock, playerProgress());
+  metaRun.sample(FIXED_DT, car, raceSys.me.position, opponents.entries.length + 1);
   if (items) items.step(FIXED_DT, race.phase !== 'countdown');
 }
 
@@ -955,7 +963,7 @@ function showFinish() {
   hud.showResults(race.lapTimes, race.best, {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: true,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
-    champ, assist: !!race.assist, noRestart: !!champ,
+    champ, assist: !!race.assist, noRestart: !!champ, meta: metaRun.summary(),
     replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
     onAction(a) {
       if (a === 'restart') {

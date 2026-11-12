@@ -11,8 +11,9 @@
 //   job.done.then((stats) => console.log(stats))   // { rendered, cached, ms }
 import * as THREE from 'three';
 import { createCarModel } from './carModel.js';
+import { costumeOf } from './carCostumes.js';
 
-const THUMB_VER = 4; // 찍는 방법(각도·조명·크기)을 바꾸면 올릴 것 → 저장된 사진을 모두 다시 찍음
+const THUMB_VER = 8; // 찍는 방법(각도·조명·크기)을 바꾸면 올릴 것 → 저장된 사진을 모두 다시 찍음
 const STORE_KEY = 'gimmick.carThumbs';
 const W = 400, H = 250; // 사진 크기 (카드에 약 150×94로 보임, 고해상도 화면 2배 기준)
 
@@ -32,7 +33,7 @@ let srcHashPromise = null;
 function modelSrcHash() {
   if (!srcHashPromise) {
     // carModel.js + 차체 파일들(carBody_*.js) 내용을 모두 합쳐서 해시
-    const FILES = ['carModel', 'carWheels', 'carLighting', ...['f1', 'gt', 'rally', 'proto', 'rocket', 'buggy', 'hatch', 'muscle', 'hyper', 'kart', 'roadster', 'truck', 'ev', 'wedge', 'van'].map((x) => 'carBody_' + x)];
+    const FILES = ['carModel', 'carWheels', 'carLighting', 'carCostumes', 'carBody_boat', 'carBody_wheels', 'carBody_cockpit', ...['f1', 'gt', 'rally', 'proto', 'rocket', 'buggy', 'hatch', 'muscle', 'hyper', 'kart', 'roadster', 'truck', 'ev', 'wedge', 'van'].map((x) => 'carBody_' + x)];
     srcHashPromise = Promise.all(FILES.map((f) => fetch(new URL(`./${f}.js`, import.meta.url)).then((r) => (r.ok ? r.text() : ''))))
       .then((a) => a.join('|'))
       .then((t) => (t ? hash(t) + t.length.toString(36) : 'x'))
@@ -84,7 +85,7 @@ async function getStudio() {
   renderer.setSize(W, H, false);
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+  renderer.toneMappingExposure = .96;
 
   const scene = new THREE.Scene();
   // 반짝이는 페인트용 방 조명 반사 (홈 3D 미리보기와 같은 느낌). 못 불러와도 그냥 찍음
@@ -98,11 +99,11 @@ async function getStudio() {
     scene.environmentIntensity = 0.6;
   } catch {}
   scene.add(new THREE.HemisphereLight('#dfeaff', '#1b1630', 1.0));
-  const key = new THREE.DirectionalLight('#fff3e2', 2.8);
+  const key = new THREE.DirectionalLight('#f4f5f7', 2.0);
   key.position.set(6, 9, 7);
-  const rimBlue = new THREE.DirectionalLight('#7fb2ff', 2.4);
+  const rimBlue = new THREE.DirectionalLight('#adb9d4', 1.2);
   rimBlue.position.set(-7, 3, -5);
-  const rimWarm = new THREE.DirectionalLight('#ff9a4a', 1.5);
+  const rimWarm = new THREE.DirectionalLight('#f0e4d5', .5);
   rimWarm.position.set(7, 2.5, -6);
   scene.add(key, rimBlue, rimWarm);
 
@@ -283,7 +284,7 @@ export function loadCarThumbs(cars, { first, onThumb } = {}) {
   const done = (async () => {
     const src = await modelSrcHash();
     const store = readStore();
-    const keyOf = (c) => hash(`${THUMB_VER}|${W}x${H}|${src}|${c.id}|${JSON.stringify(c.look ?? null)}`);
+    const keyOf = (c) => hash(`${THUMB_VER}|${W}x${H}|${src}|${c.id}|${JSON.stringify(c.look ?? null)}|${JSON.stringify(costumeOf(c.look?.costume))}`);
     // 1) 저장된 사진 먼저 (열쇠가 같을 때만)
     for (let k = queue.length - 1; k >= 0; k--) {
       const c = queue[k];
