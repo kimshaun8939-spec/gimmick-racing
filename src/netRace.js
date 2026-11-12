@@ -441,7 +441,7 @@ function createUi(net, { roster, isHost, onStartNow, onLobby, onHome }) {
     </div>`;
   document.body.appendChild(root);
   const $ = (s) => root.querySelector(s);
-  root.addEventListener('click', (e) => {
+  const onClick = (e) => {
     const a = e.target.closest('[data-a]');
     const em = e.target.closest('[data-e]');
     if (em) {
@@ -454,8 +454,13 @@ function createUi(net, { roster, isHost, onStartNow, onLobby, onHome }) {
     else if (a.dataset.a === 'lobby') onLobby();
     else if (a.dataset.a === 'home') onHome();
     else if (a.dataset.a === 'hide') $('.nr-res').classList.remove('on'), root.classList.remove('live');
-    else if (a.dataset.a === 'live') root.classList.toggle('live');
-  });
+    else if (a.dataset.a === 'live') {
+      $('.nr-res').classList.add('on'); // 닫기 뒤에도 다시 펼칠 수 있게
+      root.classList.toggle('live');
+    }
+  };
+  root.addEventListener('click', onClick);
+
   // 6~0 키 = 이모티콘 (조작키와 겹치지 않는 숫자)
   addEventListener('keydown', (e) => {
     const i = ['Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'].indexOf(e.code);
@@ -466,13 +471,22 @@ function createUi(net, { roster, isHost, onStartNow, onLobby, onHome }) {
   // 오른쪽 위 접속 표시·알림은 미니맵 바로 아래에 (미니맵을 끄면 메뉴 버튼 아래)
   const place = () => {
     const mm = document.getElementById('minimap');
-    const r = mm && mm.offsetParent && getComputedStyle(mm).display !== 'none' ? mm.getBoundingClientRect() : null;
+    const r = mm && mm.getClientRects().length && getComputedStyle(mm).display !== 'none' ? mm.getBoundingClientRect() : null;
     const top = (r && r.height > 20 ? r.bottom : 54) + 8;
     root.style.setProperty('--nr-top', `${Math.round(top)}px`);
   };
   setInterval(() => {
     const r = document.querySelector('#results.on');
     root.classList.toggle('docked', !!r && resOpen);
+    const main = r && r.querySelector('.ra-main');
+    if (main && resOpen && !main.classList.contains('nr-inline-actions')) {
+      // 온라인은 혼자 재시작/다음 맵 대신 같은 방으로 돌아감. 기존 결과 버튼 줄 안에 둠.
+      main.classList.add('nr-inline-actions');
+      main.innerHTML = '<button class="gm-btn primary big" data-a="lobby">🌐 로비로 돌아가기</button><button class="gm-btn big" data-a="live">📋 온라인 순위</button>';
+      main.addEventListener('click', onClick);
+    }
+    root.classList.toggle('embedded', !!main && resOpen);
+    root.classList.toggle('replaying', document.body.classList.contains('replaying'));
     place();
   }, 300);
   place();
@@ -627,8 +641,13 @@ function injectCss() {
 #netRace.docked.live .nr-res.on { display: block; z-index: 72; }
 #netRace .nr-dock { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: none; gap: 10px; z-index: 71; }
 #netRace.docked .nr-dock { display: flex; animation: nrPop .3s ease-out; }
+#netRace.docked.embedded .nr-dock, #netRace.replaying .nr-dock, #netRace.docked.replaying .nr-res.on { display: none; }
+#netRace.docked .nr-badge, #netRace.docked .nr-toasts, #netRace.docked .nr-emotes { display: none; }
 #netRace { z-index: 45; }
-#netRace .nr-res .card { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - var(--nr-top, 62px) - 60px); overflow: auto; }
+#netRace .nr-res .card { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - var(--nr-top, 62px) - 60px); display: flex; flex-direction: column; overflow: hidden; }
+#netRace .nr-res .rows { min-height: 0; overflow: auto; }
+#netRace .nr-res h3, #netRace .nr-res .btns { flex-shrink: 0; }
+@media (max-height: 500px) { #netRace .nr-res { top: 12px; left: 16px; right: 16px; } #netRace .nr-res .card { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 24px); margin: 0 auto; } }
 #netRace .nr-res h3 { margin: 0 0 12px; font-size: 18px; display: flex; justify-content: space-between; align-items: baseline; }
 #netRace .nr-res h3 small { color: #95a2bb; font-size: 12px; }
 #netRace .row { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); margin-bottom: 5px; animation: nrIn .25s ease-out both; }

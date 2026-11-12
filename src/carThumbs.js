@@ -74,6 +74,8 @@ export function thumbUrl(id) {
 }
 
 // ------------------------------------------------------------------ 사진 찍는 3D 그림판 (필요할 때 만들고, 다 쓰면 정리)
+// 홈·로비가 동시에 요청해도 한 작업이 다 쓴 뒤 그림판을 정리하도록 순서를 지킴.
+let thumbJobs = Promise.resolve();
 let studio = null;
 async function getStudio() {
   if (studio) return studio;
@@ -281,56 +283,65 @@ export function loadCarThumbs(cars, { first, onThumb } = {}) {
   };
   if (first) prioritize(first);
 
+  const previous = thumbJobs;
+  let release;
+  thumbJobs = new Promise((resolve) => (release = resolve));
   const done = (async () => {
-    const src = await modelSrcHash();
-    const store = readStore();
-    const keyOf = (c) => hash(`${THUMB_VER}|${W}x${H}|${src}|${c.id}|${JSON.stringify(c.look ?? null)}|${JSON.stringify(costumeOf(c.look?.costume))}`);
-    // 1) 저장된 사진 먼저 (열쇠가 같을 때만)
-    for (let k = queue.length - 1; k >= 0; k--) {
-      const c = queue[k];
-      const h = keyOf(c);
-      const m = mem.get(c.id);
-      const s = store.v === THUMB_VER && store.items[c.id];
-      const hit = m && m.h === h ? m : s && s.h === h && s.url ? s : null;
-      if (hit) {
-        mem.set(c.id, hit);
-        queue.splice(k, 1);
-        stats.cached++;
-        onThumb && onThumb(c.id, hit.url);
+    await previous;
+    try {
+      if (cancelled) return stats;
+      const src = await modelSrcHash();
+      const store = readStore();
+      const keyOf = (c) => hash(`${THUMB_VER}|${W}x${H}|${src}|${c.id}|${JSON.stringify(c.look ?? null)}|${JSON.stringify(costumeOf(c.look?.costume))}`);
+      // 1) 저장된 사진 먼저 (열쇠가 같을 때만)
+      for (let k = queue.length - 1; k >= 0; k--) {
+        const c = queue[k];
+        const h = keyOf(c);
+        const m = mem.get(c.id);
+        const s = store.v === THUMB_VER && store.items[c.id];
+        const hit = m && m.h === h ? m : s && s.h === h && s.url ? s : null;
+        if (hit) {
+          mem.set(c.id, hit);
+          queue.splice(k, 1);
+          stats.cached++;
+          onThumb && onThumb(c.id, hit.url);
+        }
       }
-    }
-    // 2) 없는 것은 한 대씩 찍기 (사이사이 쉬어서 화면이 안 멈추게)
-    if (queue.length) {
-      let st;
-      try {
-        st = await getStudio();
-      } catch (e) {
-        console.warn('차 사진을 만들 수 없어요 (WebGL)', e);
-        return stats;
-      }
-      const timing = { busy: 0, total: 0 };
-      while (queue.length && !cancelled) {
-        const c = queue.shift();
-        let url = '';
+      // 2) 없는 것은 한 대씩 찍기 (사이사이 쉬어서 화면이 안 멈추게)
+      if (queue.length && !cancelled) {
+        let st;
         try {
-          url = await shoot(st, c.look, timing);
+          st = await getStudio();
         } catch (e) {
-          console.warn('차 사진 실패', c.id, e);
+          console.warn('차 사진을 만들 수 없어요 (WebGL)', e);
+          return stats;
         }
-        if (url) {
-          mem.set(c.id, { h: keyOf(c), url });
-          stats.rendered++;
-          onThumb && onThumb(c.id, url);
+        const timing = { busy: 0, total: 0 };
+        while (queue.length && !cancelled) {
+          const c = queue.shift();
+          let url = '';
+          try {
+            url = await shoot(st, c.look, timing);
+          } catch (e) {
+            console.warn('차 사진 실패', c.id, e);
+          }
+          if (url) {
+            mem.set(c.id, { h: keyOf(c), url });
+            stats.rendered++;
+            onThumb && onThumb(c.id, url);
+          }
+          await nap(12);
         }
-        await nap(12);
+        stats.perCar = stats.rendered ? +(timing.total / stats.rendered).toFixed(1) : 0; // 차 한 대에 화면을 붙잡은 시간 합
+        stats.longest = +timing.busy.toFixed(1); // 가장 길게 붙잡은 한 번
+        st.dispose();
+        if (stats.rendered) saveStoreSoon();
       }
-      stats.perCar = stats.rendered ? +(timing.total / stats.rendered).toFixed(1) : 0; // 차 한 대에 화면을 붙잡은 시간 합
-      stats.longest = +timing.busy.toFixed(1); // 가장 길게 붙잡은 한 번
-      st.dispose();
-      if (stats.rendered) saveStoreSoon();
+      stats.ms = Math.round(performance.now() - t0);
+      return stats;
+    } finally {
+      release();
     }
-    stats.ms = Math.round(performance.now() - t0);
-    return stats;
   })();
   return { done, cancel: () => (cancelled = true), prioritize };
 }

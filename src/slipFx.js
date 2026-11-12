@@ -61,7 +61,7 @@ export function createSlipFx(o = {}) {
     scene.add(mesh);
     return mesh;
   }
-  const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _a = new THREE.Vector3(), _n = new THREE.Vector3(), _y = new THREE.Vector3(), _x = new THREE.Vector3(), _c = new THREE.Color();
+  const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _a = new THREE.Vector3(), _n = new THREE.Vector3(), _y = new THREE.Vector3(), _x = new THREE.Vector3(), _right = new THREE.Vector3(), _c = new THREE.Color();
   let wakeVis = 0, wakeT = 0;
   function updateWake(dt, camera, src, myPos, draft, charge) {
     const want = src ? Math.min(1, draft / 0.6) : 0;
@@ -76,7 +76,9 @@ export function createSlipFx(o = {}) {
     }
     wakeT += dt;
     mesh.visible = true;
-    const fwd = src.fwd, right = src.right, up = src.up || THREE.Object3D.DEFAULT_UP;
+    const fwd = src.fwd, up = src.up || THREE.Object3D.DEFAULT_UP;
+    // 온라인 상대는 물리 Car 대신 화면용 상태라 right가 없음. 받은 자세로 오른쪽을 구함.
+    const right = src.right || _right.crossVectors(up, fwd).normalize();
     _a.copy(fwd).normalize();
     const gap = myPos ? Math.max(0, (src.pos.x - myPos.x) * _a.x + (src.pos.z - myPos.z) * _a.z) : 20;
     const span = THREE.MathUtils.clamp(gap + 9, 12, 44); // 내 차 옆을 지나 뒤까지 흐름
