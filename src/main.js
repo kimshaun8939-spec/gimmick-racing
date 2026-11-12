@@ -235,6 +235,8 @@ const raceSys = await createRaceSystem({
   seed: ONLINE ? params.get('room') : CHAMP ? 'champ' + CHAMP.state.seed : null,
   loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
 });
+// 기록 비교 전에 이 맵에서 확정할 수 있는 옛 그리드 기록만 표시.
+if (!FREE) records.classifyLegacy(mapName, track, trackData.laps);
 const sectors = createSectors({ mapName, carId });
 // 아이템전: 상자·아이템·드리프트 게이지 (만들다 실패해도 레이스는 그대로 됨)
 let items = null;
@@ -248,7 +250,7 @@ if (ITEM && !FREE) {
 performance.mark('load:race');
 const carList = rosterMod ? await rosterMod.listCars().catch(() => []) : []; // 다른 차 고스트·기록 이름용
 const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
-const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList });
+const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList, mode: recordMode() });
 // 온라인 순위표에서 고른 다른 사람 고스트: ?ghost=<사람 id>&ghostCar=<차>&ghostName=<이름> (같은 맵)
 const FRIEND_GHOST = ghost && params.get('ghost') && online.enabled ? { id: params.get('ghost'), car: params.get('ghostCar') || carId, name: params.get('ghostName') || '친구' } : null;
 if (FRIEND_GHOST) {
@@ -331,7 +333,7 @@ function resetRace() {
   Object.assign(race, { lightsT: 0, lightsOutAt: 3.4 + 0.7 + Math.random() * 1.6, lights: 0, reaction: null, reactArmed: false });
   Object.assign(race, { phase: FREE ? 'racing' : 'countdown', countdown: 3.5, time: 0, clock: 0, lap: 1, lapStart: 0, lapTimes: [], nextCp: 0, lastT: startT, newLapRecord: false, assist: assistOn() });
   sectors.reset();
-  if (ghost) ghost.lapStart(1); // 레이스 전체 기록 새로 (출발 신호부터 결승까지 한 번에)
+  if (ghost) ghost.lapStart(car); // 레이스 전체 기록 새로 (출발 신호부터 결승까지 한 번에)
   hud.hideResults();
   snapCamera();
   startIntro();
@@ -436,7 +438,7 @@ function updateLaps() {
     let lapRecord = false;
     if (canSaveRecords()) {
       const prev = records.get(mapName, carId);
-      if (records.saveLap(mapName, carId, lapTime, race.assist)) {
+      if (records.saveLap(mapName, carId, lapTime, race.assist, recordMode())) {
         race.newLapRecord = true;
         lapRecord = !!(prev && prev.lap);
       }
@@ -884,10 +886,16 @@ function recordNote(r) {
 function realPlay() {
   return !(window.game && (window.game.paused || window.game.controlsOverride || window.game.tutorial));
 }
+function withRivals() {
+  return raceSys.active() || ONLINE; // 온라인 업로드·이 기기 저장이 같은 기준
+}
+function recordMode() {
+  return ONLINE ? 'online' : MODE || 'solo';
+}
 function canSaveRecords() {
   // 테스트 자동 운전·튜토리얼(차를 순간이동시킴) 중에는 기록·고스트·구간 기록을 저장하지 않음
-  // 아이템전도 저장 안 함 (아이템 때문에 시간을 비교할 수 없음)
-  return !ITEM && realPlay();
+  // 아이템전·봇·온라인 상대가 있는 레이스도 비교 조건이 달라 저장 안 함
+  return !ITEM && !withRivals() && realPlay();
 }
 function nextMapId() {
   const order = mapsMeta.map((m) => m.id).filter((id) => MAPS[id]);
@@ -899,7 +907,7 @@ function showFinish() {
   // 최고 기록 비교 기준 = 설정 ghost (맵 최고 / 이 차 최고). 이 차 기록은 늘 따로 저장
   const ref = refRecord();
   const prevRace = ref && ref.race;
-  const carRecord = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist) : false;
+  const carRecord = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist, recordMode()) : false;
   const newRace = carRecord && (!prevRace || total < prevRace);
   const prevNote = ref ? recordNote(ref) : '';
   myRecordCache = null;
@@ -907,8 +915,7 @@ function showFinish() {
   if (ghost) ghost.raceDone(total, canSaveRecords());
   // 온라인 순위표에 올리기 (서버 설정이 있을 때, 내 온라인 기록보다 빠를 때만 서버가 바꿈)
   //   봇·온라인 상대와 같이 달린 레이스는 안 올림 (사용자 요청 2026-11-12: 슬립스트림·견인·몸싸움이 있어 혼자 달린 기록과 비교가 안 됨)
-  const withRivals = raceSys.active() || ONLINE; // 봇 0대로 고른 레이스는 혼자 달린 것과 같아서 올림
-  const uploadOnline = !FREE && online.enabled && canSaveRecords() && !withRivals;
+  const uploadOnline = !FREE && online.enabled && canSaveRecords();
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
@@ -984,8 +991,9 @@ function showFinish() {
         console.warn('온라인 순위표', err);
         hud.setOnline('🌐 온라인 순위표에 못 올렸어요 (인터넷 확인)');
       });
-  } else if (!FREE && online.enabled && canSaveRecords() && withRivals) {
-    hud.setOnline('🌐 봇과 같이 달린 레이스는 온라인 순위표에 안 올라가요 · 타임 어택이나 혼자 달리기로 도전하세요');
+  } else if (!FREE && withRivals()) {
+    const who = ONLINE ? '온라인 상대와' : '봇과';
+    hud.setOnline(who + ' 함께 달린 기록은 내 기록·고스트' + (online.enabled ? '·온라인 순위표' : '') + '에 안 남아요');
   }
 }
 

@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { createCarModel } from './carModel.js';
 import { fakeCar } from './opponents.js';
 import { lineCarModel } from './car.js';
+import { ghostStart, matchingStart } from './ghostStart.js';
 
 const HZ = 20;
 const STRIDE = 12; // 샘플 하나: 위치 x,y,z (Int32, cm) + 방향 쿼터니언 4개 + 속도 + 모드 (Int16) → Int16 12칸 = 24바이트
@@ -115,6 +116,7 @@ export function createGhost(o) {
   const L = track.length;
   const M = Math.max(100, Math.min(600, Math.round(L / 20))); // 한 바퀴 시간 기록 지점 수 (시간 차이 계산용)
   const lenKey = Math.round(L);
+  let start = { x: track.sampleAt(o.spawnT ?? 0.992).pos.x, z: track.sampleAt(o.spawnT ?? 0.992).pos.z };
   let kind = 'off';
 
   // --- 모델 (반투명) --- 친구 고스트는 그 친구 차 모양 + 주황빛 (makeModel로 다시 만듦)
@@ -161,12 +163,12 @@ export function createGhost(o) {
 
   // --- 저장된 최고 랩 고스트 ---
   // best = 달리는 바퀴(2바퀴째부터) 최고, bestStart = 첫 바퀴(출발 신호부터) 최고. 둘 다 { lap, tr, marks, react }
-  function loadSlot(key) {
+  function loadSlot(key, fromStart = false) {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
       const j = JSON.parse(raw);
-      if (j.v !== 1 || j.len !== lenKey) return null;
+      if (j.v !== 1 || j.len !== lenKey || (fromStart && !matchingStart(j, start, track))) return null;
       const tr = decode(fromB64(j.data));
       return { lap: j.lap, tr, marks: Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000))), react: j.react ?? reactionOf(tr) };
     } catch (err) {
@@ -181,18 +183,18 @@ export function createGhost(o) {
   }
   const LAPS = Math.max(1, o.laps || 1);
   const RM = LAPS * M; // 레이스 전체 진행 지점 수 (바퀴마다 M개)
-  let best = loadSlot(KEY(o.mapName, o.carId));
-  let bestStart = loadSlot(KEY_START(o.mapName, o.carId));
+  let best = loadSlot(KEY(o.mapName, o.carId), LAPS === 1);
+  let bestStart = loadSlot(KEY_START(o.mapName, o.carId), true);
   // 1바퀴짜리 맵(그랑프리)은 예전에 저장한 최고 랩도 첫 바퀴(출발 신호부터)였음
   if (o.laps === 1 && !bestStart && best) bestStart = best;
   /** 레이스 전체 고스트 JSON(v 2) → { total, segs: [{ tr, off }], marks, react, relative: 'race' } (맵 길이·바퀴 수가 다르면 null) */
   function parseRun(raw) {
     if (!raw) return null;
     const j = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS) return null;
+    if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS || !matchingStart(j, start, track)) return null;
     const tr = decode(fromB64(j.data));
     const marks = Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000)));
-    return { total: j.total, segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
+    return { total: j.total, start: ghostStart(j, track), segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
   }
   function loadRun() {
     try {
@@ -217,29 +219,26 @@ export function createGhost(o) {
     }
     return { total: off, segs, marks, react: bestStart.react, relative: 'race', stitched: true };
   }
-  let run = loadRun() || stitched(); // 이 차 고스트
-  if (run) run.car = o.carId;
-  // 다른 차들 고스트 중 가장 빠른 것 (이 맵) → { ...run, car }
+  let run = null, other = null;
   const carList = o.cars || [];
   const carInfo = (id) => carList.find((c) => c.id === id) || null;
-  let other = null;
-  try {
-    let bestTotal = Infinity, bestRaw = null, bestCar = null;
+  function loadMine() {
+    best = loadSlot(KEY(o.mapName, o.carId), LAPS === 1);
+    bestStart = loadSlot(KEY_START(o.mapName, o.carId), true);
+    if (LAPS === 1 && !bestStart && best) bestStart = best;
+    run = loadRun() || stitched();
+    if (run) run.car = o.carId;
+    other = null;
+    // 후보마다 검사해 가장 빠른 것이 맞지 않아도 다음 유효한 고스트를 선택.
     for (const c of carList) {
       if (c.id === o.carId) continue;
-      const raw = localStorage.getItem(KEY_RUN(o.mapName, c.id));
-      if (!raw) continue;
-      const t = JSON.parse(raw).total;
-      if (t < bestTotal) (bestTotal = t), (bestRaw = raw), (bestCar = c.id);
+      try {
+        const g = parseRun(localStorage.getItem(KEY_RUN(o.mapName, c.id)));
+        if (g && (!other || g.total < other.total)) other = { ...g, car: c.id };
+      } catch {} // 한 차의 손상된 데이터 때문에 다른 후보를 놓치지 않음
     }
-    if (bestRaw) {
-      other = parseRun(bestRaw);
-      if (other) other.car = bestCar;
-    }
-  } catch (err) {
-    console.warn('다른 차 고스트 불러오기 실패', err);
-    other = null;
   }
+  loadMine();
   /** 'best'(맵 최고)·'car'(이 차 최고)에 맞는 내 고스트 */
   function mine(k) {
     if (k === 'car') return run || other;
@@ -404,7 +403,11 @@ export function createGhost(o) {
       return lastRunJson;
     },
     /** 레이스 시작: 기록을 새로 (출발 신호부터 결승까지 한 번에 기록) */
-    lapStart() {
+    lapStart(car) {
+      if (car && car.pos) start = { x: car.pos.x, z: car.pos.z };
+      loadMine(); // 다시 시작·온라인 그리드 변경 때 실제 출발점으로 재검사
+      if (friend && !matchingStart({ start: friend.start }, start, track)) friend = null;
+      lastRunJson = null;
       rec = emptyTrace();
       recMarks = new Float32Array(RM + 1).fill(NaN);
       recNext = 0;
@@ -440,7 +443,7 @@ export function createGhost(o) {
       const enc = encode(rec);
       const tr = decode(enc); // 저장되는 것과 똑같이 (압축 정밀도)
       const react = reactionOf(tr);
-      const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
+      const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, start: { ...start }, mode: o.mode || 'solo', data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
       lastRunJson = json;
       // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
       if (run && !run.stitched && run.total <= total) return false;

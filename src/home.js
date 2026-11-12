@@ -93,6 +93,21 @@ export async function runHome() {
         if (!res.ok) throw new Error(res.status);
         const d = await res.json();
         const pts = sampleOutline(d, 10);
+        // 맵 전체를 만들지 않고 중심 곡선만으로 옛 그리드 출발을 확인.
+        if (!d.pad && d.points && d.points.length >= 3) {
+          const scaled = ['gp', 'sea', 'jungle'].includes(m.id) ? d.scale || 1 : 1;
+          const curve = new THREE.CatmullRomCurve3(d.points.map(([x, y, z]) => new THREE.Vector3(x * scaled, y, z * scaled)), true, 'centripetal');
+          curve.arcLengthDivisions = Math.max(200, d.points.length * (m.id === 'neon' ? 20 : 40));
+          records.classifyLegacy(m.id, {
+            length: curve.getLength(), width: d.width,
+            sampleAt(t) {
+              const pos = curve.getPointAt(t);
+              const tan = curve.getTangentAt(t).setY(0).normalize();
+              const right = new THREE.Vector3().crossVectors(tan, new THREE.Vector3(0, 1, 0)).normalize();
+              return { pos, right };
+            },
+          }, d.laps || 1);
+        }
         mapInfo[m.id] = { ok: true, pts, km: outlineLength(pts) / 1000, laps: d.laps || 1, free: !!d.pad || m.free, name: d.name };
       } catch {
         mapInfo[m.id] = { ok: false, pts: [], km: 0, laps: 1, free: m.free };
