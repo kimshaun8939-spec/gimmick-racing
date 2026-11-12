@@ -47,7 +47,7 @@ async function loadJSON(url) {
   return res.json();
 }
 
-// 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 M 키로 차례대로 바꿈
+// 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 홈·Esc 메뉴에서 바꿈 (M 키는 2026-11-13에 없앰)
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
 // 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
 const MAPS = { gp: 'data/grandprix.json', sea: 'data/sea.json', neon: 'data/neon.json', moon: 'data/moon.json', jungle: 'data/jungle.json', volcano: 'data/volcano.json', glacier: 'data/glacier.json' };
@@ -1077,13 +1077,7 @@ function frame(now, manual = false) {
   }
 
   if (!ONLINE && !(window.game && window.game.net) && !menuHold && !race.champRec && input.wasPressed('Enter')) resetRace(); // 온라인에서는 Enter(다시 시작)·M(맵 바꾸기) 막음
-  if (!ONLINE && !(window.game && window.game.net) && !menuHold && input.wasPressed('KeyM')) {
-    // 맵 전환 (페이지를 새로 불러옴, 차는 그대로)
-    const url = new URL(location.href);
-    const next = MAP_ORDER[(MAP_ORDER.indexOf(mapName) + 1) % MAP_ORDER.length];
-    url.searchParams.set('map', next); // map이 없으면 홈 화면이 뜨므로 main도 꼭 적음
-    location.href = url.toString();
-  }
+  // M 키(다음 맵으로)는 없앰 (사용자 요청 2026-11-13). 맵은 홈·Esc 메뉴에서 바꿈
   // (왼쪽 아래 조작법 안내·H 키는 없앰: 사용자 요청 2026-11-09)
   if (input.wasPressed('KeyR') && race.phase === 'racing') car.respawn();
   if (input.wasPressed('KeyT')) {

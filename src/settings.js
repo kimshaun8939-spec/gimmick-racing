@@ -374,7 +374,6 @@ export function createControlsPage(opts = {}) {
       ${row(K('camView'), '시점 바꾸기', '기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석 (설정에서도)')}
       ${row(K('racingLine'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
       ${row(K('sound'), '소리 끄기/켜기')}
-      ${row(K('map'), '다음 맵으로')}
     </section>
     <section class="gm-padctl${pad.connected() ? ' on' : ''}"><h3>🎮 게임패드 ${pad.connected() ? '<span class="ok">연결됨</span>' : '<small>(연결하고 버튼을 누르면 바로 써요)</small>'}</h3>
       ${row('<kbd class="pad">L 스틱</kbd>', '조향', '기울인 만큼 꺾여요 (설정 → 게임패드에서 데드존·커브)')}

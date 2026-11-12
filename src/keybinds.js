@@ -28,13 +28,12 @@ export const ACTIONS = [
   { group: '도움 · 화면', id: 'camView', label: '시점 바꾸기', desc: '기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석', def: ['KeyV', null] },
   { group: '도움 · 화면', id: 'racingLine', label: '레이싱 라인 켜기/끄기', desc: '', def: ['KeyL', null] },
   { group: '도움 · 화면', id: 'sound', label: '소리 끄기/켜기', desc: '', def: ['KeyN', null] },
-  { group: '도움 · 화면', id: 'map', label: '다음 맵으로', desc: '', def: ['KeyM', null] },
 ];
 const BY_ID = Object.fromEntries(ACTIONS.map((a) => [a.id, a]));
 
 /** 예전 코드가 쓰던 "기본 키 이름" → 행동 (input.wasPressed('KeyR') → 복귀 키가 눌렸나) */
 export const LEGACY = {
-  Enter: 'restart', KeyM: 'map', KeyR: 'respawn', KeyT: 'gearbox', KeyN: 'sound', KeyL: 'racingLine',
+  Enter: 'restart', KeyR: 'respawn', KeyT: 'gearbox', KeyN: 'sound', KeyL: 'racingLine',
   KeyE: 'booster', KeyX: 'shiftUp', KeyZ: 'shiftDown', KeyV: 'camView',
 };
 
