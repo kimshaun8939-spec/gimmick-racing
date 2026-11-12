@@ -149,7 +149,7 @@ export function cornerPlan(game, c, before = 330) {
     const dl = P.dist(P.need.liftAt);
     if (dl > dB - 260 && dl < dA - 20) aB = Math.min(dl, dA - 30);
   }
-  const brakeChip = P.brakeKind === 'brake' ? '브레이크' : P.brakeKind === 'lift' ? 'W 떼기' : '그대로';
+  const brakeChip = P.brakeKind === 'brake' ? '브레이크' : P.brakeKind === 'lift' ? `${keybinds.label('throttle')} 떼기` : '그대로';
   // 순간들: [시작 m, 끝 m) · 큰 글자. 시범은 진짜 속도(1배)로 달리고,
   // 놓치면 안 되는 순간(브레이크 시작·에이펙스→가속)에만 실제 시간 약 1.4초 짧게 느려짐 (pulse)
   // (사용자 요청 2026-11-12 "전부 슬로 말고 놓치면 안 되는 부분만", 예전엔 진입 110 m 전부터 탈출까지 0.18~0.6배)

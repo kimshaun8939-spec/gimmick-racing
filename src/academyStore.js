@@ -22,7 +22,7 @@ export const GROUPS = [
 export const LESSONS = [
   { id: 'brake', icon: '🛑', name: '브레이크 포인트', short: '직선 끝에서 언제, 얼마나 세게 밟을까', group: 'basic', map: 'gp', art: 'brakePoint', mins: 2 },
   { id: 'trail', icon: '🎚️', name: '트레일 브레이킹', short: '브레이크를 조금 남긴 채 꺾기 시작', group: 'basic', map: 'gp', art: 'trailBrake', mins: 2 },
-  { id: 'lift', icon: '🦶', name: '리프트오프', short: 'W를 살짝 떼서 코너를 조이기', group: 'basic', map: 'gp', art: 'liftOff', mins: 2 },
+  { id: 'lift', icon: '🦶', name: '리프트오프', short: '가속을 잠깐 떼서 코너를 조이기', group: 'basic', map: 'gp', art: 'liftOff', mins: 2 },
   { id: 'late', icon: '↪️', name: '늦게 꺾고 빨리 가속', short: '긴 직선 앞 코너는 탈출이 전부', group: 'corner', map: 'gp', art: 'lateApex', mins: 2 },
   { id: 'chain', icon: '🔗', name: '연속 코너 잇기', short: '두 코너를 한 번에 생각하기', group: 'corner', map: 'gp', art: 'chicane', mins: 3 },
   { id: 'kerb', icon: '🟥', name: '연석 쓰기', short: '빨강·흰 연석까지 길을 넓게', group: 'corner', map: 'gp', art: 'kerbs', mins: 2 },

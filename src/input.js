@@ -235,22 +235,7 @@ function decorateLoading() {
   draw();
   keybinds.onChange(() => el.isConnected && draw());
   box.appendChild(el);
-  const tip = document.getElementById('ldTip');
-  if (!tip) return;
-  const LETTER = Object.fromEntries(Object.entries(LEGACY).filter(([c]) => /^Key[A-Z]$/.test(c)).map(([c, a]) => [c.slice(3), a]));
-  let mine = '';
-  const fix = () => {
-    const t = tip.textContent;
-    if (!t || t === mine) return;
-    let out = t.replace(/\b([A-Z]) 키/g, (m, L) => (LETTER[L] ? `${keybinds.main(LETTER[L])} 키` : m));
-    out = out.replace(/순간 W!/, `순간 ${keybinds.label('throttle')}!`);
-    mine = out;
-    if (out !== t) tip.textContent = out;
-  };
-  fix();
-  try {
-    new MutationObserver(fix).observe(tip, { childList: true, characterData: true, subtree: true });
-  } catch {}
+
 }
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', decorateLoading, { once: true });

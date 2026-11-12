@@ -3,7 +3,7 @@
 //   - 화면은 소리 / 화면·그래픽 / 주행 / 레이스 / 표시 묶음. 마우스 또는 키보드(↑↓ 고르기, ←→ 바꾸기)로 조절
 //   - 위쪽 탭: [일반 설정] [조작키] [게임패드] (조작키 = keybinds.js의 createKeybindPanel, 게임패드 = gamepad.js의 createPadPanel)
 //   - tab: 'pad'인 설정은 게임패드 탭에 보임. hidden: true는 화면에 안 보이는 설정 (홈의 다른 화면에서 바꿈)
-import { keybinds, createKeybindPanel, codeLabel, actionVisible } from './keybinds.js';
+import { keybinds, PRESETS, createKeybindPanel, codeLabel, actionVisible } from './keybinds.js';
 import { pad, createPadPanel } from './gamepad.js';
 import { touchWanted } from './touch.js';
 
@@ -179,7 +179,7 @@ export function createSettingsPanel(opts = {}) {
   wrap.className = 'gm-setwrap';
   wrap.innerHTML = `<div class="gm-set-tabs" role="tablist">
       <button class="gm-tab on" data-tab="general" data-nav role="tab">⚙️ 일반 설정</button>
-      <button class="gm-tab" data-tab="keys" data-nav role="tab">⌨️ 조작키<span class="badge" hidden>!</span></button>
+      <button class="gm-tab" data-tab="keys" data-nav role="tab">⌨️ 조작키 배치<span class="badge" hidden>!</span></button>
       <button class="gm-tab" data-tab="pad" data-nav role="tab">🎮 게임패드<span class="dot" hidden></span></button>
     </div>`;
   const root = document.createElement('div');
@@ -201,7 +201,11 @@ export function createSettingsPanel(opts = {}) {
     root.hidden = tab !== 'general';
     keyPanel.el.hidden = tab !== 'keys';
     padPanel.el.hidden = tab !== 'pad';
-    wrap.querySelectorAll('.gm-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+    wrap.querySelectorAll('.gm-tab').forEach((b) => {
+      const on = b.dataset.tab === tab;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
   }
   wrap.querySelector('.gm-set-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('.gm-tab');
@@ -343,7 +347,7 @@ export function createControlsPage(opts = {}) {
       </section>`
       : '';
     el.innerHTML = `${touchSec}
-    <section><h3>기본 운전</h3>
+    <section><h3>기본 운전 · ${PRESETS.find(p => p.id === keybinds.preset())?.name || '내 설정'}</h3>
       ${row(K('throttle'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
@@ -363,7 +367,7 @@ export function createControlsPage(opts = {}) {
       ${row('🚗', '일반', '평소 모드')}
       ${row('🔥', '가속', '150 km/h를 넘고 핸들이 곧으면 자동 · 빠르지만 조금 미끄러워요')}
       ${row('🚤', '배', '물에 닿으면 자동')}
-      ${row('✈️', '비행', `활주로에서 자동 · ${k1('climb')} 이륙/상승 · ${k1('dive')} 하강 · ${slotKeys('left', 'right')} 선회 · ${K('throttle')} 추력`)}
+      ${row('✈️', '비행', `활주로에서 자동 · ${K('climb')} 이륙/상승 · ${K('dive')} 하강 · ${slotKeys('left', 'right')} 선회 · ${K('throttle')} 추력`)}
     </section>
     <section><h3>그 밖에</h3>
       ${row(K('gearbox'), '자동 ↔ 수동 변속', '수동: ' + k1('shiftUp') + ' 올림 · ' + k1('shiftDown') + ' 내림')}
@@ -381,7 +385,7 @@ export function createControlsPage(opts = {}) {
       ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 처음부터 다시', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
     </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
-      ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.allDefault() ? '' : ' <span class="gm-custom">(내가 바꾼 키로 보여요)</span>'}</p>`;
+      ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.preset() === 'custom' ? ' <span class="gm-custom">(내 설정으로 보여요)</span>' : ''}</p>`;
     const b = el.querySelector('[data-editkeys]');
     if (b) b.addEventListener('click', () => opts.onEditKeys());
   }

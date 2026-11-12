@@ -1,3 +1,4 @@
+import { keybinds } from './keybinds.js';
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
@@ -262,7 +263,7 @@ export function createHud(track) {
       el.tach.classList.toggle('limiter', s.limiter);
       el.gear.textContent = s.gear < 1 ? 'R' : String(s.gear);
       el.gear.classList.toggle('shifting', s.shifting);
-      el.gearMode.textContent = s.manual ? '수동 · X↑ Z↓' : '자동 · T';
+      el.gearMode.textContent = s.manual ? `수동 · ${keybinds.label('shiftUp')}↑ ${keybinds.label('shiftDown')}↓` : `자동 · ${keybinds.label('gearbox')}`;
       // 주행 모드 표시, 가라앉는 중 경고
       for (const [name, box] of Object.entries(el.modes)) box.classList.toggle('on', (s.mode || 'normal') === name);
       el.sinkWarn.style.opacity = s.sink > 0 ? Math.min(1, 0.4 + s.sink).toFixed(2) : 0;
@@ -337,8 +338,8 @@ export function createHud(track) {
       if (s.mode === 'fly') {
         el.flightInfo.style.display = 'block';
         el.flightInfo.textContent = s.flying
-          ? `✈️ 높이 ${Math.max(0, s.altitude).toFixed(0)}m${s.speed / 3.6 < s.cfg.modes.fly.minSpeed ? ' · ⚠️ 실속! Shift로 기수를 내려요' : ''}`
-          : s.speed / 3.6 >= s.cfg.modes.fly.takeoffSpeed ? '🛫 Space를 누르면 이륙!' : `이륙 속도 ${spd(s.cfg.modes.fly.takeoffSpeed * 3.6).toFixed(0)} ${unitName()}까지 가속`;
+          ? `✈️ 높이 ${Math.max(0, s.altitude).toFixed(0)}m${s.speed / 3.6 < s.cfg.modes.fly.minSpeed ? ` · ⚠️ 실속! ${keybinds.label('dive')}로 기수를 내려요` : ''}`
+          : s.speed / 3.6 >= s.cfg.modes.fly.takeoffSpeed ? `🛫 ${keybinds.label('climb')}를 누르면 이륙!` : `이륙 속도 ${spd(s.cfg.modes.fly.takeoffSpeed * 3.6).toFixed(0)} ${unitName()}까지 가속`;
       } else el.flightInfo.style.display = 'none';
     },
     /**

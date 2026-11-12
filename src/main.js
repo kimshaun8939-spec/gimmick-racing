@@ -8,6 +8,7 @@ import { Car } from './car.js';
 import { createCarModel } from './carModel.js';
 import { initCarLighting } from './carLighting.js';
 import { createKeyboardInput, emptyControls } from './input.js';
+import { keybinds } from './keybinds.js';
 import { createHud } from './hud.js';
 import { buildScenery } from './scenery.js';
 import { buildProps } from './props.js';
@@ -70,12 +71,12 @@ let mapName = MAPS[mapParam] ? mapParam : 'gp';
 const mapsMeta = await loadMaps();
 const mapMeta = () => mapsMeta.find((m) => m.id === mapName) || { title: mapName };
 const LOAD_TIPS = [
-  '빨간불 5개가 꺼지는 순간 W! 미리 밟으면 시동이 꺼져요',
-  'Esc를 누르면 일시정지하고 설정을 바꿀 수 있어요',
+  `빨간불 5개가 꺼지는 순간 ${keybinds.label('throttle')}! 미리 밟으면 시동이 꺼져요`,
+  `${keybinds.label('menu')}를 누르면 일시정지하고 설정을 바꿀 수 있어요`,
   '코너 안쪽 연석을 빠르게 스치면 에이펙스 보너스!',
   '바다에 닿으면 자동으로 배로 변신해요',
-  'L 키로 레이싱 라인을 켜고 끌 수 있어요 (초록 밟기 · 빨강 브레이크)',
-  '길을 벗어나면 R 키로 도로에 돌아와요',
+  `${keybinds.label('racingLine')} 키로 레이싱 라인을 켜고 끌 수 있어요 (초록 밟기 · 빨강 브레이크)`,
+  `길을 벗어나면 ${keybinds.label('respawn')} 키로 도로에 돌아와요`,
   'DRS: 도로의 감지선에서 앞차와 1초 안이면 다음 직선에서 뒷날개가 열려 더 빨라져요',
   '앞차 바로 뒤에 붙으면 슬립스트림! 여러 대가 줄지어 있으면 더 세요',
 ];

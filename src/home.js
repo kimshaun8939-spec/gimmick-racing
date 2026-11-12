@@ -20,6 +20,7 @@ import * as unlocks from './unlocks.js'; // 레벨 잠금(차)·색 고르기 (�
 import { pad, padKbd } from './gamepad.js'; // 게임패드로 메뉴 이동 (스틱/D-패드 = 화살표, A = 확인, B = 뒤로)
 import { LESSONS, LICENSES, GROUPS, academy, lessonMeta, licenseChip, MEDALS, MEDAL_NAMES } from './academyStore.js'; // 드라이빙 아카데미 (2026-11-12)
 import { academyArt, licenseBadge } from './academyArt.js';
+import { PRESETS, keybinds } from './keybinds.js';
 
 export const VERSION = 'v0.9 · 2026.11';
 /** 운전 도움을 켜고 낸 기록 표시 */
@@ -1818,11 +1819,32 @@ function welcomeDialog({ first = false } = {}) {
       ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="${online.isMine(cur) ? '이 이름은 이미 내 것 · 비워 둬도 돼요' : '••••'}"></label>
         <small class="wl-pinhint">🌐 온라인 순위표용 · <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>
         <div class="wl-err" role="alert"></div></div>` : ''}
+      ${first ? `<div class="wl-keypreset"><label for="welcomeKeyPreset"><b>⌨️ 어떤 배치로 할래요?</b></label>
+        <select id="welcomeKeyPreset" aria-label="조작키 배치">${PRESETS.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
+        <small class="wl-keypreset-desc"></small><div class="wl-keypreset-keys"></div>
+        <small>기본은 WASD · 나중에 설정 → 조작키에서 바꾸거나 직접 고칠 수 있어요</small></div>` : ''}
       ${first ? `<div class="wl-tut"><span class="ic">🎓</span><div><b>처음이라면 튜토리얼부터!</b><small>약 5분 · 출발 신호, 브레이크, 에이펙스, 드리프트, 변신(가속·배·비행)까지 직접 해 보며 배워요</small></div></div>` : ''}
       <div class="btns">${first ? '<button class="gm-btn" data-r="skip">바로 둘러보기</button><button class="gm-btn primary" data-r="tut">🎓 튜토리얼 시작<kbd>Enter</kbd></button>' : '<button class="gm-btn" data-r="cancel">취소</button><button class="gm-btn primary" data-r="ok">저장<kbd>Enter</kbd></button>'}</div></div>`;
     const inp = wrap.querySelector('input');
     const pinInp = wrap.querySelector('.wl-pin input');
     const errEl = wrap.querySelector('.wl-err');
+    const presetSelect = wrap.querySelector('#welcomeKeyPreset');
+    if (presetSelect) {
+      // 예전에 직접 정한 키도 보존하고, 처음 고르지 않으면 기본 WASD로 시작해요.
+      presetSelect.value = keybinds.preset();
+      const drawPreset = () => {
+        const preset = PRESETS.find((p) => p.id === keybinds.preset());
+        wrap.querySelector('.wl-keypreset-desc').textContent = preset?.desc || '';
+        wrap.querySelector('.wl-keypreset-keys').innerHTML = [['throttle', '가속'], ['brake', '브레이크'], ['left', '왼쪽'], ['right', '오른쪽'], ['drift', '드리프트']]
+          .map(([id, text]) => `<span><small>${text}</small>${keybinds.html(id)}</span>`).join('');
+      };
+      presetSelect.addEventListener('change', () => {
+        keybinds.selectPreset(presetSelect.value);
+        drawPreset();
+        uiSound('toggle');
+      });
+      drawPreset();
+    }
     inp.value = cur || (first ? randomNick() : '');
     if (pinInp) pinInp.addEventListener('input', () => (pinInp.value = pinInp.value.replace(/\D/g, '').slice(0, 4)));
     let busy = false;
@@ -1879,6 +1901,8 @@ function welcomeDialog({ first = false } = {}) {
       e.stopImmediatePropagation(); // 홈·게임은 키를 안 받음 (글자 입력은 그대로 됨)
       const a = document.activeElement;
       if (e.code === 'Escape') return e.preventDefault(), done(first ? 'skip' : null);
+      // 선택 상자에서는 화살표·Enter·Tab의 기본 동작을 그대로 써요.
+      if (a === presetSelect) return;
       if (e.code === 'Enter' || e.code === 'NumpadEnter') {
         e.preventDefault();
         if (a && a.dataset && a.dataset.r === 'dice') return (inp.value = randomNick()), uiSound('move');
@@ -1886,7 +1910,7 @@ function welcomeDialog({ first = false } = {}) {
       }
       if (['ArrowUp', 'ArrowDown'].includes(e.code) || (a !== inp && a !== pinInp && ['ArrowLeft', 'ArrowRight'].includes(e.code))) {
         e.preventDefault();
-        const items = [inp, ...(pinInp ? [pinInp] : []), ...wrap.querySelectorAll('button')];
+        const items = [inp, ...(pinInp ? [pinInp] : []), ...(presetSelect ? [presetSelect] : []), ...wrap.querySelectorAll('button')];
         const i = items.indexOf(a);
         const d = e.code === 'ArrowUp' || e.code === 'ArrowLeft' ? -1 : 1;
         items[(i + d + items.length) % items.length].focus();

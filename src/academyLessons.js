@@ -12,6 +12,7 @@
 import { cornerPlan, createDrill, lineDriver } from './tutorialDemo.js';
 import { createBotDriver, BOT_LEVELS } from './bots.js';
 import { needOf } from './brakeNeed.js';
+import { keybinds } from './keybinds.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const kmh = (v) => Math.round(Math.abs(v) * 3.6);
@@ -87,7 +88,7 @@ export function pickSpots(ctx) {
   S.lift = take(
     good
       .filter((c) => !used.has(c) && c.drop > 1.2 && c.drop <= 9 && c.vMin > 28 && c.apexes.length <= 2)
-      // + 이 차로 'W 떼기'면 충분한 코너 먼저 (브레이크가 확실히 이득인 코너는 뒤로)
+      // + 이 차로 '가속 떼기'면 충분한 코너 먼저 (브레이크가 확실히 이득인 코너는 뒤로)
       .sort((a, b) => (kindOf(a) === 'lift' ? 0 : kindOf(a) === 'flat' ? 1 : 2) - (kindOf(b) === 'lift' ? 0 : kindOf(b) === 'flat' ? 1 : 2) || (a.linkedPrev && a.gapPrev < 150 ? 1 : 0) - (b.linkedPrev && b.gapPrev < 150 ? 1 : 0) || Math.abs(a.drop - 4) - Math.abs(b.drop - 4))[0] || null,
   );
   // 늦게 꺾고 빨리 가속: 탈출 뒤 긴 직선이 오는 코너 (직선이 길수록, 느린 코너일수록)
@@ -240,7 +241,7 @@ const row = (id, ok, title, text) => ({ id, ok, title, text });
  *  감속 구간이 긴 코너(그랑프리 T15 등)에서 너무 일찍 너무 느려졌음) */
 const planBrake = (P) => (c, cur, car) => {
   if (!cur || cur.id !== 'brake' || !car.trackInfo) return;
-  if (P.brakeKind && P.brakeKind !== 'brake') return; // 브레이크가 필요 없는 코너: 운전사가 'W 떼기' 계획대로 (brakeNeed.js)
+  if (P.brakeKind && P.brakeKind !== 'brake') return; // 브레이크가 필요 없는 코너: 운전사가 `${keybinds.label('throttle')} 떼기` 계획대로 (brakeNeed.js)
   const vt = car.lineSpeed((car.trackInfo.index + Math.round((Math.abs(car.speed) * 0.25) / P.ds)) % P.N);
   if (car.speed > vt + 0.4) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.85));
 };
@@ -258,19 +259,19 @@ export function _setDemoLook(v) {
 }
 
 // ------------------------------------------------------------------ 순간 띠 · 글자 만들기
-/** 띠의 '브레이크' 칸 이름: 이 차로 브레이크가 필요 없는 코너면 'W 떼기' / '그대로' */
-const bName = (P) => (!P.brakeKind || P.brakeKind === 'brake' ? '브레이크' : P.brakeKind === 'lift' ? 'W 떼기' : '그대로');
+/** 띠의 '브레이크' 칸 이름: 이 차로 브레이크가 필요 없는 코너면 '가속 떼기' / '그대로' */
+const bName = (P) => (!P.brakeKind || P.brakeKind === 'brake' ? '브레이크' : P.brakeKind === 'lift' ? `${keybinds.label('throttle')} 떼기` : '그대로');
 function stripOf(list) {
   return { ids: list.map((x) => x[0]), names: Object.fromEntries(list), alias: { approach: list[0][0] } };
 }
 
 // ------------------------------------------------------------------ 레슨들
 const DRV_TXT = {
-  rwd: '이 차는 <b>뒷바퀴 굴림</b>이라 W를 떼면 꼬리가 조금 더 돌아요. 코너 앞에서 잠깐 떼고 다시 눌러 봐요.',
-  fwd: '이 차는 <b>앞바퀴 굴림</b>이라 코너에서 W를 세게 밟으면 앞이 바깥으로 밀려요. 탈출에선 핸들을 풀면서 밟아요.',
-  awd: '이 차는 <b>네 바퀴 굴림</b>이라 떼거나 밟아도 차분한 편이에요.',
+  rwd: () => `이 차는 <b>뒷바퀴 굴림</b>이라 ${keybinds.label('throttle')}를 떼면 꼬리가 조금 더 돌아요. 코너 앞에서 잠깐 떼고 다시 눌러 봐요.`,
+  fwd: () => `이 차는 <b>앞바퀴 굴림</b>이라 코너에서 ${keybinds.label('throttle')}를 세게 밟으면 앞이 바깥으로 밀려요. 탈출에선 핸들을 풀면서 밟아요.`,
+  awd: () => '이 차는 <b>네 바퀴 굴림</b>이라 떼거나 밟아도 차분한 편이에요.',
 };
-const drvTxt = (ctx) => DRV_TXT[ctx.car.cfg.drivetrain || 'rwd'] || DRV_TXT.rwd;
+const drvTxt = (ctx) => (DRV_TXT[ctx.car.cfg.drivetrain || 'rwd'] || DRV_TXT.rwd)();
 
 export const RUN = {};
 
@@ -366,7 +367,7 @@ RUN.trail = {
         if (trailStart == null) trailStart = ctx.race.time;
         const tap = (ctx.race.time - trailStart) % 0.32 < 0.1; // 물리 시간: 슬로 모션에서도 같은 운전
         const vt = car.lineSpeed((car.trackInfo.index + Math.round((v * 0.25) / P.ds)) % P.N);
-        // 계획보다 느려지면 브레이크를 떼고 W를 눌러 속도를 회복. 키 그림도 이 0/1 입력을 그대로 보여 줌.
+        // 계획보다 느려지면 브레이크를 떼고 가속 키를 눌러 속도를 회복. 키 그림도 이 0/1 입력을 그대로 보여 줌.
         c.throttle = v < vt - 1 ? 1 : 0;
         c.brake = v >= vt - 1 && tap ? 1 : 0;
       }
@@ -407,10 +408,10 @@ RUN.lift = {
   demo: true,
   spot: (ctx) => ctx.spots.lift,
   intro: (ctx, c) => `
-    <p>브레이크까지는 필요 없는 <b>빠른 코너</b>에서는 ${ctx.kbd('throttle')}를 <b>잠깐 떼기만</b> 해도 차 머리가 안쪽으로 조여져요. 라인 밖으로 나갈 것 같을 때 W를 톡 떼는 그 느낌이 바로 이 기술이에요!</p>
+    <p>브레이크까지는 필요 없는 <b>빠른 코너</b>에서는 ${ctx.kbd('throttle')}를 <b>잠깐 떼기만</b> 해도 차 머리가 안쪽으로 조여져요. 라인 밖으로 나갈 것 같을 때 ${ctx.kbd('throttle')}를 톡 떼는 그 느낌이 바로 이 기술이에요!</p>
     ${steps([['①', `코너 앞에서 ${ctx.kbd('throttle')} 톡 떼기`], ['②', `${ctx.kbd(c.side > 0 ? 'right' : 'left')} 꺾기 (브레이크 없이)`], ['③', '머리가 안쪽으로 들어오면'], ['④', `다시 ${ctx.kbd('throttle')} 꾹`]])}
-    ${why(`W를 떼면 무게가 <b>앞으로</b> 쏠려 앞바퀴가 눌리고 <b>더 잘 돌아요</b>. 밟고 있으면 앞이 들려서 덜 돌아요. 오래 꾹 밟다가 코너 한가운데서 <b>확</b> 떼면 뒤가 가벼워져 <b>꼬리가 살짝</b> 돌아요(리프트오프). ${drvTxt(ctx)}`)}
-    <p class="tut-tip">💡 W를 <b>자주</b> 떼야 한다면 = 코너에 너무 빨리 들어간 거예요. 그땐 코너 앞에서 브레이크 키를 짧게 톡 누르는 게 더 빨라요.</p>`,
+    ${why(`${ctx.kbd('throttle')}를 떼면 무게가 <b>앞으로</b> 쏠려 앞바퀴가 눌리고 <b>더 잘 돌아요</b>. 밟고 있으면 앞이 들려서 덜 돌아요. 오래 꾹 밟다가 코너 한가운데서 <b>확</b> 떼면 뒤가 가벼워져 <b>꼬리가 살짝</b> 돌아요(리프트오프). ${drvTxt(ctx)}`)}
+    <p class="tut-tip">💡 ${ctx.kbd('throttle')}를 <b>자주</b> 떼야 한다면 = 코너에 너무 빨리 들어간 거예요. 그땐 코너 앞에서 브레이크 키를 짧게 톡 누르는 게 더 빨라요.</p>`,
   plan: (ctx, c) => {
     const P = cornerPlan(ctx.game, c, runUp(ctx, c));
     P.driver = () => lineDriver(ctx.game, { look: 0.14 }); // 아주 빠른 스위퍼: 멀리 보면 안쪽을 깎아 잔디로 (0.2 → 동, 0.12~0.14 → 은)
@@ -424,7 +425,7 @@ RUN.lift = {
       { id: 'gas', a: P.dA + 6, b: 1e9, ts: 1, pulse: { ts: 0.4, sec: 0.9 } },
     ];
     P.momentAt = (m) => P.moments.find((x) => m >= x.a && m < x.b) || P.moments[0];
-    P.strip = stripOf([['straight', '직선'], ['lift', 'W 떼기'], ['apex', '에이펙스'], ['gas', '다시 꾹']]);
+    P.strip = stripOf([['straight', '직선'], ['lift', `${keybinds.label('throttle')} 떼기`], ['apex', '에이펙스'], ['gas', '다시 꾹']]);
     const T = ctx.kbd('throttle'), S = ctx.kbd(P.turnKey);
     P.texts = (id, coach) =>
       coach
@@ -446,7 +447,7 @@ RUN.lift = {
     return P;
   },
   task: (ctx, P) => `${ctx.cname(P.c)}: 브레이크 없이 ${ctx.K('throttle')}만 <b>톡 떼서</b> 돌고, 에이펙스 뒤 다시 꾹`,
-  goals: ['W 떼기 (브레이크 없이)', '짧게 떼기', '길 안에서', '다시 가속'],
+  goals: ['가속 떼기 (브레이크 없이)', '짧게 떼기', '길 안에서', '다시 가속'],
   cue: (P, id) => ({ straight: 'throttle', lift: P.turnKey, apex: null, gas: 'throttle' })[id],
   judge(ctx, P) {
     const R = cornerRec(ctx, P);
@@ -457,14 +458,14 @@ RUN.lift = {
         const { res, by } = R.rows();
         const X = R.X;
         const rows = [];
-        if (X.liftT >= 0.12 && X.brkInLift < 0.15) rows.push(row('lift', 'ok', 'W 떼기 (브레이크 없이)', '좋아요! 브레이크 없이 W만 떼서 돌았어요'));
-        else if (X.liftT >= 0.12) rows.push(row('lift', 'meh', 'W 떼기 (브레이크 없이)', `W는 뗐는데 브레이크도 ${t1(X.brkInLift)}초 밟았어요. 여긴 떼기만 해도 돼요`));
-        else if (X.brkInLift >= 0.15) rows.push(row('lift', 'meh', 'W 떼기 (브레이크 없이)', `브레이크로 돌았어요. 이번엔 ${ctx.kbd('throttle')}만 떼 보세요`));
-        else rows.push(row('lift', 'bad', 'W 떼기 (브레이크 없이)', `계속 밟고 있었어요. 코너 앞에서 ${ctx.kbd('throttle')}를 잠깐 떼요`));
+        if (X.liftT >= 0.12 && X.brkInLift < 0.15) rows.push(row('lift', 'ok', `${keybinds.label('throttle')} 떼기 (브레이크 없이)`, `좋아요! 브레이크 없이 ${keybinds.label('throttle')}만 떼서 돌았어요`));
+        else if (X.liftT >= 0.12) rows.push(row('lift', 'meh', `${keybinds.label('throttle')} 떼기 (브레이크 없이)`, `${ctx.kbd('throttle')}는 뗐는데 브레이크도 ${t1(X.brkInLift)}초 밟았어요. 여긴 떼기만 해도 돼요`));
+        else if (X.brkInLift >= 0.15) rows.push(row('lift', 'meh', `${keybinds.label('throttle')} 떼기 (브레이크 없이)`, `브레이크로 돌았어요. 이번엔 ${ctx.kbd('throttle')}만 떼 보세요`));
+        else rows.push(row('lift', 'bad', `${keybinds.label('throttle')} 떼기 (브레이크 없이)`, `계속 밟고 있었어요. 코너 앞에서 ${ctx.kbd('throttle')}를 잠깐 떼요`));
         if (X.liftMax <= 0) rows.push(row('short', 'bad', '짧게 떼기', '떼지 않았어요'));
         else if (X.liftMax > 1.6) rows.push(row('short', 'meh', '짧게 떼기', `${t1(X.liftMax)}초나 뗐어요. 길게 떼면 느려져요 (0.3~1초면 충분)`));
         else rows.push(row('short', 'ok', '짧게 떼기', `${t1(X.liftMax)}초만 짧게 뗐어요`));
-        if (res.respawn || X.offT > 0.6) rows.push(row('stay', 'bad', '길 안에서', '밖으로 나갔어요. W를 조금 더 일찍 떼요'));
+        if (res.respawn || X.offT > 0.6) rows.push(row('stay', 'bad', '길 안에서', `밖으로 나갔어요. ${keybinds.label('throttle')}를 조금 더 일찍 떼요`));
         else if (X.offT > 0.15) rows.push(row('stay', 'meh', '길 안에서', '바퀴가 잔디에 살짝 닿았어요'));
         else rows.push(row('stay', 'ok', '길 안에서', '라인 안에서 잘 돌았어요'));
         rows.push(by.gas);
@@ -540,7 +541,7 @@ RUN.chain = {
     <p><b>${ctx.cname(a)}</b> 바로 뒤에 <b>${ctx.cname(b)}</b>가 붙어 있어요. 이런 곳은 두 코너를 <b>하나로</b> 생각해요: 첫 코너 탈출이 둘째 코너의 <b>진입 자리</b>가 돼요.</p>
     ${steps([['①', `${ctx.cname(a)}: 에이펙스 + 좋은 탈출`], ['②', same ? '바깥으로 너무 나가지 않기' : `둘째 코너 바깥(${b.side > 0 ? '왼쪽' : '오른쪽'})에 자리 잡기`], ['③', `${ctx.cname(b)}: 에이펙스`], ['④', '둘 다 깔끔 = 연계 ×2']])}
     ${why(`깔끔한 코너(에이펙스 + 좋은 탈출)를 <b>이어서</b> 하면 '연계 ×n' 보너스가 점점 커져요. 첫 코너에서 욕심내서 빨리 들어가면 탈출이 밀려서 둘째 코너까지 망쳐요 → <b>첫 코너는 조금 차분하게</b>.`)}
-    <p class="tut-tip">💡 첫 코너 탈출에서 밀린다면 W를 톡 떼서(리프트오프) 머리를 다시 안쪽으로 넣어요.</p>`;
+    <p class="tut-tip">💡 첫 코너 탈출에서 밀린다면 ${ctx.kbd('throttle')}를 톡 떼서(리프트오프) 머리를 다시 안쪽으로 넣어요.</p>`;
   },
   plan: (ctx, pair) => {
     const [a, b] = pair;
@@ -1238,7 +1239,7 @@ RUN.lap = {
   standing: true,
   spot: (ctx) => (ctx.line ? { lap: true } : null),
   intro: (ctx, s, target) => `
-    <p>출발 신호부터 <b>한 바퀴</b>. 복귀(R) 없이, 잔디는 거의 밟지 않고, <b>${fmt(target)}</b> 안에 들어오면 합격이에요.</p>
+    <p>출발 신호부터 <b>한 바퀴</b>. 복귀(${ctx.K('respawn')}) 없이, 잔디는 거의 밟지 않고, <b>${fmt(target)}</b> 안에 들어오면 합격이에요.</p>
     ${steps([['①', '불이 꺼지면 출발'], ['②', '배운 것 모두: 브레이크·에이펙스·탈출'], ['③', '잔디 · 복귀 없이'], ['④', `목표 ${fmt(target)}`]])}
     <p class="tut-tip">💡 한 바퀴가 끝나면 바로 성적표가 나와요. 무리하지 말고 깔끔하게!</p>`,
   target(ctx) {

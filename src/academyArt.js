@@ -43,7 +43,7 @@ function scene(key, id) {
       return road('M-15 131Q129 144 164 82T334 51', 64) +
         arrow('M10 139Q128 150 181 99T300 75', C.cyan, 3, 'stroke-dasharray="7 6"') +
         arrow('M10 139Q114 151 148 79T300 35') + car(127, 114, 38) +
-        arrow('M126 104L141 84', C.red, 2) + text(13, 39, 'W 떼기 · 앞에 무게', C.red) +
+        arrow('M126 104L141 84', C.red, 2) + text(13, 39, '가속 떼기 · 앞에 무게', C.red) +
         text(204, 119, '더 안쪽으로', C.green) + text(206, 151, '점선: 원래 라인', C.cyan, 10);
     case 'lateApex':
       return road(corner, 60) +

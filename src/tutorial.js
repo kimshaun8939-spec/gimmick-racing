@@ -808,7 +808,7 @@ export function startTutorial(game) {
       choices.innerHTML = s.card ? s.card() : '';
       const buttons = [...choices.content.querySelectorAll('[data-goto]')].map((b) => b.outerHTML).join('');
       $('.tut-card .tut-body').innerHTML = shortCard({
-        ...text, buttons, keyHtml: (key) => shortKeys(key, K, s.id === 'fly' ? 'dive' : 'drift'),
+        ...text, buttons, keyHtml: (key) => shortKeys(key, K),
       });
     } else {
       $('.tut-card .tut-body').innerHTML = s.card ? s.card() : `<p>${s.task ? s.task() : ''}</p>`;
