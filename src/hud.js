@@ -103,13 +103,12 @@ export function createHud(track) {
     if (!rookieHint) return;
     if (firstComplete) { rookieHint.hidden = true; return; }
     const active = !document.getElementById('results')?.classList.contains('on');
-    const show = active && (s.countdown || s.time < 38);
+    const show = active && (s.countdown || s.time < 24) && toastTimer <= 0 && bigTimer <= 0 && bannerTimer <= 0 && !document.querySelector('.mt-notice:not(.out)');
     rookieHint.hidden = !show;
     if (!show) return;
     const text = s.countdown ? '<b>불이 모두 꺼지면 출발!</b>지금은 가속에서 손을 떼고 기다려요.'
       : s.time < 10 ? '<b>첫 코너까지 천천히 익혀요</b>' + rookieKey('throttle') + ' 가속 · 핸들은 짧게 톡톡'
-      : s.time < 24 ? '<b>도로의 색이 브레이크 타이밍이에요</b>🟢 가속 · 🟡 가속 놓기 · 🔴 ' + rookieKey('brake') + ' 브레이크'
-      : '<b>변신은 차가 알아서 해요</b>길을 벗어나면 ' + rookieKey('respawn') + ' 복귀 · 메뉴에서 언제든 쉬어요';
+      : '<b>도로의 색이 브레이크 타이밍이에요</b>🟢 가속 · 🟡 가속 놓기 · 🔴 ' + rookieKey('brake') + ' 브레이크';
     if (text !== rookieText) { rookieHint.innerHTML = text; rookieText = text; }
   }
 
@@ -510,16 +509,19 @@ export function createHud(track) {
     showResults(lapTimes, best, info = {}) {
       if (rookieHint) rookieHint.hidden = true;
       let firstNext = '';
+      const recommendNext = rookie && !firstComplete && info.hasNext && !info.champ && !route.has('room');
       if (rookie && !firstComplete) {
         firstComplete = true;
         try { localStorage.setItem('gimmick.firstComplete', '1'); localStorage.setItem('gimmick.firstRun', 'done'); } catch {}
         const next = nextUnlock(profile.get().level);
         firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음엔 어디로?</b><p>코너 하나가 편해질 때마다 레이스가 더 재밌어져요.</p><div class="nr-next-links"><a class="gm-btn" href="?menu=academy">🎓 아카데미<small>브레이크 레슨으로 더 빠르게</small></a><a class="gm-btn" href="?menu=map">🗺️ 새 맵 구경<small>바다와 하늘에서도 달려요</small></a><a class="gm-btn" href="?menu=car">🏎️ 내 차고<small>' + (next ? '다음 해금 · Lv.' + next.level + ' · ' + escH(next.text) : '다른 차의 운전 감각 느껴 보기') + '</small></a></div></div>';
+        if (recommendNext) firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음 코스에 도전해요</b><p><strong>다음 도전 · ' + escH(info.nextMap?.title || '새로운 코스') + '</strong><br>' + (info.nextMap?.id === 'sea' ? '물 위에서는 배로 변신해요. ' : '새 코스에서 다른 주행 감각을 느껴 보세요. ') + '아래 ‘다음 맵’으로 이어 달려요.</p>' + (next ? '<small>다음 해금 · Lv.' + next.level + ' · ' + escH(next.text) + '</small>' : '') + '</div>';
       }
       const nextBtn = (o) => {
         const lbl = String(o.nextLabel || '다음 맵').replace(/\s*›\s*$/, '');
         const arrow = /홈으로/.test(lbl) ? '' : '<span class="ic r">›</span>';
-        return `<button class="gm-btn big next${o.noRestart ? ' primary' : ''}" data-res="next">${escH(lbl)}${arrow}</button>`;
+        const copy = !o.champ && o.nextMap?.title ? '<span class="next-copy"><span>다음 맵</span><small>' + escH(o.nextMap.title) + '</small></span>' : escH(lbl);
+        return `<button class="gm-btn big next${o.noRestart || recommendNext ? ' primary' : ''}" data-res="next" aria-label="${escH(lbl)}">${copy}${arrow}</button>`;
       };
       const total = lapTimes.reduce((a, b) => a + b, 0);
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
@@ -579,7 +581,7 @@ export function createHud(track) {
         </div>
         <div class="btns">
           <div class="ra-main">
-            ${info.noRestart ? '' : '<button class="gm-btn primary big" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
+            ${info.noRestart ? '' : '<button class="gm-btn' + (recommendNext ? '' : ' primary') + ' big" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
             ${info.hasNext ? nextBtn(info) : ''}
           </div>
           <div class="ra-sub">

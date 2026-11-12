@@ -34,3 +34,12 @@
 .mt-shop-intro>span{font-size:44px}
 .mt-shop-intro h3{font-size:22px;margin:0 0 5px}
 @media(max-width:719px){.mt-shop-intro{padding:4px 0 12px;gap:12px}.mt-shop-intro h3{font-size:20px}.mt-shop-intro>span{font-size:36px}}
+
+/* night-qa4: 주행 중 업적은 미니맵 아래, 낮은 터치 화면에서는 작은 한 줄 */
+body:not(:has(#home)) .mt-notice { top: 232px; }
+@media (max-height: 500px) and (orientation: landscape) {
+  body:not(:has(#home)) .mt-notice { top: 160px; right: 12px; max-width: 190px; padding: 7px 10px; gap: 7px; }
+  body:not(:has(#home)) .mt-notice-medal { font-size: 20px; }
+  body:not(:has(#home)) .mt-notice b { font-size: 11px; margin: 0; }
+  body:not(:has(#home)) .mt-notice em { font-size: 8px; }
+}

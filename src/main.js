@@ -61,13 +61,32 @@ const ITEM = params.get('mode') === 'item';
 const MODE = ITEM ? 'race' : ['race', 'time'].includes(params.get('mode')) ? params.get('mode') : null;
 // 온라인 레이스 (?room=코드): 봇 수·실력은 주소(&bots=N&botLevel=..)로 → 모든 사람이 같은 봇 (방 코드로 같은 씨앗)
 const ONLINE = !!params.get('room');
+// 실제 준비 단계마다 막대와 문구 갱신. 숨은 탭에서도 진행되도록 타이머를 함께 둠.
+async function loadingStage(step, text) {
+  const status = document.getElementById('ldStatus');
+  const bar = document.getElementById('ldProgress');
+  if (status) status.textContent = step ? step + '/5 · ' + text : text;
+  if (bar && step) {
+    bar.classList.add('progress');
+    bar.querySelector('i').style.width = [0, 10, 25, 45, 65, 85][step] + '%';
+  }
+  // 무거운 코스 계산 전에 이번 단계가 화면에 보일 틈을 줌.
+  await new Promise((resolve) => {
+    const fallback = setTimeout(resolve, 50);
+    requestAnimationFrame(() => { clearTimeout(fallback); setTimeout(resolve, 0); });
+  });
+}
 if (!mapParam) {
+  const title = document.getElementById('ldMap');
+  if (title) title.textContent = '기믹 레이싱에 오신 걸 환영해요';
+  await loadingStage(0, '홈과 차고를 준비해요');
   // 홈 화면 (차·맵 고르기). 출발하면 ?map=..&car=.. 주소로 새로 불러와서 아래 게임이 시작됨
   const { runHome } = await import('./home.js');
   await runHome();
   await new Promise(() => {}); // 홈 화면에서는 게임을 만들지 않음
 }
 let mapName = MAPS[mapParam] ? mapParam : 'gp';
+await loadingStage(1, '코스와 차를 불러와요');
 // 로딩 화면: 맵 이름·차 이름·팁
 const mapsMeta = await loadMaps();
 const mapMeta = () => mapsMeta.find((m) => m.id === mapName) || { title: mapName };
@@ -93,7 +112,9 @@ const MAP_TIPS = {
   glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '1 km 직선 끝 T1이 가장 좋은 추월 지점: 늦게 브레이크!', '길이 넓으니 큰 스위퍼는 연석까지 넓게 쓰세요. 눈밭은 미끄럽고 느려요'],
 };
 const tipList = MAP_TIPS[mapName] && Math.random() < 0.7 ? MAP_TIPS[mapName] : LOAD_TIPS;
-ld('ldTip', '💡 ' + tipList[Math.floor(Math.random() * tipList.length)]);
+ld('ldTip', '💡 ' + (params.get('rookie') === '1' && mapName === 'glacier'
+  ? '첫 직선에서 150 km/h를 넘기면 가속 모드로 변신해요. 코너에서는 빨간 라인을 보고 브레이크!'
+  : tipList[Math.floor(Math.random() * tipList.length)]));
 // 차: ?car=<id> (없으면 기본 차 = 테스트가 늘 같은 차로 돌게). 차 목록·성능은 carRoster.js
 const carParam = params.get('car');
 let carCfg;
@@ -166,12 +187,15 @@ resize();
 // 맵 전용 모듈: 맵 json에 "module": "neonMap" 처럼 적으면 src/neonMap.js의 buildTrack/buildScenery/buildProps를 씀 (없는 함수는 기본 것)
 const mapMod = trackData.module ? await import(`./${trackData.module}.js`) : null;
 const sceneBeforeMap = new Set(scene.children); // 트랙·풍경이 새로 넣은 것만 묶어 그리기 대상 (staticBatch.js)
+await loadingStage(2, '달릴 도로를 만들어요');
 performance.mark('load:start');
 const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : buildTrack(trackData, scene);
 performance.mark('load:track');
+await loadingStage(3, '풍경과 코스 기믹을 준비해요');
 const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : buildScenery(track, scene);
 const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
 performance.mark('load:scenery');
+await loadingStage(4, '차와 출발선을 준비해요');
 const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : buildProps(track, scene);
 performance.mark('load:props');
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
@@ -964,7 +988,8 @@ function showFinish() {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: true,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
     champ, assist: !!race.assist, noRestart: !!champ, meta: metaRun.summary(),
-    replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : null,
+    nextMap: { id: nextMapId(), title: (mapsMeta.find((m) => m.id === nextMapId()) || {}).title || nextMapId() },
+    replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : `다음 맵 · ${(mapsMeta.find((m) => m.id === nextMapId()) || {}).title || nextMapId()}`,
     onAction(a) {
       if (a === 'restart') {
         if (!ONLINE && !race.champRec) resetRace(); // 온라인·챔피언십(점수 저장 뒤)에서는 다시 하지 않음
@@ -977,6 +1002,8 @@ function showFinish() {
       else if (a === 'next') {
         const u = new URL(raceUrl(nextMapId(), carId));
         if (MODE) u.searchParams.set('mode', ITEM ? 'item' : MODE);
+        // 첫 도전에서 이어 달릴 땐 쉬운 봇·운전 도움을 유지. 홈에서 고른 레이스는 원래 설정을 씀.
+        if (params.get('rookie') === '1' && MODE === 'race' && !ITEM) u.searchParams.set('rookie', '1');
         location.href = u.toString();
       }
       else if (a === 'replay') replay.start();
@@ -1012,6 +1039,7 @@ let capNext = 0; // 프레임 제한: 다음에 그릴 시각
 let elapsed = 0;
 let fpsFrames = 0, fpsT = performance.now();
 // 가만히 있는 트랙·풍경 메시를 재질별로 묶어 그림 호출 수를 줄임 (모양은 그대로, 렉 줄이기). ?batch=0 이면 끔
+await loadingStage(5, '빛과 움직임을 마지막으로 점검해요');
 const batcher = (() => {
   if (params.get('batch') === '0') return null;
   // 코스에서 먼 물체는 큰 칸으로 묶음 (멀리 있는 하늘 섬·산을 120 m 칸으로 자르면 조각만 많아짐)
@@ -1035,6 +1063,9 @@ if (params.get('prewarm') !== '0') {
 }
 {
   const l = document.getElementById('loading');
+  const bar = document.querySelector('#ldProgress i');
+  if (bar) bar.style.width = '100%';
+  ld('ldStatus', '준비 완료! 곧 출발해요');
   l.classList.add('out');
   setTimeout(() => l.remove(), 450);
 }
