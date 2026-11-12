@@ -315,7 +315,7 @@ export function createCoachUI(root) {
     cue(id) {
       for (const k in keyEls) keyEls[k].classList.toggle('cue', k === id);
     },
-    pedals(thr, brk, v, target) {
+    pedals(thr, brk, v, target, minimum = false) {
       $('.td-bar.thr b').style.height = `${Math.round(clamp(thr, 0, 1) * 100)}%`;
       $('.td-bar.brk b').style.height = `${Math.round(clamp(brk, 0, 1) * 100)}%`;
       $('.td-spd b').textContent = kmh(v);
@@ -323,7 +323,8 @@ export function createCoachUI(root) {
       if (target != null) {
         const over = Math.abs(v) - target;
         t.innerHTML = `목표 <b>${kmh(target)}</b>`;
-        t.className = `td-tgt ${over > 3.5 ? 'red' : over > 0.8 ? 'yel' : 'grn'}`;
+        // 가속 연습의 목표는 넘어야 하는 속도이므로 초과를 경고하지 않음.
+        t.className = `td-tgt ${minimum ? (over >= 0 ? 'grn' : '') : over > 3.5 ? 'red' : over > 0.8 ? 'yel' : 'grn'}`;
       } else t.innerHTML = '';
     },
     buttons(html) {

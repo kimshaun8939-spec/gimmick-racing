@@ -27,3 +27,10 @@
  .mt-content { padding:10px 12px!important; }
  .mt-tabs button { padding:8px 10px; }
 }
+
+/* night-qa2: 첫 상품의 가격과 구매 버튼까지 보이도록 소개 여백 정리 */
+.mt-shop-intro{padding:4px 8px 12px;gap:16px;margin-bottom:12px}
+.mt-shop-intro .mt-kicker{display:none}
+.mt-shop-intro>span{font-size:44px}
+.mt-shop-intro h3{font-size:22px;margin:0 0 5px}
+@media(max-width:719px){.mt-shop-intro{padding:4px 0 12px;gap:12px}.mt-shop-intro h3{font-size:20px}.mt-shop-intro>span{font-size:36px}}

@@ -1017,7 +1017,7 @@ export async function runHome() {
     box.querySelector('.hx-lic').textContent = p.icon || '🔰';
     box.querySelector('.lv').textContent = `Lv.${p.level} ${p.title}`;
     box.querySelector('.hx-xp i').style.width = `${Math.round((p.pct || 0) * 100)}%`;
-    box.querySelector('.hx-xp').title = `다음 레벨까지 ${p.have} / ${p.need} XP`;
+    box.querySelector('.hx-xp').title = `다음 레벨까지 ${Math.max(0, p.need - p.have)} XP · ${p.have} / ${p.need} XP`;
     let titleEl = box.querySelector('.mt-driver-title');
     if (!titleEl) { titleEl = document.createElement('span'); titleEl.className = 'mt-driver-title'; box.querySelector('.hx-dinfo').appendChild(titleEl); }
     titleEl.textContent = meta.title() ? '✦ ' + meta.title() : ''; titleEl.hidden = !meta.title();
@@ -1331,7 +1331,18 @@ export async function runHome() {
   home.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-go], [data-act]');
     if (!b) return;
-    if (b.dataset.go) return show(b.dataset.go);
+    if (b.dataset.go) {
+      show(b.dataset.go);
+      // 샵의 코스튬 구경은 성능표 아래를 다시 찾지 않아도 바로 보여 줌.
+      if (b.dataset.go === 'car' && b.dataset.carSection === 'costume') requestAnimationFrame(() => {
+        const box = views.car.querySelector('.mt-costume-box');
+        const info = views.car.querySelector('.h-carinfo');
+        const scroller = getComputedStyle(info).overflowY === 'auto' ? info : views.car;
+        scroller.scrollTop += box.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
+        box.querySelector('.mt-costume.on, .mt-costume')?.focus({ preventScroll: true });
+      });
+      return;
+    }
     const act = b.dataset.act;
     if (act === 'start') view === 'mode' ? start() : view === 'main' ? show('car') : show('mode'); // 메인의 레이스 시작 = 1단계 차 고르기부터
     else if (act === 'metaShop' || act === 'metaGoals') { show('meta'); metaPage.showTab(act === 'metaShop' ? 'shop' : 'goals'); }

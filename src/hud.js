@@ -514,7 +514,7 @@ export function createHud(track) {
         firstComplete = true;
         try { localStorage.setItem('gimmick.firstComplete', '1'); localStorage.setItem('gimmick.firstRun', 'done'); } catch {}
         const next = nextUnlock(profile.get().level);
-        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음엔 어디로?</b><p>코너 하나가 편해질 때마다 레이스가 더 재밌어져요.</p><div class="nr-next-links"><a class="gm-btn" href="?menu=academy">🎓 아카데미<small>브레이크 레슨으로 더 빠르게</small></a><a class="gm-btn" href="?menu=map">🗺️ 새 맵 구경<small>바다와 하늘에서도 달려요</small></a><a class="gm-btn" href="?menu=car">🏎️ 내 차고<small>' + (next ? 'Lv.' + next.level + ' · ' + escH(next.text) : '다른 차의 운전 감각 느껴 보기') + '</small></a></div></div>';
+        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음엔 어디로?</b><p>코너 하나가 편해질 때마다 레이스가 더 재밌어져요.</p><div class="nr-next-links"><a class="gm-btn" href="?menu=academy">🎓 아카데미<small>브레이크 레슨으로 더 빠르게</small></a><a class="gm-btn" href="?menu=map">🗺️ 새 맵 구경<small>바다와 하늘에서도 달려요</small></a><a class="gm-btn" href="?menu=car">🏎️ 내 차고<small>' + (next ? '다음 해금 · Lv.' + next.level + ' · ' + escH(next.text) : '다른 차의 운전 감각 느껴 보기') + '</small></a></div></div>';
       }
       const nextBtn = (o) => {
         const lbl = String(o.nextLabel || '다음 맵').replace(/\s*›\s*$/, '');

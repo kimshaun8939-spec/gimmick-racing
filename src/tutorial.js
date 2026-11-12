@@ -988,6 +988,7 @@ export function startTutorial(game) {
     const s = STEPS[cur];
     const prog = s.kind === 'drill' && drill ? drillProg() : s.progress ? s.progress(st) : [];
     const bar = s.bar ? s.bar(st) : null;
+    if (s.goals?.length === 1 && bar != null) prog[0] = bar >= 1;
     $('.tut-panel .tut-goals').innerHTML = (s.goals || [])
       .map((g, j) => `<div class="g ${prog[j] ? 'ok' : ''}"><i>${prog[j] ? '✓' : ''}</i><span>${esc(g)}</span></div>`)
       .join('') + (bar != null ? `<div class="tut-bar"><b style="width:${Math.round(bar * 100)}%"></b></div>` : '') + (s.gauge && phase !== 'card' ? s.gauge(st) : '');
@@ -1127,7 +1128,9 @@ export function startTutorial(game) {
       st._age = (st._age || 0) + dt;
       if (s.keys) {
         coach.keys(car.thr, car.brk, car.steerIn, dt);
-        coach.pedals(car.thr, car.brk, car.speed, car.trackInfo && line ? coachSpeed(car, track, idxNow()) : null);
+        // 기초 연습은 미션의 목표 속도만 표시 (도로 권장 속도와 혼동하지 않게).
+        const target = s.id === 'gas' ? 100 / 3.6 : s.id === 'stop' ? (st.g0 ? 80 : 50) / 3.6 : s.id === 'accel' ? 150 / 3.6 : (s.id === 'line' || s.kind === 'drill') && car.trackInfo && line ? coachSpeed(car, track, idxNow()) : null;
+        coach.pedals(car.thr, car.brk, car.speed, target, s.id === 'gas' || s.id === 'accel' || (s.id === 'stop' && !!st.g0));
       }
       if (st._age < 0.25 || !car.trackInfo) {
         seen.length = 0;
