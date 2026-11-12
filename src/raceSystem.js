@@ -9,7 +9,7 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK } from './bots.js';
+import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
 import { settings } from './settings.js';
@@ -563,7 +563,7 @@ export async function createRaceSystem(o) {
   // --- 견인 (2026-11-12, 사용자 요청 "뒤처지면 끌어당겨 줌"): 1등보다 startSec초 넘게 뒤처진 차를 살짝 밀어 줌 → car.tow (0~1) ---
   //   효과는 car.js (공기 저항 ↓, 최고 속도·힘 살짝 ↑, data/car.json tow). startSec 안으로 들어오면 꺼지므로 1등을 따라잡게 만들지는 않음
   //   봇 레이스·아이템전·챔피언십·온라인(내 차·내 화면의 봇만), 혼자·타임 어택은 없음 (상대가 없으면 꺼짐). 설정 '견인' 또는 &tow=0이면 끔
-  //   봇 따라잡기(어려움 upMul/upDraft, 마스터)를 받는 봇은 견인 없음 (겹쳐서 고무줄이 너무 세지 않게)
+  //   기본은 마스터를 포함해 사람·봇 같은 조건. &rb=1에서만 예전 따라잡기 중복 제외를 복원
   const towCalm = (() => {
     // 점프 립 80 m 앞 ~ 착지 200 m 뒤 (bots.js jumpCalm과 같은 구간): 견인으로 빨라지면 점프 착지가 어긋남
     const Nn = line && line.N;
@@ -585,7 +585,7 @@ export async function createRaceSystem(o) {
     const ti = c.trackInfo;
     if (towCalm && ti && towCalm[Math.min(towCalm.length - 1, Math.max(0, Math.floor(ti.t * towCalm.length)))]) return 0;
     if (c.gravityScale && c.gravityScale() < 0.95) return 0; // 저중력: 빨라지면 날아감
-    if (x !== me) {
+    if (RUBBER_BAND && x !== me) {
       const st = x.driver && x.driver.state;
       if (MASTER || (x.cuDraft || 0) > 0.01 || (st && (st.paceMul > 1.001 || st.paceMul < 0.999 || st.calm))) return 0; // 따라잡기로 빨라지거나(어려움 &cu=1) 늦춰지는(쉬움) 봇은 견인 없음
       if (st && st.closeOn && st.eq && st.eq.keep > 1.001) return 0; // 접전(bots.js CLOSE)으로 이미 당겨지는 봇은 견인 없음 (겹치지 않게)
@@ -713,7 +713,7 @@ export async function createRaceSystem(o) {
       updateDraft(b, dt, racing);
       b.driver.state.realDraft = b.draft; // 봇 운전사는 진짜 슬립스트림만 봄 (추월 판단)
       // 따라잡기(어려움·마스터)의 보이지 않는 슬립스트림: car.assistDraft (예전 세기 그대로, car.json draft.assistDragCut·assistTopGain), 점프 근처·저중력에서는 안 함
-      b.car.assistDraft = b.cuDraft > 0 && racing && !b.driver.state.calm ? b.cuDraft : 0;
+      b.car.assistDraft = RUBBER_BAND && b.cuDraft > 0 && racing && !b.driver.state.calm ? b.cuDraft : 0;
     }
     // 견인
     updateTow(dt, time, racing);
@@ -763,16 +763,17 @@ export async function createRaceSystem(o) {
   function masterKeeper(b, time, lead) {
     const mc = level.master, st = b.driver.state;
     let hT = b.mFix || 0;
-    if (lead && b.progress < lead.progress) {
+    if (RUBBER_BAND && lead && b.progress < lead.progress) {
       const g = gapBetween(lead, b, time);
       const sec = g.laps ? 99 : g.sec || 0;
       if (sec > mc.humanSec) hT = Math.max(hT, Math.min(1, (sec - mc.humanSec) / mc.gain));
     }
     if (time < 3) hT = Math.min(hT, mc.startHelp); // 출발 덩어리에서는 덜
-    b.mH += (hT - b.mH) * 0.3;
+    if (RUBBER_BAND) b.mH += (hT - b.mH) * 0.3;
+    else b.mH = hT; // 출발 제한 뒤에는 판 시작 때 정한 도움 그대로 (사람과 무관)
     if (b.mH < 0.01) b.mH = 0;
     masterHelp(b, b.mH, st.calm);
-    return { want: 1 + mc.paceMax * b.mH, draft: mc.draftMax * b.mH };
+    return { want: 1 + mc.paceMax * b.mH, draft: RUBBER_BAND ? mc.draftMax * b.mH : 0 };
   }
 
   /** 기준 = 가장 앞선 사람 (혼자면 나, 온라인이면 나와 다른 사람 중 1등). 완주한 사람은 빼고, 모두 완주했으면 null */
@@ -790,13 +791,13 @@ export async function createRaceSystem(o) {
    * 보통: 없음 (항상 1)
    */
   // 접전(bots.js CLOSE)이 켜져 있으면 예전 따라잡기(쉬움 slowMul·어려움 upMul/upDraft)는 안 씀: 사람 기준 당기기·늦추기를 bots.js 무리 유지가 대신 함 (겹치지 않게)
-  const CLOSE_ON = CLOSE.on && !!level.close && PACK.on && PACK.keep.on;
-  // 2026-11-12 drs (사용자 요청 "멈춰 주는 게 아니라 시스템으로"): 어려움의 '몰래 빨라지기·늦추기'(catchUp.sec: upMul·upDraft·downMul)는 기본 끔
-  //   → 눈에 보이고 모두에게 똑같은 견인·슬립스트림(기차)·DRS가 대신. &cu=1이면 예전처럼. 쉬움(aheadM·slowMul)은 처음 하는 사람용 안전망이라 그대로
-  const LEGACY_CU = QS.get('cu') === '1';
+  const CLOSE_ON = RUBBER_BAND && CLOSE.on && !!level.close && PACK.on && PACK.keep.on;
+  // 숨은 고무줄은 &rb=1에서만 복원: 쉬움 늦추기·마스터 사람 기준 증가·가짜 슬립스트림.
+  //   어려움 따라잡기와 CLOSE는 예전처럼 &cu=1 / &close=1도 필요. 기본은 모두에게 같은 견인·슬립스트림·DRS만.
+  const LEGACY_CU = RUBBER_BAND && QS.get('cu') === '1';
   function catchUp(time, racing) {
-    const cu = CLOSE_ON ? null : level.catchUp && (level.catchUp.aheadM || LEGACY_CU) ? level.catchUp : null;
-    const lead = racing && (cu || MASTER) ? leadHuman() : null;
+    const cu = RUBBER_BAND && !CLOSE_ON && level.catchUp && (level.catchUp.aheadM || LEGACY_CU) ? level.catchUp : null;
+    const lead = RUBBER_BAND && racing && (cu || MASTER) ? leadHuman() : null;
     for (const b of bots) {
       const st = b.driver.state;
       let want = 1, draft = 0;
@@ -825,7 +826,8 @@ export async function createRaceSystem(o) {
           } else if (b.progress > lead.progress && sec > (cu.secDown ?? cu.sec)) want = cu.downMul;
         }
       }
-      st.paceMul += (want - st.paceMul) * 0.3;
+      if (MASTER && !RUBBER_BAND) st.paceMul = want; // 고정 도움의 계획 속도도 즉시 같은 값으로
+      else st.paceMul += (want - st.paceMul) * 0.3;
       if (Math.abs(st.paceMul - want) < 0.002) st.paceMul = want;
       b.cuDraft = (b.cuDraft || 0) + (draft - (b.cuDraft || 0)) * 0.3;
       if (b.cuDraft < 0.01) b.cuDraft = 0;

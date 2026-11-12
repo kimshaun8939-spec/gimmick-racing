@@ -19,7 +19,7 @@ export const BOT_LEVELS = {
   //   원인: 봇 조향 방식이 나빴음. 20 m 앞 점을 향해 꺾는 방식은 빠른 코너에서 핸들이 늦게 풀려 안쪽 잔디로 파고들었음
   //     (예전 라인 봇도 그랑프리 1바퀴 중 36초를 잔디 위에서 보냄). 그래서 '라인 봇 = 거의 완벽'이라는 예전 기준이 틀렸음
   //   → 조향을 '원하는 회전 속도' 방식으로 바꿈 (아래 controls의 조향). 같은 차·같은 계획으로 그랑프리 216.7 → 188.9초, 달 156.6 → 142.4초
-  //   쉬움: 처음 하는 사람(벽에 박고 가끔 복귀)도 이김 + 따라잡기로 늦춰 줌
+  //   쉬움: 낮은 pace·topK·thrK로 천천히 달림 (사람 기준 늦추기는 &rb=1에서만)
   //   보통: 처음 하는 사람은 이기기 어려움 (예전 라인 봇과 비슷한 빠르기)
   //   어려움: 잘하는 사람과 비슷 (가장 빠른 봇이 사람 기록 ±2~3%)
   //   실측 (혼자 달림, 블루 프로토, 초): 그랑프리 쉬움 263 / 보통 219 / 어려움 187 (사람 184)
@@ -49,11 +49,11 @@ export const BOT_LEVELS = {
 // 마스터(master, 2026-11-10 사용자 요청: 처음엔 "내 기록보다 빠르게" → 고침 "내 기록과 상관없이 그냥 어렵게, 이름은 마스터"):
 //   운전은 어려움과 똑같고, 봇마다 고정된 도움 h(help 범위 안, 봇마다 다르게)를 늘 받음 = 내 기록을 안 봄
 //   도움 h(0~1): 코너 속도 +paceMax·h, 타이어 접지(옆·앞뒤·브레이크)와 핸들 회전 +gripMax·h, 엔진 힘 +powerMax·h,
-//     보이지 않는 슬립스트림 draftMax·h (공기 저항 −30%·최고 속도 +4%까지)
+//     draftMax·h 보이지 않는 슬립스트림은 &rb=1에서만 (기본은 진짜 앞차 뒤 슬립스트림만)
 //     + saturBrake: 핸들을 끝까지 꺾어도 모자라면 바로 속도를 줄임 (화산 T7·H1 출구에서 벽에 박혔던 것)
 //   점프 근처(봇 st.calm)에서는 코너 속도·힘 도움 없음 (접지 도움만). 저중력 구역은 calmGrav: false라 도움 그대로
-//   사람이 humanSec초 넘게 앞서면 늦은 만큼(gain초면 최대 1) 도움을 더 올림 (어려움 봇의 catchUp 같은 것)
-//   출발 덩어리(처음 3초)는 startHelp까지만
+//   기본 도움 h는 봇마다 정한 고정값. 사람 기준 humanSec·gain 증가는 &rb=1에서만
+//   출발 덩어리(처음 3초)는 startHelp까지만, 이후 고정 h로 (점프 안전 제한은 유지)
 BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
@@ -69,12 +69,20 @@ BOT_LEVELS.master = {
 //   raceSystem의 예전 따라잡기(쉬움 slowMul·어려움 upMul/upDraft)는 이게 켜져 있으면 안 씀 (겹치지 않게). 마스터 도움은 그대로, 견인은 이걸로 빨라지는 봇은 안 받음
 //   사람이 없거나(봇끼리) 사람이 완주했으면 예전 봇 무리 가운데 기준. 점프 근처·저중력·비행 중에는 빨라지지 않음 (PACK.keep과 같음)
 //   2026-11-12 drs: 기본 끔 (사용자 "멈춰 주는 게 아니라 시스템으로" → 눈에 보이는 DRS·슬립스트림 기차·견인으로 바꿈, src/drs.js). 주소 &close=1이면 켬
+// 숨은 따라잡기·늦추기는 기본 끔. &rb=1만 예전 동작을 허용 (cu·close는 각 플래그도 필요).
+export const RUBBER_BAND = (() => {
+  try {
+    return new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('rb') === '1';
+  } catch {
+    return false;
+  }
+})();
 export const CLOSE = { on: false };
 // 봇 목표 최고 속도에 슬립스트림·견인·DRS 몫을 더하기 (2026-11-12 drs). &botaero=0 = 예전처럼 안 더함 (비교 시험용)
 let BOT_AERO = true;
 try {
   const q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
-  if (q.get('close') === '1') CLOSE.on = true;
+  if (RUBBER_BAND && q.get('close') === '1') CLOSE.on = true;
   if (q.get('botaero') === '0') BOT_AERO = false;
 } catch {}
 //   draft = 띠보다 draftAt초(기본 1) 넘게 뒤처진 봇에게 (1.5초에 걸쳐 커짐) 주는 보이지 않는 슬립스트림 최대 (raceSystem cuDraft, 예전 어려움 upDraft와 같은 것; 속도 계획 표가 없는 맵(화산)에서도 실제로 빨라지게)
@@ -102,7 +110,7 @@ export function rng(seed) {
 //   고친 것: carEq = 봇은 '자기 차가 이 맵에서 같은 등급 가운데 차보다 몇 % 빠른지'(CAR_REL 표)만큼 늦추거나(최대 slowMax)
 //     보이지 않게 도와줌(최대 helpMax: 타이어 접지·핸들·엔진·최고 속도. 사람 차에는 안 함). 표에 없는 맵·차는 속도 계획 시간으로 어림(늦추기만·빠르게는 여유 안에서)
 //     + 봇이 고르는 차에서 이 맵에서 너무 느린 차(rel > pickMax)는 빼고 (같은 등급 다른 차가 충분하면) + paceVar 줄임 + keep(무리 유지)
-//   ?pack=0 이면 전부 예전처럼 (paceVar는 줄인 값 그대로), ?keep=0 이면 무리 유지만 끔
+//   차·맵 보정은 유지. 무리 유지는 기본 끔(&rb=1로 복원), ?pack=0은 차·맵 보정까지 끔, ?keep=0은 무리 유지 끔
 export const PACK = {
   on: true,
   slowMax: 0.15, // 빠른 차를 최대 15%까지 늦춤
@@ -113,7 +121,7 @@ export const PACK = {
 //   → 무리보다 앞선 차는 늦추고(최대 down) 뒤처진 차는 당김(최대 up) → 다시 한 덩어리가 되어 추월이 일어남
   //   fMax = 차 맞추기 × 무리 유지 최대. 마스터는 코너·직선 목표 속도만 (차 도움은 raceSystem 마스터 도움이 덮어써서)
   open: { sec: 25, k: 0.95 }, // 출발 뒤 sec초 동안 바로 앞에 차가 있으면 코너 속도 ×k (어려움·마스터, 예전 그대로)
-  keep: { on: true, after: 8, behind: 1, ahead: 1, up: 0.07, down: 0.05, perSec: 0.025, fMax: 1.1, bias: 1.015 },
+  keep: { on: RUBBER_BAND, after: 8, behind: 1, ahead: 1, up: 0.07, down: 0.05, perSec: 0.025, fMax: 1.1, bias: 1.015 },
 };
 try {
   const q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
