@@ -39,9 +39,11 @@ export async function createRaceSystem(o) {
   const markLen = (laps + 2) * M + 2;
   // 슬립스트림·견인 값 (data/car.json draft·tow, 플레이어 차 cfg 기준). 주소 &slip=old = 예전 슬립스트림(비교용), &tow=0 = 견인 끔
   const SLIP_OLD = QS.get('slip') === 'old';
+  const SLIP_SLING = QS.get('slip') === 'sling'; // 2026-11-13 슬링샷 없앰 전 방식 (충전 + 옆으로 빠지면 슬링샷, 비교용)
   const TOW_OLD = QS.get('towold') === '1';
   const legacyDraft = (cfg) => {
-    if (SLIP_OLD && cfg && cfg.draft && cfg.draft.legacy) cfg.draft = { ...cfg.draft, ...cfg.draft.legacy };
+    if (SLIP_OLD && cfg && cfg.draft && cfg.draft.legacy) cfg.draft = { ...cfg.draft, ...cfg.draft.legacy, pullAccel: 0, topMax: 1 };
+    if (SLIP_SLING && cfg && cfg.draft && cfg.draft.slingMode) cfg.draft = { ...cfg.draft, ...cfg.draft.slingMode };
     if (TOW_OLD && cfg && cfg.tow) cfg.tow = { ...cfg.tow, startSec: 2.5, fullSec: 8, dragCut: 0.3, topGain: 0.05, powerGain: 0.1, assistSec: 3 }; // 플레이어·봇 차 모두 (car.js도 이 값을 씀)
   };
   legacyDraft(car.cfg);
@@ -493,7 +495,8 @@ export async function createRaceSystem(o) {
   //   2026-11-12 (사용자 요청 "더 세고 잘 보이게"): 4~45 m, 옆 2.3 m (예전 4~30 m, 2 m), car.json draft 값도 셈.
   //   충전(x.slip 0~1): draft 0.4 넘게 chargeTime초 → ready 이상 충전된 채 옆으로 빠지면 슬링샷 (car.slingT)
   const DRAFT_MIN = DC.minGap ?? 4, DRAFT_MAX = DC.range ?? 30, DRAFT_LAT = DC.lat ?? 2, DRAFT_V = DC.minSpeed ?? 15;
-  const SLING = DC.sling !== false && !SLIP_OLD;
+  //   2026-11-13 슬링샷 없앰: 기본은 충전·슬링샷 없음 (car.json draft.sling false) = 뒤에 붙으면 바로 빨라짐 (car.js pullAccel·topGain). &slip=sling이면 예전 충전+슬링샷
+  const SLING = DC.sling === true && !SLIP_OLD;
   function draftFor(x) {
     const c = x.view;
     x.slipCand = null;
@@ -921,7 +924,7 @@ export async function createRaceSystem(o) {
   }
   let slipFx = null;
   try {
-    slipFx = createSlipFx({ getScene: findScene, draftCfg: DC });
+    slipFx = createSlipFx({ getScene: findScene, draftCfg: DC, sling: SLING });
     if (bots.length) slipFx.prepare(); // 공기 줄기 메시를 미리 장면에 넣어 둠 (불러오는 화면에서 셰이더를 미리 만듦)
   } catch (err) {
     console.warn('슬립스트림 연출 만들기 실패', err);
@@ -932,7 +935,8 @@ export async function createRaceSystem(o) {
     opponents.render(dt, elapsed, camera, (e) => [e.name, `P${e.position || ''}`]);
     if (slipFx) {
       const src = me.slipSrc && me.slipSrc.view && me.draft > 0.03 ? me.slipSrc.view : null;
-      slipFx.update(dt, camera, { racing: racingNow && !me.finished, draft: me.draft || 0, charge: me.slip || 0, src, myPos: car.pos, tow: me.tow || 0, towOn: towOn(), sling: !!me.slingFx });
+      const gain = Math.min(DC.topMax ?? 1, (me.draft || 0) * (DC.topGain ?? 0.04) * (1 + Math.min(2, car.draftTrain || 0) * (DC.trainGain ?? 0))); // HUD '+n%'
+      slipFx.update(dt, camera, { racing: racingNow && !me.finished, draft: me.draft || 0, charge: me.slip || 0, gain, src, myPos: car.pos, tow: me.tow || 0, towOn: towOn(), sling: !!me.slingFx });
       me.slingFx = false;
     }
     if (drs) drs.update(dt, racingNow);

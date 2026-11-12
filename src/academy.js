@@ -11,6 +11,9 @@ import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
 import { touch, touchWanted } from './touch.js';
 import { createCoachUI, createDemo, momentText } from './tutorialDemo.js';
+import { coachSpeed } from './brakeNeed.js';
+import { LESSON_TEXT, EXAM_TEXT } from './academyText.js';
+import { shortCard, shortKeys } from './academyCards.js';
 import { kbd as kbdTd } from './tutorialDemo.js';
 import { RUN, pickSpots, fmt } from './academyLessons.js';
 import { LESSONS, LICENSES, academy, lessonMeta, licenseMeta, scoreRows, medalFor, MEDALS, MEDAL_NAMES } from './academyStore.js';
@@ -224,7 +227,7 @@ export function startAcademy(game) {
     $('.tut-card .tut-ic').innerHTML = icon;
     $('.tut-card h2').textContent = title;
     $('.ac-crumb').innerHTML = crumb();
-    $('.tut-card').classList.remove('tdr', 'ac-rep', 'ac-final');
+    $('.tut-card').classList.remove('tdr', 'ac-rep', 'ac-final', 'ac-short-frame');
   }
   function crumb() {
     if (exam) {
@@ -261,12 +264,25 @@ export function startAcademy(game) {
   function showIntro() {
     if (!P) return showBlocked();
     frame(chipText(), meta.icon, `${meta.name}${label() ? ` · ${label()}` : ''}`);
-    const goals = (L.goals || []).map((g) => `<span>${esc(g)}</span>`).join('');
-    const ex = exam ? `<div class="ac-examnote">${licenseBadge(exam.lic, { size: 26 })}<span>합격 기준: 이 과제 <b>${MEDALS[lic().need]} ${MEDAL_NAMES[lic().need]}</b> 이상 · 기회 <b>${Math.max(1, 2 - exam.tries)}번</b> 남음 (좋은 쪽 기록)</span></div>` : '';
-    $('.tut-card .tut-body').innerHTML = `
-      ${ex}
-      <div class="ac-intro"><div class="ac-art">${academyArt(meta.art)}</div><div class="ac-txt">${L.intro(ctx, spot, target)}</div></div>
-      <div class="ac-goalrow"><b>성적표 항목</b>${goals}<em>✓ 모두 = 🥇 · 75% = 🥈 · 50% = 🥉</em></div>`;
+    const text = Object.hasOwn(LESSON_TEXT, lessonId) ? LESSON_TEXT[lessonId] : null;
+    const examText = exam && Object.hasOwn(EXAM_TEXT, exam.lic) ? EXAM_TEXT[exam.lic] : null;
+    $('.tut-card').classList.toggle('ac-short-frame', !!text);
+    if (text) {
+      const rule = examText ? '\n\n' + examText.title + '\n' + examText.more : '';
+      const badge = exam ? MEDAL_NAMES[lic().need] + ' 이상 · 기회 ' + Math.max(1, 2 - exam.tries) + '번' : '';
+      $('.tut-card .tut-body').innerHTML = shortCard({
+        ...text, title: text.title + (label() ? ' · ' + label() : ''), badge,
+        tip: examText ? examText.tip : text.tip, more: text.more + rule,
+        keyHtml: (key) => shortKeys(key, K, lessonId === 'fly' ? 'dive' : 'drift'),
+      });
+    } else {
+      const goals = (L.goals || []).map((g) => `<span>${esc(g)}</span>`).join('');
+      const ex = exam ? `<div class="ac-examnote">${licenseBadge(exam.lic, { size: 26 })}<span>합격 기준: 이 과제 <b>${MEDALS[lic().need]} ${MEDAL_NAMES[lic().need]}</b> 이상 · 기회 <b>${Math.max(1, 2 - exam.tries)}번</b> 남음 (좋은 쪽 기록)</span></div>` : '';
+      $('.tut-card .tut-body').innerHTML = `
+        ${ex}
+        <div class="ac-intro"><div class="ac-art">${academyArt(meta.art)}</div><div class="ac-txt">${L.intro(ctx, spot, target)}</div></div>
+        <div class="ac-goalrow"><b>성적표 항목</b>${goals}<em>✓ 모두 = 🥇 · 75% = 🥈 · 50% = 🥉</em></div>`;
+    }
     const demoOk = L.demo !== false;
     $('.tut-card .tut-btns').innerHTML =
       btn('home', exam ? '‹ 시험 그만두기' : '‹ 아카데미') + '<span class="sp"></span>' +
@@ -590,7 +606,7 @@ export function startAcademy(game) {
     if (!L.standing && race.phase === 'countdown') return startLive();
     st.age += dt;
     coach.keys(car.thr, car.brk, car.steerIn, dt);
-    coach.pedals(car.thr, car.brk, car.speed, car.trackInfo && line ? car.lineSpeed(idxNow()) : null);
+    coach.pedals(car.thr, car.brk, car.speed, car.trackInfo && line ? coachSpeed(car, track, idxNow()) : null);
     if (st.age < 0.25 || !car.trackInfo) {
       seen.length = 0;
       return;
@@ -668,6 +684,7 @@ export function startAcademy(game) {
         e.preventDefault();
         e.stopImmediatePropagation();
         const a = document.activeElement;
+        if (a && a.matches('.ac-short-summary')) return a.click();
         if (a && a.closest && a.closest('.tut-card button') && e.code !== 'Space') return a.click();
         const p = $('.tut-card .tut-btns .primary');
         p && p.click();
@@ -676,7 +693,7 @@ export function startAcademy(game) {
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.code)) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const bs = [...root.querySelectorAll('.tut-card button')].filter((b) => b.offsetParent !== null);
+        const bs = [...root.querySelectorAll('.tut-card button, .tut-card .ac-short-summary')].filter((b) => b.offsetParent !== null);
         const i = bs.indexOf(document.activeElement);
         const back = e.code === 'ArrowLeft' || e.code === 'ArrowUp' || (e.code === 'Tab' && e.shiftKey);
         const j = i < 0 ? bs.length - 1 : (i + (back ? -1 : 1) + bs.length) % bs.length;

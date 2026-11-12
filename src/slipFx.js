@@ -6,6 +6,9 @@
 //   3) 화면: 가장자리 바람 줄(#draftLines, 예전 것)을 충전만큼 진하게, 슬링샷 때 번쩍 + "⚡ 슬링샷!" (#slingFlash)
 //   4) 소리 (WebAudio 합성, audioMix가 효과음 크기·N 끄기를 따름): 바람 '쉬이익'이 슬립스트림·충전만큼 높아짐,
 //      준비되면 높은 반짝 소리, 슬링샷 '휙', 견인이 켜질 때 낮은 '우웅' (15초에 한 번만)
+//   2026-11-13 슬링샷 없앰 (기본, o.sling false = SIMPLE): 충전·금색·'옆으로 빠지면' 안내·슬링샷 번쩍임/소리 없음.
+//     뒤에 붙어 있으면 파란 줄기 하나로 '켜짐'만 보이고, HUD는 '💨 슬립스트림 +n%'(지금 올라간 최고 속도), 바람 소리는 슬립스트림 세기만큼.
+//     &slip=sling이면 예전 충전 막대·금색·슬링샷 그대로
 //   리플레이·일시정지처럼 update가 안 불리면 0.3초 뒤 저절로 숨기고 소리를 끔
 import * as THREE from 'three';
 
@@ -37,6 +40,7 @@ export function createSlipFx(o = {}) {
   const getScene = o.getScene || (() => null);
   const D = o.draftCfg || {};
   const readyAt = D.ready ?? 0.9;
+  const SIMPLE = !o.sling; // 슬링샷 없음 (기본)
 
   // ---------- 3D 공기 줄기 ----------
   let mesh = null;
@@ -76,9 +80,9 @@ export function createSlipFx(o = {}) {
     _a.copy(fwd).normalize();
     const gap = myPos ? Math.max(0, (src.pos.x - myPos.x) * _a.x + (src.pos.z - myPos.z) * _a.z) : 20;
     const span = THREE.MathUtils.clamp(gap + 9, 12, 44); // 내 차 옆을 지나 뒤까지 흐름
-    const readyK = THREE.MathUtils.clamp((charge - readyAt + 0.25) / 0.25, 0, 1);
+    const readyK = SIMPLE ? 0 : THREE.MathUtils.clamp((charge - readyAt + 0.25) / 0.25, 0, 1);
     _c.copy(CYAN).lerp(GOLD, readyK);
-    const vis = wakeVis * (0.55 + 0.45 * Math.min(1, charge / readyAt));
+    const vis = SIMPLE ? wakeVis : wakeVis * (0.55 + 0.45 * Math.min(1, charge / readyAt));
     for (let i = 0; i < N; i++) {
       const s = seeds[i];
       s.u += dt * s.sp * (0.8 + 0.6 * readyK);
@@ -128,23 +132,24 @@ export function createSlipFx(o = {}) {
     twPct.className = 'tw-pct';
     tow.appendChild(twPct);
   }
+  if (box) box.classList.toggle('simple', SIMPLE); // 막대·안내 숨김 (raceFx.css)
   let shown = { on: null, pct: -1, ready: null, tow: -1, towOn: null, lines: -1 };
-  function setHud(draft, charge, towK, towOn) {
+  function setHud(draft, charge, towK, towOn, gain = 0) {
     const on = draft > 0.12 || charge > 0.05;
     if (box && on !== shown.on) box.classList.toggle('on', (shown.on = on));
-    const p = Math.round(Math.min(1, charge / readyAt) * 20) * 5;
+    const p = SIMPLE ? Math.round(gain * 100) : Math.round(Math.min(1, charge / readyAt) * 20) * 5;
     if (p !== shown.pct) {
       shown.pct = p;
-      if (pct) pct.textContent = p + '%';
+      if (pct) pct.textContent = SIMPLE ? '+' + p + '%' : p + '%';
       if (fill) fill.style.width = p + '%';
     }
-    const ready = charge >= readyAt;
+    const ready = !SIMPLE && charge >= readyAt;
     if (ready !== shown.ready) {
       shown.ready = ready;
       if (box) box.classList.toggle('ready', ready);
       if (tip) tip.textContent = ready ? '⚡ 옆으로 빠지면 슬링샷!' : '바짝 붙어서 충전 중…';
     }
-    const lq = Math.round(Math.min(1, Math.max(0, draft - 0.12) / 0.5) * (0.6 + 0.4 * Math.min(1, charge / readyAt)) * 20) / 20;
+    const lq = Math.round(Math.min(1, Math.max(0, draft - 0.12) / 0.5) * (SIMPLE ? 0.85 : 0.6 + 0.4 * Math.min(1, charge / readyAt)) * 20) / 20;
     if (lq !== shown.lines && lines) {
       shown.lines = lq;
       lines.style.opacity = lq * 0.95;
@@ -282,7 +287,8 @@ export function createSlipFx(o = {}) {
   function setSound(draft, charge) {
     if (!ctx || !S) return;
     const t = ctx.currentTime;
-    const ready = charge >= readyAt;
+    const ready = !SIMPLE && charge >= readyAt;
+    if (SIMPLE) charge = Math.min(1, draft) * 0.6; // 슬링샷 없음: 바람 소리는 슬립스트림 세기만
     S.wind.gain.setTargetAtTime(Math.min(1, draft) * (0.07 + 0.06 * Math.min(1, charge)), t, 0.08);
     S.bp.frequency.setTargetAtTime(380 + 1100 * Math.min(1, draft) + 900 * Math.min(1, charge), t, 0.1);
     S.shine.gain.setTargetAtTime(ready && draft > 0.2 ? 0.022 : 0, t, 0.06);
@@ -301,16 +307,16 @@ export function createSlipFx(o = {}) {
   let towWas = 0, towSoundAt = -1e9;
   return {
     /**
-     * st = { racing, draft, charge, src(앞차 Car 또는 null), myPos, tow(0~1), towOn(견인 켜짐), sling(이번에 슬링샷) }
+     * st = { racing, draft, charge, gain(슬립스트림으로 올라간 최고 속도 비율), src(앞차 Car 또는 null), myPos, tow(0~1), towOn(견인 켜짐), sling(이번에 슬링샷, &slip=sling만) }
      */
     update(dt, camera, st) {
       lastUpdate = performance.now();
       hidden = false;
       const draft = st.racing ? st.draft || 0 : 0, charge = st.racing ? st.charge || 0 : 0;
       updateWake(dt, camera, st.racing && draft > 0.03 ? st.src : null, st.myPos, draft, charge);
-      setHud(draft, charge, st.racing ? st.tow || 0 : 0, st.towOn !== false);
+      setHud(draft, charge, st.racing ? st.tow || 0 : 0, st.towOn !== false, st.racing ? st.gain || 0 : 0);
       setSound(draft, charge);
-      if (st.sling) {
+      if (st.sling && !SIMPLE) {
         slingFlash();
         oneShot('sling');
       }

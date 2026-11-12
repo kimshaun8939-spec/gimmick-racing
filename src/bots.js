@@ -723,7 +723,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         if (dM < 35 && Math.abs(dLat) < 2.2 && !attack) attack = { dM, o };
         // 추월 줄로 빠지는 건 가까워졌을 때만 (그 전에는 바로 뒤에서 슬립스트림을 탐)
         // 슬립스트림을 타고 있고 앞이 직선이면: 성격만큼 일찍 옆으로 빠져 나란히 (빨아들인 속도로 옆에 붙음)
-        const draftPull = (st.realDraft ?? car.draft ?? 0) > 0.25 && !brakeSoon && closing > -0.5 && dM < 16 + aggr * 12;
+        //   2026-11-13 슬링샷 없앰: 슬링샷이 꺼져 있으면(기본) 슬립스트림 때문에 일부러 옆으로 빠지지 않음 (뒤에 붙어 있으면 바로 빨라지니까, 따라잡으면 아래 closing 조건으로 추월)
+        const draftPull = car.cfg?.draft?.sling === true && (st.realDraft ?? car.draft ?? 0) > 0.25 && !brakeSoon && closing > -0.5 && dM < 16 + aggr * 12;
         if (((closing > 0.3 && dM < 14 + closing * 3) || dM < gapM + 5 || draftPull) && !narrowSoon) {
           // 추월할 줄: 앞차 왼쪽/오른쪽 3.2 m (그 차가 있는 지점의 라인 한계 lo~hi 안)
           //   지금 나랑 가까운 쪽 + 다음 코너 안쪽이면 가산점 (과감한 봇일수록 안쪽을 고름)

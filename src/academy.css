@@ -213,3 +213,129 @@
   #tutorial.acad .ac-panel .tut-pbtns .gm-btn { min-height: 28px; padding: 3px 8px; font-size: 11.5px; }
   #tutorial.acad .ac-panel .tut-pbtns .gm-btn .k { display: none; }
 }
+
+
+/* ------------------------------------------------------------------ 짧은 카드 (2026-11-13)
+   독립 부품: shortCard()에서만 사용. 기본(자세히 접힘)은 1280×800 / 767×360 안에 들어가도록.
+   컨테이너 쿼리는 작은 미리 보기 칸에서도 같은 배치를 쓰게 해요. */
+.ac-short-card {
+  box-sizing: border-box; container-type: inline-size;
+  width: min(940px, 100%); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px);
+  margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 14px;
+  overflow: auto; scrollbar-width: thin; color: var(--gm-text, #f3f6fb);
+  font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+  background: linear-gradient(145deg, var(--sf-3, rgba(255,255,255,.06)), transparent 65%), var(--gm-bg, #070b17);
+  border: 1px solid var(--sf-line2, rgba(255,255,255,.2)); border-radius: var(--r-xl, 24px);
+  box-shadow: var(--sh-2, 0 10px 28px rgba(0,0,0,.38));
+}
+.ac-short-card *, .ac-short-card *::before, .ac-short-card *::after { box-sizing: border-box; }
+.ac-short-header { display: grid; justify-items: start; gap: 6px; flex-shrink: 0; }
+.ac-short-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  background: var(--sf-2); border: 1px solid var(--sf-line2); color: var(--gm-accent);
+  font-size: 12px; font-weight: 800; line-height: 1.2;
+}
+.ac-short-card .ac-short-title { margin: 0; color: var(--gm-text); font-size: 30px; font-weight: 900; line-height: 1.15; word-break: keep-all; }
+.ac-short-body { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr); align-items: center; gap: 26px; flex-shrink: 0; }
+.ac-short-body.ac-short-noart { grid-template-columns: minmax(0, 1fr); }
+.ac-short-art { min-width: 0; display: grid; place-items: center; overflow: hidden; border-radius: var(--r-md); background: var(--sf-1); }
+.ac-short-art > svg { display: block; width: 100% !important; height: 210px !important; max-width: 100%; max-height: none; margin: 0; }
+.ac-short-keys { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; min-width: 0; }
+.ac-short-keyrow { display: grid; grid-template-columns: 108px minmax(0, 1fr); align-items: center; gap: 12px; margin: 0; }
+.ac-short-card .ac-short-kbd {
+  display: inline-grid; place-items: center; justify-self: start; min-width: 46px; min-height: 38px; margin: 0; padding: 5px 10px;
+  border: 1px solid var(--gm-line2); border-bottom: 3px solid var(--gm-dim); border-radius: var(--r-sm);
+  background: linear-gradient(180deg, var(--sf-3), transparent), var(--gm-panel2);
+  color: var(--gm-text); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 3px 0 rgba(0,0,0,.35);
+  font-family: inherit; font-size: 17px; font-weight: 900; line-height: 1.15; white-space: nowrap;
+}
+.ac-short-action { min-width: 0; color: var(--gm-text); font-size: 22px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; }
+.ac-short-card .ac-short-tip { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sf-2); color: var(--gm-accent); font-size: 17px; font-weight: 700; line-height: 1.3; word-break: keep-all; }
+.ac-short-more { flex-shrink: 0; color: var(--gm-dim); font-size: 15px; line-height: 1.5; }
+.ac-short-summary { cursor: pointer; width: fit-content; padding: 2px 4px; color: var(--gm-dim); font-size: 14px; font-weight: 700; }
+.ac-short-summary:hover { color: var(--gm-text); }
+.ac-short-summary:focus-visible { outline: 2px solid var(--gm-accent); outline-offset: 3px; border-radius: 4px; }
+.ac-short-card .ac-short-explanation { margin: 8px 0 0; padding: 12px; color: var(--gm-text); font-size: 15px; line-height: 1.6; background: var(--sf-1); border: 1px solid var(--sf-line); border-radius: var(--r-sm); white-space: pre-line; word-break: keep-all; overflow-wrap: anywhere; }
+.ac-short-buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
+.ac-short-buttons > .sp { flex: 1; }
+
+@container (max-width: 720px) {
+  .ac-short-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ac-short-art > svg { height: 116px !important; }
+  .ac-short-keys { gap: 8px; }
+  .ac-short-keyrow { grid-template-columns: 108px minmax(0, 1fr); }
+}
+@media (max-width: 780px) {
+  .ac-short-card { padding: 16px; gap: 10px; border-radius: var(--r-lg); }
+  .ac-short-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .ac-short-art > svg { height: 116px !important; }
+  .ac-short-keys { gap: 8px; }
+}
+@media (max-height: 520px) {
+  .ac-short-card { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); padding: 8px 14px; gap: 4px; border-radius: var(--r-md); }
+  .ac-short-header { gap: 2px; }
+  .ac-short-badge { padding: 1px 8px; font-size: 11px; }
+  .ac-short-card .ac-short-title { font-size: 26px; line-height: 1.1; }
+  .ac-short-body { gap: 6px; }
+  .ac-short-art > svg { height: 80px !important; }
+  .ac-short-keys { gap: 4px; }
+  .ac-short-keyrow { grid-template-columns: 100px minmax(0, 1fr); gap: 10px; }
+  .ac-short-card .ac-short-kbd { min-width: 36px; min-height: 26px; padding: 2px 8px; font-size: 15px; border-radius: 7px; }
+  .ac-short-action { font-size: 22px; line-height: 1.2; }
+  .ac-short-card .ac-short-tip { padding: 4px 8px; font-size: 17px; line-height: 1.2; }
+  .ac-short-summary { padding: 0 4px; font-size: 13px; line-height: 20px; }
+  .ac-short-buttons { gap: 6px; }
+  .ac-short-buttons .gm-btn { min-height: 32px; padding: 5px 12px; font-size: 14px; }
+}
+@media (max-width: 440px) {
+  .ac-short-card { padding: 12px; }
+  .ac-short-card .ac-short-title { font-size: 26px; }
+  .ac-short-keyrow { grid-template-columns: 94px minmax(0, 1fr); gap: 8px; }
+  .ac-short-card .ac-short-kbd { font-size: 14px; }
+  .ac-short-action { font-size: 20px; }
+  .ac-short-card .ac-short-tip { font-size: 16px; }
+}
+
+/* Codex 이어받음: 기존 카드 틀 안에서는 제목·테두리를 한 번만 표시. */
+#tutorial .tut-card.ac-short-frame { width: min(900px, calc(100vw - 24px)); }
+#tutorial .ac-short-frame > .tut-hero { display: none; }
+#tutorial .ac-short-frame .ac-short-card {
+  width: 100%; max-height: none; padding: 0; margin: 10px 0 0; gap: 10px;
+  overflow: visible; background: none; border: 0; border-radius: 0; box-shadow: none;
+}
+#tutorial .ac-short-frame .ac-short-title { font-family: inherit; font-style: normal; font-size: 26px; }
+#tutorial .ac-short-frame .ac-short-art > svg { height: 176px !important; }
+#tutorial .ac-short-frame .ac-short-controls { display: flex; flex-wrap: wrap; gap: 2px; white-space: normal; }
+#tutorial .ac-short-controls kbd { min-width: 0; height: auto; padding: 0 2px; margin: 0; font-size: inherit; border: 0; background: none; box-shadow: none; }
+#tutorial .ac-short-frame .ac-short-buttons { justify-content: flex-start; }
+#tutorial .ac-short-buttons .tut-next-ac { width: auto; margin: 0; padding: 6px 10px; display: flex; gap: 6px; }
+#tutorial .ac-short-buttons .tut-next-ac small, #tutorial .ac-short-buttons .tut-next-ac > i { display: none; }
+#tutorial .ac-short-frame > .tut-btns { margin-top: 10px; }
+@media (max-width: 520px) {
+  #tutorial .ac-short-frame .ac-short-art > svg { height: 90px !important; }
+  #tutorial .ac-short-frame .ac-short-title { font-size: 22px; }
+  #tutorial .ac-short-frame .ac-short-action { font-size: 18px; }
+  #tutorial .ac-short-frame .ac-short-tip { font-size: 15px; }
+}
+@media (max-height: 520px) {
+  #tutorial .tut-card.ac-short-frame { width: min(900px, calc(100vw - 16px)); padding: 8px 12px; max-height: calc(100dvh - 12px); }
+  #tutorial .ac-short-frame .tut-top { min-height: 24px; gap: 6px; }
+  #tutorial .ac-short-frame .tut-dots, #tutorial .ac-short-frame .ac-best { display: none; }
+  #tutorial .ac-short-frame .ac-short-card { margin-top: 4px; gap: 5px; }
+  #tutorial .ac-short-frame .ac-short-title { font-size: 21px; line-height: 1.15; }
+  #tutorial .ac-short-frame .ac-short-body { grid-template-columns: minmax(110px, .65fr) minmax(0, 1.8fr); gap: 10px; }
+  #tutorial .ac-short-frame .ac-short-noart { grid-template-columns: minmax(0, 1fr); }
+  #tutorial .ac-short-frame .ac-short-art > svg { height: 106px !important; }
+  #tutorial .ac-short-frame .ac-short-keys { gap: 4px; }
+  #tutorial .ac-short-frame .ac-short-keyrow { grid-template-columns: 100px minmax(0, 1fr); gap: 8px; }
+  #tutorial .ac-short-frame .ac-short-action { font-size: 17px; line-height: 1.2; }
+  #tutorial .ac-short-frame .ac-short-tip { font-size: 14px; line-height: 1.25; padding: 4px 8px; }
+  #tutorial .ac-short-frame .ac-short-explanation { font-size: 13px; padding: 8px; }
+  #tutorial .ac-short-frame > .tut-btns { position: static; margin: 6px 0 0; padding: 0; background: none; gap: 5px; }
+  #tutorial .ac-short-frame .gm-btn { min-height: 30px; padding: 4px 9px; font-size: 12px; }
+}
+
+/* 게임 안에서 짧은 카드 배경이 투명해 글씨가 배경에 묻히던 것 (2026-11-13) */
+.tut-card .ac-short-card, .acad .ac-short-card, .ac-short-card {
+  background: linear-gradient(145deg, rgba(255,255,255,.06), transparent 65%), #0b1020 !important;
+}

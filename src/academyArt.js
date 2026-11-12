@@ -66,9 +66,9 @@ function scene(key, id) {
       return road('M105 194V-14', 138) +
         [76, 91, 119, 134].map((x) => path('M' + x + ' 53Q' + (x + (x < 105 ? -8 : 8)) + ' 88 ' + x + ' 138', C.cyan, 2, 'opacity=".55"')).join('') +
         car(105, 44, 0, C.gold) + car(105, 133) +
-        arrow('M105 112Q109 86 151 76Q166 66 166 27') +
+        arrow('M105 116V70') +
         text(197, 51, '뒤에서 따라가기', C.cyan, 11) +
-        text(197, 105, '옆으로 쏙!', C.green) + text(197, 124, '슬링샷', C.green, 11);
+        text(197, 105, '뒤에 붙으면', C.green) + text(197, 124, '빨라짐', C.green, 11);
     case 'drs':
       return road('M15 91H329', 63) +
         '<rect x="108" y="60" width="202" height="62" fill="#4dff7a" opacity=".09"/>' +

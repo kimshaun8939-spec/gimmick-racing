@@ -26,7 +26,7 @@ export const LESSONS = [
   { id: 'late', icon: '↪️', name: '늦게 꺾고 빨리 가속', short: '긴 직선 앞 코너는 탈출이 전부', group: 'corner', map: 'gp', art: 'lateApex', mins: 2 },
   { id: 'chain', icon: '🔗', name: '연속 코너 잇기', short: '두 코너를 한 번에 생각하기', group: 'corner', map: 'gp', art: 'chicane', mins: 3 },
   { id: 'kerb', icon: '🟥', name: '연석 쓰기', short: '빨강·흰 연석까지 길을 넓게', group: 'corner', map: 'gp', art: 'kerbs', mins: 2 },
-  { id: 'slip', icon: '💨', name: '슬립스트림 · 슬링샷', short: '앞차 뒤에 붙었다가 옆으로 튀어 나가기', group: 'race', map: 'gp', art: 'slipstream', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 0 } },
+  { id: 'slip', icon: '💨', name: '슬립스트림', short: '앞차 뒤에 바짝 붙어 빨라진 뒤 추월', group: 'race', map: 'gp', art: 'slipstream', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 0 } },
   { id: 'drs', icon: '🟩', name: 'DRS', short: '앞차와 1초 안이면 뒷날개가 열려요', group: 'race', map: 'gp', art: 'drs', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0 } },
   { id: 'drift', icon: '🌀', name: '드리프트', short: '헤어핀에서 꼬리를 미끄러뜨려 돌기', group: 'special', map: 'gp', art: 'drift', mins: 2 },
   { id: 'fly', icon: '✈️', name: '비행 루트', short: '활주로 → 고리 4개 → 착륙장', group: 'special', map: 'gp', art: 'fly', mins: 2 },

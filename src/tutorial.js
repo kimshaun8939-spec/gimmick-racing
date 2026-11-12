@@ -19,6 +19,9 @@ import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
 import { touch, touchWanted } from './touch.js';
 import { cornerPlan, createCoachUI, createDemo, createDrill, momentText, kbd as kbdTd } from './tutorialDemo.js';
+import { needOf, smartProfile, coachSpeed } from './brakeNeed.js';
+import { TUTORIAL_TEXT } from './academyText.js';
+import { shortCard, shortKeys } from './academyCards.js';
 
 const TUT_KEY = 'gimmick.tutorial';
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -38,11 +41,12 @@ const STEER = () => (pad.usingPad() ? '<kbd class="pad">L 스틱</kbd>' : onTouc
 export function startTutorial(game) {
   if (!game || !game.car) return;
   if (game.tutorial && game.tutorial.el) return game.tutorial; // 두 번 부르지 않게
-  if (!document.getElementById('tut2css')) {
+  for (const [id, file] of [['tut2css', './tutorial2.css'], ['acadcss', './academy.css']]) {
+    if (document.getElementById(id)) continue;
     const l = document.createElement('link');
-    l.id = 'tut2css';
+    l.id = id;
     l.rel = 'stylesheet';
-    l.href = new URL('./tutorial2.css', import.meta.url).href;
+    l.href = new URL(file, import.meta.url).href;
     document.head.appendChild(l);
   }
   const params = new URLSearchParams(location.search);
@@ -87,7 +91,19 @@ export function startTutorial(game) {
   };
   const drillOk = (c) => groundCorner(c) && !inSpace(W(c.brakeI - M(330))) && !nearRunway(W(c.brakeI - M(330))) && [c.brakeI - M(330), c.brakeI - M(160), c.brakeI, c.apexI, c.exitI].every(clearAt);
   // 크게 제동하는 땅 위 코너들 (제동이 클수록 앞): 시범·따라 하기·라인 색 연습 자리
-  const bigBrakes = corners.filter((c) => c.drop > 8 && drillOk(c)).sort((a, b) => b.drop - a.drop);
+  //   + 이 차로 브레이크가 확실히 이득인 코너만 (brakeNeed.js: W만 떼는 것보다 0.25초 넘게 빠름). 잘 꺾이는 차로 '브레이크 필요 없는 코너'에서 브레이크를 시키지 않게
+  //     (사용자 요청 2026-11-13). 그런 코너가 하나도 없으면 예전처럼 제동이 큰 코너
+  const brakeGain = (c) => {
+    try {
+      const n = needOf(car, track, c);
+      return n ? (n.kind === 'brake' ? n.gain : -1) : 1;
+    } catch {
+      return 1;
+    }
+  };
+  const bigAll = corners.filter((c) => c.drop > 8 && drillOk(c)).sort((a, b) => b.drop - a.drop);
+  const bigSure = bigAll.filter((c) => brakeGain(c) >= 0.25);
+  const bigBrakes = bigSure.length ? bigSure : bigAll;
   const SPOT = {
     brake: brakeC,
     demo: bigBrakes[0] || null,
@@ -270,13 +286,21 @@ export function startTutorial(game) {
   const add = (st) => STEPS.push(st);
   const mem = {}; // 단계별 다시 하기 자리 (같은 자리로 돌아가게)
   const prof = () => car._lineProfile || (car.lineSpeed(0), car._lineProfile);
-  /** 차 바로 앞 라인 색 (racingLineFx와 같은 계산): 'red' | 'yellow' | 'green' */
+  /** 차 바로 앞 라인 색 (racingLineFx와 같은 계산: 브레이크가 필요 없는 코너는 노랑까지만): 'red' | 'yellow' | 'green' */
   function lineColorNear() {
     const P = prof();
     if (!P || !car.trackInfo) return 'green';
+    let sp = null;
+    try {
+      sp = smartProfile(car, track);
+    } catch {}
+    const ref = sp ? sp.speed : P.speed;
     const idx = idxNow(), v = Math.abs(car.speed);
     let worst = -9;
-    for (let k = 0, n = Math.round((v * 0.35 + 4) / ds); k <= n; k++) worst = Math.max(worst, v - P.speed[W(idx + k)]);
+    for (let k = 0, n = Math.round((v * 0.35 + 4) / ds); k <= n; k++) {
+      const i = W(idx + k);
+      worst = Math.max(worst, sp && sp.noBrake[i] ? Math.min(2.2, v - ref[i]) : v - ref[i]);
+    }
     return worst > 3.5 ? 'red' : worst > 0.8 ? 'yellow' : 'green';
   }
   const COLOR_TXT = { red: ['빨강', '브레이크!', '#ff5a48'], yellow: ['노랑', '액셀을 떼요', '#ffd23a'], green: ['초록', '밟아도 돼요', '#4dff7a'] };
@@ -759,6 +783,7 @@ export function startTutorial(game) {
 
   function cardFrame(s, chip) {
     phase = 'card';
+    $('.tut-card').classList.remove('ac-short-frame');
     stopAuto();
     pause(true);
     try {
@@ -775,7 +800,19 @@ export function startTutorial(game) {
     cardFrame(s);
     $('.tut-card').classList.remove('tdr');
     $('.tut-card h2').textContent = s.title;
-    $('.tut-card .tut-body').innerHTML = s.card ? s.card() : `<p>${s.task ? s.task() : ''}</p>`;
+    const text = Object.hasOwn(TUTORIAL_TEXT, s.id) ? TUTORIAL_TEXT[s.id] : null;
+    $('.tut-card').classList.toggle('ac-short-frame', !!text);
+    if (text) {
+      // 예전 카드 안의 이동 버튼도 보존 (완료·배 연습·아카데미 등). 긴 글은 넣지 않음.
+      const choices = document.createElement('template');
+      choices.innerHTML = s.card ? s.card() : '';
+      const buttons = [...choices.content.querySelectorAll('[data-goto]')].map((b) => b.outerHTML).join('');
+      $('.tut-card .tut-body').innerHTML = shortCard({
+        ...text, buttons, keyHtml: (key) => shortKeys(key, K, s.id === 'fly' ? 'dive' : 'drift'),
+      });
+    } else {
+      $('.tut-card .tut-body').innerHTML = s.card ? s.card() : `<p>${s.task ? s.task() : ''}</p>`;
+    }
     $('.tut-card .tut-btns').style.display = '';
     $('.tut-card [data-t="go"]').innerHTML = `${esc(s.go || (s.info ? '다음' : '시작'))} <kbd>Enter</kbd>`;
     $('.tut-card [data-t="prev"]').style.visibility = cur > 0 ? '' : 'hidden';
@@ -1071,7 +1108,7 @@ export function startTutorial(game) {
       st._age = (st._age || 0) + dt;
       if (s.keys) {
         coach.keys(car.thr, car.brk, car.steerIn, dt);
-        coach.pedals(car.thr, car.brk, car.speed, car.trackInfo && line ? car.lineSpeed(idxNow()) : null);
+        coach.pedals(car.thr, car.brk, car.speed, car.trackInfo && line ? coachSpeed(car, track, idxNow()) : null);
       }
       if (st._age < 0.25 || !car.trackInfo) {
         seen.length = 0;
@@ -1158,6 +1195,7 @@ export function startTutorial(game) {
       if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') {
         e.preventDefault();
         e.stopImmediatePropagation();
+        if (document.activeElement && document.activeElement.matches('.ac-short-summary')) return document.activeElement.click();
         if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.tut-card button') && e.code !== 'Space') {
           document.activeElement.click();
           return;
@@ -1169,7 +1207,7 @@ export function startTutorial(game) {
       if (e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'Tab') {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const bs = [...root.querySelectorAll('.tut-card button')].filter((b) => b.offsetParent !== null);
+        const bs = [...root.querySelectorAll('.tut-card button, .tut-card .ac-short-summary')].filter((b) => b.offsetParent !== null);
         const i = bs.indexOf(document.activeElement);
         const j = (i + (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || (e.code === 'Tab' && e.shiftKey) ? -1 : 1) + bs.length) % bs.length;
         bs[j] && bs[j].focus({ preventScroll: true });

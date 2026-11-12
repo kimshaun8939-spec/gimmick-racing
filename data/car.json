@@ -70,8 +70,10 @@
     "exitAngle": 0.6, "exitGood": 0.35, "exitMinHold": 0.4, "exitKeep": 0.45, "exitMax": 3.5, "exitAlign": 0.4, "exitRate": 16
   },
   "_draft": "슬립스트림 (2026-11-12 세게 + 잘 보이게, .debug/agents/tow-slip.md). 앞차 뒤 minGap~range m, 옆 lat m 안이면 car.draft 0~1 (raceSystem이 넣어 줌, minSpeed m/s 아래는 없음): 공기 저항 × (1 − dragCut·draft), 최고 속도 × (1 + topGain·draft). draft가 0.4 넘으면 충전(chargeTime초에 가득, 빠지면 decayTime초에 비움) → ready 이상 충전된 채 옆으로 빠지면 슬링샷: slingTime초 동안 최고 속도 +slingTop, 가속 +slingAccel m/s² (앞차가 slingAhead m 안일 때만). assistDragCut·assistTopGain = 봇 따라잡기의 '보이지 않는 슬립스트림'(car.assistDraft) 세기 = 예전 값 그대로 (봇 실력 맞춘 값이 안 바뀌게). legacy = 주소 &slip=old일 때 쓰는 예전 값 (비교 테스트용)",
+  "_draft2": "2026-11-13 슬링샷 없앰 (사용자 요청 '굳이 옆으로 비켜야 하는 시스템 없애 그냥 가속이 되게'): sling false = 충전·옆으로 빠지기 없음. 대신 뒤에 붙어 있는 동안 바로: 공기 저항 −dragCut, 최고 속도 +topGain (기차면 ×(1+trainGain·n), 합쳐서 topMax까지), 가속 +pullAccel m/s² × draft (액셀 밟을 때, 최고 속도 안에서). 주소 &slip=sling = 바로 전 방식(충전+슬링샷, slingMode 값), &slip=old = 그보다 전 (legacy)",
   "draft": {
-    "dragCut": 0.5, "topGain": 0.08, "range": 45, "minGap": 4, "lat": 2.3, "minSpeed": 15,
+    "dragCut": 0.5, "topGain": 0.11, "topMax": 0.14, "pullAccel": 1.5, "sling": false, "range": 45, "minGap": 4, "lat": 2.3, "minSpeed": 15,
+    "slingMode": { "sling": true, "topGain": 0.08, "topMax": 1, "pullAccel": 0 },
     "chargeTime": 1.6, "decayTime": 1.2, "ready": 0.9, "slingTime": 1.5, "slingTop": 0.06, "slingAccel": 6, "slingAhead": 32,
     "assistDragCut": 0.3, "assistTopGain": 0.04, "trainGain": 0.2,
     "legacy": { "dragCut": 0.3, "topGain": 0.04, "range": 30, "lat": 2, "sling": false }

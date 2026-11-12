@@ -300,7 +300,7 @@ export class Car {
     const drK = Math.min(1, this.draft || 0), adK = noAssist ? 0 : Math.min(1, this.assistDraft || 0), twK = Math.min(1, this.tow || 0);
     const trK = 1 + Math.min(2, this.draftTrain || 0) * (DR.trainGain ?? 0);
     let m = 1;
-    const top = Math.max(drK * (DR.topGain ?? 0.04) * trK, adK * (DR.assistTopGain ?? 0.04));
+    const top = Math.max(Math.min(DR.topMax ?? 1, drK * (DR.topGain ?? 0.04) * trK), adK * (DR.assistTopGain ?? 0.04)); // topMax = 기차까지 합친 슬립스트림 최고 속도 상한
     if (top > 0) m *= 1 + top;
     if (twK > 0) m *= 1 + (TW.topGain ?? 0) * twK;
     if (this.slingT > 0) m *= 1 + (DR.slingTop ?? 0.06);
@@ -817,7 +817,9 @@ export class Car {
 
     if (boosting && f < maxSpeed) f = Math.min(maxSpeed, f + cfg.boost.accel * dt);
     if (this.itemBoostT > 0 && f > -1 && f < maxSpeed) f = Math.min(maxSpeed, f + (IT.boostAccel ?? 16) * dt); // 아이템 부스터: 세게 밀어 줌
-    if (this.slingT > 0 && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (DR.slingAccel ?? 6) * dt); // 슬링샷: 앞차 옆으로 튀어 나감
+    if (this.slingT > 0 && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (DR.slingAccel ?? 6) * dt); // 슬링샷 (&slip=sling일 때만): 앞차 옆으로 튀어 나감
+    // 슬립스트림 끌림 (2026-11-13 슬링샷 대신): 뒤에 붙어 있는 동안 바로 가속 +pullAccel × draft (기차면 더, 최고 속도 안에서)
+    if (drK > 0 && DR.pullAccel && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + DR.pullAccel * drK * trK * dt);
     // 깔끔한 드리프트 탈출: 드리프트로 잃은 속도 일부를 0.3초쯤에 걸쳐 돌려받음 (부스트 아님: 최고 속도를 넘지 않음)
     if (this.exitRefund > 0) {
       const a = Math.min(this.exitRefund, (cfg.drift.exitRate ?? 16) * dt);

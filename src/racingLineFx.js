@@ -8,6 +8,7 @@
 //   코너 안쪽 연석(에이펙스)을 빠르게 스치면 "에이펙스!" 표시 + 살짝 가속 (판정은 car.js의 checkApex)
 import * as THREE from 'three';
 import { lineCarModel } from './car.js';
+import { smartProfile } from './brakeNeed.js';
 
 const HALF = 0.5; // 띠 반폭 (m)
 const LIFT = 0.07; // 도로 위로 띄우는 높이 (연석 0.02~0.04보다 위)
@@ -109,9 +110,17 @@ export function createRacingLineFx(scene, track, car) {
     const start = W(ci - back); // 0 ≤ start < N, 끝은 2N 안
     const count = back + ahead;
     const speed = Math.abs(car.speed);
+    // 이 차로 브레이크가 이득이 없는 코너(W만 떼도 되는 곳)는 'W 떼기' 계획 속도와 비교하고 빨강(브레이크!) 대신 노랑까지만
+    //   (사용자 요청 2026-11-13 "브레이크 안 밟고 가는 게 빠른 구간에서 브레이크를 밟으라고 함", brakeNeed.js)
+    let sp = null;
+    try {
+      sp = car.cornerInfo ? smartProfile(car, track) : null;
+    } catch {}
+    const ref = sp ? sp.speed : prof.speed;
     for (let k = 0; k <= count; k++) {
       const r = start + k, i = W(r);
-      const diff = speed - prof.speed[i];
+      let diff = speed - ref[i];
+      if (sp && sp.noBrake[i]) diff = Math.min(diff, 2.2);
       if (diff > 3.5) tmp.copy(RED);
       else if (diff > 0.8) tmp.copy(YELLOW).lerp(RED, (diff - 0.8) / 2.7);
       else if (diff > -1.5) tmp.copy(GREEN).lerp(YELLOW, (diff + 1.5) / 2.3);

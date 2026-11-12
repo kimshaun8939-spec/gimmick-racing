@@ -1152,7 +1152,10 @@ function frame(now, manual = false) {
   if (corners) corners.update(car, dt);
   kerbFx.update(car, dt);
   checkModeChange();
-  updateCamera(dt);
+  // 카메라·속도 효과는 게임 시간(dt × 슬로 배율)으로: 실제 dt로 따라가면 슬로 모션 때 차가 느린 것처럼 계산돼
+  //   followLead(속도만큼 앞을 겨냥)가 따라가기 지연보다 커져서 카메라가 차에 바짝 붙었음 (2026-11-13 시범 고침)
+  const camDt = dt * tsc;
+  updateCamera(camDt);
   _shakeBase.copy(camera.position); // 화면 흔들림 세기(설정): 흔들기 전 위치를 기억해 두었다가 섞음
   offroadFx.shakeCamera(camera);
   kerbFx.shakeCamera(camera, car);
@@ -1169,7 +1172,7 @@ function frame(now, manual = false) {
   hud.shakeCamera(camera, dt);
   const shk = shakeK * camViews.shakeMul; // 1인칭(보닛·운전석)은 흔들림을 줄임
   if (!co && shk !== 1) camera.position.lerpVectors(_shakeBase, camera.position, shk);
-  if (!co) speedFx.update(car, camera, dt);
+  if (!co) speedFx.update(car, camera, camDt);
   track.animate(elapsed);
   scenery.animate(elapsed, dt, car);
   props.animate(elapsed);

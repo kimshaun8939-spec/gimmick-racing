@@ -11,6 +11,7 @@
 //     demo: 시범 주행이 되나 }
 import { cornerPlan, createDrill, lineDriver } from './tutorialDemo.js';
 import { createBotDriver, BOT_LEVELS } from './bots.js';
+import { needOf } from './brakeNeed.js';
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const kmh = (v) => Math.round(Math.abs(v) * 3.6);
@@ -64,16 +65,30 @@ export function pickSpots(ctx) {
   const lone = (c) => !c.linkedPrev || c.gapPrev > 150; // 앞 코너와 떨어진 코너 (처음 배우기 좋음)
   const hwAt = (i) => (track.halfWidthAt ? track.halfWidthAt(i) : track.width / 2);
   const onKerb = (c) => line.offset[c.apexI] * c.side >= hwAt(c.apexI) - 0.3; // 레이싱 라인이 에이펙스에서 안쪽 끝(연석)까지 감
-  const bigBrakes = good.filter((c) => c.drop > 8).sort((a, b) => (lone(b) ? 1 : 0) - (lone(a) ? 1 : 0) || b.drop - a.drop);
+  // 이 차로 브레이크가 정말 필요한가 (brakeNeed.js, 사용자 요청 2026-11-13 "잘 꺾이는 차인데 브레이크 안 밟는 게 빠른 곳에서 브레이크를 시킴")
+  //   kindOf: 'brake' | 'lift' | 'flat', gainOf: 브레이크로 아끼는 시간(초)
+  const needC = (c) => {
+    try {
+      return needOf(car, track, c);
+    } catch {
+      return null;
+    }
+  };
+  const kindOf = (c) => (needC(c) || { kind: 'brake' }).kind;
+  const gainOf = (c) => (needC(c) || { gain: 1 }).gain;
+  const sureBrake = (c) => kindOf(c) === 'brake' && gainOf(c) >= 0.25; // 브레이크 연습 = 확실히 브레이크가 이득인 코너만
+  const bigAll = good.filter((c) => c.drop > 8).sort((a, b) => (lone(b) ? 1 : 0) - (lone(a) ? 1 : 0) || b.drop - a.drop);
+  const bigBrakes = bigAll.filter(sureBrake).length ? bigAll.filter(sureBrake) : bigAll;
   const S = {};
-  S.brake = take(bigBrakes[0] || good.sort((a, b) => b.drop - a.drop)[0]);
+  S.brake = take(bigBrakes[0] || good.slice().sort((a, b) => gainOf(b) - gainOf(a))[0]);
   S.trail = take(bigBrakes.find((c) => !used.has(c) && lone(c)) || bigBrakes.find((c) => !used.has(c)) || S.brake);
   // 리프트오프: 브레이크가 거의 필요 없는(속도를 조금만 줄이는) 빠른 코너, 앞 코너와 떨어진 곳 우선
   //   (200 km/h 아래만 골라 보니 T23 138 km/h = W만 떼서는 못 줄이는 코너가 걸려 더 나빴음 → 줄이는 양 4 m/s에 가까운 것 그대로)
   S.lift = take(
     good
       .filter((c) => !used.has(c) && c.drop > 1.2 && c.drop <= 9 && c.vMin > 28 && c.apexes.length <= 2)
-      .sort((a, b) => (a.linkedPrev && a.gapPrev < 150 ? 1 : 0) - (b.linkedPrev && b.gapPrev < 150 ? 1 : 0) || Math.abs(a.drop - 4) - Math.abs(b.drop - 4))[0] || null,
+      // + 이 차로 'W 떼기'면 충분한 코너 먼저 (브레이크가 확실히 이득인 코너는 뒤로)
+      .sort((a, b) => (kindOf(a) === 'lift' ? 0 : kindOf(a) === 'flat' ? 1 : 2) - (kindOf(b) === 'lift' ? 0 : kindOf(b) === 'flat' ? 1 : 2) || (a.linkedPrev && a.gapPrev < 150 ? 1 : 0) - (b.linkedPrev && b.gapPrev < 150 ? 1 : 0) || Math.abs(a.drop - 4) - Math.abs(b.drop - 4))[0] || null,
   );
   // 늦게 꺾고 빨리 가속: 탈출 뒤 긴 직선이 오는 코너 (직선이 길수록, 느린 코너일수록)
   const nextRun = (c) => {
@@ -83,7 +98,7 @@ export function pickSpots(ctx) {
   S.late = take(
     good
       .filter((c) => !used.has(c) && c.drop > 3 && !inSpace(W(c.exitI + M(240))))
-      .map((c) => ({ c, s: nextRun(c) * (c.vMin < 42 ? 1.25 : 1) * (lone(c) ? 1 : 0.55) * (onKerb(c) ? 1 : 0.7) * (c.apexes.length === 1 ? 1 : 0.8) }))
+      .map((c) => ({ c, s: nextRun(c) * (c.vMin < 42 ? 1.25 : 1) * (lone(c) ? 1 : 0.55) * (onKerb(c) ? 1 : 0.7) * (c.apexes.length === 1 ? 1 : 0.8) * (kindOf(c) === 'brake' ? 1 : 0.4) }))
       .sort((a, b) => b.s - a.s)[0]?.c || null,
   );
   if (S.late) S.late.runAfter = nextRun(S.late);
@@ -135,14 +150,26 @@ function runUp(ctx, c) {
   const corners = ctx.corners || ctx.car.cornerInfo.corners;
   const p = corners[(c.k - 1 + corners.length) % corners.length];
   const gap = p === c ? 330 : ctx.fwd(p.exitI, c.brakeI);
-  if (gap - 10 >= 110) return clamp(gap - 10, 110, 330);
-  // 앞 코너가 가까우면: 110~330 m 앞 중 가장 곧은 곳에서 시작 (앞 코너 한가운데에 놓이면 시작하자마자 잔디로 나감)
-  const curv = ctx.line.curvature, W = ctx.W, M = ctx.M;
-  let best = 110, bestCost = Infinity;
-  for (let d = 110; d <= 330; d += 10) {
-    let k = 0;
-    for (let e = -15; e <= 15; e += 5) k = Math.max(k, Math.abs(curv[W(c.brakeI - M(d) + M(e))]));
-    const cost = k * 1000 + Math.abs(d - 200) / 400;
+  // 시작 자리: 110~330 m 앞 중 '곧은 곳' (차는 도로 방향으로 놓이므로 도로도 곧고, 라인도 곧고, 라인이 도로를 비스듬히 가로지르지 않는 곳)
+  //   예전엔 앞 코너가 멀면 그냥 탈출 뒤에서 시작 → S자 한가운데에 놓여 시작하자마자 핸들을 끝까지 꺾고도 라인을 놓치는 일이 있었음
+  const curv = ctx.line.curvature, off = ctx.line.offset, W = ctx.W, M = ctx.M, S = ctx.track.samples, N = ctx.N;
+  const roadK = (i) => {
+    if (!S || S.length < N) return 0;
+    const a = S[W(i - 2)].pos, b = S[W(i)].pos, d = S[W(i + 2)].pos;
+    const h1 = Math.atan2(b.z - a.z, b.x - a.x), h2 = Math.atan2(d.z - b.z, d.x - b.x);
+    const dh = Math.atan2(Math.sin(h2 - h1), Math.cos(h2 - h1));
+    return Math.abs(dh) / Math.max(0.5, Math.hypot(d.x - a.x, d.z - a.z) / 2);
+  };
+  const lo = 110, hi = Math.max(110, Math.min(330, gap - 10 >= 110 ? gap - 10 : 330));
+  let best = clamp(gap - 10, 110, 330), bestCost = Infinity;
+  for (let d = lo; d <= hi; d += 10) {
+    let k = 0, sl = 0;
+    for (let e = -20; e <= 20; e += 5) {
+      const i = W(c.brakeI - M(d) + M(e));
+      k = Math.max(k, Math.abs(curv[i]), roadK(i));
+      sl = Math.max(sl, Math.abs(off[W(i + 1)] - off[W(i - 1)]) / (2 * ctx.ds));
+    }
+    const cost = k * 1000 + sl * 60 + Math.abs(d - 220) / 400;
     if (cost < bestCost) (bestCost = cost), (best = d);
   }
   return best;
@@ -212,6 +239,7 @@ const row = (id, ok, title, text) => ({ id, ok, title, text });
  *  감속 구간이 긴 코너(그랑프리 T15 등)에서 너무 일찍 너무 느려졌음) */
 const planBrake = (P) => (c, cur, car) => {
   if (!cur || cur.id !== 'brake' || !car.trackInfo) return;
+  if (P.brakeKind && P.brakeKind !== 'brake') return; // 브레이크가 필요 없는 코너: 운전사가 'W 떼기' 계획대로 (brakeNeed.js)
   const vt = car.lineSpeed((car.trackInfo.index + Math.round((Math.abs(car.speed) * 0.25) / P.ds)) % P.N);
   if (car.speed > vt + 0.4) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.85));
 };
@@ -229,6 +257,8 @@ export function _setDemoLook(v) {
 }
 
 // ------------------------------------------------------------------ 순간 띠 · 글자 만들기
+/** 띠의 '브레이크' 칸 이름: 이 차로 브레이크가 필요 없는 코너면 'W 떼기' / '그대로' */
+const bName = (P) => (!P.brakeKind || P.brakeKind === 'brake' ? '브레이크' : P.brakeKind === 'lift' ? 'W 떼기' : '그대로');
 function stripOf(list) {
   return { ids: list.map((x) => x[0]), names: Object.fromEntries(list), alias: { approach: list[0][0] } };
 }
@@ -332,8 +362,9 @@ RUN.trail = {
       if (cur.id === 'trail') {
         const k = clamp((P.dA - 6 - P.dist(car.trackInfo.index % P.N)) / Math.max(10, P.dA - 6 - bEnd), 0, 1);
         const vt = car.lineSpeed((car.trackInfo.index + Math.round((v * 0.25) / P.ds)) % P.N);
-        c.throttle = 0;
-        c.brake = v > vt + 0.3 ? Math.max(Math.min(c.brake, 0.6), 0.25 * k) : v > vt - 0.8 ? 0.05 + 0.07 * k : 0; // 계획 속도보다 빠를 때만 조금 더, 아니면 아주 살짝 (보이게)
+        // 계획 속도보다 빠를 때만 조금 더, 계획 속도 근처면 아주 살짝 남기기(보이게), 계획보다 느려지면 브레이크를 떼고 액셀을 살짝 (에이펙스가 너무 느렸음)
+        c.throttle = v < vt - 1 ? 0.3 : 0;
+        c.brake = v > vt + 0.3 ? Math.max(Math.min(c.brake, 0.6), 0.25 * k) : v > vt - 0.3 ? 0.04 + 0.05 * k : 0; // 계획 속도보다 빠를 때만 조금 더, 아니면 아주 살짝 (보이게)
       }
       if (cur.id === 'apex') c.brake = 0;
     };
@@ -455,7 +486,7 @@ RUN.late = {
     P.moments = P.moments.map((x) => (x.id === 'out' ? { ...x, b: P.vCheckD - 30 } : x));
     P.moments.push({ id: 'run', a: P.vCheckD - 30, b: 1e9, ts: 1 });
     P.momentAt = (m) => P.moments.find((x) => m >= x.a && m < x.b) || P.moments[0];
-    P.strip = stripOf([['straight', '직선'], ['brake', '브레이크'], ['turn', '늦게 꺾기'], ['apex', '에이펙스'], ['gas', '바로 꾹'], ['out', '탈출'], ['run', '직선 속도']]);
+    P.strip = stripOf([['straight', '직선'], ['brake', bName(P)], ['turn', '늦게 꺾기'], ['apex', '에이펙스'], ['gas', '바로 꾹'], ['out', '탈출'], ['run', '직선 속도']]);
     const T = ctx.kbd('throttle'), S = ctx.kbd(P.turnKey);
     P.texts = (id, coach) =>
       ({
@@ -471,7 +502,7 @@ RUN.late = {
     const R = cornerRec(ctx, P);
     return {
       step: R.step,
-      prog: () => [R.drill.R.brakeD != null, !!R.drill.R.apex, R.drill.R.gasDelay != null && R.drill.R.gasDelay < 0.6, R.X.vEnd != null && R.X.vEnd >= R.X.vPlan * 0.97],
+      prog: () => [P.brakeKind && P.brakeKind !== 'brake' ? R.drill.R.brakeD == null && R.drill.R.passApexT != null : R.drill.R.brakeD != null, !!R.drill.R.apex, R.drill.R.gasDelay != null && R.drill.R.gasDelay < 0.6, R.X.vEnd != null && R.X.vEnd >= R.X.vPlan * 0.97],
       result() {
         const { res, by } = R.rows();
         const X = R.X, D = R.drill.R;
@@ -532,10 +563,10 @@ RUN.chain = {
     const out2 = b.side > 0 ? '왼쪽' : '오른쪽';
     P.texts = (id, coach) =>
       coach
-        ? { straight: [`${T} 꾹`, ''], c1: [`${ctx.cname(a)} · ${a.drop > 1.5 ? B : '톡 떼기'}`, ''], apex1: ['에이펙스 → 탈출', ''], link: [a.side === b.side ? '밖으로 너무 나가지 않기' : `${out2}에 자리 잡기`, ''], apex2: [`${ctx.cname(b)} 에이펙스`, ''], gas: [`${T} 꾹!`, ''] }[id]
+        ? { straight: [`${T} 꾹`, ''], c1: [`${ctx.cname(a)} · ${P.brakeKind === 'brake' ? B : P.brakeKind === 'lift' ? '톡 떼기' : '그대로'}`, ''], apex1: ['에이펙스 → 탈출', ''], link: [a.side === b.side ? '밖으로 너무 나가지 않기' : `${out2}에 자리 잡기`, ''], apex2: [`${ctx.cname(b)} 에이펙스`, ''], gas: [`${T} 꾹!`, ''] }[id]
         : {
             straight: [`두 코너를 한 번에!`, `${ctx.cname(a)} 다음 바로 ${ctx.cname(b)}`],
-            c1: [`${ctx.cname(a)}: ${a.drop > 1.5 ? `${B}로 차분하게` : `${T}를 살짝 떼고`}`, '첫 코너는 욕심내지 않기'],
+            c1: [`${ctx.cname(a)}: ${P.brakeKind === 'brake' ? `${B}로 차분하게` : P.brakeKind === 'lift' ? `${T}를 살짝 떼고 (브레이크 없이)` : `브레이크 없이 그대로`}`, '첫 코너는 욕심내지 않기'],
             apex1: ['에이펙스 → 깔끔한 탈출', '여기서 밀리면 다음 코너도 늦어져요'],
             link: [a.side === b.side ? '바깥 끝까지 나가지 말고' : `다음 코너 바깥(${out2})으로`, `${ctx.cname(b)}에 들어갈 자리를 만들어요`],
             apex2: [`${ctx.cname(b)} 에이펙스`, '안쪽 연석을 스쳐요'],
@@ -545,7 +576,7 @@ RUN.chain = {
   },
   task: (ctx, P) => `${ctx.cname(P.c)}→${ctx.cname(P.c2)}: 첫 코너 깔끔 → 자리 잡기 → 둘째 코너 깔끔 = <b>연계 ×2</b>`,
   goals: ['첫 코너 탈출', '둘째 코너 자리', '둘째 코너', '연계 ×2'],
-  cue: (P, id) => ({ straight: 'throttle', c1: P.c.drop > 1.5 ? 'brake' : P.turnKey, apex1: 'throttle', link: null, apex2: P.c2.side > 0 ? 'right' : 'left', gas: 'throttle' })[id],
+  cue: (P, id) => ({ straight: 'throttle', c1: P.brakeKind === 'brake' ? 'brake' : P.turnKey, apex1: 'throttle', link: null, apex2: P.c2.side > 0 ? 'right' : 'left', gas: 'throttle' })[id],
   judge(ctx, P) {
     const R = cornerRec(ctx, P);
     const c2line = ctx.line.offset[P.c2.brakeI] * P.c2.side;
@@ -587,7 +618,7 @@ RUN.kerb = {
   plan: (ctx, c) => {
     const P = basePlan(ctx, c, runUp(ctx, c));
     P.badge = `🎬 시범 · ${ctx.cname(c)} 연석`;
-    P.strip = stripOf([['straight', '직선'], ['brake', '브레이크'], ['turn', '꺾기'], ['apex', '안쪽 연석'], ['gas', '가속'], ['out', '바깥 연석']]);
+    P.strip = stripOf([['straight', '직선'], ['brake', bName(P)], ['turn', '꺾기'], ['apex', '안쪽 연석'], ['gas', '가속'], ['out', '바깥 연석']]);
     P.moments = P.moments.map((x) => (x.id === 'out' ? { ...x, pulse: { ts: 0.35, sec: 1.0 } } : x.id === 'brake' ? { ...x, pulse: null } : x));
     P.texts = (id, coach) =>
       ({
@@ -617,7 +648,7 @@ RUN.kerb = {
   },
 };
 
-// 7) 슬립스트림 · 슬링샷 (앞차 = 봇 1대를 아카데미가 '페이스 카'로 몰아요) -------------
+// 7) 슬립스트림 (앞차 = 봇 1대를 아카데미가 '페이스 카'로 몰아요) -------------
 function paceCar(ctx) {
   const rs = ctx.game.raceSys;
   return rs && rs.bots && rs.bots[0] ? rs.bots[0] : null;
@@ -683,19 +714,21 @@ function releasePace(b) {
   }
 }
 RUN.slip = {
+  // 슬립스트림 (2026-11-13 바뀐 규칙: 슬링샷·충전 게이지 없음. 앞차 바로 뒤에 붙으면 그 자리에서 바로 빨라짐 → 따라잡아서 옆으로 나가 추월)
+  //   예전 '슬립스트림 · 슬링샷' 레슨은 .debug/academyLessons.before-slip2.js
   demo: true,
   needsBot: true,
   spot: (ctx) => (ctx.spots.straight && paceCar(ctx) ? ctx.spots.straight : null),
   intro: (ctx) => `
-    <p>앞차 <b>바로 뒤</b>는 바람이 막혀서 공기 저항이 줄어요(<b>슬립스트림</b> 💨). 뒤에 붙어 있으면 게이지가 차고, 다 찬 뒤 <b>옆으로 빠지면</b> 잠깐 튀어 나가요(<b>슬링샷</b>).</p>
-    ${steps([['①', '앞차 뒤에 바짝 (줄 맞추기)'], ['②', '💨 게이지가 가득 찰 때까지'], ['③', `${ctx.kbd('left')}/${ctx.kbd('right')} 살짝 옆으로`], ['④', `${ctx.kbd('throttle')} 꾹 → 추월!`]])}
-    ${why('앞차 뒤 약 45 m 안, 같은 줄에서 받을 수 있고 가까울수록 세요. 충전된 채 옆으로 나가면 1.5초 동안 <b>최고 속도와 가속이 조금</b> 올라가요. 코너 앞에서 빠지면 브레이크 때문에 효과가 없어요 → <b>직선 중간</b>에 빠지기.')}
+    <p>앞차 <b>바로 뒤</b>는 바람이 막혀서 공기 저항이 줄어요(<b>슬립스트림</b> 💨). 붙어 있는 동안 <b>바로 빨라져서</b> 앞차를 따라잡아요.</p>
+    ${steps([['①', '앞차 뒤에 바짝 (줄 맞추기)'], ['②', `💨 붙은 채로 ${ctx.kbd('throttle')} 꾹`], ['③', `거의 닿으면 ${ctx.kbd('left')}/${ctx.kbd('right')} 살짝 옆으로`], ['④', '나란히 → 추월!']])}
+    ${why('앞차 뒤 약 45 m 안, 같은 줄에서 받을 수 있고 <b>가까울수록 세요</b>. 옆으로 나가면 바람을 다시 맞아서 효과가 끝나요 → 앞차에 <b>거의 닿을 때까지</b> 붙어 있다가 나가요. 코너 앞에서 나가면 브레이크 때문에 추월하기 어려워요 → <b>직선 중간</b>에.')}
     <p class="tut-tip">💡 이 레슨에서는 앞차(연습용 차)가 일정한 속도로 달려 줘요. 진짜 레이스에서도 똑같이 돼요.</p>`,
   plan(ctx, S) {
     const { N, ds } = ctx;
     const P = {
       c: { num: 0, side: 1 }, N, ds, i0: ctx.W(S.i0 - Math.round(40 / ds)), vMin: 0, side: 1, turnKey: 'right', outKey: 'left',
-      badge: '🎬 시범 · 슬립스트림 · 슬링샷',
+      badge: '🎬 시범 · 슬립스트림',
     };
     P.dist = (idx) => {
       const m = ctx.W(idx - P.i0) * ds;
@@ -704,48 +737,48 @@ RUN.slip = {
     P.end = Math.min(S.m + 20, 900);
     const rs = ctx.game.raceSys;
     const me = () => (rs && rs.me) || {};
-    P.state = () => {
+    const draftNow = () => Math.max(car(ctx).draft || 0, me().draft || 0);
+    P.gap = () => {
       const b = paceCar(ctx);
-      const x = me();
-      if (car(ctx).slingT > 0 || x.slingFx) return 'sling';
-      if ((x.slip || 0) >= 0.9) return 'ready';
-      if ((x.draft || 0) > 0.3) return 'draft';
-      return b ? 'chase' : 'chase';
+      return b && b.car.trackInfo && ctx.car.trackInfo ? P.dist(ctx.car.trackInfo.index) - P.dist(b.car.trackInfo.index) : -99; // + = 내가 앞
+    };
+    let out = false; // 시범·화면: 옆으로 나갔나
+    P.state = () => {
+      const g = P.gap();
+      if (g > 2) return 'pass';
+      if (out || g > -7) return 'out';
+      if (draftNow() > 0.15) return 'draft';
+      return 'chase';
     };
     P.moments = [{ id: 'chase', a: -1e9, b: 1e9, ts: 1 }];
-    P.momentAt = () => {
-      const s = P.state();
-      return P._mo[s];
-    };
-    P._mo = { chase: { id: 'chase', ts: 1 }, draft: { id: 'draft', ts: 1 }, ready: { id: 'ready', ts: 1, pulse: { ts: 0.35, sec: 1.2 } }, sling: { id: 'sling', ts: 1, pulse: { ts: 0.4, sec: 0.8 } } };
-    P.strip = stripOf([['chase', '뒤에 붙기'], ['draft', '💨 충전'], ['ready', '옆으로!'], ['sling', '슬링샷']]);
-    const T = ctx.kbd('throttle');
+    P._mo = { chase: { id: 'chase', ts: 1 }, draft: { id: 'draft', ts: 1, pulse: { ts: 0.4, sec: 1.0 } }, out: { id: 'out', ts: 1, pulse: { ts: 0.35, sec: 1.2 } }, pass: { id: 'pass', ts: 1 } };
+    P.momentAt = () => P._mo[P.state()];
+    P.strip = stripOf([['chase', '뒤에 붙기'], ['draft', '💨 빨라짐'], ['out', '옆으로'], ['pass', '추월']]);
+    const T = ctx.kbd('throttle'), Lk = ctx.kbd('left'), Rk = ctx.kbd('right');
     P.texts = (id, coach) =>
       coach
-        ? { chase: [`앞차 뒤로 · ${T} 꾹`, ''], draft: ['💨 붙어 있기', '게이지 충전 중'], ready: ['지금 옆으로!', `${ctx.kbd('left')} 또는 ${ctx.kbd('right')} 살짝`], sling: ['슬링샷!', `${T} 꾹 → 추월`] }[id]
+        ? { chase: [`앞차 뒤로 · ${T} 꾹`, ''], draft: ['💨 붙어 있기', '빨라지는 중'], out: ['지금 옆으로!', `${Lk} 또는 ${Rk} 살짝`], pass: ['추월!', `${T} 꾹`] }[id]
         : {
             chase: [`앞차 바로 뒤로! ${T} 꾹`, '같은 줄에 맞추면 바람이 막혀요'],
-            draft: ['💨 슬립스트림 받는 중', '공기 저항이 줄어서 점점 가까워져요'],
-            ready: ['게이지 가득! 이제 옆으로', `${ctx.kbd('left')} 살짝 → 앞차 옆으로 빠지기`],
-            sling: ['슬링샷!', '잠깐 더 빨라져요 → 추월'],
+            draft: ['💨 슬립스트림 — 바로 빨라져요', '붙어 있는 만큼 앞차에 가까워져요'],
+            out: ['거의 닿았으면 이제 옆으로', `${Lk} 살짝 → 앞차 옆으로`],
+            pass: ['추월!', '빨라진 속도 그대로 앞으로'],
           }[id];
-    // 시범: 라인 따라가다 충전되면 옆(왼쪽 3.4 m)으로
-    let side = 0;
+    // 시범: 라인 따라 앞차 뒤에 붙어 있다가 6 m까지 따라잡으면 옆(왼쪽 3.4 m)으로
     P.driver = () =>
       lineDriver(ctx.game, {
         offset: () => {
-          const s = P.state();
-          if (s === 'ready' || s === 'sling') side = -3.4;
-          const b = paceCar(ctx);
-          if (b && side && b.car.trackInfo && ctx.car.trackInfo && P.dist(ctx.car.trackInfo.index) - P.dist(b.car.trackInfo.index) > 14) side = 0;
-          return side;
+          const g = P.gap();
+          if (!out && g > -6 && g < 0) out = true;
+          if (out && g > 14) out = false;
+          return out ? -3.4 : 0;
         },
       });
     P.demoCtl = (c) => {
       c.brake = 0;
       c.throttle = 1;
     };
-    P.place = () => (side = 0);
+    P.place = () => (out = false);
     return P;
   },
   place(ctx, P) {
@@ -754,39 +787,39 @@ RUN.slip = {
     const v = 0.82 * ctx.car.lineSpeed(i);
     ctx.placeRolling(i, 0, v);
     if (b) {
-      placeBot(ctx, b, i + Math.round(15 / ctx.ds), v); // 15 m 앞 (예전 24 m는 직선 460 m 안에 추월까지 못 갔음)
+      placeBot(ctx, b, i + Math.round(15 / ctx.ds), v); // 15 m 앞
       drivePace(ctx, b, () => 0.93);
     }
     if (P.place) P.place();
   },
   cleanup: (ctx) => releasePace(paceCar(ctx)),
-  task: (ctx) => `앞차 뒤에 붙어 💨 게이지를 채우고 → 옆으로 빠져 <b>슬링샷</b> → 추월!`,
-  goals: ['💨 뒤에 붙기', '게이지 가득', '슬링샷', '추월'],
-  cue: (P, id) => ({ chase: 'throttle', draft: 'throttle', ready: 'left', sling: 'throttle' })[id],
+  task: (ctx) => `앞차 뒤에 바짝 붙어 💨 빨라지기 → 거의 닿으면 옆으로 → <b>추월!</b>`,
+  goals: ['💨 뒤에 붙기', '따라잡기', '추월'],
+  cue: (P, id) => ({ chase: 'throttle', draft: 'throttle', out: 'left', pass: 'throttle' })[id],
   judge(ctx, P) {
     const rs = ctx.game.raceSys, me = () => (rs && rs.me) || {};
-    const X = { draftT: 0, maxSlip: 0, slings0: me().slings || 0, sling: false, ahead: null, respawn: false, gap0: null };
-    const b = paceCar(ctx);
-    const gap = () => (b && b.car.trackInfo && ctx.car.trackInfo ? P.dist(ctx.car.trackInfo.index) - P.dist(b.car.trackInfo.index) : -99);
+    const X = { draftT: 0, maxDraft: 0, closest: null, gap0: null, ahead: null, respawn: false };
     return {
       step(dt, seen) {
         if (seen.includes('respawn') || seen.includes('fall')) return (X.respawn = true), 'end';
-        const x = me();
-        if ((x.draft || 0) > 0.3) X.draftT += dt;
-        X.maxSlip = Math.max(X.maxSlip, x.slip || 0);
-        if ((x.slings || 0) > X.slings0 || ctx.car.slingT > 0) X.sling = true;
+        const d = Math.max(ctx.car.draft || 0, me().draft || 0);
+        if (d > 0.15) X.draftT += dt;
+        X.maxDraft = Math.max(X.maxDraft, d);
         if (!ctx.car.trackInfo) return null;
-        X.ahead = gap();
-        if (P.dist(ctx.car.trackInfo.index) > P.end || (X.sling && X.ahead > 25)) return 'end';
+        const g = P.gap();
+        X.ahead = g;
+        if (X.gap0 == null && g > -90) X.gap0 = g;
+        if (g < 0) X.closest = X.closest == null ? g : Math.max(X.closest, g);
+        if (P.dist(ctx.car.trackInfo.index) > P.end || g > 25) return 'end';
         return null;
       },
-      prog: () => [X.draftT > 1.2, X.maxSlip >= 0.9, X.sling, X.ahead != null && X.ahead > 2],
+      prog: () => [X.draftT > 1.2, X.closest != null && X.closest > -8, X.ahead != null && X.ahead > 2],
       result() {
         const rows = [];
         rows.push(X.draftT >= 1.2 ? row('draft', 'ok', '💨 뒤에 붙기', `${t1(X.draftT)}초 동안 슬립스트림을 받았어요`) : X.draftT > 0.3 ? row('draft', 'meh', '💨 뒤에 붙기', `${t1(X.draftT)}초만 받았어요. 줄을 앞차에 맞춰 더 오래`) : row('draft', 'bad', '💨 뒤에 붙기', '앞차 바로 뒤, 같은 줄로 들어가요'));
-        rows.push(X.maxSlip >= 0.9 ? row('charge', 'ok', '게이지 가득', '충전 완료!') : X.maxSlip >= 0.5 ? row('charge', 'meh', '게이지 가득', `${Math.round(X.maxSlip * 100)}%에서 빠졌어요. 가득 찰 때까지 참아요`) : row('charge', 'bad', '게이지 가득', '게이지를 거의 못 채웠어요'));
-        rows.push(X.sling ? row('sling', 'ok', '슬링샷', '슬링샷 성공!') : X.maxSlip >= 0.9 ? row('sling', 'meh', '슬링샷', `가득 찬 뒤 ${ctx.kbd('left')}/${ctx.kbd('right')}로 앞차 옆으로 빠지면 터져요`) : row('sling', 'bad', '슬링샷', '먼저 게이지를 채워요'));
-        rows.push(X.ahead != null && X.ahead > 2 ? row('pass', 'ok', '추월', `앞차보다 ${Math.round(X.ahead)} m 앞!`) : X.ahead != null && X.ahead > -8 ? row('pass', 'meh', '추월', '나란히까지 왔어요. 직선 중간에 더 일찍 빠져요') : row('pass', 'bad', '추월', '추월하지 못했어요'));
+        const cl = X.ahead != null && X.ahead > 0 ? 0 : X.closest;
+        rows.push(cl != null && cl > -8 ? row('close', 'ok', '따라잡기', '앞차 바로 뒤까지 따라잡았어요') : cl != null && cl > -16 ? row('close', 'meh', '따라잡기', `${Math.round(-cl)} m까지 왔어요. 더 오래 붙어 있어요`) : row('close', 'bad', '따라잡기', '앞차와 거리가 줄지 않았어요. 같은 줄로 바짝'));
+        rows.push(X.ahead != null && X.ahead > 2 ? row('pass', 'ok', '추월', `앞차보다 ${Math.round(X.ahead)} m 앞!`) : X.ahead != null && X.ahead > -8 ? row('pass', 'meh', '추월', '나란히까지 왔어요. 거의 닿으면 바로 옆으로') : row('pass', 'bad', '추월', '추월하지 못했어요'));
         return { rows, respawn: X.respawn };
       },
     };
