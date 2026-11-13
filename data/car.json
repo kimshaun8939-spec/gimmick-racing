@@ -50,7 +50,9 @@
     "powerSlide": 0.3, "powerPush": 0.25, "liftOff": 0.4, "tuck": 1.4, "liftTuck": 1.4, "tuckMax": 0.2, "capShare": 0.5
   },
   "_impact": "세게 부딪혔을 때 (벽·블록·건물·가드레일). 들이받는 속도(벽 쪽 성분)가 minSpeed m/s부터 효과가 생겨 minSpeed+fullSpeed에서 최대. friction: 긁히는 마찰로 잃는 속도 = 들이받는 속도 × 이 값 (최대 maxLoss 비율), align: 차 방향을 새 진행 방향 쪽으로 돌리는 비율, maxSlip: 부딪힌 뒤 남는 미끄러짐 최대(rad), yawKeep: 돌던 회전이 남는 비율, recover: 이 시간(초) 동안 꼬리가 더 돌아가지 않고 드리프트도 다시 안 걸림, alignRate: 차 방향이 돌아가는 빠르기 (클수록 확 돎, 15면 0.1초에 약 78%)",
-  "impact": { "minSpeed": 6, "fullSpeed": 14, "friction": 0.35, "maxLoss": 0.45, "align": 0.7, "maxSlip": 0.3, "yawKeep": 0.25, "recover": 0.7, "alignRate": 15 },
+  "impact": { "minSpeed": 6, "fullSpeed": 14, "friction": 0.35, "maxLoss": 0.45, "align": 0.7, "maxSlip": 0.3, "yawKeep": 0.25, "recover": 0.7, "alignRate": 15,
+    "wallClearance": 0.18
+  },
   "_입력": "키보드를 눌러도 페달과 핸들이 한 번에 끝까지 가지 않고 이 속도(초당)로 움직임",
   "input": { "throttleRise": 3.0, "throttleFall": 6, "brakeRise": 5, "brakeFall": 8, "steerRise": 3.2, "steerReturn": 6, "steerRiseHighSpeed": 0.45 },
   "drift": {
@@ -138,7 +140,7 @@
     "minSep": 250
   },
   "_contact": "차끼리 몸싸움 (2026-11-12 close-race, 사용자 요청 '몸싸움하면 차가 돌고 감속이 너무 심함 → 도는 것 자체를 없애줘'; raceSystem.js softContact). nospin: true면 부딪혀도 차 방향·회전·미끄럼각은 그대로, 옆으로 밀리기만 (주소 &nospin=0이면 예전 몸싸움). rest: 옆으로 튕기는 정도 (0 = 안 튕김), restRear: 뒤에서 똑바로 박을 때 튕기는 정도 (0 = 뒤차가 앞차 속도에 맞춰짐, 앞뒤 속도는 이때만 주고받음), aggr: 들이받은 쪽(닿는 쪽으로 움직이던 차)이 더 많이 밀려나는 정도 (0 = 반반, 0.5 = 최대 ±25%p), latShare: 옆으로 받는 충격 중 실제로 밀리는 비율, nudgeMax: 옆으로 밀리는 최고 속도 (m/s), nudgeDecay: 밀림이 사라지는 빠르기 (1/초, 5면 0.14초에 반), scrub: 나란히 비빌 때 닿은 스텝마다 잃는 앞 속도 비율 (0.0002 × 120스텝 = 1초 비비면 약 2.4%). 벽 충돌·혼자 드리프트 스핀·아이템 맞기는 그대로",
-  "contact": { "nospin": true, "rest": 0.15, "restRear": 0, "aggr": 0.5, "latShare": 1, "nudgeMax": 6, "nudgeDecay": 5, "scrub": 0.0002 },
+  "contact": { "nospin": true, "rest": 0.15, "restRear": 0, "aggr": 0.5, "latShare": 1, "nudgeMax": 0.8, "nudgeDecay": 8, "separationGap": 0.02, "scrub": 0.0002 },
   "_feel": "차체 연출 (carModel): roll = 코너에서 바깥으로 기우는 정도 배수, pitch = 브레이크 때 앞이 숙고 가속 때 뒤가 주저앉는 정도 배수 (모양마다 기본값 × 이 값), spring = 서스펜션 단단함 (클수록 빨리 따라감), damp = 출렁임 줄이기 (1이면 안 넘침, 작을수록 출렁)",
   "feel": { "roll": 1, "pitch": 1, "spring": 90, "damp": 0.6 },
   "_boostsEnabled": "false = 부스트 패드·드리프트 부스트·비행 고리 부스트를 끔 (E 부스터는 booster.enabled로 따로). true로 바꾸면 다시 켜짐",

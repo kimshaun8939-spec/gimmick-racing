@@ -382,7 +382,7 @@ export async function createRaceSystem(o) {
     const k = CC.latShare ?? 1;
     c.cNudge.x += lx * k;
     c.cNudge.z += lz * k;
-    const m = Math.hypot(c.cNudge.x, c.cNudge.z), mx = CC.nudgeMax ?? 6;
+    const m = Math.hypot(c.cNudge.x, c.cNudge.z), mx = CC.nudgeMax ?? 0.8;
     if (m > mx) c.cNudge.multiplyScalar(mx / m);
   }
   function softContact(a, b, bStatic, share, sideHit, depth) {
@@ -403,8 +403,10 @@ export async function createRaceSystem(o) {
       const cb = Math.max(0, _vb.x * _n.x + _vb.z * _n.z - (_vb.x * dx + _vb.z * dz) * nd);
       if (ca + cb > 0.5) share = Math.min(0.9, Math.max(0.1, share + (ca / (ca + cb) - 0.5) * (CC.aggr ?? 0.5)));
     }
-    a.pos.addScaledVector(_n, depth * share);
-    if (!bStatic) b.pos.addScaledVector(_n, -depth * (1 - share));
+    // 2 cm 여유: 거의 같은 면에 매 스텝 재진입하며 밀림·마찰을 반복하지 않게 한다.
+    const separate = depth + (CC.separationGap ?? 0.02);
+    a.pos.addScaledVector(_n, separate * share);
+    if (!bStatic) b.pos.addScaledVector(_n, -separate * (1 - share));
     const sa0 = a.speed, sb0 = b.speed || 0;
     if (sideHit) {
       // 나란히 비빔: 앞 속도는 두 차 모두 아주 조금만 (contact.scrub, 닿은 스텝마다)
@@ -447,6 +449,10 @@ export async function createRaceSystem(o) {
   function applyNudge(c, dt) {
     const n = c.cNudge;
     if (!n || (n.x === 0 && n.z === 0)) return;
+    // 충돌 당시의 밀림을 코너에서 앞뒤 힘으로 바꾸지 않고, 현재 진행 방향의 옆 성분만 남긴다.
+    const fwd = flatDir(c, _fa), forward = n.x * fwd.x + n.z * fwd.z;
+    n.x -= fwd.x * forward;
+    n.z -= fwd.z * forward;
     const m = Math.hypot(n.x, n.z);
     const jumped = c._nPos && c._nPos.distanceToSquared(c.pos) > 225; // 복귀·순간이동 (한 스텝에 15 m 넘게) → 밀림 없앰
     if (m < 0.03 || jumped) {
@@ -473,7 +479,7 @@ export async function createRaceSystem(o) {
       c.pos.x += n.x * dt;
       c.pos.z += n.z * dt;
     }
-    n.multiplyScalar(Math.exp(-(CC.nudgeDecay ?? 5) * dt));
+    n.multiplyScalar(Math.exp(-(CC.nudgeDecay ?? 8) * dt));
     (c._nPos || (c._nPos = new THREE.Vector3())).copy(c.pos);
   }
 

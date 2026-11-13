@@ -175,7 +175,10 @@ export class Car {
     this.launchTime = 0; // 완벽한 출발 효과 남은 시간
     this.launchSpin = 0; // 출발 실패(휠스핀) 남은 시간
     this.hitT = 0; // 세게 부딪힌 뒤 차가 자세를 되찾는 남은 시간 (이 동안은 꼬리가 더 돌아가지 않음)
-    this.hitTurn = 0; // 부딪힌 뒤 차 방향을 진행 방향 쪽으로 아직 더 돌려야 하는 각도 (한 번에 확 돌지 않고 0.1초쯤에 걸쳐)
+    this.hitTurn = 0; // 예전 디버그 값 호환: 벽 충돌로 차 머리를 강제로 돌리지 않음
+    this._wallNormal = null;
+    this._wallAt = -Infinity;
+    this._impactGrip = false;
 
     // 화면 연출용 값
     this.forwardSpeed = 0;
@@ -240,6 +243,9 @@ export class Car {
     if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
+    this._impactGrip = false;
+    this._wallNormal = null;
+    this._wallAt = -Infinity;
     this.jumpStall = 0; // 부정 출발로 시동 꺼진 남은 시간
     this.needRelease = false; // 부정 출발 뒤 W를 한 번 떼야 다시 출발
     this.sink = 0;
@@ -522,10 +528,11 @@ export class Car {
     const v = this.moveDir.multiplyScalar(this.speed);
     const vn = v.dot(out);
     if (vn > 0) {
-      v.addScaledVector(out, -vn * 1.2);
+      v.addScaledVector(out, -vn);
       if (vn > 8) this.events.push('bump');
-      this.setVelocityOnSurface(v);
-      this.afterImpact(-vn);
+      this.setVelocityOnSurface(v, Math.PI / 2);
+      this.afterImpact(-vn, out.clone().negate());
+      this.moveDirTo(this.vel).multiplyScalar(this.speed);
     }
   }
 
@@ -544,30 +551,46 @@ export class Car {
   /** (예전 에너지 큐브용) 이제 게이지가 없어서 아무 일도 하지 않음 */
   addCharge() {}
 
-  /**
-   * 세게 부딪힌 직후 (벽·블록·건물·가드레일): 진행 방향만 꺾이고 차 방향은 그대로면 미끄러짐(slip)이 40~70°로 커지고,
-   * 그러면 뒷바퀴 한계(오버스티어) 계산이 꼬리를 계속 돌려서 차가 빙글빙글 멈추지 않았음.
-   * → 부딪힌 세기만큼: 옆으로 긁히며 속도를 잃고, 차 방향을 새 진행 방향 쪽으로 돌려 미끄러짐을 작게 줄이고,
-   *   돌던 회전과 드리프트를 끊고, 잠깐(impact.recover초) 동안은 꼬리가 더 돌아가지 않게 함
-   * vn: 벽 쪽으로 들어가던 속도 (m/s, 음수). setVelocityOnSurface를 부른 뒤에 부름
-   */
-  afterImpact(vn) {
+  /** 벽의 안쪽 속도만 없앤 뒤 호출. 핸들·요 속도·머리 방향은 그대로 둔다. */
+  afterImpact(vn, normal = null) {
     const I = this.cfg.impact;
     if (!I || this.flying) return;
-    const hard = THREE.MathUtils.clamp((Math.abs(vn) - I.minSpeed) / I.fullSpeed, 0, 1);
-    if (hard <= 0) return;
-    // 벽에 긁히는 마찰: 들이받은 세기에 비례해서 속도 손해 (최대 maxLoss 비율)
-    const s = Math.abs(this.speed);
-    const loss = Math.min(I.maxLoss * s, I.friction * Math.abs(vn) * hard);
-    this.speed = Math.sign(this.speed) * (s - loss);
-    // 차 방향을 진행 방향 쪽으로: align 비율만큼 돌리고, 그래도 maxSlip보다 크면 거기까지
-    let turn = this.slip * I.align * hard;
-    const rest = this.slip - turn;
-    if (Math.abs(rest) > I.maxSlip) turn += rest - Math.sign(rest) * I.maxSlip;
-    this.hitTurn = turn; // 실제로 돌리는 건 updateGround에서 alignRate 빠르기로 (한 프레임에 확 돌면 순간이동처럼 보임)
-    this.yawRate *= 1 - (1 - I.yawKeep) * hard;
+    this.hitTurn = 0;
+    this._impactGrip = true;
+    if (normal) {
+      (this._wallNormal || (this._wallNormal = new THREE.Vector3())).copy(normal);
+      // 도로 접평면의 법선: 뱅크에서도 바닥에 붙은 속도만 제한한다.
+      this._wallNormal.addScaledVector(this.up, -this._wallNormal.dot(this.up)).normalize();
+      this._wallAt = this.simT;
+    }
     if (this.drifting) this.endDrift(false);
-    this.hitT = Math.max(this.hitT, I.recover * hard);
+    // 충돌로 생긴 큰 slip이 타이어의 꼬리 회전으로 바뀌는 것만 막는다.
+    this.hitT = Math.max(this.hitT, I.recover ?? 0.7);
+  }
+
+  /** 방금 닿은 벽이 여전히 차 옆에 있는가. 벽 끝/핸들로 빠져나오면 해제한다. */
+  wallSliding() {
+    const n = this._wallNormal;
+    if (!n || !this.grounded || this.flying) return false;
+    const box = this.hitbox, gap = this.cfg.impact?.wallClearance ?? 0.18;
+    const side = _wallSide.crossVectors(this.up, this.fwd).normalize();
+    const along = -n.dot(this.fwd), across = -n.dot(side);
+    const reach = Math.max(box.front * along, -box.back * along) + box.half * Math.abs(across);
+    const hit = this.track.castRay(_org.copy(this.pos).addScaledVector(this.up, 0.6), _dir.copy(n).negate(), reach + gap);
+    let near = hit && hit.normal.dot(n) > 0.7;
+    const ti = this.trackInfo, lim = ti && this.track.railLimit?.(ti);
+    if (!near && lim != null) {
+      const sg = Math.sign(ti.lateral) || 1, r = ti.sample.right;
+      const fo = this.fwd.dot(r) * sg, so = side.dot(r) * sg;
+      const railReach = Math.max(box.front * fo, -box.back * fo) + box.half * Math.abs(so);
+      near = -(r.x * n.x + r.z * n.z) * sg > 0.7 && Math.abs(this.pos.y - ti.sample.pos.y) < 4 && Math.abs(ti.lateral) + railReach > lim - gap;
+    }
+    if (near || this.simT - this._wallAt < 0.04) {
+      this.hitT = Math.max(this.hitT, this.cfg.impact?.recover ?? 0.7);
+      return true;
+    }
+    this._wallNormal = null;
+    return false;
   }
 
   /**
@@ -579,11 +602,11 @@ export class Car {
     const v = this.vel.clone();
     const vn = v.dot(normal);
     if (vn >= 0) return;
-    v.addScaledVector(normal, -vn * 1.3);
+    v.addScaledVector(normal, -vn);
     if (vn < -8) this.events.push('bump');
     if (this.grounded) {
-      this.setVelocityOnSurface(v);
-      this.afterImpact(vn);
+      this.setVelocityOnSurface(v, Math.PI / 2);
+      this.afterImpact(vn, normal);
       this.vel.copy(this.moveDir).multiplyScalar(this.speed);
     } else {
       this.vel.copy(v);
@@ -605,7 +628,7 @@ export class Car {
   }
 
   /** 3D 속도를 바닥 위의 speed와 slip으로 바꿈 */
-  setVelocityOnSurface(v) {
+  setVelocityOnSurface(v, maxSlip = 1.2) {
     const tangential = v.clone().addScaledVector(this.up, -v.dot(this.up));
     const s = tangential.length();
     if (s < 1e-4) {
@@ -620,7 +643,7 @@ export class Car {
       this.speed = -s;
       a = Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI));
     } else this.speed = s;
-    this.slip = THREE.MathUtils.clamp(a, -1.2, 1.2);
+    this.slip = THREE.MathUtils.clamp(a, -maxSlip, maxSlip);
   }
 
   /**
@@ -686,6 +709,12 @@ export class Car {
 
   updateGround(dt, c) {
     const cfg = this.cfg;
+    const wallSlide = this.wallSliding();
+    // 벽이 끝나도 충돌로 생긴 옆 미끄럼이 가라앉기 전에는 꼬리 회전을 다시 켜지 않는다.
+    if (this._impactGrip) {
+      if (!wallSlide && Math.abs(this.slip) < 0.12) this._impactGrip = false;
+      else this.hitT = Math.max(this.hitT, dt * 2);
+    }
     const spike = this.form === 'spike';
     let f = this.speed;
     // 비행 모드: 충분히 빠를 때 Space로 이륙
@@ -927,6 +956,9 @@ export class Car {
         f *= 1 - (D.spinLoss ?? 0.15);
         this.endDrift(false, false, true);
       }
+    } else if (wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) {
+      // 머리가 벽 안쪽을 향하는 동안 접지력이 이동 방향을 다시 벽 쪽으로 끌지 않게 한다.
+      // 위의 조향 회전(dYaw)은 이미 적용됨. 벽 바깥을 향해 꺾으면 즉시 정상 접지로 돌아간다.
     } else {
       let grip = cfg.grip * (1 - 0.4 * offK);
       if (spike) grip *= cfg.booster.gripFactor;
@@ -973,7 +1005,7 @@ export class Car {
       // 옆으로 미끄러지면 느려짐. 드리프트 중 좋은 각도 창 안이면 덜 느려짐 (drift.holdDrag)
       const D = cfg.drift, win = D.holdAngle || [0.28, 0.75];
       const inWin = this.drifting && this.driftAngle >= win[0] && this.driftAngle <= win[1];
-      const lost = f * Math.abs(Math.sin(this.slip)) * D.slipDrag * (inWin ? D.holdDrag ?? 0.7 : 1) * dt;
+      const lost = (wallSlide ? 0 : f) * Math.abs(Math.sin(this.slip)) * D.slipDrag * (inWin ? D.holdDrag ?? 0.7 : 1) * dt;
       f -= lost;
       if (this.drifting) this.driftLoss += Math.abs(lost);
     }
@@ -985,16 +1017,6 @@ export class Car {
     }
     this.speed = f;
     } // motion
-
-    // 부딪힌 뒤: 차 방향을 진행 방향 쪽으로 남은 만큼 부드럽게 돌림 (진행 방향은 그대로, 미끄러짐만 줄어듦)
-    if (this.hitTurn) {
-      let d = Math.abs(this.hitTurn) < 1e-3 ? this.hitTurn : this.hitTurn * (1 - Math.exp(-(cfg.impact?.alignRate ?? 20) * dt));
-      if (Math.sign(d) !== Math.sign(this.slip)) d = this.hitTurn = 0; // 그사이 미끄러짐이 이미 반대로 바뀜 → 그만
-      else if (Math.abs(d) > Math.abs(this.slip)) (d = this.slip), (this.hitTurn = d); // 진행 방향을 넘어 돌지 않게
-      this.fwd.applyAxisAngle(this.up, d);
-      this.slip -= d;
-      this.hitTurn -= d;
-    }
 
     // --- 이동: 앞에 벽이 있는지 확인 ---
     let move = this.moveDirTo(_mv).multiplyScalar(f * dt);
@@ -1015,15 +1037,15 @@ export class Car {
         if (cornerHit && cornerHit.normal.dot(this.up) < 0.5 && (!wall || cornerHit.distance < wall.distance)) wall = cornerHit;
       }
       if (wall && wall.normal.dot(this.up) < 0.5) {
-        // 너무 가파른 면 = 벽. 벽을 따라 미끄러지며 살짝 튕김
+        // 너무 가파른 면 = 벽. 들어가는 속도만 없애고 벽을 따라 미끄러짐
         const v = this.moveDir.multiplyScalar(f);
         const vn = v.dot(wall.normal);
         if (vn < 0) {
-          v.addScaledVector(wall.normal, -vn * 1.25);
+          v.addScaledVector(wall.normal, -vn);
           if (vn < -8) this.events.push('bump');
           if (this.drifting) this.endDrift(false);
-          this.setVelocityOnSurface(v);
-          this.afterImpact(vn);
+          this.setVelocityOnSurface(v, Math.PI / 2);
+          this.afterImpact(vn, wall.normal);
           move = this.moveDirTo(_mv).multiplyScalar(this.speed * dt);
         }
       }
