@@ -728,7 +728,7 @@ RUN.slip = {
   intro: (ctx) => `
     <p>앞차 <b>바로 뒤</b>는 바람이 막혀서 공기 저항이 줄어요(<b>슬립스트림</b> 💨). 붙어 있는 동안 <b>바로 빨라져서</b> 앞차를 따라잡아요.</p>
     ${steps([['①', '앞차 뒤에 바짝 (줄 맞추기)'], ['②', `💨 붙은 채로 ${ctx.kbd('throttle')} 꾹`], ['③', `거의 닿으면 ${ctx.kbd('left')}/${ctx.kbd('right')} 살짝 옆으로`], ['④', '나란히 → 추월!']])}
-    ${why('앞차 뒤 약 45 m 안, 같은 줄에서 받을 수 있고 <b>가까울수록 세요</b>. 옆으로 나가면 바람을 다시 맞아서 효과가 끝나요 → 앞차에 <b>거의 닿을 때까지</b> 붙어 있다가 나가요. 코너 앞에서 나가면 브레이크 때문에 추월하기 어려워요 → <b>직선 중간</b>에.')}
+    ${why('앞차 뒤 약 45 m 안, 같은 줄에서 받을 수 있고 <b>가까울수록 세요</b>. 옆으로 빠져도 효과가 <b>잠깐 이어져</b> 추월을 도와줘요. 앞차에 <b>가까이 붙었다가</b> 옆으로 나가요. 코너 앞에서 나가면 브레이크 때문에 추월하기 어려워요 → <b>직선 중간</b>에.')}
     <p class="tut-tip">💡 이 레슨에서는 앞차(연습용 차)가 일정한 속도로 달려 줘요. 진짜 레이스에서도 똑같이 돼요.</p>`,
   plan(ctx, S) {
     const { N, ds } = ctx;
@@ -859,7 +859,8 @@ RUN.drs = {
     P.dDet = P.dist(det);
     P.dZs = P.dist(zs);
     P.dZe = P.dist(ze);
-    P.end = P.dZe + 30;
+    // 날개 열림과 따라잡기를 익힌 뒤 끝냄. 직선 뒤 굽이까지 억지로 가속하게 하지 않아요.
+    P.end = Math.min(P.dZe - 100, P.dZs + 320);
     const rs = ctx.game.raceSys;
     P.moments = [
       { id: 'close', a: -1e9, b: P.dDet - 20, ts: 1 },
@@ -881,12 +882,16 @@ RUN.drs = {
             open: ['DRS ZONE: 날개 열림!', `${T} 꾹 → 앞차를 따라잡아요`],
             zone: [`${B}를 밟으면 닫혀요`, '직선 끝 브레이크 지점까지 꾹'],
           }[id];
-    P.driver = () => lineDriver(ctx.game, { offset: () => (P._side || 0) });
+    P.driver = () => lineDriver(ctx.game, { edge: 4, offset: () => (P._side || 0) });
     P.demoCtl = (c, cur, car) => {
       const b = paceCar(ctx);
       if (b && b.car.trackInfo && car.trackInfo && cur && cur.id === 'zone') {
         const g = P.dist(b.car.trackInfo.index) - P.dist(car.trackInfo.index);
-        P._side = g < 18 && g > -10 ? -3.4 : 0;
+        // 라인이 가장자리에 붙어 있어도 도로 중앙 쪽으로 추월. 한 번 정한 쪽을 유지해 깜빡이지 않게.
+        if (!P._passSide && g < 30 && g > -10) P._passSide = ctx.line.offset[car.trackInfo.index % N] < 0 ? 3.4 : -3.4;
+        if (P._passSide && g < -18) P._passed = true;
+        const want = P._passed ? 0 : P._passSide || 0;
+        P._side += clamp(want - P._side, -0.04, 0.04);
       }
     };
     return P;
@@ -895,11 +900,19 @@ RUN.drs = {
     const b = paceCar(ctx);
     const i = ctx.W(P.i0);
     const v = 0.85 * ctx.car.lineSpeed(i);
+    // 시범 → 따라 하기 → 재시도마다 감지선을 새로 판정해요.
+    const rs = ctx.game.raceSys;
+    if (rs && rs.drs) {
+      rs.drs.reset();
+      for (const e of [rs.me, ...rs.bots]) e.drsIn = false;
+    }
     // DRS는 레이스 출발 뒤 15초부터 → 연습에선 레이스 시계를 그 뒤로
     if (ctx.race.time < 20) ctx.race.time = 20;
     if (ctx.race.clock != null && ctx.race.clock < 20) ctx.race.clock = 20;
     ctx.placeRolling(i, 0, v);
     P._side = 0;
+    P._passSide = 0;
+    P._passed = false;
     if (b) {
       placeBot(ctx, b, i + Math.round(Math.max(20, v * 0.55) / ctx.ds), v);
       // 감지선까지는 플레이어 앞 약 0.55초를 지켜 줌 (봇 차 가속이 더 좋으면 1초 밖으로 달아났음) → DRS ZONE부터는 계획 속도 ×0.95로 그냥 달림

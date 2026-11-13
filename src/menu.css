@@ -2345,3 +2345,20 @@ body:has(#results.on) #xpPill { display:none!important; }
 
 #results .res-dashboard .ra-main:not(:has(button)) { display:none; }
 @media(prefers-reduced-motion:reduce) { #results .podium .pd { animation:none!important; } }
+
+/* launchqa: 차를 고른 뒤 꾸미기 목록 끝까지 내리지 않고 다음으로 */
+@media (min-width:901px) and (min-height:521px) {
+ #home .h-carinfo { scroll-padding-bottom:90px; }
+ #home .h-carinfo > .btns { position:sticky; bottom:-20px; z-index:4; flex-shrink:0; margin:8px -22px -20px; padding:12px 22px 20px; background:#101a30; border-top:1px solid #60708a; }
+}
+@media (max-width:900px) and (min-height:521px) {
+ #home .h-carinfo > .btns { position:fixed; bottom:48px; left:16px; right:16px; z-index:5; margin:0; padding:10px; background:#101a30; border:1px solid #60708a; border-radius:14px; }
+ #home .h-carinfo { padding-bottom:90px; backdrop-filter:none; -webkit-backdrop-filter:none; }
+ #home .h-view[data-view="car"] { scroll-padding-bottom:100px; }
+}
+
+@media (max-width:480px) {
+ #tutorial .tut-dots { gap:3px; }
+ #tutorial .tut-dots i { width:5px; height:5px; }
+ #tutorial .tut-dots i.cur { width:14px; }
+}

@@ -74,3 +74,9 @@ body:not(:has(#home)) .mt-notice { top: 232px; }
  #results .res-dashboard .mt-result-ach { margin-top:10px; }
  #results .res-next-goal { margin-top:10px; }
 }
+
+/* launchqa: 가로 터치 화면의 오른손 운전 버튼을 업적 알림이 가리지 않게 */
+body:has(#pauseMenu.on) .mt-notice { display:none; }
+@media (max-height:500px) and (orientation:landscape) {
+ body.touch-on:not(:has(#home)) .mt-notice { top:68px; left:50%; right:auto; width:220px; max-width:32vw; translate:-50% 0; }
+}

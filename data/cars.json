@@ -176,7 +176,7 @@
       "id": "rocket",
       "class": "A",
       "name": "로켓 드래그",
-      "tag": "ROCKET DRAGSTER · 가속·부스터",
+      "tag": "ROCKET DRAGSTER · 직선 가속",
       "desc": "등에 로켓을 단 드래그스터. 출발 가속이 가장 세고 직선이 길수록 빨라서 네온 시티에서 등급 최강! 대신 핸들이 예민하고 뒤가 잘 미끄러지는 까다로운 차예요.",
       "stats": {
         "speed": 4,

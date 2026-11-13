@@ -339,3 +339,9 @@
 .tut-card .ac-short-card, .acad .ac-short-card, .ac-short-card {
   background: linear-gradient(145deg, rgba(255,255,255,.06), transparent 65%), #0b1020 !important;
 }
+
+/* launchqa: 레슨 목록을 끝까지 내리지 않아도 홈으로 돌아가기 */
+.ax-head { flex-shrink:0; }
+.ax-back { flex:none; order:3; margin-left:auto; }
+@media (max-width:720px) { .ax-title { min-width:0; } .ax-sum { order:4; flex-basis:100%; } .ax-back { order:2; } }
+@media (max-height:520px) { .ax-head { gap:8px; } .ax-sum .n { display:none; } }

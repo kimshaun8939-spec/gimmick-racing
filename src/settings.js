@@ -69,7 +69,7 @@ export const SETTING_DEFS = [
   { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷 · 마스터 = 어려움보다 훨씬 빠름, 아주 잘해야 이김', type: 'choice',
     options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '마스터']], def: 'normal' },
   { group: '레이스', key: 'drs', label: 'DRS', desc: '직선의 DRS 구간 앞 감지선에서 앞차와 1초 안이면, 그 직선에서 뒷날개가 열려 더 빨라져요 (봇도 똑같이, 브레이크를 밟으면 닫힘)', type: 'toggle', def: true },
-  { group: '레이스', key: 'tow', label: '견인', desc: '바로 앞차와 1초 넘게 벌어지면 앞차 쪽으로 끌어당겨 줘요 (멀수록 셈, 봇도 똑같이, 봇 레이스·아이템전·챔피언십). 오래 받으면 기록에 "🛟 도움 켬"', type: 'toggle', def: true },
+  { group: '레이스', key: 'tow', label: '견인', desc: '바로 앞차와 1초 넘게 벌어지면 자동으로 가속을 도와줘요 (멀수록 셈, 봇도 똑같이, 상대가 있는 레이스). 오래 받으면 결과에 "🛟 도움 켬"', type: 'toggle', def: true },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
   // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
   { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,
@@ -361,8 +361,8 @@ export function createControlsPage(opts = {}) {
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}
       ${row('<kbd class="gm-drs">DRS</kbd>', 'DRS (따라잡기)', '도로의 DRS DETECTION 선에서 앞차와 1초 안이면 → 다음 DRS ZONE 직선에서 뒷날개가 저절로 열려 빨라져요. 브레이크를 밟으면 닫힘')}
-      ${row('💨', '슬립스트림', '앞차 바로 뒤에 붙으면 공기 저항이 줄어 바로 빨라져요 (최고 속도도 올라감). 옆으로 빠질 필요 없음, 여러 대가 줄지어 있으면 더 세요')}
-      ${row('🧲', '견인', '바로 앞차와 1초 넘게 벌어지면 앞차 쪽으로 끌어당겨 줘요 (멀수록 셈, 봇도 똑같이)')}
+      ${row('💨', '슬립스트림', '앞차 바로 뒤에 붙으면 공기 저항이 줄어 바로 빨라져요 (최고 속도도 올라감). 옆으로 빠져도 효과가 잠깐 이어져 추월을 도와줘요. 여러 대가 줄지어 있으면 더 세요')}
+      ${row('🧲', '견인', '바로 앞차와 1초 넘게 벌어지면 자동으로 가속을 도와줘요 (멀수록 셈, 봇도 똑같이). 핸들은 직접 조작해요')}
       ${row(K('respawn'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}
       ${row(K('restart'), '다시 하기 (결과 화면에서)')}
       ${row(K('menu'), '메뉴 · 일시정지', '설정, 다시 시작, 홈으로')}

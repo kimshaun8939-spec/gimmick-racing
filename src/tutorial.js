@@ -28,7 +28,7 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // 지금 정한 키 (<kbd>). 패드를 쓰는 중이면 패드 버튼
 // 휴대폰(터치 버튼)이면 화면 버튼 이름으로
-const TOUCH_LBL = { camView: '👁 시점', throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
+const TOUCH_LBL = { menu: '☰ 메뉴', camView: '👁 시점', throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
 const onTouch = () => !pad.usingPad() && touchWanted();
 const TK = (id) => (onTouch() && TOUCH_LBL[id] ? `<kbd>${TOUCH_LBL[id]}</kbd>` : null);
 // 운전 키(가속·브레이크·좌우)는 W와 ↑처럼 기본·보조 키를 같이 보여 줌 (방향키로 하는 사람도 있어서)
@@ -383,7 +383,7 @@ export function startTutorial(game) {
         seen.length = 0;
       },
       update(dt, s) {
-        if (seen.includes('jumpStart')) s.jump = true;
+        if (seen.includes('jumpStart')) { s.jump = true; return 'fail:부정 출발! 가속에서 손을 떼고, 불이 모두 꺼진 다음 눌러요'; }
         coach.cue(race.phase === 'racing' ? 'throttle' : null);
         if (race.phase === 'racing' && car.forwardSpeed > 4) {
           if (s.jump) return 'fail:부정 출발! 불이 꺼진 다음에 밟아요';
@@ -704,6 +704,7 @@ export function startTutorial(game) {
       task: () => `${K('menu')} 로 메뉴를 열어 보세요. 설정·조작키·다시 시작·홈이 있어요. 그다음 <b>계속하기</b>.`,
       goals: ['메뉴 열기', '계속하기'],
       setup(s) {
+        setSpeed(0); // 메뉴 안내를 읽는 동안 차가 저절로 도로 밖으로 가지 않게
         s.noOffFail = true;
       },
       update(dt, s) {
@@ -733,9 +734,9 @@ export function startTutorial(game) {
     });
   }
 
-  // 입문 코스: 필수 조작만. 정교한 코너·드리프트는 아카데미에서 이어 해요.
+  // 입문 코스: 기본 조작·드리프트 맛보기·메뉴·레이스의 자동 도움까지. 정교한 코너는 아카데미에서 이어 해요.
   if (quick) {
-    const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'forms', 'accel', 'fly', 'respawn', 'done']);
+    const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'drift', 'forms', 'accel', 'fly', 'respawn', 'menu', 'modes', 'done']);
     for (let i = STEPS.length - 1; i >= 0; i--) if (!keep.has(STEPS[i].id)) STEPS.splice(i, 1);
     const intro = STEPS.find((x) => x.id === 'welcome');
     if (intro) intro.card = () => '<p>딱 필요한 것만, <b>약 3~5분</b> 함께 달려 봐요.</p><div class="nq-roadmap"><span>① 불이 꺼지면 출발</span><span>② 핸들은 짧게 톡톡</span><span>③ 빨강은 브레이크</span><span>④ 차가 알아서 변신!</span></div><p class="tut-tip">막히면 건너뛰어도 괜찮아요. 레이스는 시험이 아니에요. 마치면 넓은 빙하 코스에서 쉬운 봇 3대와 첫 레이스!</p>';
@@ -832,7 +833,7 @@ export function startTutorial(game) {
       $('.tut-card .tut-body').innerHTML = s.card ? s.card() : `<p>${s.task ? s.task() : ''}</p>`;
     }
     $('.tut-card .tut-btns').style.display = '';
-    $('.tut-card [data-t="go"]').innerHTML = `${esc(s.go || (s.info ? '다음' : '시작'))} <kbd>Enter</kbd>`;
+    $('.tut-card [data-t="go"]').innerHTML = `${esc(s.go || (s.info ? '다음' : '시작'))}${onTouch() ? '' : pad.usingPad() ? ' <kbd>A</kbd>' : ' <kbd>Enter</kbd>'}`;
     $('.tut-card [data-t="prev"]').style.visibility = cur > 0 ? '' : 'hidden';
     $('.tut-card [data-t="skip"]').style.display = s.final ? 'none' : '';
     $('.tut-card [data-t="skip"]').textContent = s.info ? '튜토리얼 끝내기' : s.kind === 'demo' ? '시범 건너뛰기' : '이 미션 건너뛰기';
@@ -1133,6 +1134,8 @@ export function startTutorial(game) {
         coach.pedals(car.thr, car.brk, car.speed, target, s.id === 'gas' || s.id === 'accel' || (s.id === 'stop' && !!st.g0));
       }
       if (st._age < 0.25 || !car.trackInfo) {
+        // 자리 이동 직후 누른 복귀도 인정: 이벤트를 버리면 이미 복귀했는데 미션이 멈춰요.
+        if (s.id === 'respawn' && st.keyed && seen.includes('respawn')) { seen.length = 0; success(); return; }
         seen.length = 0;
         return;
       }

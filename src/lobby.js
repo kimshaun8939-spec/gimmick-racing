@@ -65,7 +65,7 @@ export async function openLobby(opts = {}) {
   el.innerHTML = `
     <div class="lb-bg"></div>
     <div class="lb-top">
-      <div class="lb-title"><span class="globe">🌐</span><div><b>온라인 멀티플레이</b><small>친구와 같은 코스에서 실시간 레이스 · 서버 설치 없이 링크만 보내면 끝</small></div></div>
+      <div class="lb-title"><span class="globe">🌐</span><div><b>온라인 멀티플레이</b><small>방 만들기 → 초대 링크 공유 → 친구와 함께 출발</small></div></div>
       <button class="gm-btn small" data-act="close">✕ 닫기 <kbd>Esc</kbd></button>
     </div>
     <div class="lb-view" data-view="entry"></div>
@@ -929,6 +929,18 @@ function injectCss() {
   #lobby .lb-room { grid-template-columns: 1fr; grid-template-areas: "code" "players" "maps" "car" "chat" "bar"; }
   #lobby .lb-codecard .code { font-size: 42px; }
   #lobby .lb-field { grid-template-columns: 1fr; gap: 6px; }
+}
+/* launchqa: 휴대폰 제목과 준비 상태가 한 글자씩 꺾이지 않게 */
+@media (max-width:520px) {
+ #lobby .lb-top { gap:10px; }
+ #lobby .lb-title { min-width:0; flex:1; gap:8px; }
+ #lobby .lb-title .globe { flex:none; width:36px; height:36px; font-size:22px; }
+ #lobby .lb-title b { font-size:21px; line-height:1.2; word-break:keep-all; }
+ #lobby .lb-top > button { flex:none; }
+ #lobby .lb-bar { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; }
+ #lobby .lb-bar .status { grid-column:1 / -1; grid-row:1; text-align:center; font-size:12px; word-break:keep-all; }
+ #lobby .lb-bar > button { grid-row:2; }
+ #lobby #lbMain { min-width:0; width:100%; }
 }`;
   document.head.appendChild(st);
 }

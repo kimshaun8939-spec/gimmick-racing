@@ -779,7 +779,7 @@ export async function runHome() {
         ${best
           ? `<div class="hm-best"><small>최고 기록${info.laps > 1 ? ` (${info.laps}바퀴 합)` : ''}</small><strong>${fmtTime(best.v.race)}</strong>${best.v.raceAssist ? ASSIST_TAG : ''}</div>
              <div class="hm-car">${pic(best.c.id, true)}<span><b>${esc(best.c.name)}</b><small>${esc(best.c.tag || '')}</small></span></div>`
-          : `<div class="hm-none">🏁 아직 이 맵을 달리지 않았어요<small>완주하면 여기에 기록이 쌓여요</small></div>`}
+          : `<div class="hm-none">🏁 아직 이 맵을 달리지 않았어요<small>타임 어택이나 자유 연습을 완주하면 기록이 쌓여요</small></div>`}
         <button class="gm-btn primary small hm-go" data-act="recRace" data-nav>🏁 이 맵 달리기 ›</button></div></div>`;
     if (!runs.length) {
       box.innerHTML = head + `<div class="hm-card empty">${hero}</div>` + foot();
@@ -808,7 +808,7 @@ export async function runHome() {
       drawTrackThumb(cv, info.pts || [], m.theme);
     } catch {}
     function foot() {
-      return `<div class="hr-foot"><span>${online.enabled ? '완주하면 온라인 순위표에도 자동으로 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>모든 기록 지우기</button></div>`;
+      return `<div class="hr-foot"><span>${online.enabled ? '타임 어택·자유 연습 완주 기록은 이름·비밀번호를 정하면 순위표에도 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>모든 기록 지우기</button></div>`;
     }
   }
 
@@ -826,7 +826,7 @@ export async function runHome() {
     if (!box) return;
     fixRecMap();
     const me = online.me();
-    box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>이름 + 비밀번호 4자리 · 완주하면 자동으로 올라감</small></h3>
+    box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>혼자 달린 완주 기록만 · 이름 + 비밀번호 4자리</small></h3>
       <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
       <div class="h-olboard"><div class="none">불러오는 중…</div></div>
       <div class="h-olme">${olMeHtml(me)}</div>`;
@@ -903,6 +903,7 @@ export async function runHome() {
     views.academy.innerHTML = `
       <div class="ax">
         <div class="ax-head">
+          <button class="gm-btn small ax-back" data-go="main" data-nav>‹ 홈으로</button>
           <div class="ax-title"><span class="ic">🎓</span><div><b>드라이빙 아카데미</b><small>설명 → 시범 주행 → 따라 하기 → 성적표 · 메달을 모으고 라이선스를 따요</small></div></div>
           <div class="ax-sum"><span>🥇 <b>${sum.gold}</b></span><span>🥈 <b>${sum.silver}</b></span><span>🥉 <b>${sum.bronze}</b></span><span class="n">레슨 ${sum.done}/${sum.total}</span>${top ? `<span class="lic">${licenseChip(top, 24)}</span>` : ''}</div>
         </div>
@@ -910,7 +911,7 @@ export async function runHome() {
           <div class="ax-lessons h-panel">${groups}</div>
           <div class="ax-side h-panel"><h3 class="ax-sh">🪪 라이선스 시험 <small>아무것도 잠그지 않아요 · 보상은 배지·색·XP</small></h3>${LICENSES.map(licCard).join('')}</div>
         </div>
-        <div class="ax-foot"><button class="gm-btn" data-go="main" data-nav>‹ 뒤로</button><span class="ax-car">🏎️ ${esc(carOf(carId).name)}(으)로 연습해요 · 차는 '레이스 시작'에서 바꿔요</span></div>
+        <div class="ax-foot"><span class="ax-car">🏎️ ${esc(carOf(carId).name)} · 이 차로 연습해요 · 차는 '레이스 시작'에서 바꿔요</span></div>
       </div>`;
   }
   window.addEventListener('gimmick:academy', () => view === 'academy' && renderAcademy());
@@ -978,7 +979,7 @@ export async function runHome() {
     views.mode.querySelector('.who').textContent = `🗺️ ${m.title} · 🏎️ ${c.name}`;
     views.main.querySelector('.h-cartag .tg').textContent = c.tag || '';
     views.main.querySelector('.h-cartag .n').textContent = c.name;
-    views.map.querySelector('.who').textContent = `🏎️ ${c.name} 으로 달려요`;
+    views.map.querySelector('.who').textContent = `🏎️ ${c.name} · 이 차로 달려요`;
   }
 
   /** 큰 시작 버튼의 차 사진 (carThumbs가 찍어 둔 것, 아직 없으면 그림 글자) */
@@ -1236,6 +1237,11 @@ export async function runHome() {
     }
   });
   settings.onChange(refreshModes);
+  // 클릭으로 포커스가 옮겨질 때 focusin이 먼저 방식을 바꿔요. 누르기 전 선택을 기억해 첫 클릭은 선택만.
+  let modeClickFrom = null;
+  views.mode.addEventListener('pointerdown', (e) => {
+    modeClickFrom = e.target.closest('[data-pick]') ? raceMode : null;
+  });
   views.mode.addEventListener('click', (e) => {
     const adj = e.target.closest('[data-adj]');
     if (adj) {
@@ -1247,8 +1253,9 @@ export async function runHome() {
     }
     const pick = e.target.closest('[data-pick]');
     if (pick) {
-      if (raceMode === pick.dataset.pick) start();
+      if (raceMode === pick.dataset.pick && (e.detail === 0 || modeClickFrom === pick.dataset.pick)) start();
       else pickMode(pick.dataset.pick, true);
+      modeClickFrom = null;
     }
   });
   views.mode.addEventListener('focusin', (e) => {

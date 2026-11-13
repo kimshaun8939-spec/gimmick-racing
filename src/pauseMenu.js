@@ -18,7 +18,7 @@ export function createPauseMenu(o) {
   root.innerHTML = `
     <div class="pm-wrap">
       <div class="pm-side">
-        <div class="pm-head"><div class="ic">⏸</div><div><h2>일시정지</h2><small>Esc를 누르면 계속 달려요</small></div></div>
+        <div class="pm-head"><div class="ic">⏸</div><div><h2>일시정지</h2><small>계속하기를 누르면 이어서 달려요</small></div></div>
         <div class="h-panel pm-info"></div>
         <div class="pm-list">
           <button class="gm-btn primary" data-act="resume" data-nav><span class="ic">▶</span>계속하기<kbd>Esc</kbd></button>
@@ -108,7 +108,7 @@ export function createPauseMenu(o) {
 
   async function leave(pageName) {
     if (o.isRacing() && !(await confirmDialog(pageName === undefined ? '홈으로 갈까요?' : pageName === 'car' ? '차를 바꿀까요?' : '맵을 바꿀까요?',
-      '지금 달리던 레이스는 끝나요. (최고 랩 기록은 이미 저장돼 있어요)', pageName === undefined ? '홈으로' : '바꾸러 가기'))) return;
+      '이동하면 지금 달리던 레이스가 끝나요.', pageName === undefined ? '홈으로' : '바꾸러 가기'))) return;
     o.onHome(pageName);
   }
 
