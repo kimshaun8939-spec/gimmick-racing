@@ -42,7 +42,9 @@ export function showCourseGuide({ map, title, mode, championship, params, onClos
   const answer = confirmDialog(title + ' · 처음 달리나요?', tips.map(t => '• ' + t).join('\n') + fly + rules + '\n\n' + drive + '\n빨간불 5개가 모두 꺼진 뒤 가속하세요. 지금은 출발 신호가 멈춰 있어요.', '확인하고 출발', '홈으로');
   const dialog = document.querySelector('.gm-confirm');
   dialog?.classList.add('course-guide');
-  if (usingPad) { const hint = dialog?.querySelector('[data-r="1"] kbd'); if (hint) hint.outerHTML = padKbd(0); }
+  const confirmHint = dialog?.querySelector('[data-r="1"] kbd');
+  if (touch) confirmHint?.remove();
+  else if (usingPad && confirmHint) confirmHint.outerHTML = padKbd(0);
   answer.then(ok => {
     if (ok) { try { localStorage.setItem(key, 'seen'); } catch {} }
     state.open = false;

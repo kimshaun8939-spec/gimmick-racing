@@ -403,7 +403,9 @@ export function startTutorial(game) {
       goals: ['100 km/h 넘기'],
       keys: true,
       setup(s) {
-        if (race.phase !== 'racing') game.resetRace();
+        // 가속만 배우는 동안은 조향이 필요 없는 기존 직선 연습 자리를 써요.
+        if (SPOT.straight) placeRolling(SPOT.straight.i0, 0);
+        else if (race.phase !== 'racing') game.resetRace();
       },
       update(dt, s) {
         coach.cue('throttle');
