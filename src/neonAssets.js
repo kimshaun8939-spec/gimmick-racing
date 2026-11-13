@@ -241,7 +241,7 @@ export function hologramMaterial(color = '#38e8ff', { opacity = 0.75, lines = 2.
 const ADS = [
   ['NEON CITY', 'GRAND PRIX', '#ff2f8e', '#2ff3ff'],
   ['기믹 레이싱', 'GIMMICK RACING', '#ffe23a', '#ff2f8e'],
-  ['TURBO COLA', '⚡ 부스터 충전 ⚡', '#7dff6a', '#2ff3ff'],
+  ['TURBO COLA', '⚡ 네온 에너지 ⚡', '#7dff6a', '#2ff3ff'],
   ['GLITCH ZONE', '차원 포털 앞 300m', '#b06cff', '#ff5cf0'],
   ['RAMEN 24H', '라멘 · 떡볶이 · 치킨', '#ff8a2a', '#ffe23a'],
   ['MAGNET TUBE', '벽·천장을 달리세요!', '#2ff3ff', '#b06cff'],

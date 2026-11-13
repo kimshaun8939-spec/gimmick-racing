@@ -9,6 +9,7 @@ import { createCarModel } from './carModel.js';
 import { initCarLighting } from './carLighting.js';
 import { createKeyboardInput, emptyControls } from './input.js';
 import { keybinds } from './keybinds.js';
+import { COURSE_TIPS, showCourseGuide } from './courseGuide.js';
 import { createHud } from './hud.js';
 import { buildScenery } from './scenery.js';
 import { buildProps } from './props.js';
@@ -106,12 +107,13 @@ const ld = (id, text) => {
 };
 ld('ldMap', mapMeta().title);
 const MAP_TIPS = {
-  mirage: ['모래폭풍 안에서는 청록 비콘과 노면 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요'],
+  ...COURSE_TIPS,
+  mirage: ['모래폭풍 안에서는 청록 안내등과 노면 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요'],
   foundry: ['25 m 고가는 다른 도로와 교차해요. 난간을 따라 공장 위를 가로지르세요', '민트 ↑ 벨트는 가속, 황색 ↓ 벨트는 감속해요. 160 m 앞 안내를 보고 민트 쪽을 골라요', '회전 이송대는 중앙을 곧게 지나면 빨라요. 가장자리는 회전 방향으로 밀려요', '용광로 사발은 18° 경사예요. 도로 안쪽을 따라 부드럽게 돌고 마지막 코너 전에 감속하세요', '황색 횡이송 벨트는 오른쪽으로 밀어요. 큰 화살표를 보고 왼쪽 조향으로 중심을 잡아요'],
   volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'],
-  glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '1 km 직선 끝 T1이 가장 좋은 추월 지점: 늦게 브레이크!', '길이 넓으니 큰 스위퍼는 연석까지 넓게 쓰세요. 눈밭은 미끄럽고 느려요'],
+  glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '긴 직선 끝 첫 코너에서는 빨간 라인을 보고 미리 브레이크!', '길이 넓어도 코너 앞에서는 감속하세요. 눈밭은 미끄럽고 느려요'],
 };
-const tipList = MAP_TIPS[mapName] && Math.random() < 0.7 ? MAP_TIPS[mapName] : LOAD_TIPS;
+const tipList = MAP_TIPS[mapName] || LOAD_TIPS;
 ld('ldTip', '💡 ' + (params.get('rookie') === '1' && mapName === 'glacier'
   ? '첫 직선에서 150 km/h를 넘기면 가속 모드로 변신해요. 코너에서는 빨간 라인을 보고 브레이크!'
   : tipList[Math.floor(Math.random() * tipList.length)]));
@@ -713,7 +715,7 @@ function handleEvents() {
       hud.flash('#7dff6a', 0.35);
       hud.shake(0.12);
     }
-    if (e === 'takeoff') hud.toast(`✈️ 이륙! ${keyLabel('climb', 'Space')} 상승 · ${keyLabel('dive', 'Shift')} 하강`);
+    if (e === 'takeoff') hud.toast(document.body.classList.contains('touch-on') ? '✈️ 이륙! ⬆ 상승 · ⬇ 하강 · 왼쪽 화면으로 선회해요' : `✈️ 이륙! ${keyLabel('climb', 'Space')} 상승 · ${keyLabel('dive', 'Shift')} 하강`);
     if (e === 'forceLand') hud.toast('🛬 비행 구역 끝! 땅으로 내려가요');
     if (e === 'smash') hud.shake(0.1);
     if (e === 'explode') {
@@ -743,14 +745,14 @@ function handleEvents() {
     if (e === 'jumpStart') {
       hud.big('부정 출발!', 1.4);
       hud.flash('#ff3b30', 0.6);
-      hud.toast(`불이 꺼지기 전에 밟아서 시동이 꺼졌어요 · ${keyLabel('throttle', 'W')}를 뗐다가 다시 누르세요`);
+      hud.toast(document.body.classList.contains('touch-on') ? '불이 꺼지기 전에 밟아서 시동이 꺼졌어요 · 가속 버튼에서 손을 뗐다가 다시 누르세요' : `불이 꺼지기 전에 밟아서 시동이 꺼졌어요 · ${keyLabel('throttle', 'W')}를 뗐다가 다시 누르세요`);
     }
     if (e === 'launchSpin') hud.toast('회전수가 너무 높아 바퀴가 헛돌아요!');
     // 모드가 바뀔 때: 큰 글자·화면 번쩍임 없이 차가 변신하는 모습(carModel) + 변신 소리 + 아래 버튼만 살짝 (아래 checkModeChange)
     if (e === 'splash') hud.toast('🌊 물에 빠지는 중! 곧 자동으로 배 모드');
     if (e === 'autoBoat') hud.toast('🚤 물에 닿아서 자동으로 배 모드!');
-    if (e === 'autoFly') hud.toast(`🛫 활주로! 자동으로 비행 모드 · ${keyLabel('climb', 'Space')} 이륙`);
-    if (e === 'sink') hud.toast(`가라앉았어요. ${keyLabel('respawn', 'R')} 키로 도로에 돌아와요`);
+    if (e === 'autoFly') hud.toast(document.body.classList.contains('touch-on') ? '🛫 활주로! 속도를 낸 뒤 ⬆ 상승을 눌러 이륙해요' : `🛫 활주로! 자동으로 비행 모드 · ${keyLabel('climb', 'Space')} 이륙`);
+    if (e === 'sink') hud.toast(document.body.classList.contains('touch-on') ? '가라앉았어요. ↺ 복귀를 눌러 도로로 돌아와요' : `가라앉았어요. ${keyLabel('respawn', 'R')} 키로 도로에 돌아와요`);
     if (e === 'apex' || e === 'apexPerfect') {
       lineFx.apex(car.lastApexInfo);
       if (corners) corners.apexHit(car.lastApexN);
@@ -915,7 +917,7 @@ function goHome(page) {
 }
 const menu = createPauseMenu({
   getInfo: () => ({
-    map: mapTitle, car: carName, free: FREE,
+    map: mapTitle, car: carName, free: FREE, online: ONLINE,
     lapText: `${Math.min(race.lap, totalLaps)} / ${totalLaps}`,
     time: race.time, best: race.best, record: (refRecord() || {}).race,
     phase: race.phase, lapTimes: race.lapTimes,
@@ -1131,6 +1133,12 @@ if (params.get('prewarm') !== '0') {
   setTimeout(() => l.remove(), 450);
 }
 
+// 출발 전 설명 뒤에도 준비된 코스가 보이도록 첫 장면을 한 번 그려요.
+renderer.render(scene, camera);
+const courseGuide = showCourseGuide({ map: mapName, title: mapTitle, mode: ITEM ? 'item' : MODE, championship: !!CHAMP, params,
+  onClose() { input.clear(); last = performance.now(); acc = 0; }, onHome: () => goHome(),
+});
+
 function frame(now, manual = false) {
   // 프레임 제한 (설정): 너무 이르면 이번 화면은 건너뜀
   const cap = settings.values.fpsCap;
@@ -1145,6 +1153,12 @@ function frame(now, manual = false) {
   if (window.game && window.game.paused) {
     engineAudio.update(car); // 일시정지 중엔 엔진 소리를 줄여 끔
     if (!manual) requestAnimationFrame(frame); // 테스트용 일시정지
+    return;
+  }
+  // 첫 코스 설명을 읽는 동안 출발 신호·물리도 기다림.
+  if (courseGuide.open) {
+    input.clear();
+    if (!manual) requestAnimationFrame(frame);
     return;
   }
   // ESC 메뉴가 열려 있으면 모두 멈춤 (물리·시간·출발 신호). 화면은 마지막 장면 그대로
@@ -1312,7 +1326,7 @@ function frame(now, manual = false) {
     for (const [e, view] of botViews) e.view = view;
   }
   if (items) {
-    items.setVisible(true);
+    items.setVisible(race.phase === 'racing' && !menuHold && !intro.on);
     items.update(dt, elapsed);
   }
   // 고스트는 기록 샘플 사이를 이미 보간함: 내 차와 같은 표시 시각(물리보다 최대 한 스텝 뒤).

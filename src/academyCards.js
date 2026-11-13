@@ -14,25 +14,31 @@ const keyText = (value) => String(value ?? '').replace(/\{([a-zA-Z]+)\}/g, (_, a
  * 예: shortCard({ ...LESSON_TEXT.brake, badge: '레슨 1/11', buttons: buttonHtml })
  */
 export function shortCard({ art, title, keys = [], tip = '', more = '', badge = '', buttons = '', keyHtml }) {
+  // 보조 문장도 호출 화면의 터치·패드·현재 키 배치를 따라가요.
+  const text = value => keyHtml ? String(value ?? '').replace(/\{[a-zA-Z]+\}/g, token => {
+    const label = document.createElement('span');
+    label.innerHTML = keyHtml(token);
+    return label.textContent;
+  }) : keyText(value);
   const svg = academyArt(art);
   const rows = (Array.isArray(keys) ? keys : []).slice(0, 3).map(([key, action]) =>
     '<li class="ac-short-keyrow">' + (keyHtml
       ? '<span class="ac-short-kbd ac-short-controls">' + keyHtml(key) + '</span>'
-      : '<kbd class="ac-short-kbd">' + escapeHtml(keyText(key)) + '</kbd>') +
-    '<span class="ac-short-action">' + escapeHtml(keyText(action)) + '</span></li>',
+      : '<kbd class="ac-short-kbd">' + escapeHtml(text(key)) + '</kbd>') +
+    '<span class="ac-short-action">' + escapeHtml(text(action)) + '</span></li>',
   ).join('');
-  return '<article class="ac-short-card" aria-label="' + escapeHtml(keyText(title)) + '">' +
+  return '<article class="ac-short-card" aria-label="' + escapeHtml(text(title)) + '">' +
     '<header class="ac-short-header">' +
       (badge ? '<span class="ac-short-badge">' + escapeHtml(badge) + '</span>' : '') +
-      '<h2 class="ac-short-title">' + escapeHtml(keyText(title)) + '</h2>' +
+      '<h2 class="ac-short-title">' + escapeHtml(text(title)) + '</h2>' +
     '</header>' +
     '<div class="ac-short-body' + (svg ? '' : ' ac-short-noart') + '">' +
       (svg ? '<div class="ac-short-art">' + svg + '</div>' : '') +
       '<ul class="ac-short-keys">' + rows + '</ul>' +
     '</div>' +
-    (tip ? '<p class="ac-short-tip"><span aria-hidden="true">💡</span> ' + escapeHtml(keyText(tip)) + '</p>' : '') +
+    (tip ? '<p class="ac-short-tip"><span aria-hidden="true">💡</span> ' + escapeHtml(text(tip)) + '</p>' : '') +
     (more ? '<details class="ac-short-more"><summary class="ac-short-summary">자세히</summary>' +
-      '<p class="ac-short-explanation">' + escapeHtml(keyText(more)) + '</p></details>' : '') +
+      '<p class="ac-short-explanation">' + escapeHtml(text(more)) + '</p></details>' : '') +
     (buttons ? '<footer class="ac-short-buttons">' + buttons + '</footer>' : '') +
   '</article>';
 }

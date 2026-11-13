@@ -537,7 +537,7 @@ export async function openLobby(opts = {}) {
           <div class="share-row"><button class="gm-btn small" data-act="share" id="lbShare">📤 공유</button><small>링크를 받은 친구는 누르기만 하면 이 방으로 와요</small></div>
         </section>
         <section class="lb-card lb-players"><h3>선수 <span id="lbCount"></span></h3><div class="list" id="lbPlayers"></div></section>
-        <section class="lb-card lb-maps"><h3 id="lbMapTitle">맵</h3><div class="grid" id="lbMaps"></div><div class="lb-bots" id="lbMode"></div><div class="lb-bots" id="lbBots"></div></section>
+        <section class="lb-card lb-maps"><h3 id="lbMapTitle">맵</h3><div class="grid" id="lbMaps"></div><div class="lb-bots" id="lbMode"></div><p class="lb-modehelp" id="lbModeHelp"></p><div class="lb-bots" id="lbBots"></div></section>
         <section class="lb-card lb-mycar"><h3>내 차 <button class="gm-btn small" data-act="rename">✏️ 이름 바꾸기</button></h3><div class="lb-cars" id="lbCars2"></div></section>
         <section class="lb-card lb-chat"><h3>채팅</h3><div class="log" id="lbChat"></div><form id="lbChatForm"><input id="lbChatIn" maxlength="80" placeholder="메시지 입력 후 Enter" autocomplete="off"><button class="gm-btn small">보내기</button></form></section>
         <div class="lb-bar"><button class="gm-btn danger" data-act="leave">← 방 나가기</button><span class="status" id="lbStatus"></span><button class="gm-btn primary" id="lbMain"></button></div>
@@ -608,6 +608,9 @@ export async function openLobby(opts = {}) {
           ? `<div class="gm-seg">${MODES.map(([m, t]) => `<button data-act="mode" data-m="${m}" class="${m === rmode ? 'on' : ''}">${t}</button>`).join('')}</div>`
           : `<b>${rmode === 'item' ? '🎁 아이템전' : '🏁 스피드전'}</b>`
       }`;
+    $('#lbModeHelp').textContent = rmode === 'item'
+      ? '🎁 상자를 지나 아이템을 얻고, 화면 위 아이템 칸을 눌러 사용해요. 드리프트 게이지를 채워도 부스터를 얻어요.'
+      : '🏁 정해진 바퀴를 먼저 완주하면 승리해요. 다른 사람이 모두 준비 완료를 누르면 방장이 출발해요.';
     const bots = s.bots();
     $('#lbBots').innerHTML = `<span>🤖 컴퓨터 차</span>${
       s.isHost

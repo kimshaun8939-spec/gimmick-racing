@@ -55,7 +55,7 @@ function blocked() {
   const q = (s) => document.querySelector(s);
   if (q('#pauseMenu.on') || q('#results.on') || q('.gm-confirm') || q('#lobby')) return true;
   const g = window.game;
-  if (g && g.tutorial && g.tutorial.phase === 'card') return true;
+  if (g && g.tutorial && ['card', 'demo'].includes(g.tutorial.phase)) return true;
   const ld = q('#loading');
   return !!(ld && !ld.classList.contains('out'));
 }

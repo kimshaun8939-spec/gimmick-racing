@@ -50,6 +50,9 @@ export function createPauseMenu(o) {
 
   function renderInfo() {
     const i = o.getInfo();
+    root.querySelector('.pm-head h2').textContent = i.online ? '온라인 메뉴' : '일시정지';
+    root.querySelector('.pm-head small').textContent = i.online ? '온라인 경기는 계속돼요. 내 차는 가속을 멈춰요' : '계속하기를 누르면 이어서 달려요';
+    root.querySelector('[data-act="restart"]').style.display = i.online ? 'none' : '';
     root.querySelector('.pm-info').innerHTML = [
       ['맵', i.map],
       ['차', i.car],
@@ -81,8 +84,8 @@ export function createPauseMenu(o) {
       const i = o.getInfo();
       pageTitle.textContent = '';
       const laps = (i.lapTimes || []).map((t, k) => `<span>LAP ${k + 1} · ${fmtTime(t)}</span>`).join('');
-      pageBody.innerHTML = `<div class="pm-welcome"><div><div class="big">PAUSE</div>
-        <div>${i.phase === 'countdown' ? '출발 신호가 멈춰 있어요. 계속하기를 누르면 이어서 켜져요' : i.phase === 'finished' ? '완주했어요! 다시 시작하거나 다른 맵을 골라 보세요' : '레이스가 멈춰 있어요'}</div>
+      pageBody.innerHTML = `<div class="pm-welcome"><div><div class="big">${i.online ? '온라인 경기 중' : '잠시 쉬는 중'}</div>
+        <div>${i.online ? '온라인에서는 메뉴를 열어도 레이스가 계속돼요. 계속하기로 돌아가세요' : i.phase === 'countdown' ? '출발 신호가 멈춰 있어요. 계속하기를 누르면 이어서 켜져요' : i.phase === 'finished' ? '완주했어요! 다시 시작하거나 다른 맵을 골라 보세요' : '레이스가 멈춰 있어요'}</div>
         ${laps ? `<div class="laps">${laps}</div>` : ''}</div></div>`;
     }
   }
@@ -115,6 +118,7 @@ export function createPauseMenu(o) {
   async function act(name) {
     if (name === 'resume') doClose();
     else if (name === 'restart') {
+      if (o.getInfo().online) return;
       doClose();
       o.onRestart();
     } else if (name === 'settings' || name === 'controls' || name === 'keys') {

@@ -314,7 +314,7 @@ export function startAcademy(game) {
       console.warn('시범 주행 오류', e);
       return startLive();
     }
-    coach.buttons(`<button class="gm-btn small" data-t="demoAgain">↺ 처음부터 <kbd>${esc(keybinds.main('restart'))}</kbd></button><button class="gm-btn small" data-t="demoSkip">직접 해 보기 ›</button>`);
+    coach.buttons(`<button class="gm-btn small" data-t="demoAgain">↺ 처음부터 <kbd>${esc(keybinds.main('restart'))}</kbd></button><button class="gm-btn small" data-t="demoSkip">직접 해 보기 ›</button><button class="gm-btn small" data-t="card">‹ 설명·나가기</button>`);
   }
   function demoDone(skipped) {
     stopAuto();

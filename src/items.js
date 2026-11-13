@@ -418,7 +418,7 @@ export function createItems(o) {
     const all = racers();
     if (!hintDone && raceT > 1.2) {
       hintDone = true;
-      say(`🎁 아이템 상자를 먹고 ${keyLabel('booster', 'E')}로 사용!`);
+      say(document.body.classList.contains('touch-on') ? '🎁 상자를 지나 아이템 획득 → 화면 위 아이템 칸을 눌러 사용해요' : `🎁 상자를 지나면 아이템! ${keyLabel('booster', 'E')} 키로 사용해요`);
     }
     // 상자
     for (const row of rows) {

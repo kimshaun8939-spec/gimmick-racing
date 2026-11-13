@@ -2362,3 +2362,150 @@ body:has(#results.on) #xpPill { display:none!important; }
  #tutorial .tut-dots i { width:5px; height:5px; }
  #tutorial .tut-dots i.cur { width:14px; }
 }
+
+/* launchqa2: 휴대폰의 작은 설명·버튼, 출발 전 코스 안내 */
+.course-guide .box { width:min(640px,calc(100vw - 28px)); max-height:calc(100dvh - 24px); overflow:auto; }
+.course-guide .box p { white-space:pre-line; text-align:left; line-height:1.7; color:#dce6f7; word-break:keep-all; }
+.course-guide .btns { position:sticky; bottom:-1px; padding-top:10px; background:#10192d; }
+body.touch-on .course-guide kbd { display:none; }
+body.touch-on #touchCtl .tc-btn small { font-size:12px; line-height:1.2; }
+body.touch-on #itemHud .slot kbd { font-size:0; }
+body.touch-on #itemHud .slot kbd::after { content:'사용'; font-size:12px; }
+body.touch-on #itemHud .gl { font-size:14px; }
+body.touch-on #itemHud .s2 { min-width:52px; min-height:52px; }
+@media (max-width:900px), (pointer:coarse) {
+ #home .gm-btn.hx-ico { width:44px; height:44px; min-height:44px; }
+ #home .mt-wallet-btn { min-width:44px; min-height:44px; }
+ #home .h-icons { gap:6px; }
+ #home .hx-util { gap:0; }
+ #home .hx-flow button { min-height:44px; box-sizing:border-box; padding:4px 7px; font-size:12px; }
+ #home .hx-flow button b,#home .hx-steps b { font-size:12px; }
+ #home .gm-btn,#pauseMenu .gm-btn,#results .res-dashboard .btns .gm-btn,.cp-panel .gm-btn { min-height:44px!important; font-size:max(12px,1em); }
+ #home .cp-quick { width:44px; min-height:44px; }
+ #home .h-arrow { min-width:44px; }
+ #home .h-mopt button { width:44px; height:44px; }
+ #home .cx-sort { min-height:44px; }
+ #home .h-carstage .h-modebtns button { min-height:44px; }
+ #home .h-carstage button { min-height:44px; }
+ #home .mt-filters button,#home .mt-tabs button,#home .mt-title-btn,#home .mt-preview-reset,#home .mt-title-list button { min-height:44px; }
+ #home .hx-driver .lv,#home .hx-driver .st,#home .hx-chips i,#home .hx-kicker,#home .hx-grid small,
+ #home .mt-home-goals :is(b,small,em),#home .mt-wallet-btn small,#home .mt-driver-title,
+ #home .h-carlist :is(small,.cnt,.tg),#home .h-carinfo small,#home .h-modebtns button,
+ #home .mp-layout small,#home .mp-lhint,#home .h-modesum small,#home .h-foot,
+ #home .ns-method,#home .ns-note,.cp-panel :is(small,kbd),.cp-panel :is(.cp-kicker,.cp-badges,.cp-lock,.cp-legend,.cp-method,.cp-tablehint,.cp-foot,.cp-intro),
+ #home .mt-page :is(small,.mt-kicker,.mt-note,.mt-status,.mt-feedback,.mt-progress-text,.mt-rewards>span,.mt-ledger),
+ #home :is(.mt-costume-note,.mt-costume>small,.mt-costume>b,.mt-costume-pic>i,.mt-costume-detail p,.mt-costume-detail small,.mt-costume-empty p),
+ #results .res-dashboard :is(small,kbd,.badge,.online,.who,.res-detail,.res-theory,.res-times .hd,.cana .ct,.stand,.cst),
+ #lobby :is(small,kbd),#tutorial :is(small,kbd),.gm-confirm kbd { font-size:12px!important; }
+ #home .mt-home-goals small { white-space:normal; line-height:1.5; }
+ #home .mt-home-goals em { max-width:65px; white-space:normal; line-height:1.5; }
+ #home .h-modetip { display:block; flex-shrink:0; font-size:12px; line-height:1.5; padding:8px 12px; }
+ #home .h-mode.sel .h-modecard small { -webkit-line-clamp:unset; display:block; overflow:visible; }
+ #home .mt-page :is(p,.mt-product p,.mt-ach p,.mt-costume-detail p) { font-size:12px!important; line-height:1.6; color:#b7c8e2; }
+ #home .mt-filters button { font-size:12px; }
+ #home .hx-util .off { opacity:1; }
+}
+@media (max-width:480px) {
+ #home .h-top { padding-left:12px; padding-right:12px; }
+ #home .h-icons { flex:1; justify-content:flex-end; min-width:0; }
+ #home .gm-btn.hx-driver { flex:1; min-width:0; max-width:125px; padding-right:4px; gap:4px; }
+ #home .hx-driver .hx-dinfo { min-width:0; }
+ #home .hx-driver .hx-lic { flex-shrink:0; }
+ #home .hx-flow { gap:2px; padding:3px; }
+ #home .hx-flow i { display:none; }
+ #home .h-modegrid { flex-shrink:0; overflow:visible; }
+ #home .h-modes { height:auto; }
+ #home .h-view[data-view='mode'] { overflow-y:auto; padding-bottom:76px; }
+ #home .h-modes .bar { position:fixed; bottom:48px; left:16px; right:16px; z-index:5; background:#10192d; }
+}
+@media (max-height:520px) and (min-width:481px) {
+ #home .h-modetip { max-height:58px; overflow-y:auto; }
+ #home .h-mode.sel .h-modecard small { -webkit-line-clamp:2; display:-webkit-box; overflow:hidden; }
+ .course-guide .box { padding:16px 22px; }
+ .course-guide .box h3 { font-size:21px; margin:0 0 10px; }
+ .course-guide .box p { font-size:13px; margin:8px 0; line-height:1.55; }
+}
+@media(prefers-reduced-motion:reduce) {
+ #home *,#home *::before,#home *::after,#tutorial *,#pauseMenu *,#touchCtl *,#results *,.gm-confirm * { scroll-behavior:auto!important; animation:none!important; transition:none!important; }
+}
+
+@media (max-width:900px), (pointer:coarse) {
+ #home .h-carlist .cp-quick { width:44px; min-width:44px; }
+ #home .gx-sw { width:44px; height:44px; min-width:44px; min-height:44px; }
+ #home :is(.nc-badge,.nm-classhelp,.h-carcard .cl,.gx-classinfo>span,.mt-money,.mt-money i) { font-size:12px!important; }
+ .cp-panel .cp-carbuttons .gm-btn { min-width:44px; min-height:44px; }
+}
+
+@media (max-width:900px), (pointer:coarse) {
+ #home :is(small,kbd,.h-assist,.h-classchip>span,.h-map .stars,.h-map .len,.mp-tags span,.mp-ot,.ol-cap,.mt-rank,.mt-tabs button,.mt-wallet>span,.mt-completion em,.mt-progress-text b),
+ #home .ax-tx em,#home .ax-medal i,#home .ax-lic :is(span,small),#home :is(.ax-rule,.ax-rule b,.ax-rew),
+ .cp-panel :is(.cp-score>span,.cp-class,.cp-name,.cp-legend .cp-key) { font-size:12px!important; }
+ #home .cx-find input,#home .mt-status select { min-height:44px; }
+ #home summary,#pauseMenu summary,.cp-panel summary { min-height:44px; box-sizing:border-box; padding-top:12px; padding-bottom:12px; }
+ #home .hr-arr { min-width:44px; }
+ :is(#home,#pauseMenu,#lobby) .gm-seg { flex-wrap:wrap; }
+ :is(#home,#pauseMenu,#lobby) .gm-seg button { min-width:44px; min-height:44px; }
+ :is(#home,#pauseMenu,#lobby) .gm-switch { height:44px; border-radius:22px; }
+ :is(#home,#pauseMenu,#lobby) .gm-switch i { top:11px; }
+ :is(#home,#pauseMenu,#lobby) .gm-switch::after { inset:0; }
+ :is(#home,#pauseMenu) input[type='range'] { height:44px; background:transparent; }
+ :is(#home,#pauseMenu) input[type='range']::-webkit-slider-runnable-track { height:6px; border-radius:4px; background:#8fa2c3; }
+ :is(#home,#pauseMenu) input[type='range']::-webkit-slider-thumb { margin-top:-5px; }
+}
+
+#results.rp #rpBar { background:rgba(10,20,38,.96); border-color:#8ca9ca; color:#edf3ff; }
+#rpBar .rp-help { font-size:12px; color:#c4d5ed; margin:8px 0 0; line-height:1.5; }
+#rpBar button:disabled { opacity:.65; cursor:default; }
+@media(max-width:900px),(pointer:coarse) {
+ #rpBar .rp-btns .gm-btn { min-height:44px; font-size:12px; }
+ #rpBar .rp-seek { height:44px; margin:0; background:transparent; }
+ #rpBar .rp-seek::-webkit-slider-runnable-track { height:6px; background:#8fa2c3; border-radius:4px; }
+ #rpBar .rp-seek::-webkit-slider-thumb { margin-top:-5px; }
+ #results .res-dashboard .btns .gm-btn { font-size:12px!important; word-break:keep-all; }
+ #results .res-dashboard :is(.nr-next p,.nr-next strong,.res-xp em,.mt-result-balance,.mt-money,.mt-money i,.mt-result-ach>span,.mt-result-ach b,.mt-result-link) { font-size:12px!important; }
+}
+
+@media (max-width:900px),(pointer:coarse) {
+ #tutorial :is(button.gm-btn,.tut-x) { min-height:44px!important; font-size:12px!important; }
+ #tutorial .tut-x { min-width:44px; }
+ #tutorial summary { min-height:44px; box-sizing:border-box; padding-top:12px; padding-bottom:12px; }
+ #tutorial .tut-chip { font-size:12px; }
+ #tutorial .tut-card .tut-btns { flex-shrink:0; }
+ #tutorial .tut-card .tut-body { min-height:0; overflow-y:auto; }
+}
+
+@media(max-width:900px),(pointer:coarse) {
+ .td-btns .gm-btn { min-height:44px; font-size:12px; }
+ #topLeft :is(#lap,#best,.sec b,.sec span),#raceGaps,#speedUnit { font-size:12px!important; }
+ #topLeft .sec { min-width:0; }
+ #topLeft #best { white-space:normal; }
+}
+
+@media(max-width:900px),(pointer:coarse) {
+ body #lobby :is(button.gm-btn,input) { min-height:44px!important; }
+ body #lobby :is(.cl,.ping) { font-size:12px!important; }
+ body #lobby .lb-pl button { min-width:44px; min-height:44px; }
+}
+
+body #lobby .lb-modehelp { color:#c3d4ec; background:#101d31; border:1px solid #58708e; border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.6; }
+
+@media(prefers-reduced-motion:reduce) { #draftLines { animation:none!important; } }
+
+@media(max-width:900px),(pointer:coarse) { #home :is(.h-map .rec,.mt-title-btn,.h-carcard .chk,.h-carinfo>.tg) { font-size:12px!important; } }
+
+#pauseMenu :is(.pm-head small,.pm-welcome) { word-break:keep-all; }
+@media(max-width:900px),(pointer:coarse) {
+ #home { --gm-dim:#b2bfd4; }
+ #home .ax-tx b,#home .ax-tx em { word-break:keep-all; overflow-wrap:normal; }
+}
+
+@media(max-width:900px),(pointer:coarse) {
+ #home :is(.mp-facts em,.kb-selected,.kb-mini-row i,.kb-legend span,.kb-legend b),
+ #home .pad-pic span,#home .pad-slot .lock { font-size:12px!important; }
+ #home .pad-slot { min-height:44px; }
+ #home .kb-reset { min-width:44px; min-height:44px; }
+}
+
+@media(max-width:900px),(pointer:coarse) { #home .kb-preset-summary :is(span,b) { font-size:12px!important; } }
+
+body:has(.course-guide) > .hud,body:has(.course-guide) :is(#menuBtn,#touchCtl,#itemHud) { visibility:hidden; }

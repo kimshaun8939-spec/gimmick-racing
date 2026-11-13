@@ -431,7 +431,7 @@ export function createHud(track) {
         }
       }
       lastPos = info.pos;
-      const g = (x) => (!x ? '' : x.laps ? `${x.laps}랩` : `${x.sec.toFixed(1)}초`);
+      const g = (x) => (!x ? '' : x.laps ? `${x.laps}랩` : `${Math.max(0, x.sec).toFixed(1)}초`);
       el.raceGaps.innerHTML =
         (info.ahead ? `<div class="a">▲ ${escH(info.ahead.name)}${info.ahead.gap ? ` ${g(info.ahead.gap)} 앞` : ''}</div>` : '<div class="a">🏁 선두!</div>') +
         (info.behind ? `<div class="b">▼ ${escH(info.behind.name)}${info.behind.gap ? ` ${g(info.behind.gap)} 뒤` : ''}</div>` : '');

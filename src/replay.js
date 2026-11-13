@@ -242,6 +242,7 @@ export function createReplay(o) {
     bar = document.createElement('div');
     bar.id = 'rpBar';
     bar.innerHTML = `<div class="rp-top"><b>🎬 리플레이</b><span class="rp-car"></span><span class="rp-time"></span></div>
+      <p class="rp-help">완주한 주행을 다시 보는 화면이에요. 아래 막대를 끌어 원하는 순간으로 이동하세요.</p>
       <input class="rp-seek" type="range" min="0" max="1000" value="0" aria-label="재생 위치">
       <div class="rp-btns">
         <button class="gm-btn small" data-rp="back" title="5초 뒤로 (←)">⏪ 5초</button>
@@ -249,7 +250,7 @@ export function createReplay(o) {
         <button class="gm-btn small" data-rp="fwd" title="5초 앞으로 (→)">5초 ⏩</button>
         <button class="gm-btn small" data-rp="speed" title="배속 (F)">1×</button>
         <button class="gm-btn small" data-rp="cam" title="카메라 (C)">📺 TV</button>
-        <button class="gm-btn small" data-rp="car" title="다른 차 보기 (↑/↓)">🚗 다른 차</button>
+        <button class="gm-btn small" data-rp="car" title="다른 차 보기 (↑/↓)" ${cars.length < 2 ? 'disabled' : ''}>${cars.length < 2 ? '🚗 내 차만 있음' : '🚗 다른 차'}</button>
         <button class="gm-btn small" data-rp="exit" data-res="home" title="나가기 (Esc)">✕ 나가기</button>
       </div>`;
     root.prepend(bar); // 패드 B(= #results의 첫 [data-res="home"])가 '나가기'를 누르게 맨 앞에

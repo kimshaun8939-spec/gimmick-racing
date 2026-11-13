@@ -131,6 +131,8 @@ export async function runHome() {
   // ------------------------------------------------------------------ 화면 틀
   const home = document.createElement('div');
   home.id = 'home';
+  // 홈에서는 주행 HUD가 키보드 탐색·화면 읽기에 섞이지 않게 숨겨요.
+  document.querySelectorAll('body > .hud, #menuBtn, #slingFlash, #draftLines').forEach(el => { el.style.display = 'none'; el.style.animation = 'none'; el.inert = true; });
   home.innerHTML = `
     <div class="h-glow"></div><div class="h-floor"></div><div class="h-streaks"></div>
     <div class="h-top">
@@ -157,7 +159,7 @@ export async function runHome() {
     <div class="h-view" data-view="mode"></div>
     <div class="h-view" data-view="academy"></div>
     <div class="h-view" data-view="meta"></div>
-    <div class="h-foot"><span>${VERSION} · 기믹 레이싱 · Three.js</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
+    <div class="h-foot"><span>${VERSION} · 기믹 레이싱</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
     <div class="h-launch"><div class="ld" id="hLaunch"></div></div>
     <div class="h-toast" id="hToast"></div>`;
   document.body.appendChild(home);
@@ -1098,7 +1100,7 @@ export async function runHome() {
   const OPT_LABEL = { bots: '봇 수', botLevel: '봇 실력', ghost: '고스트', champLen: '시즌' };
   const MODE_TIPS = {
     race: '🏁 봇들과 같은 출발선에서 출발해요. 봇은 내 차와 같은 등급의 차를 타요',
-    item: '🎁 코스의 아이템 상자를 먹고 부스터·로켓·방어막을 써요. 드리프트로 게이지를 채우면 부스터가 생겨요',
+    item: '🎁 상자를 지나 아이템을 얻어요. 화면 위 아이템 칸을 누르거나 ' + keybinds.label('booster') + ' 키로 사용해요. 드리프트 게이지를 채워도 부스터를 얻어요',
     time: '⏱️ 혼자 달리며 고스트(내 최고 기록)와 겨뤄요. 구간마다 빨라졌는지 느려졌는지 알려 줘요',
     net: '🌐 방을 만들어 코드를 친구에게 보내거나, 친구 코드로 들어가요. 모두 준비되면 같이 출발해요',
     free: '🧭 봇·고스트 없이 혼자 달려요. 코스를 익히거나 레이싱 라인을 연습할 때 좋아요',
@@ -1852,6 +1854,7 @@ function createPreview(home) {
     dirty = true;
   }
 
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   let last = performance.now(), time = 0;
   function loop(now) {
     requestAnimationFrame(loop);
@@ -1865,14 +1868,14 @@ function createPreview(home) {
     time += dt;
     idle += dt;
     if (!dragging) {
-      spin *= Math.exp(-3 * dt);
-      const auto = idle > 2 ? 0.32 : 0;
+      spin = reduceMotion.matches ? 0 : spin * Math.exp(-3 * dt);
+      const auto = !reduceMotion.matches && idle > 2 ? 0.32 : 0;
       angle += (spin + auto) * dt;
     }
     table.rotation.y = angle;
     // 새 차가 살짝 위에서 내려앉음
     if (holder) {
-      drop = Math.min(1, drop + dt / 0.45);
+      drop = reduceMotion.matches ? 1 : Math.min(1, drop + dt / 0.45);
       const e = 1 - Math.pow(1 - drop, 3);
       holder.position.y = holder.userData.baseY + 0.7 * (1 - e) + Math.sin(drop * Math.PI) * 0.03;
     }
@@ -2078,7 +2081,7 @@ function firstDriveDialog(onMode) {
     let form = 0;
     const showForm = () => { onMode(forms[form][0]); wrap.querySelector('.nf-form').textContent = forms[form][1]; form = (form + 1) % forms.length; };
     showForm();
-    const timer = setInterval(showForm, 3200);
+    const timer = matchMedia('(prefers-reduced-motion: reduce)').matches ? null : setInterval(showForm, 3200);
     function finish() {
       setNick(cleanNick(input.value) || randomNick());
       keybinds.selectPreset(select.value);
