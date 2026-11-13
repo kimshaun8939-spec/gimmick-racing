@@ -16,7 +16,7 @@ export const SETTING_DEFS = [
   { group: '소리', key: 'fxVol', label: '효과음', desc: '변신·바람·연석·메뉴 소리', type: 'slider', def: 1 },
   { group: '소리', key: 'muted', label: '소리 끄기', desc: () => `게임 중 ${keybinds.main('sound')} 키와 같아요`, type: 'toggle', def: false },
 
-  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 높음으로 그리다가 끊기면 해상도만 살짝 낮춤 (렉이 걸리는 컴퓨터용). 노트북이 뜨거워지면 낮춰 보세요', type: 'choice',
+  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 해상도·그림자·백미러 갱신을 차례로 줄여요. 낮음 = 낮은 해상도, 햇빛 그림자 끔, 백미러는 덜 자주 그림. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
     options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
   { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 배터리·발열이 줄어요', type: 'choice',
     options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 60 }, // 2026-11-12 기본 0 → 60 (사용자 요청: 발열)
@@ -146,6 +146,12 @@ function createStore() {
 }
 
 export const settings = createStore();
+// 자동 품질의 현재 화면 비용 단계. 저장된 사용자 설정과 구분하며, 물리에는 쓰지 않아요.
+export const graphicsBudget = { tier: 0 };
+export function graphicsTier() {
+  const q = settings.values.quality;
+  return q === 'low' ? 2 : q === 'medium' ? 1 : q === 'auto' ? graphicsBudget.tier : 0;
+}
 
 /** 아주 작은 메뉴 소리 (효과음 크기·소리 끄기를 따름). kind: move / select / back / toggle */
 let uiCtx = null;

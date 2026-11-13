@@ -15,7 +15,7 @@
 //   main.js: createMirror({...}) 하나 + 매 프레임 게임 화면을 그린 바로 뒤 mirror.frame(dt, { phase, intro, override })
 //   모양은 src/mirror.css (이 파일이 스스로 불러옴). 숨는 때: 출발 신호·그리드 소개·리플레이·결과 화면·ESC 메뉴·HUD 숨김·상대 없는 레이스
 import * as THREE from 'three';
-import { settings } from './settings.js';
+import { settings, graphicsTier } from './settings.js';
 
 export const MIRROR_CFG = {
   showM: 35, // 이 거리(m, 코스를 따라) 안에 뒤차가 있으면 내려옴
@@ -271,8 +271,10 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
     const key = `${r.x},${r.y},${r.w},${r.h},${pr}`;
     const half = C.halfRate && !HALF_OFF && st.k >= 1;
     if (!half || fb.key !== key) fb.ok = false;
-    st.flip = !st.flip;
-    if (half && fb.ok && st.flip) {
+    // CPU 여유가 적어도 거울은 유지. 2프레임마다 그리던 것을 낮음에서 3프레임마다.
+    const stride = graphicsTier() === 2 ? 3 : 2;
+    st.copyFrame = ((st.copyFrame || 0) + 1) % stride;
+    if (half && fb.ok && st.copyFrame !== 0) {
       drawCopy(r, glY, h);
       st.ms = performance.now() - t0;
       st.reused++;

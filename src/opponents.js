@@ -8,6 +8,7 @@
 //   화면: 차마다 3D 모델 + 머리 위 이름표. 멀리 있는 차는 가벼운 모형(LOD)으로 바꿔서 그림 → 7대여도 가볍게
 import * as THREE from 'three';
 import { createCarModel } from './carModel.js';
+import { graphicsTier } from './settings.js';
 import { batchLocal } from './staticBatch.js'; // 차 부품 묶어 그리기 (렉 줄이기)
 
 const FULL_DIST = 120; // 이 거리(m) 안에서만 자세한 모델 (밖은 단순한 모형)
@@ -220,6 +221,13 @@ export function createOpponents(scene) {
         entries.splice(i, 1);
         scene.remove(entry.model.root, entry.proxy, entry.tag.sprite);
         entry.model.dispose && entry.model.dispose();
+        // 단순 모형과 이름표는 carModel.dispose의 범위 밖. 온라인 입퇴장 때도 GPU 자원을 돌려줌.
+        const geos = new Set(), mats = new Set();
+        entry.proxy.traverse(o => { if (o.geometry) geos.add(o.geometry); if (o.material) mats.add(o.material); });
+        for (const g of geos) g.dispose();
+        for (const m of mats) m.dispose();
+        entry.tag.sprite.material.map.dispose();
+        entry.tag.sprite.material.dispose();
         for (const fn of changeFns) fn('remove', entry);
       },
     };
@@ -269,6 +277,7 @@ export function createOpponents(scene) {
         // 그림자 단계: 거리가 바뀌면 바로, 아니어도 1초마다 다시 (변신으로 부품이 풀려 새로 생긴 메시까지)
         let tier = shadowTierOf(d);
         if (e.shTier != null && tier !== e.shTier && shadowTierOf(d + (tier > e.shTier ? -2 : 2)) === e.shTier) tier = e.shTier; // 경계에서 2 m 여유 (깜빡임 방지)
+        tier = Math.max(graphicsTier() > 0 ? 1 : 0, tier);
         e.shT = (e.shT || 0) - dt;
         if (tier !== e.shTier || e.shT < 0) {
           applyShadowTier(e.model.root, tier);

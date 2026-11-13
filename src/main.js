@@ -19,7 +19,7 @@ import { createKerbFx } from './kerbFx.js';
 import { createTransformSfx } from './transformFx.js';
 import { createSpeedFx } from './speedFx.js';
 import { createGpCorners } from './gpCorners.js';
-import { settings, dialogOpen } from './settings.js';
+import { settings, dialogOpen, graphicsBudget } from './settings.js';
 import { createPauseMenu } from './pauseMenu.js';
 import { records, fmtTime } from './records.js';
 import { loadMaps, loadRoster, setLast, raceUrl, homeUrl } from './gameData.js';
@@ -812,30 +812,31 @@ function setModuleMute(m) {
   speedFx.setMuted(m);
   if (items) items.setMuted(m);
 }
-/** 그래픽 품질: 낮음 = 해상도 낮추고 그림자 끔, 보통 = 해상도 1배·그림자 작게, 높음 = 예전과 같음
- *  자동 (2026-11-10, 기본) = 높음과 같게 그리다가 화면이 끊기면 해상도 배율만 조금씩 낮춤 (autoRes), 부드러워지면 다시 올림 */
-const autoRes = { scale: 1, min: 0.55, acc: 0, frames: 0, slowT: 0, goodT: 0, smallShadow: false, log: [] };
-// 이 컴퓨터에서 지난번에 맞춘 값부터 시작 (처음 몇 초 렉 줄이기). 한 칸 높게 시작해서 버티면 그대로, 못 버티면 다시 내려감
+/** 자동 품질은 해상도 다음으로 그림 호출도 줄임. 차/물리/봇 수는 유지. */
+const autoRes = { scale: 1, min: 0.55, tier: 0, workMs: 0, startAt: 0, acc: 0, frames: 0, slowT: 0, goodT: 0, smallShadow: false, log: [] };
 try {
   const saved = JSON.parse(localStorage.getItem('gimmick.autoRes') || 'null');
-  if (saved && saved.scale > 0) {
+  if (saved && Number.isFinite(saved.scale) && saved.scale > 0) {
     autoRes.scale = Math.min(1, Math.max(autoRes.min, saved.scale * 1.1));
-    autoRes.smallShadow = !!saved.smallShadow && autoRes.scale <= autoRes.min + 0.05;
+    autoRes.tier = Math.max(0, Math.min(2, saved.tier | 0));
+    autoRes.smallShadow = autoRes.tier > 0 || (!!saved.smallShadow && autoRes.scale <= autoRes.min + 0.05);
   }
 } catch {}
 const saveAutoRes = () => {
   try {
-    localStorage.setItem('gimmick.autoRes', JSON.stringify({ scale: +autoRes.scale.toFixed(3), smallShadow: autoRes.smallShadow }));
+    localStorage.setItem('gimmick.autoRes', JSON.stringify({ scale: +autoRes.scale.toFixed(3), tier: autoRes.tier, smallShadow: autoRes.smallShadow }));
   } catch {}
 };
 function applyQuality(q) {
   const full = Math.min(devicePixelRatio, 2);
-  const pr = q === 'low' ? Math.min(devicePixelRatio, 1) * 0.8 : q === 'medium' ? Math.min(devicePixelRatio, 1.25) : q === 'auto' ? Math.max(0.6, full * autoRes.scale) : full;
+  graphicsBudget.tier = q === 'auto' ? autoRes.tier : q === 'low' ? 2 : q === 'medium' ? 1 : 0;
+  const autoFull = Math.min(full, graphicsBudget.tier === 2 ? 1.45 : 2);
+  const pr = q === 'low' ? Math.min(devicePixelRatio, 1) * 0.8 : q === 'medium' ? Math.min(devicePixelRatio, 1.25) : q === 'auto' ? Math.max(0.6, autoFull * autoRes.scale) : full;
   if (Math.abs(renderer.getPixelRatio() - pr) > 1e-3) {
     renderer.setPixelRatio(pr);
     resize();
   }
-  sun.castShadow = q !== 'low';
+  sun.castShadow = q !== 'low' && !(q === 'auto' && autoRes.tier === 2);
   const size = q === 'high' || (q === 'auto' && !autoRes.smallShadow) ? 2048 : 1024;
   if (sun.shadow.mapSize.x !== size) {
     sun.shadow.mapSize.set(size, size);
@@ -845,46 +846,53 @@ function applyQuality(q) {
     }
   }
 }
-/** 자동 품질: 실제 화면 프레임 시간으로 판단 (1초마다). 목표 = 60fps(또는 프레임 제한)의 90% */
+/** 1초씩 판단. 30 제한도 존중하고, 회복은 여유가 8초 이어질 때만 (품질 왕복 방지). */
 function autoResTick(dt) {
-  if (settings.values.quality !== 'auto' || dt <= 0 || document.hidden || elapsed < 3) return; // 처음 3초는 셰이더 준비로 끊길 수 있어 빼고
+  if (settings.values.quality !== 'auto' || dt <= 0 || document.hidden) return;
+  if (!autoRes.startAt) autoRes.startAt = performance.now();
+  if (performance.now() - autoRes.startAt < 3000) return;
   autoRes.acc += dt;
   autoRes.frames++;
   if (autoRes.acc < 1) return;
   const fps = autoRes.frames / autoRes.acc;
   autoRes.acc = 0;
   autoRes.frames = 0;
-  const cap = settings.values.fpsCap || 60;
-  const want = Math.min(cap, 60) * 0.9;
-  let next = autoRes.scale;
+  const target = Math.min(settings.values.fpsCap || 60, 60);
+  const want = target * 0.9;
+  let next = autoRes.scale, changed = false;
   if (fps < want) {
     autoRes.goodT = 0;
     autoRes.slowT++;
-    // 많이 느리면 크게, 조금 느리면 조금 (한 번에 최대 25%)
     next = Math.max(autoRes.min, autoRes.scale * Math.max(0.75, Math.min(0.95, Math.sqrt(fps / want))));
-    // 이미 가장 낮은데도 느리면 그림자 지도를 작게
-    if (autoRes.scale <= autoRes.min + 1e-3 && autoRes.slowT >= 3 && !autoRes.smallShadow) {
+    // 해상도만 내려도 CPU의 그림 호출은 남음. 많이 느리면 바로, 최저에서도 느리면 차례로 줄임.
+    if (autoRes.slowT >= 2 && autoRes.tier < 2 && (fps < target * 0.65 || autoRes.scale <= autoRes.min + 0.01)) {
+      autoRes.tier++;
       autoRes.smallShadow = true;
-      applyQuality('auto');
-      saveAutoRes();
+      autoRes.slowT = 0;
+      changed = true;
     }
   } else {
     autoRes.slowT = 0;
-    autoRes.goodT++;
-    // 4초 동안 계속 부드러우면 조금 올려 봄 (못 버티면 다시 내려옴)
-    if (autoRes.goodT >= 4 && autoRes.scale < 1) {
-      next = Math.min(1, autoRes.scale * 1.1);
+    if (fps >= target * 0.97) autoRes.goodT++;
+    else autoRes.goodT = 0;
+    if (autoRes.goodT >= 8) {
+      // 60 제한에서 60이라는 사실만으로 남는 성능을 알 수 없으므로, 먼저 해상도만 천천히 회복.
+      if (autoRes.scale < 1) next = Math.min(1, autoRes.scale * 1.1);
+      else if (autoRes.tier > 0 && autoRes.workMs > 0 && autoRes.workMs < 500 / target) {
+        autoRes.tier--;
+        autoRes.smallShadow = autoRes.tier > 0;
+        changed = true;
+      } else if (autoRes.smallShadow && autoRes.workMs > 0 && autoRes.workMs < 500 / target) {
+        // 예전 버전의 작은 그림자 캐시(tier 필드 없음)도 충분히 회복하면 원래 크기로.
+        autoRes.smallShadow = false;
+        changed = true;
+      }
       autoRes.goodT = 0;
     }
-    // 충분히 회복했으면 그림자 지도도 원래 크기로
-    if (autoRes.smallShadow && autoRes.goodT === 0 && next > autoRes.min + 0.15) {
-      autoRes.smallShadow = false;
-      applyQuality('auto');
-    }
   }
-  if (Math.abs(next - autoRes.scale) > 1e-3) {
+  if (changed || Math.abs(next - autoRes.scale) > 1e-3) {
     autoRes.scale = next;
-    autoRes.log.push([Math.round(elapsed), Math.round(fps), +next.toFixed(2)]);
+    autoRes.log.push([Math.round(elapsed), Math.round(fps), +next.toFixed(2), autoRes.tier]);
     if (autoRes.log.length > 40) autoRes.log.shift();
     applyQuality('auto');
     saveAutoRes();
@@ -1130,9 +1138,12 @@ const batcher = (() => {
 await friendGhostReady;
 resetRace();
 // 미리 데우기 (렉 줄이기 2): 불러오는 화면 동안 모든 셰이더·모양을 그래픽카드에 올려 둠 → 처음 보이는 순간 멈칫하지 않음 (prewarm.js, ?prewarm=0 이면 끔)
+// 반사 지도처럼 첫 animate에서 만들던 자원도 로딩 화면에서 먼저 준비.
+if (scenery.prepare) await scenery.prepare(renderer);
 if (params.get('prewarm') !== '0') {
   try {
-    window.__prewarm = await prewarm(renderer, scene, camera);
+    window.__prewarm = await prewarm(renderer, scene, camera, [], { shadowLight: settings.values.quality === 'auto' ? sun : null,
+      originals: batcher ? batcher.batches.flatMap(b => b.items.map(it => it.o)) : [] });
   } catch (e) {
     console.warn('미리 데우기 실패 (괜찮음)', e);
   }
@@ -1161,7 +1172,8 @@ function frame(now, manual = false) {
     if (now < capNext - 2) return requestAnimationFrame(frame);
     capNext = now - capNext > iv ? now + iv : capNext + iv;
   }
-  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); // 음수 방지 (game.tick 뒤 진짜 화면 프레임이 오면 시간이 거꾸로였음)
+  const realDt = Math.max(0, (now - last) / 1000);
+  const dt = Math.min(0.1, realDt); // 음수 방지 (game.tick 뒤 진짜 화면 프레임이 오면 시간이 거꾸로였음)
   last = now;
   if (window.game && window.game.paused) {
     engineAudio.update(car); // 일시정지 중엔 엔진 소리를 줄여 끔
@@ -1192,8 +1204,9 @@ function frame(now, manual = false) {
     if (!manual) requestAnimationFrame(frame);
     return;
   }
+  const workStart = performance.now();
   elapsed += dt;
-  if (!manual) autoResTick(dt); // 자동 품질 (테스트용 game.tick은 빼고)
+  if (!manual) autoResTick(realDt); // 자동 품질 (테스트용 game.tick은 빼고)
   if (settings.values.showFps) {
     fpsFrames++;
     if (now - fpsT >= 500) {
@@ -1413,7 +1426,11 @@ function frame(now, manual = false) {
   mirror.frame(dt, { phase: race.phase, intro: intro.on, override: !!co, renderCar });
   for (const s of poses) s.snap = false; // 백미러 (보일 때만 그림)
   input.endFrame();
-  if (!manual) requestAnimationFrame(frame);
+  if (!manual) {
+    const cost = performance.now() - workStart;
+    autoRes.workMs = autoRes.workMs ? autoRes.workMs * 0.9 + cost * 0.1 : cost;
+    requestAnimationFrame(frame);
+  }
 }
 requestAnimationFrame(frame);
 

@@ -1884,10 +1884,17 @@ function createPreview(home) {
   }
 
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  let last = performance.now(), time = 0;
+  let last = performance.now(), time = 0, nextFrame = 0;
   function loop(now) {
     requestAnimationFrame(loop);
-    if (!home.isConnected) return;
+    if (!home.isConnected || document.hidden) return;
+    // 홈의 3D 미리보기도 사용자가 고른 프레임 제한을 따름 (고주사율 화면 발열/배터리).
+    const cap = settings.get('fpsCap');
+    if (cap) {
+      const interval = 1000 / cap;
+      if (now < nextFrame - 2) return;
+      nextFrame = now - nextFrame > interval ? now + interval : nextFrame + interval;
+    }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     // 흐리게 깔리는 화면(맵·설정 등)에서는 그리지 않음 (노트북 발열 줄이기)

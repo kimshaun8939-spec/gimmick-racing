@@ -846,8 +846,7 @@ export function buildNeonScenery(track, scene) {
       },
     };
   }
-  function makeEnv() {
-    const renderer = window.game && window.game.renderer;
+  function makeEnv(renderer = window.game && window.game.renderer) {
     if (!renderer || envDone) return;
     envDone = true;
     const es = new THREE.Scene();
@@ -882,6 +881,11 @@ export function buildNeonScenery(track, scene) {
     cityEnv = rt.texture;
     scene.environment = cityEnv;
     pm.dispose();
+    // 반사 지도를 만든 임시 장면은 본 레이스에 쓰지 않음.
+    es.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    });
   }
   let cityEnv = null;
 
@@ -891,6 +895,7 @@ export function buildNeonScenery(track, scene) {
   city.updateMatrixWorld(true);
   const buildMs = Math.round(performance.now() - t0);
   return {
+    prepare(renderer) { makeEnv(renderer); },
     collideCar() {},
     addCollider() {},
     animate(time, dt, car) {
