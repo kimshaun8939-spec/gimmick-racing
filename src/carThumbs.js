@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { createCarModel } from './carModel.js';
 import { costumeOf } from './carCostumes.js';
 
-const THUMB_VER = 13; // 찍는 방법(각도·조명·크기)을 바꾸면 올릴 것 → 저장된 사진을 모두 다시 찍음
+const THUMB_VER = 14; // 찍는 방법(각도·조명·크기)을 바꾸면 올릴 것 → 저장된 사진을 모두 다시 찍음
 const STORE_KEY = 'gimmick.carThumbs';
 const W = 400, H = 250; // 사진 크기 (카드에 약 150×94로 보임, 고해상도 화면 2배 기준)
 

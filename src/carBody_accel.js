@@ -1,4 +1,4 @@
-// flame: 4차의 낮은 기구 유지. 공유 셰이더로 붉은 불꽃·전기 플라스마·불티.
+// flame2: 낮은 기구 유지. 범퍼에 붙는 속 빈 금속 노즐과 그 안쪽에 결합된 공유 불꽃/전기 아크.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const clamp=x=>Math.max(0,Math.min(1,x));
@@ -57,11 +57,12 @@ function acquireFire(){
      vec3 bx=(modelViewMatrix*instanceMatrix*vec4(1.,0.,0.,0.)).xyz;
      vec3 by=(modelViewMatrix*instanceMatrix*vec4(0.,1.,0.,0.)).xyz;
      // 납작한 슬롯은 보는 각도에 맞는 타원 단면. 넓은 폭을 세로 불기둥으로 돌리지 않는다.
-     float wide=length(vec2(dot(side,bx)*fireData.w,dot(side,by)*fireHeight))*pulse;
+     float wide=length(vec2(dot(side,bx)*fireData.w,dot(side,by)*fireHeight));
      vec3 p=origin.xyz;
      float age=fract(uTime*(.85+.3*seed)+seed*17.0);
      if(kind<.5){
-      p+=axis*(uv.y*len)+side*(position.x*wide);
+      float flare=1.0+1.0*sin(uv.y*3.14159);
+      p+=axis*(uv.y*len)+side*(position.x*wide*flare*mix(1.,pulse,smoothstep(.02,.20,uv.y)));
      }else if(kind<1.5){
       // 입구 광륜은 카메라를 바라보는 작은 스프라이트, 차체 뒤 낮은 위치 고정.
       p+=(bx*position.x*fireData.w+by*position.y*fireHeight)*(1.18+.45*uPop);
@@ -94,6 +95,7 @@ function acquireFire(){
       float r=abs(x+sway);
       float envelope=pow(max(0.,1.-y),.68)*(.72+.20*sin(y*3.14));
       envelope*=.64+.45*n+.18*fine;
+      envelope=mix(.99,envelope,smoothstep(.015,.13,y));
       float edge=1.-smoothstep(envelope-.13,envelope+.03,r);
       float tongue=noise(vec2(x*5.+seed*9.,t*11.));
       edge*=1.-smoothstep(.64+.24*tongue,1.,y);
@@ -173,7 +175,9 @@ function buildFire(body,emitters,id,colour){
    body.updateWorldMatrix(true,false);inv.copy(body.matrixWorld).invert();
    for(let j=0;j<emitters.length;j++){
     const e=emitters[j];e.node.updateWorldMatrix(true,false);
-    if(e.node.parent){m.multiplyMatrices(inv,e.node.matrixWorld);e.local??=new THREE.Matrix4();e.local.copy(m);}else m.copy(e.local);
+    let attached=false;for(let n=e.node;n;n=n.parent)if(n===body){attached=true;break;}
+    // 병합으로 관 그룹이 잠시 빠져도 같은 body 기준 좌표를 유지한다(중첩된 4연 배기 포함).
+    if(attached){m.multiplyMatrices(inv,e.node.matrixWorld);e.local??=new THREE.Matrix4();e.local.copy(m);}else m.copy(e.local);
     shift.makeTranslation(0,0,e.z);m.multiply(shift);
     for(let k=0;k<perPort;k++)mesh.setMatrixAt(j*perPort+k,m);
    }
@@ -216,11 +220,50 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    cyl(r*.16,r*.18,.10,M.trim,0,0,-.29,g);
    spin(rotor,'z',22);g.userData.continuous=true;return g;
  };
+
+ // flame2: 속이 빈 금속 나팔. 표면/그을음/안쪽 벽을 한 지오메트리로 만들어 batchLocal 가능.
+ const nozzleMetal=new THREE.MeshStandardMaterial({vertexColors:true,metalness:.72,roughness:.36,side:THREE.DoubleSide});
+ const hotWall=new THREE.MeshStandardMaterial({color:id==='volt'||id==='nova'?'#73bdff':'#e99148',emissive:id==='volt'||id==='nova'?'#208dff':'#ff440c',emissiveIntensity:1,metalness:.45,roughness:.43,side:THREE.DoubleSide});
+ hotWall.userData.live=true;
+ const throat=(g,w,h,d,shape='oval')=>{
+   const N=id==='midnight'?6:['gt','trophy'].includes(id)?8:12,pts=[];
+   for(let i=0;i<N;i++){
+     const a=i/N*Math.PI*2,c=Math.cos(a),s=Math.sin(a);
+     const square=(shape==='slot'||shape==='split')&&id!=='proto';
+     // 슬롯도 둥근 모서리의 실제 관. 삼각 배기는 세 갈래의 부드러운 나팔.
+     const r=shape==='delta'?1+.14*Math.sin(a*3):1;
+     pts.push([square?Math.sign(c)*Math.abs(c)**.40:c*r,square?Math.sign(s)*Math.abs(s)**.40:s*r]);
+   }
+   const positions=[],colors=[],indices=[];
+   const ring=(scale,z,hex)=>{const col=new THREE.Color(hex);for(const [x,y]of pts){positions.push(x*w*.5*scale,y*h*.5*scale,z);colors.push(col.r,col.g,col.b);}};
+   ring(.68,d*.52,'#4f5364');if(!['gt','trophy','midnight'].includes(id))ring(.97,-d*.34,'#858d9c');ring(1,-d*.50,'#b4a18d');
+   ring(.81,-d*.50,'#3c293b');ring(.67,-d*.14,'#251c21');ring(.49,d*.40,'#080a0d');
+   for(let j=0;j<positions.length/(3*N)-1;j++)for(let i=0;i<N;i++){const a=j*N+i,b=j*N+(i+1)%N,c=b+N,e=a+N;indices.push(a,b,e,b,c,e);}
+   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
+   const tube=add(geo,nozzleMetal,0,0,0,g);tube.name='hollow-burnished-nozzle';
+   const hotPos=[],hotIdx=[];
+   for(const [scale,z]of [[.79,-d*.48],[.72,-d*.29]])for(const [x,y]of pts)hotPos.push(x*w*.5*scale,y*h*.5*scale,z);
+   for(let i=0;i<N;i++){const a=i,b=(i+1)%N;hotIdx.push(a,b,a+N,b,b+N,a+N);}
+   const hg=new THREE.BufferGeometry();hg.setAttribute('position',new THREE.Float32BufferAttribute(hotPos,3));hg.setIndex(hotIdx);hg.computeVertexNormals();add(hg,hotWall,0,0,0,g).name='hot-inner-wall';
+   // 검은 바닥은 입구보다 깊숙이 둔다. 발광판으로 구멍을 막지 않는다.
+   add(new THREE.CircleGeometry(1,N).rotateY(Math.PI).scale(w*.245,h*.245,1),M.dark,0,0,d*.39,g);
+   g.userData.nozzle={width:w*.81,height:h*.81,mouth:-d*.50,start:-d*.37,depth:d,shape};
+   if(id==='volt'||id==='nova'){
+     // 절연대의 마주 보는 전극: 전기 아크가 나오는 곳.
+     for(const s of [-1,1]){
+       box(w*.12,h*.26,d*.28,M.carbon,s*w*.48,0,-d*.05,g);
+       box(w*.13,h*.10,d*.30,M.metal,s*w*.35,0,-d*.30,g);
+       box(w*.06,h*.12,.025,hotWall,s*w*.32,0,-d*.47,g);
+     }
+   }
+   return {node:g,z:-d*.37,width:w*.81,height:h*.81,len:id==='rocket'?1.55:id==='kart'?.66:id==='buggy'?.86:id==='nova'?1.22:.93};
+ };
  const exhaust=(name,x,y,z,r,parent=kit)=>{
-   const g=group(name,x,y,z,parent);cyl(r*.78,r,.38,M.darkMetal,0,0,0,g,true);
-   add(new THREE.TorusGeometry(r,.025,4,10),M.trim,0,0,-.20,g);
-   add(new THREE.CircleGeometry(r*.72,10).rotateY(Math.PI),M.dark,0,0,-.17,g);
-   emitters.push({node:g,z:-.21,width:r*1.65,height:r*1.65,len:id==='rocket'?1.55:id==='kart'?.66:id==='buggy'?.86:.80});
+   const g=group(name,x,y,z,parent);
+   emitters.push(throat(g,r*2,r*2,.52));
+   // 로켓 몸통과 차체를 잇는 금속 새들/플랜지. 불꽃과 관은 같은 g 기준.
+   box(r*1.4,.065,.27,M.darkMetal,0,-r*.73,.19,g);
+   box(.075,r*.85,.20,M.metal,0,-r*.65,.22,g);
    g.userData.continuous=true;return g;
  };
  let squat=.025,pitch=0,hop=0,drs=.12;
@@ -292,7 +335,8 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    for(const side of [-1,1]){
      const pipe=exhaust('side-exhaust',side*1.0,.35,-.3,.22);
      pipe.rotation.y=-side*Math.PI/2;
-     box(.44,.04,.22,M.carbon,0,-.1,.10,pipe);
+     box(.34,.06,.58,M.carbon,0,-.14,.27,pipe);
+     add(new THREE.CylinderGeometry(.13,.13,.70,8,1,true).rotateX(Math.PI/2),M.darkMetal,0,0,.42,pipe);
      move(pipe,.55,.94,q=>{reveal(pipe,q);pipe.position.x=side*(1+.45*q);});
    }
  } else if(id==='midnight') {
@@ -360,10 +404,10 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  } else if(id==='buggy'||id==='kart') {
    const kart=id==='kart';hop=kart?.07:.09;drs=0;
    for(const side of [-1,1]){
-     const x=kart?.57:.79,y=kart?.37:.57,z=kart?-1.10:-1.66;
-     const pod=exhaust(kart?'soda-rocket':'spring-rocket',side*x,y,z,kart?.31:.42);
+     const x=kart?.57:.79,y=kart?.37:.49,z=kart?-1.48:-2.03;
+     const pod=exhaust(kart?'soda-rocket':'spring-rocket',side*x,y,z,kart?.25:.32);
      cyl(kart?.24:.30,kart?.24:.30,kart?.52:.72,M.accent,0,0,.32,pod,true);
-     box(.06,.22,.18,M.carbon,0,-.17,.1,pod);
+     box(.08,.13,.56,M.carbon,-side*.15,-.12,.32,pod);
      if(kart){
        add(new THREE.TorusGeometry(.16,.025,4,10),M.accent,0,0,.06,pod);
        box(.12,.07,.09,M.accent,0,.20,.02,pod);
@@ -489,36 +533,25 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  }
  // 추진부도 전용 실루엣: 직사각 벤투리, 삼각 제트, 타원 배기, 전기 고리.
  // 단면 도형만 공유하고 개수·비율·위치·벌어지는 방향은 21대 각각 정한다.
+
  const port=(name,x,y,z,w,h,d,shape='slot',cant=0)=>{
-   y=Math.min(y,.48);h*=.66;d*=.62;z=Math.max(z,-2.28);
-   const g=group(name,x,y,z);
-   const shellMat=['roadster','pickup','muscle'].includes(id)?M.darkMetal:M.carbon;
-   if(shape==='ring') {
-     add(new THREE.TorusGeometry(w*.5,.075,4,10),M.accent,0,0,-d*.48,g).scale.y=h/w;
-     add(new THREE.TorusGeometry(w*.40,.035,3,10),light,0,0,-d*.49,g).scale.y=h/w;
-     cyl(w*.40,w*.48,d,shellMat,0,0,0,g,true).scale.y=h/w;
-   }else if(shape==='oval') {
-     cyl(w*.36,w*.50,d,shellMat,0,0,0,g,true).scale.y=h/w;
-     const rim=add(new THREE.TorusGeometry(w*.50,.035,3,8),M.trim,0,0,-d*.5,g);rim.scale.y=h/w;
-     const disc=add(new THREE.CircleGeometry(w*.36,8).rotateY(Math.PI),light,0,0,-d*.48,g);disc.scale.y=h/w;
-   }else if(shape==='delta') {
-     // 삼각 외피와 발광 입구. 큰 면은 얇은 판으로 만들어 면 수를 줄인다.
-     const sh=new THREE.Shape();sh.moveTo(-w*.5,-h*.5);sh.lineTo(w*.5,-h*.5);sh.lineTo(0,h*.5);sh.closePath();
-     add(new THREE.ExtrudeGeometry(sh,{depth:d,bevelEnabled:false}),shellMat,0,0,-d*.5,g);
-     add(new THREE.ConeGeometry(w*.34,h*.60,3).rotateX(Math.PI/2),light,0,0,-d*.51,g).scale.z=.08;
-   }else {
-     box(w,.075,d,shellMat,0,h*.5,0,g);box(w,.075,d,M.accent,0,-h*.5,0,g);
-     for(const s of [-1,1])box(.07,h,d,shellMat,s*w*.5,0,0,g);
-     box(w*.82,h*.70,.025,M.dark,0,0,-d*.46,g);
-     box(w*.82,.035,.035,light,0,-h*.35,-d*.51,g);
-     if(shape==='split')box(.06,h*.8,.08,M.trim,0,0,-d*.5,g);
-   }
-   for(const side of [-1,1]){
-     const fairing=fin([[d*.96,-h*.38],[d*.96,h*.12],[d*.1,h*.50],[-d*.52,h*.48],[-d*.52,-h*.48]],.045,M.paint,g);fairing.position.x=side*w*.48;
-   }
-   move(g,.32+(x>0?.07:0),.91,q=>{reveal(g,q);g.scale.set(Math.max(.001,q),Math.max(.001,q),Math.max(.001,q));g.position.x=x+Math.sign(x)*.16*q;g.position.z=z-.08*q;g.rotation.z=cant*q;});
-   // 노즐의 수/위치/단면은 4차 그대로. 불꽃만 공용 인스턴스 렌더러에 등록.
-   emitters.push({node:g,z:-d*.51,width:w*.88,height:h*.88,len:shape==='ring'?.95:id==='nova'?1.22:.93});
+   // 차마다 다른 범퍼 끝. 공통 z 제한으로 프로토 배기가 차체 속에 묻히던 문제 제거.
+   const rear={f1:-2.42,junior:-2.42,proto:-2.66,nova:-2.66,hyper:-2.69,volt:-2.78,gt:-2.66,midnight:-2.66,muscle:-2.63,rally:-2.24,blizzard:-2.24,hatch:-2.13,roadster:-2.28,trophy:-2.40,pickup:-2.40,cube:-2.09,scorpion:-2.08,razor:-2.41}[id];
+   const settings={proto:[.66,.44,.36],nova:[.67,.51,.48],hyper:[.73,.55,.32],volt:[.60,.61,.40],muscle:[.72,.62,.36],roadster:[.48,.40,.40],trophy:[.69,.54,.39],pickup:[.66,.48,.42],scorpion:[.72,.45,.43]}[id];
+   if(settings){x=Math.sign(x)*settings[0];w=settings[1];h=settings[2];}else h*=.78;
+   y=Math.min(y,id==='volt'?.49:.46);d=Math.min(.46,d*.68);
+   const g=group(name,x,y,rear+.12);
+   // 고정 받침은 범퍼 내부까지 들어가고 관 앞쪽과 겹쳐 붙는다.
+   const fixed=group(name+'-mount',x,y,rear+.13);
+   box(w*1.04,h*1.02,.12,M.carbon,0,0,0,fixed);
+   for(const s of [-1,1])box(.045,h*1.08,.17,M.metal,s*w*.50,0,-.035,fixed);
+   if(id==='f1'||id==='junior')box(w*.70,.14,.52,M.carbon,-Math.sign(x)*.14,-h*.55,.20,fixed);
+   move(fixed,.22,.54,q=>reveal(fixed,q),false);
+   // 받침 속에서 뒤로 미끄러져 나온다. 관 지름은 일정하다.
+   move(g,.32+(x>0?.07:0),.91,q=>{reveal(g,q);g.position.z=rear+.12-.23*q;g.rotation.z=cant*q;},false);
+   if(id==='midnight'){
+     for(const s of [-1,1]){const outlet=group('night-separated-throat',s*w*.255,0,0,g);emitters.push(throat(outlet,w*.46,h,d,'slot'));}
+   }else emitters.push(throat(g,w,h,d,shape));
    return g;
  };
  switch(id) {
@@ -619,6 +652,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
      for(const fn of spinners)fn(p,time);
      if(locked)locked.visible=kit.visible;
      light.emissiveIntensity=.65+2.3*smooth(phase(p,.60,1));
+     hotWall.emissiveIntensity=(.30+2.7*smooth(phase(p,.69,.97)))*(.70+.30*clamp(throttle));
      const k=smooth(phase(p,.12,.92));body.position.y-=squat*k;
      body.position.y+=hop*Math.sin(phase(p,.1,.95)*Math.PI*2)**2*(p<1?1:0);
      body.rotation.x+=pitch*k;
