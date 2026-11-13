@@ -1,6 +1,5 @@
 import { keybinds } from './keybinds.js';
-import { nextUnlock } from './unlocks.js';
-import { profile, showXpPill } from './profile.js';
+import { mixState } from './audioMix.js';
 import { touchWanted } from './touch.js';
 import { pad as gamepad } from './gamepad.js';
 import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
@@ -38,7 +37,7 @@ function cornerHtml(c) {
   const sgn = (d) => (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2);
   const refName = c.refKind === 'bot' ? '가장 빠른 봇' : c.refKind === 'me' ? '내 예전 최고' : '';
   const top = c.top.length
-    ? c.top.map((r) => `<div class="ct"><b>T${esc(r.num)}</b>${r.delta != null && r.delta > 0 ? `<span class="lost">${sgn(r.delta)}초</span>` : ''}<span class="tip">${esc(r.tip.text)}</span></div>`).join('')
+    ? c.top.slice(0, 2).map((r) => `<div class="ct"><b>T${esc(r.num)}</b>${r.delta != null && r.delta > 0 ? `<span class="lost">${sgn(r.delta)}초</span>` : ''}<span class="tip">${esc(r.tip.text)}</span></div>`).join('')
     : '<div class="ct ok">모든 코너 깔끔해요! 👍</div>';
   const chips = c.rows
     .map((r) => {
@@ -47,7 +46,7 @@ function cornerHtml(c) {
     })
     .join('');
   return `<div class="cana"><div class="hd">🔍 코너 분석${refName ? ` <small>기준: ${refName}${c.lost > 0.05 ? ` · 합계 ${c.lost.toFixed(2)}초 느림` : ''}</small>` : ''}</div>
-    <div class="ctop">${top}</div><div class="cchips">${chips}</div></div>`;
+    <div class="ctop">${top}</div><details class="res-detail"><summary>코너별 기록 자세히</summary><div class="cchips">${chips}</div></details></div>`;
 }
 
 function podiumHtml(rows, cls = '') {
@@ -88,6 +87,46 @@ function confetti(box, n = 70) {
     wrap.appendChild(p);
   }
   box.appendChild(wrap);
+  setTimeout(() => wrap.remove(), 6200);
+}
+
+// 믹서의 효과음 버스를 사용하므로 음소거·전체/효과음 크기가 실시간으로 적용됨.
+let recordAudio, recordNotes = [];
+const reducedResultsMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function stopRecordSound() {
+  for (const note of recordNotes) { try { note.stop(); } catch {} }
+  recordNotes = [];
+}
+function recordCelebration(box, full) {
+  stopRecordSound();
+  if (!reducedResultsMotion()) {
+    const particles = document.createElement('div');
+    particles.className = 'record-particles';
+    particles.setAttribute('aria-hidden', 'true');
+    particles.innerHTML = Array.from({ length: full ? 30 : 10 }, (_, i) => '<i style="--x:' + (i * 37 % 100) + '%;--dx:' + ((i % 7 - 3) * 22) + 'px;--delay:' + (i % 5 * .08) + 's;--turn:' + (i * 43) + 'deg"></i>').join('');
+    box.appendChild(particles);
+    setTimeout(() => particles.remove(), 2500);
+  }
+  if (mixState().muted || !navigator.userActivation?.hasBeenActive) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    recordAudio ||= new AC();
+    const ctx = recordAudio;
+    // 같은 오디오를 재사용해 다시 할 때 컨텍스트가 늘지 않게 함.
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t = ctx.currentTime + .03;
+    (full ? [523.25, 659.25, 783.99, 1046.5] : [659.25, 783.99]).forEach((hz, i) => {
+      const note = ctx.createOscillator(), gain = ctx.createGain();
+      note.type = 'sine'; note.frequency.value = hz;
+      gain.gain.setValueAtTime(0, t + i * .11);
+      gain.gain.linearRampToValueAtTime(full ? .09 : .045, t + i * .11 + .015);
+      gain.gain.exponentialRampToValueAtTime(.0001, t + i * .11 + .38);
+      note.connect(gain); gain.connect(ctx.destination);
+      note.onended = () => { note.disconnect(); gain.disconnect(); recordNotes = recordNotes.filter(n => n !== note); };
+      recordNotes.push(note); note.start(t + i * .11); note.stop(t + i * .11 + .4);
+    });
+  } catch { /* 오디오를 쓸 수 없는 기기에서는 시각 효과만 */ }
 }
 
 export function createHud(track) {
@@ -504,34 +543,26 @@ export function createHud(track) {
     },
     /**
      * 완주 결과 화면
-     * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next | home | car)
+     * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next (챔피언십) | replay | home | car)
      */
     showResults(lapTimes, best, info = {}) {
       if (rookieHint) rookieHint.hidden = true;
       let firstNext = '';
-      const recommendNext = rookie && !firstComplete && info.hasNext && !info.champ && !route.has('room');
       if (rookie && !firstComplete) {
         firstComplete = true;
         try { localStorage.setItem('gimmick.firstComplete', '1'); localStorage.setItem('gimmick.firstRun', 'done'); } catch {}
-        const next = nextUnlock(profile.get().level);
-        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음엔 어디로?</b><p>코너 하나가 편해질 때마다 레이스가 더 재밌어져요.</p><div class="nr-next-links"><a class="gm-btn" href="?menu=academy">🎓 아카데미<small>브레이크 레슨으로 더 빠르게</small></a><a class="gm-btn" href="?menu=map">🗺️ 새 맵 구경<small>바다와 하늘에서도 달려요</small></a><a class="gm-btn" href="?menu=car">🏎️ 내 차고<small>' + (next ? '다음 해금 · Lv.' + next.level + ' · ' + escH(next.text) : '다른 차의 운전 감각 느껴 보기') + '</small></a></div></div>';
-        if (recommendNext) firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요! 다음 코스에 도전해요</b><p><strong>다음 도전 · ' + escH(info.nextMap?.title || '새로운 코스') + '</strong><br>' + (info.nextMap?.id === 'sea' ? '물 위에서는 배로 변신해요. ' : '새 코스에서 다른 주행 감각을 느껴 보세요. ') + '아래 ‘다음 맵’으로 이어 달려요.</p>' + (next ? '<small>다음 해금 · Lv.' + next.level + ' · ' + escH(next.text) + '</small>' : '') + '</div>';
+        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요!</b><p>다음 도전은 아래 <strong>차·맵 바꾸기</strong>에서 골라요. 물 위를 달리는 바닷가 코스도 있어요.</p></div>';
       }
-      const nextBtn = (o) => {
-        const lbl = String(o.nextLabel || '다음 맵').replace(/\s*›\s*$/, '');
-        const arrow = /홈으로/.test(lbl) ? '' : '<span class="ic r">›</span>';
-        const copy = !o.champ && o.nextMap?.title ? '<span class="next-copy"><span>다음 맵</span><small>' + escH(o.nextMap.title) + '</small></span>' : escH(lbl);
-        return `<button class="gm-btn big next${o.noRestart || recommendNext ? ' primary' : ''}" data-res="next" aria-label="${escH(lbl)}">${copy}${arrow}</button>`;
-      };
+      const nextBtn = (o) => '<button class="gm-btn primary next" data-res="next">' + escH(o.nextLabel || '다음 경기') + '</button>';
       const total = lapTimes.reduce((a, b) => a + b, 0);
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
       // 최고 기록 = 완주 시간 (여러 바퀴면 모든 바퀴 합)으로 판단 (사용자 요청 2026-11-10)
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
-      if (info.newRace) badges.push('<span class="badge">🏆 새 최고 기록!</span>');
+      if (info.newRace) badges.push('<span class="badge record-chip">🏆 새 최고 기록!</span>');
       const pn = info.prevNote ? ` · ${esc(info.prevNote)}` : ''; // 다른 차로 낸 기록이면 그 차 이름
-      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">예전 최고 ${fmtTime(info.prevRace)}${pn} → ${diffTxt}</span>`);
+      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">이전 ${fmtTime(info.prevRace)}${pn} → <strong class="record-delta">${diffTxt}</strong></span>`);
       if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)}${pn} (${diffTxt})</span>`);
       if (info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
       if (info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
@@ -540,11 +571,11 @@ export function createHud(track) {
       // 레이스(봇·온라인): 순위 결과표, 구간 기록표
       const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
       const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>` : '';
-      const secHtml = info.sectorLaps && info.sectorLaps.length
-        ? `<table class="secs"><tr class="hd"><td></td><td>S1</td><td>S2</td><td>S3</td></tr>${info.sectorLaps
-            .map((lap, i) => `<tr><td>LAP ${i + 1}</td>${[0, 1, 2].map((k) => (lap[k] ? `<td style="color:${SC[lap[k].color] || '#fff'}">${lap[k].time.toFixed(3)}</td>` : '<td>-</td>')).join('')}</tr>`)
-            .join('')}${info.theoretical ? `<tr class="theo"><td colspan="4">이론상 최고 랩 (구간 최고 합) ${fmtTime(info.theoretical)}</td></tr>` : ''}</table>`
-        : '';
+      // 랩·섹터를 한 표로 묶고 긴 경주만 펼쳐 보기.
+      const hasSectors = !!info.sectorLaps?.length;
+      const lapRow = (t, i) => '<tr class="' + (t === best ? 'best' : '') + '"><td>L' + (i + 1) + (t === best ? ' ★' : '') + '</td><td>' + fmtTime(t) + '</td>' + (hasSectors ? [0,1,2].map(k => { const sp = info.sectorLaps[i]?.[k]; return '<td style="color:' + (SC[sp?.color] || '#bccbdf') + '">' + (sp ? sp.time.toFixed(3) : '—') + '</td>'; }).join('') : '') + '</tr>';
+      const tableHead = '<tr class="hd"><td>랩</td><td>시간</td>' + (hasSectors ? '<td>S1</td><td>S2</td><td>S3</td>' : '') + '</tr>';
+      const lapHtml = '<table class="laps res-times">' + tableHead + lapTimes.slice(0,4).map(lapRow).join('') + '</table>' + (lapTimes.length > 4 ? '<details class="res-detail"><summary>전체 ' + lapTimes.length + '바퀴 보기</summary><table class="res-times">' + tableHead + lapTimes.slice(4).map((t,i) => lapRow(t,i+4)).join('') + '</table></details>' : '') + (info.theoretical ? '<div class="res-theory">이론상 최고 랩 <b>' + fmtTime(info.theoretical) + '</b></div>' : '');
       const ch = info.champ;
       // 순위는 아래 순위표와 같은 standings에서 (온라인: 먼저 들어온 상대가 늦게 알려져도 표·제목·시상대가 같게)
       const myRow = info.standings && info.standings.find((r) => r.isPlayer);
@@ -559,30 +590,26 @@ export function createHud(track) {
         : info.standings && info.standings.length > 2
           ? info.standings.slice(0, 3)
           : null;
-      const champBlock = ch ? champHtml(ch) : '';
-      el.results.innerHTML = `<div class="res${standHtml || ch ? ' wide' : ''}${ch && ch.final ? ' final' : ''}">
+      const champMe = ch?.table.find(r => r.isPlayer);
+      const champBlock = ch ? '<details class="res-detail res-champ"><summary>🏆 시즌 ' + (champMe?.pos || '—') + '위 · ' + (champMe?.points || 0) + '점' + (ch.final ? ' · 최종' : ' · ' + ch.no + '/' + ch.total + '경기') + '</summary>' + champHtml(ch) + '</details>' : '';
+      el.results.innerHTML = `<div class="res res-dashboard${standHtml || ch ? ' wide has-rivals' : ''}${ch && ch.final ? ' final' : ''}${info.newRace ? ' new-record' : info.newLap ? ' new-lap' : ''}">
         <div class="res-head">
-        <div class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</div><h2>${title}</h2>
-        <div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div>
-        <div class="total">${fmtTime(total)}</div>
+        <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
+        <div class="res-clock"><small>완주 시간</small><div class="total">${fmtTime(total)}</div></div>
         <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>
         </div>
         <div class="res-scroll">
-        ${firstNext}
-        ${metaResultsHtml(info.meta)}
-        ${podRows ? podiumHtml(podRows, ch && ch.final ? 'season' : '') : ''}
-        ${ch && ch.final ? champBlock : ''}
-        ${standHtml}
-        ${ch && !ch.final ? champBlock : ''}
-        <table class="laps">${lapTimes.map((t, i) => `<tr class="${t === best ? 'best' : ''}"><td>LAP ${i + 1}${t === best ? ' ⭐' : ''}</td><td>${fmtTime(t)}</td></tr>`).join('')}</table>
-        ${secHtml}
-        ${cornerHtml(info.corners)}
+        <div class="res-grid">
+          <section class="res-panel res-records"><h3>주행 기록 <small>${lapTimes.length} LAP</small></h3>${lapHtml}${firstNext || cornerHtml(info.corners)}</section>
+          ${info.meta ? '<section class="res-panel res-rewards"><h3>경험치 · 보상</h3>' + metaResultsHtml(info.meta) + '</section>' : ''}
+          ${standHtml || ch ? '<section class="res-panel res-rank"><h3>레이스 결과' + (info.position ? '<small>' + info.position + '위 / ' + (info.standings?.length || '') + '</small>' : '') + '</h3>' + (podRows ? podiumHtml(podRows, ch?.final ? 'season' : '') : '') + standHtml + champBlock + '</section>' : ''}
+        </div>
         </div>
         <div class="btns">
           <div class="ra-main">
-            ${info.noRestart ? '' : '<button class="gm-btn' + (recommendNext ? '' : ' primary') + ' big" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
-            ${info.hasNext ? nextBtn(info) : ''}
+            ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
+            ${ch && info.hasNext && !ch.final ? nextBtn(info) : ''}
           </div>
           <div class="ra-sub">
             ${info.replay ? '<button class="gm-btn sub" data-res="replay"><span class="ic">▶</span>리플레이</button>' : ''}
@@ -598,11 +625,11 @@ export function createHud(track) {
         }),
       );
       el.results.classList.add('on');
-      if (info.meta) {
+      if (info.meta && !info.newRace && !info.newLap && !reducedResultsMotion()) {
         playMetaCelebration(el.results.querySelector('.res'), info.meta.celebration);
-        showXpPill({ gained: info.meta.xp + info.meta.raceXp, after: info.meta.profile, levelUp: info.meta.profile.level > info.meta.beforeLevel, tierUp: false });
       }
-      if (info.position === 1 || (ch && ch.final && ch.table[0] && ch.table[0].isPlayer)) confetti(el.results.querySelector('.res'), ch && ch.final ? 120 : 70);
+      if (info.newRace || info.newLap) recordCelebration(el.results.querySelector('.res'), !!info.newRace);
+      else if (!reducedResultsMotion() && (!info.meta?.celebration || info.meta.celebration.id === 'stock') && (info.position === 1 || (ch?.final && ch.table[0]?.isPlayer))) confetti(el.results.querySelector('.res'), ch?.final ? 60 : 36);
       // 결과 화면 위에 남은 안내 글자는 지움
       el.toast.style.opacity = 0;
       toastTimer = 0;
@@ -612,6 +639,9 @@ export function createHud(track) {
     updateStandings(rows) {
       const t = el.results.querySelector('table.stand');
       if (t && rows) t.innerHTML = standRows(rows);
+      const positionNote = el.results.querySelector('.res-rank h3 > small');
+      const playerRow = rows?.find(r => r.isPlayer);
+      if (positionNote && playerRow) positionNote.textContent = playerRow.pos + '위 / ' + rows.length;
       // 내 순위가 바뀌었으면(온라인 상대의 완주가 늦게 도착) 제목·깃발·시상대도 같이 고침. 시즌 끝 화면은 시즌 순위라 그대로
       const me = rows && rows.find((r) => r.isPlayer);
       if (!me || !me.pos || me.pos === el.results._pos || el.results._seasonFinal) return;
@@ -623,6 +653,7 @@ export function createHud(track) {
       if (pd && rows.length > 2) pd.outerHTML = podiumHtml(rows.slice(0, 3));
     },
     hideResults() {
+      stopRecordSound();
       el.results.classList.remove('on');
       el.results.innerHTML = '';
     },

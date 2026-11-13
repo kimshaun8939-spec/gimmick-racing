@@ -522,12 +522,81 @@ const CAM = {
   ...(carCfg.camera || {}),
 };
 const cam = { sk: 0, acc: 0, pull: 0, prevSpeed: 0, boostK: 0, t: 0 };
+
+// 화면만 직전/현재 물리 상태 사이에 그림 (물리·충돌·기록은 원래 Car 그대로).
+// 고주사율 화면의 60 제한은 1/120초 스텝 수가 매번 달라지므로 같은 alpha를 모든 차와 카메라에 사용.
+const renderStates = new WeakMap();
+const _poseBasis = new THREE.Matrix4(), _poseRight = new THREE.Vector3(), _poseQ = new THREE.Quaternion();
+function pose() {
+  return { pos: new THREE.Vector3(), vel: new THREE.Vector3(), q: new THREE.Quaternion(), speed: 0, forwardSpeed: 0 };
+}
+function readPose(p, source) {
+  p.pos.copy(source.pos);
+  p.vel.copy(source.vel);
+  _poseRight.crossVectors(source.up, source.fwd).normalize();
+  _poseBasis.makeBasis(_poseRight, source.up, source.fwd);
+  p.q.setFromRotationMatrix(_poseBasis).normalize();
+  p.speed = source.speed;
+  p.forwardSpeed = source.forwardSpeed;
+}
+function copyPose(to, from) {
+  to.pos.copy(from.pos); to.vel.copy(from.vel); to.q.copy(from.q);
+  to.speed = from.speed; to.forwardSpeed = from.forwardSpeed;
+}
+function resetRenderState(s) {
+  readPose(s.current, s.source);
+  copyPose(s.previous, s.current);
+  s.snap = true;
+}
+function renderState(source) {
+  let s = renderStates.get(source);
+  if (!s) {
+    const view = Object.create(source);
+    for (const k of ['pos', 'vel', 'fwd', 'up']) view[k] = source[k].clone();
+    s = { source, view, previous: pose(), current: pose(), snap: true };
+    renderStates.set(source, s);
+    resetRenderState(s);
+  }
+  return s;
+}
+const playerRender = renderState(car);
+const renderCar = playerRender.view;
+function physicalRenderStates() {
+  return [playerRender, ...opponents.entries.filter(e => e.car && !e.remote).map(e => renderState(e.car))];
+}
+function renderPose(s, alpha) {
+  const { view, previous: p, current: c } = s;
+  view.pos.lerpVectors(p.pos, c.pos, alpha);
+  view.vel.lerpVectors(p.vel, c.vel, alpha);
+  _poseQ.slerpQuaternions(p.q, c.q, alpha);
+  view.fwd.set(0, 0, 1).applyQuaternion(_poseQ);
+  view.up.set(0, 1, 0).applyQuaternion(_poseQ);
+  view.speed = THREE.MathUtils.lerp(p.speed, c.speed, alpha);
+  view.forwardSpeed = THREE.MathUtils.lerp(p.forwardSpeed, c.forwardSpeed, alpha);
+  view.renderSnap = s.snap;
+}
+function renderDiscontinuity(s) {
+  // R·용암·코스 밖 복귀와 외부 placeAt(튜토리얼 등): 두 위치 사이를 끌고 가지 않음.
+  const limit = Math.max(3, s.current.vel.length() * FIXED_DT * 3);
+  return s.current.pos.distanceToSquared(s.source.pos) > limit * limit || s.source.events.includes('respawn');
+}
+function sampleCameraAcceleration() {
+  const a = car.grounded ? THREE.MathUtils.clamp((car.forwardSpeed - cam.prevSpeed) / FIXED_DT, -40, 25) : 0;
+  cam.prevSpeed = car.forwardSpeed;
+  // 액셀을 밟은 채 변속하는 짧은 동력 단절은 카메라를 앞뒤로 펌프질하지 않게 유지.
+  // 페달을 떼거나 브레이크를 밟으면 즉시 실제 감속을 따라감.
+  if (!(car.grounded && car.shiftTimer > 0 && car.thr > 0.2 && car.brk < 0.1)) {
+    cam.acc = THREE.MathUtils.lerp(cam.acc, a, 1 - Math.exp(-3 * FIXED_DT));
+  }
+}
+
 const _lookDir = new THREE.Vector3(), _lead = new THREE.Vector3();
 const smoothK = (x, a, b) => {
   const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
 function cameraTarget(outPos, outLook) {
+  const car = renderCar;
   // 차 바로 뒤, 낮게 붙어서 따라감 (CAM_BACK을 키우면 멀어짐). 빠를수록 조금 가깝고 낮게 (땅이 더 빨리 흘러 보임)
   //   시점(camViews.dist): 가까운 추격·먼 추격은 거리·높이·보는 곳에 배율
   const vk = camViews.dist;
@@ -543,7 +612,12 @@ function cameraTarget(outPos, outLook) {
   }
   outLook.copy(car.pos).addScaledVector(_lookDir, (6 + CAM.lookAhead * cam.sk) * vk.look).addScaledVector(camUp, 1.0 * vk.lookUp);
 }
-function snapCamera() {
+function snapCamera(resetPoses = true) {
+  if (resetPoses) {
+    acc = 0;
+    for (const s of physicalRenderStates()) { resetRenderState(s); renderPose(s, 1); }
+  }
+  const car = renderCar;
   camViews.snap();
   camFwd.copy(car.fwd);
   camUp.copy(car.up);
@@ -556,6 +630,7 @@ function snapCamera() {
   camera.lookAt(camLook);
 }
 function updateCamera(dt) {
+  const car = renderCar;
   // 공중에서는 위쪽 방향을 세상 기준으로 천천히, 땅에서는 차 기준으로 빠르게
   camUp.lerp(car.up, 1 - Math.exp(-(car.grounded ? 5 : 2.5) * dt)).normalize();
   // 앞 방향은 차가 바라보는 방향을 부드럽게 따라감 (위쪽 방향과 직각으로 유지)
@@ -569,9 +644,7 @@ function updateCamera(dt) {
   cam.t += dt;
   cam.sk = THREE.MathUtils.lerp(cam.sk, smoothK(kmh, CAM.fxFromKmh, CAM.topKmh), 1 - Math.exp(-2 * dt));
   // 앞뒤 가속도 (부딪힘처럼 순간적으로 확 바뀐 속도는 잘라냄) → 세게 밟으면 카메라가 살짝 뒤로, 브레이크면 살짝 앞으로
-  const a = dt > 0 && car.grounded ? THREE.MathUtils.clamp((car.forwardSpeed - cam.prevSpeed) / dt, -40, 25) : 0;
-  cam.prevSpeed = car.forwardSpeed;
-  cam.acc = THREE.MathUtils.lerp(cam.acc, a, 1 - Math.exp(-3 * dt));
+  // 가속도는 고정 물리 스텝에서 측정 (렌더 간격의 1~3스텝 오차를 미분하지 않음).
   const pullT = THREE.MathUtils.clamp(cam.acc * CAM.accelPull, -CAM.brakePullMax, CAM.accelPullMax);
   cam.pull = THREE.MathUtils.lerp(cam.pull, pullT, 1 - Math.exp(-3 * dt));
 
@@ -929,10 +1002,6 @@ function canSaveRecords() {
   // 아이템전·봇·온라인 상대가 있는 레이스도 비교 조건이 달라 저장 안 함
   return !ITEM && !withRivals() && realPlay();
 }
-function nextMapId() {
-  const order = mapsMeta.map((m) => m.id).filter((id) => MAPS[id]);
-  return order[(order.indexOf(mapName) + 1) % order.length] || 'gp';
-}
 function showFinish() {
   replay.markFinish(race.clock); // 리플레이는 완주 4초 뒤까지
   const total = race.lapTimes.reduce((a, b) => a + b, 0);
@@ -985,11 +1054,10 @@ function showFinish() {
     }
   }
   hud.showResults(race.lapTimes, race.best, {
-    map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: true,
+    map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: !!champ && !champ.final,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
     champ, assist: !!race.assist, noRestart: !!champ, meta: metaRun.summary(),
-    nextMap: { id: nextMapId(), title: (mapsMeta.find((m) => m.id === nextMapId()) || {}).title || nextMapId() },
-    replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : `다음 맵 · ${(mapsMeta.find((m) => m.id === nextMapId()) || {}).title || nextMapId()}`,
+    replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : undefined,
     onAction(a) {
       if (a === 'restart') {
         if (!ONLINE && !race.champRec) resetRace(); // 온라인·챔피언십(점수 저장 뒤)에서는 다시 하지 않음
@@ -998,13 +1066,6 @@ function showFinish() {
         const u = champ.final ? null : champUrl();
         if (u) location.href = u;
         else goHome();
-      }
-      else if (a === 'next') {
-        const u = new URL(raceUrl(nextMapId(), carId));
-        if (MODE) u.searchParams.set('mode', ITEM ? 'item' : MODE);
-        // 첫 도전에서 이어 달릴 땐 쉬운 봇·운전 도움을 유지. 홈에서 고른 레이스는 원래 설정을 씀.
-        if (params.get('rookie') === '1' && MODE === 'race' && !ITEM) u.searchParams.set('rookie', '1');
-        location.href = u.toString();
       }
       else if (a === 'replay') replay.start();
       else if (a === 'car') goHome('map');
@@ -1115,7 +1176,7 @@ function frame(now, manual = false) {
     }
   }
 
-  if (!ONLINE && !(window.game && window.game.net) && !menuHold && !race.champRec && input.wasPressed('Enter')) resetRace(); // 온라인에서는 Enter(다시 시작)·M(맵 바꾸기) 막음
+  if (!ONLINE && !(window.game && window.game.net) && !menuHold && !race.champRec && race.phase === 'finished' && input.wasPressed('Enter')) resetRace(); // Enter 다시 시작은 결과 화면에서만 (레이스 중 Enter로 처음으로 가는 것은 없앰, 사용자 요청 2026-11-13). 온라인에서는 막음
   // M 키(다음 맵으로)는 없앰 (사용자 요청 2026-11-13). 맵은 홈·Esc 메뉴에서 바꿈
   // (왼쪽 아래 조작법 안내·H 키는 없앰: 사용자 요청 2026-11-09)
   if (input.wasPressed('KeyR') && race.phase === 'racing') car.respawn();
@@ -1172,9 +1233,25 @@ function frame(now, manual = false) {
   if (items && controls.booster) items.usePlayer(); // 아이템전: 부스터 키 = 아이템 쓰기
   // 슬로 모션 (튜토리얼 시범 주행, 2026-11-12): game.timeScale(0.05~4, 기본 1)만큼 물리 시간을 늦춤. race.time은 물리 스텝마다 더하므로 기록 계산은 그대로
   const tsc = window.game && window.game.timeScale > 0 && window.game.timeScale !== 1 ? Math.min(4, Math.max(0.05, window.game.timeScale)) : 1;
+  const poses = physicalRenderStates();
+  for (const s of poses) {
+    if (s.current.pos.distanceToSquared(s.source.pos) > 1e-12 || s.current.vel.distanceToSquared(s.source.vel) > 1e-12) {
+      const jump = renderDiscontinuity(s);
+      resetRenderState(s);
+      s.snap = jump;
+      if (s === playerRender) cam.prevSpeed = car.forwardSpeed;
+    }
+  }
   acc += dt * tsc;
   while (acc >= FIXED_DT) {
+    for (const s of poses) copyPose(s.previous, s.current);
     stepWorld(controls);
+    sampleCameraAcceleration();
+    for (const s of poses) {
+      const jump = renderDiscontinuity(s);
+      readPose(s.current, s.source);
+      if (jump) { copyPose(s.previous, s.current); s.snap = true; }
+    }
     controls.booster = false; // 부스터, 변속 명령은 한 번만 전달
     controls.shiftUp = controls.shiftDown = false;
     controls.mode = null;
@@ -1188,7 +1265,10 @@ function frame(now, manual = false) {
   handleEvents();
   replay.sample(race.clock, race.phase); // 리플레이 기록 (1/15초마다)
 
-  model.sync(car, dt * tsc, elapsed);
+  const renderAlpha = THREE.MathUtils.clamp(acc / FIXED_DT, 0, 1);
+  for (const s of poses) renderPose(s, renderAlpha);
+  if (playerRender.snap) snapCamera(false);
+  model.sync(renderCar, dt * tsc, elapsed);
   offroadFx.update(car, dt);
   lineFx.update(car);
   if (corners) corners.update(car, dt);
@@ -1214,17 +1294,30 @@ function frame(now, manual = false) {
   hud.shakeCamera(camera, dt);
   const shk = shakeK * camViews.shakeMul; // 1인칭(보닛·운전석)은 흔들림을 줄임
   if (!co && shk !== 1) camera.position.lerpVectors(_shakeBase, camera.position, shk);
-  if (!co) speedFx.update(car, camera, camDt);
+  if (!co) speedFx.update(renderCar, camera, camDt);
   track.animate(elapsed);
   scenery.animate(elapsed, dt, car);
   props.animate(elapsed);
   // 봇·온라인 상대 모델 + 이름표, 고스트
-  raceSys.update(dt, elapsed, camera);
+  // 봇도 같은 물리 시각으로 표시. view만 잠깐 바꾸고 원본 Car는 건드리지 않음.
+  // 온라인 상대는 opponents의 네트워크 보간을 그대로 사용.
+  const botViews = [];
+  try {
+    for (const e of opponents.entries) if (e.car && !e.remote) {
+      botViews.push([e, e.view]);
+      e.view = renderState(e.car).view;
+    }
+    raceSys.update(dt, elapsed, camera);
+  } finally {
+    for (const [e, view] of botViews) e.view = view;
+  }
   if (items) {
     items.setVisible(true);
     items.update(dt, elapsed);
   }
-  if (ghost) ghost.update(dt, elapsed, race.time - race.lapStart, race.time, camera, race.phase === 'racing' && ghost.kind !== 'off');
+  // 고스트는 기록 샘플 사이를 이미 보간함: 내 차와 같은 표시 시각(물리보다 최대 한 스텝 뒤).
+  const renderDelay = race.phase === 'racing' ? FIXED_DT * (1 - renderAlpha) : 0;
+  if (ghost) ghost.update(dt * tsc, elapsed, Math.max(0, race.time - race.lapStart - renderDelay), Math.max(0, race.time - renderDelay), camera, race.phase === 'racing' && ghost.kind !== 'off');
   // 순위 패널은 1초에 5번만 (글자 바꾸기가 무거움). 완주 뒤 결과표 순위도 봇이 들어오면 갱신
   race.hudT = (race.hudT || 0) + dt;
   if (race.hudT > 0.2) {
@@ -1290,7 +1383,8 @@ function frame(now, manual = false) {
 
   if (batcher) batcher.update();
   renderer.render(scene, camera);
-  mirror.frame(dt, { phase: race.phase, intro: intro.on, override: !!co }); // 백미러 (보일 때만 그림)
+  mirror.frame(dt, { phase: race.phase, intro: intro.on, override: !!co, renderCar });
+  for (const s of poses) s.snap = false; // 백미러 (보일 때만 그림)
   input.endFrame();
   if (!manual) requestAnimationFrame(frame);
 }

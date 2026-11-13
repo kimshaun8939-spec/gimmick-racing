@@ -163,7 +163,7 @@ export function createCamViews(o) {
       const m = it.m, g = m.geometry;
       info.meshes++;
       let cls = null;
-      if (it.fx) cls = 3;
+      if (it.fx || m.userData.accelMoving) cls = 3; // 전개 뒤 눈앞으로 올라오는 부품은 양쪽 1인칭에서 숨김
       else if (Array.isArray(m.material) || (g.groups && g.groups.length) || g.morphAttributes.position || Object.values(g.attributes).some((a) => a.isInterleavedBufferAttribute)) {
         const b = it.box; // 통째로만
         cls = (b.max.y > eyeC.y - 0.1 && b.max.z > eyeC.z - 0.15 ? 1 : 0) + (b.max.y > eyeB.y - 0.04 && b.max.z > eyeB.z - 0.1 ? 2 : 0);

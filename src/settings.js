@@ -364,7 +364,7 @@ export function createControlsPage(opts = {}) {
       ${row('💨', '슬립스트림', '앞차 바로 뒤에 붙으면 공기 저항이 줄어 바로 빨라져요 (최고 속도도 올라감). 옆으로 빠질 필요 없음, 여러 대가 줄지어 있으면 더 세요')}
       ${row('🧲', '견인', '바로 앞차와 1초 넘게 벌어지면 앞차 쪽으로 끌어당겨 줘요 (멀수록 셈, 봇도 똑같이)')}
       ${row(K('respawn'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}
-      ${row(K('restart'), '처음부터 다시')}
+      ${row(K('restart'), '다시 하기 (결과 화면에서)')}
       ${row(K('menu'), '메뉴 · 일시정지', '설정, 다시 시작, 홈으로')}
     </section>
     <section><h3>자동 변신 모드</h3>
@@ -385,7 +385,7 @@ export function createControlsPage(opts = {}) {
       ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}
       ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '아이템 사용 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
       ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')} · 시점 ${pad.html('camView')}`)}
-      ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 처음부터 다시', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
+      ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 다시 하기(결과 화면)', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}
     </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
       ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.preset() === 'custom' ? ' <span class="gm-custom">(내 설정으로 보여요)</span>' : ''}</p>`;

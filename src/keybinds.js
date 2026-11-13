@@ -23,7 +23,7 @@ export const ACTIONS = [
   { group: '변속', id: 'shiftUp', label: '기어 올림 (수동)', desc: '', def: ['KeyX', null] },
   { group: '변속', id: 'shiftDown', label: '기어 내림 (수동)', desc: '', def: ['KeyZ', null] },
   { group: '레이스', id: 'respawn', label: '도로로 복귀', desc: '길을 벗어났거나 뒤집혔을 때', def: ['KeyR', null] },
-  { group: '레이스', id: 'restart', label: '처음부터 다시', desc: '', def: ['Enter', null] },
+  { group: '레이스', id: 'restart', label: '다시 하기', desc: '결과 화면에서만', def: ['Enter', null] },
   { group: '레이스', id: 'menu', label: '메뉴 · 일시정지', desc: 'Esc는 항상 메뉴 (보조 키만 바꿀 수 있어요)', def: ['Escape', null], lock: [0] },
   { group: '도움 · 화면', id: 'camView', label: '시점 바꾸기', desc: '기본 → 가까운 추격 → 먼 추격 → 보닛 → 운전석', def: ['KeyV', null] },
   { group: '도움 · 화면', id: 'racingLine', label: '레이싱 라인 켜기/끄기', desc: '', def: ['KeyL', null] },

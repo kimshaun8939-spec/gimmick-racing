@@ -2212,3 +2212,136 @@ body:has(#results.on) .mt-notice { display: none; }
   #results .next-copy small::before { content: none; }
   #results .ra-main .next { min-width: 0; }
 }
+
+/* results · 한눈에 보는 완주 화면 (2026-11-13) */
+#results .res.res-dashboard { width:min(1220px,calc(100vw - 48px)); max-height:calc(100dvh - 40px); border-radius:22px; text-align:left; }
+#results .res.res-dashboard.has-rivals { width:min(1540px,calc(100vw - 48px)); }
+#results .res-dashboard .res-head { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; justify-items:stretch; gap:10px 28px; padding:26px 30px 20px; }
+#results .res-title { display:flex; gap:12px; align-items:center; }
+#results .res-title h2 { font-size:38px; margin:0; }
+#results .res-title .flag { display:block; font-size:28px; }
+#results .res-identity .who { margin-top:9px; line-height:1.5; white-space:normal; overflow-wrap:anywhere; }
+#results .res-clock { text-align:center; }
+#results .res-clock>small { color:#a4b5cf; font-size:11px; letter-spacing:.12em; }
+#results .res-clock .total { margin:4px 0 0; font-size:52px; font-weight:900; letter-spacing:-.045em; }
+#results .res-dashboard .badges { justify-content:flex-end; align-content:center; margin:0; }
+#results .res-dashboard .badge { font-size:11px; line-height:1.5; }
+#results .record-delta { color:#ffe29a; font-size:15px; }
+#results .res-dashboard .online { grid-column:1/-1; justify-self:stretch; margin:0; padding:7px 12px; font-size:11px; border-radius:8px; line-height:1.5; }
+#results .res-dashboard .res-scroll { padding:22px 30px; }
+#results .res-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:20px; align-items:start; }
+#results .res-dashboard.has-rivals .res-grid { grid-template-columns:minmax(0,1.12fr) minmax(0,1fr) minmax(0,1.08fr); }
+#results .res-panel { min-width:0; border:1px solid #afc7ff20; border-radius:14px; background:linear-gradient(145deg,#26365045,#101b3028); padding:18px; }
+#results .res-grid>:first-child { margin-top:0; }
+#results .res-panel h3 { display:flex; align-items:baseline; justify-content:space-between; gap:8px; font-size:15px; margin:0 0 16px; font-weight:800; }
+#results .res-panel h3>small { font-size:10px; color:#93a6c4; font-weight:600; }
+#results .res-dashboard .res-times { font-size:12px; margin:0; white-space:nowrap; }
+#results .res-dashboard .res-times td { padding:11px 7px; text-align:right; }
+#results .res-times td:first-child { text-align:left; }
+#results .res-times .hd { color:#93a6c4; font-size:10px; }
+#results .res-theory { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#9eb0cd; font-size:11px; padding:12px 2px; border-bottom:1px solid #ffffff12; }
+#results .res-theory b { color:#d9c0ff; font-size:14px; font-variant-numeric:tabular-nums; }
+#results .res-dashboard .cana { margin-top:16px; padding:0; background:none; }
+#results .res-dashboard .cana .hd { font-size:12px; line-height:1.5; }
+#results .cana .hd small { display:block; font-size:10px; color:#93a6c4; margin-top:4px; }
+#results .res-dashboard .ctop { margin-top:10px; display:grid; gap:7px; }
+#results .res-dashboard .cana .ct { display:flex; align-items:baseline; flex-wrap:wrap; gap:5px; padding:7px 8px; font-size:11px; line-height:1.5; }
+#results .res-dashboard .cana .tip { flex:1 1 150px; }
+#results .res-detail { margin-top:12px; font-size:11px; color:#aebed6; }
+#results .res-detail>summary { cursor:pointer; padding:7px 0; color:#b9cbe4; font-weight:700; }
+#results .res-detail>summary:focus-visible { outline:2px solid #ffdc80; outline-offset:3px; }
+#results .res-dashboard .btns { display:flex; flex-direction:row; gap:10px; padding:16px 30px 20px; }
+#results .res-dashboard .ra-main { flex:1; display:flex; gap:10px; }
+#results .res-dashboard .ra-main:empty { display:none; }
+#results .res-dashboard .ra-sub { flex:3; display:flex; gap:10px; }
+#results .res-dashboard .btns .gm-btn { flex:1; flex-direction:row; gap:8px; min-height:48px; padding:10px 12px; border-radius:11px; font-size:13px; line-height:1.3; white-space:normal; }
+#results .res-dashboard .btns .gm-btn .ic { width:auto; height:auto; background:none; font-size:17px; }
+#results .res-dashboard .btns .gm-btn kbd { font-size:10px; }
+#results .res-dashboard .podium { margin:0 0 10px; gap:6px; }
+#results .res-dashboard .podium .who { font-size:11px; }
+#results .res-dashboard .podium .pd>small { font-size:9px; }
+#results .res-dashboard .podium .blk { height:24px; font-size:16px; }
+#results .res-dashboard .podium .p1 .blk { height:36px; }
+#results .res-dashboard .podium .p2 .blk { height:29px; }
+#results .res-dashboard .stand { margin:0; font-size:11px; }
+#results .res-dashboard .stand td { padding:7px 5px; }
+#results .res-dashboard .stand .nm { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#results .res-dashboard .stand .nm small { display:none; }
+#results .res-dashboard .champ { margin:8px 0 0; }
+#results .res-dashboard .cst { font-size:11px; }
+#results .res-dashboard .nr-next { margin:12px 0 0; padding:10px; border-radius:9px; }
+#results .res-dashboard .nr-next>b { font-size:12px; }
+#results .res-dashboard .nr-next p { font-size:11px; margin:5px 0 0; line-height:1.5; }
+body:has(#results.on) #xpPill { display:none!important; }
+@media (max-width:1279px) {
+ #results .res.res-dashboard,#results .res.res-dashboard.has-rivals { width:min(940px,calc(100vw - 28px)); }
+ #results .res-dashboard .res-head { padding:20px; gap:10px 18px; }
+ #results .res-clock .total { font-size:42px; }
+ #results .res-dashboard .res-scroll { padding:16px 20px; }
+ #results .res-dashboard.has-rivals .res-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ #results .res-rank { grid-column:1/-1; }
+ #results .res-dashboard .btns { padding:12px 20px; }
+}
+@media (min-width:1280px) and (max-height:800px) {
+ #results .res-dashboard .res-head { padding:18px 24px 14px; gap:8px 20px; }
+ #results .res-clock .total { font-size:44px; }
+ #results .res-dashboard .res-scroll { padding:16px 24px; }
+ #results .res-panel { padding:14px; }
+ #results .res-panel h3 { margin-bottom:12px; }
+ #results .res-dashboard .stand td { padding:6px 4px; }
+ #results .res-dashboard .btns { padding:12px 24px; }
+}
+@media (max-width:700px) {
+ #results .res-dashboard .res-head { grid-template-columns:1fr auto; gap:10px; padding:16px; }
+ #results .res-title h2 { font-size:28px; }
+ #results .res-title .flag { font-size:21px; }
+ #results .res-identity .who { font-size:10px; margin-top:5px; }
+ #results .res-clock .total { font-size:32px; }
+ #results .res-dashboard .res-head .badges { grid-column:1/-1; justify-content:flex-start; }
+ #results .res-dashboard .res-scroll { padding:12px; }
+ #results .res-grid,#results .res-dashboard.has-rivals .res-grid { grid-template-columns:1fr; gap:12px; }
+ #results .res-rank { grid-column:auto; }
+ #results .res-panel { padding:14px; }
+ #results .res-dashboard .btns { flex-direction:column; padding:10px 12px; gap:7px; }
+ #results .res-dashboard .ra-main,#results .res-dashboard .ra-sub { flex:auto; gap:7px; }
+ #results .res-dashboard .btns .gm-btn { font-size:11px; padding:8px 4px; min-height:42px; gap:4px; }
+ #results .res-dashboard .btns .gm-btn .ic { font-size:14px; }
+}
+@media (max-height:560px) and (min-width:701px) {
+ #results .res.res-dashboard,#results .res.res-dashboard.has-rivals { width:calc(100vw - 20px); max-height:calc(100dvh - 16px); }
+ #results .res-dashboard .res-head { grid-template-columns:minmax(0,1fr) auto; padding:10px 16px; gap:6px 16px; }
+ #results .res-title h2 { font-size:25px; }
+ #results .res-title .flag { display:none; }
+ #results .res-identity .who { font-size:10px; margin-top:2px; }
+ #results .res-clock .total { font-size:32px; }
+ #results .res-dashboard .res-head .badges { grid-column:1/-1; justify-content:flex-start; margin:0; }
+ #results .res-dashboard .res-head .online { font-size:10px; padding:4px 8px; }
+ #results .res-dashboard .res-scroll { padding:12px 16px; }
+ #results .res-grid { gap:12px; }
+ #results .res-panel { padding:12px; }
+ #results .res-dashboard .btns { padding:8px 12px; gap:7px; }
+ #results .res-dashboard .btns .gm-btn { min-height:42px; font-size:11px; padding:6px; }
+ #results .res-dashboard .btns .gm-btn kbd { display:none; }
+}
+
+/* 2차 사진 검토: 기본 여백을 줄여 720px 높이에서도 전체 보상 노출 */
+#results .res-dashboard .res-scroll>.res-grid { margin-top:0; }
+@media(min-width:1280px) and (max-height:800px) {
+ #results .res-dashboard .mt-result-ach>span { padding:5px 8px; }
+ #results .res-dashboard .res-xp b { font-size:23px; }
+ #results .res-dashboard .res-xp-bar { margin:7px 0 5px; }
+ #results .res-dashboard .res-detail { margin-top:8px; }
+ #results .res-dashboard .res-detail>summary { padding:5px 0; }
+}
+
+/* 3차 다듬기: 온라인 흐름 버튼 둘도 같은 줄에서 충분한 너비 확보 */
+#results .res-dashboard .ra-main.nr-inline-actions { flex:2.3; }
+#results .res-dashboard .ra-main .next { font-size:12px; }
+#results .res-dashboard .res-rank:has(.res-champ) .stand td { padding-top:5px; padding-bottom:5px; }
+@media(min-width:1280px) {
+ #results .res.res-dashboard { background:linear-gradient(155deg,#24314ceb,transparent 55%),rgba(10,16,31,.98); }
+ #results .res-dashboard .res-panel { background:linear-gradient(145deg,#25344c65,#0d172c66); }
+}
+
+#results .res-dashboard .ra-main:not(:has(button)) { display:none; }
+@media(prefers-reduced-motion:reduce) { #results .podium .pd { animation:none!important; } }

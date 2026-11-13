@@ -255,7 +255,7 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
   }
 
   /** 거울 장면 그리기 (게임 화면을 그린 바로 뒤) */
-  function render() {
+  function render(renderCar = car) {
     if (st.rectDirty || !st.rect) measure();
     const r = st.rect;
     if (!r || r.w < 8 || r.h < 8) return;
@@ -278,8 +278,8 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
     }
 
     // 카메라: 운전자 눈 위치에서 뒤를 봄 (차가 기울면 같이 기울어짐 = 진짜 거울처럼)
-    _eye.copy(car.pos).addScaledVector(car.right, C.eye[0]).addScaledVector(car.up, C.eye[1]).addScaledVector(car.fwd, C.eye[2]);
-    _look.copy(car.pos).addScaledVector(car.fwd, -C.look).addScaledVector(car.up, C.lookDown);
+    _eye.copy(renderCar.pos).addScaledVector(renderCar.right, C.eye[0]).addScaledVector(renderCar.up, C.eye[1]).addScaledVector(renderCar.fwd, C.eye[2]);
+    _look.copy(renderCar.pos).addScaledVector(renderCar.fwd, -C.look).addScaledVector(renderCar.up, C.lookDown);
     cam.position.copy(_eye);
     cam.up.copy(car.up);
     cam.lookAt(_look);
@@ -463,7 +463,7 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
       st.tagT = 0.2;
       setTag(st.k > 0 && near && near.d < C.maxM + C.hideExtraM ? near : null);
     }
-    if (st.k > 0) render();
+    if (st.k > 0) render(ctx.renderCar);
   }
 
   function reset() {

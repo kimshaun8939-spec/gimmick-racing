@@ -9,7 +9,7 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
+import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, prepareBotPace, balanceBotConfig, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
 import { settings } from './settings.js';
@@ -83,8 +83,13 @@ export async function createRaceSystem(o) {
     const picks = pickBotCars(roster, carId, nBots, seed);
     const names = BOT_NAMES.slice().sort(() => rand() - 0.5);
     const cfgs = await Promise.all(picks.map((p) => o.loadCarConfig(p.id)));
+    // 사람의 잠금/선택/그리드와 무관하게 같은 등급 전체를 기준으로 자동 보정.
+    const cls = (roster.cars || []).find(p => p.id === carId)?.class;
+    const classCars = (roster.cars || []).filter(p => !cls || p.class === cls);
+    const classCfgs = await Promise.all(classCars.map(p => o.loadCarConfig(p.id)));
+    prepareBotPace(track, classCfgs);
     picks.forEach((p, i) => {
-      const cfg = cfgs[i];
+      const cfg = balanceBotConfig(track, cfgs[i]);
       legacyDraft(cfg);
       const bc = new Car(cfg, botTrack);
       bc.manual = false;
@@ -106,20 +111,23 @@ export async function createRaceSystem(o) {
   const all = () => [me, ...opponents.entries];
 
   // --- 출발 그리드 ---
-  // 칸 k: 출발선에서 (9 + 8k) m 뒤, 왼쪽/오른쪽 번갈아 (2열 엇갈림)
-  const halfW = (track.width || 16) / 2;
-  const gridLat = Math.min(3.4, halfW * 0.42);
+  // 칸 k: 4.2m 엇갈림, 같은 열8.4m. 라인 가까운 두 열로 첫 코너 강제 합류를 줄임.
+  const halfW = (track.width || 16) / 2; // checkStuck의 도로 바깥 판정에도 사용
   function slot(k) {
-    const dist = 9 + 8 * k;
+    const dist = 9 + 4.2 * k;
     let t = 1 - dist / L;
     t -= Math.floor(t);
-    return { t, lat: (k % 2 === 0 ? -1 : 1) * gridLat };
+    const i=Math.round(t*line.N)%line.N, lo=line.lo[i]+1.25, hi=line.hi[i]-1.25;
+    const column=Math.min(1.55,Math.max(.6,(hi-lo)/2));
+    const center=Math.max(lo+column,Math.min(hi-column,line.offset[i]));
+    return {t,lat:center+(k%2===0?-1:1)*column};
   }
   let mySlot = null; // 온라인: 호스트가 정해 주는 칸
   let gridTotal = null;
   let humanSlots = 0; // 온라인: 앞쪽 칸 0..humans-1은 사람 자리 → 봇은 그 뒤부터
   /** 그리드에 놓기. 플레이어 칸 { t, lat } 를 돌려줌 */
   function placeGrid() {
+    stats.byCar = {};
     const total = gridTotal || 1 + bots.length;
     const pIdx = mySlot != null ? mySlot : bots.length ? Math.min(total - 1, Math.ceil(total * 0.6) - 1) : 0;
     const p = slot(pIdx);
@@ -292,6 +300,11 @@ export async function createRaceSystem(o) {
       }
     }
     stats.contacts++;
+    const hits = stats.byCar || (stats.byCar = {});
+    for (const c of bStatic ? [a] : [a,b]) {
+      const id = c === car ? 'me' : c.cfg?.carId;
+      if (id) hits[id] = (hits[id] || 0) + 1;
+    }
     if (NOSPIN) stats.nospin = true;
     if (a === car || b === car) stats.player = (stats.player || 0) + 1; // 플레이어 차가 낀 접촉
     if (stats.time < 8) stats.start = (stats.start || 0) + 1; // 출발 8초 안 (한 덩어리로 출발할 때)
@@ -581,7 +594,8 @@ export async function createRaceSystem(o) {
   function towWant(x, ahead, lead, time) {
     const c = x.view;
     if (!lead || x === lead || x.finished || x.remote || !c || time < (TC.startDelay ?? 8)) return 0;
-    if (c.flying || !c.grounded || c.surface === 'water' || c.mode === 'fly' || x.offMain) return 0;
+    if (c.flying || !c.grounded || c.mode === 'fly' || x.offMain) return 0;
+    if (c.surface === 'water' && (TOW_OLD || !(TC.waterGain > 0))) return 0;
     const ti = c.trackInfo;
     if (towCalm && ti && towCalm[Math.min(towCalm.length - 1, Math.max(0, Math.floor(ti.t * towCalm.length)))]) return 0;
     if (c.gravityScale && c.gravityScale() < 0.95) return 0; // 저중력: 빨라지면 날아감
@@ -604,15 +618,18 @@ export async function createRaceSystem(o) {
   function updateTow(dt, time, racing) {
     const on = racing && towOn();
     let lead = null;
-    if (on) for (const e of all()) if (!e.finished && (!lead || e.progress > lead.progress)) lead = e;
+    if (on) for (const e of all()) {
+      const p = e.finished ? laps : e.progress, lp = lead ? (lead.finished ? laps : lead.progress) : -Infinity;
+      if (!lead || p > lp || (p === lp && e.finished && lead.finished && e.finishTime < lead.finishTime)) lead = e;
+    }
     for (const x of [me, ...bots]) {
       // 바로 앞차 (견인 3차: 간격 = max(바로 앞차 간격, 1등 간격 × leadShare), towWant). &towold=1 = 예전(1등 기준만)
       let ref = null;
       if (on && !TOW_OLD) {
         let best = 1;
         for (const y of all()) {
-          if (y === x || y.finished) continue;
-          const d = y.progress - x.progress;
+          if (y === x) continue;
+          const d = Math.min(laps, y.progress) - x.progress;
           if (d > 0 && d < best) {
             best = d;
             ref = y;
@@ -628,6 +645,29 @@ export async function createRaceSystem(o) {
       if (x.tow > (x.towMax || 0)) x.towMax = x.tow;
       if (x === me && x.tow > 0 && !x.finished) x.towUsed = (x.towUsed || 0) + x.tow * dt; // 기록 '도움 켬' 판정용 (가장 센 견인 기준 초)
     }
+  }
+
+  // pack2: 물 위에도 같은 눈에 보이는 슬립스트림/견인. 원본 차 설정은 바꾸지 않음.
+  // 파도 점프·후진·제동 중에는 추가 추진 없음. 급류/아이템의 기존 속도를 깎지 않음.
+  function waterAero(x, dt, racing) {
+    const c=x.view;
+    c.waterAeroTop=1;
+    if(!racing||x.finished||!c.grounded||c.mode!=='boat'||c.surface!=='water'||c.speed<=0)return;
+    const b=c.cfg.modes.boat, dr=c.cfg.draft||{}, tw=c.cfg.tow||{};
+    const slip=SLIP_OLD?0:Math.min(1,c.draft||0), tow=TOW_OLD?0:Math.min(1,c.tow||0);
+    const train=1+Math.min(2,c.draftTrain||0)*(dr.trainGain||0);
+    const gain=Math.min(.12, slip*(dr.topGain||0)*train*(dr.waterGain||0)+tow*(tw.topGain||0)*(tw.waterGain||0));
+    c.waterAeroTop=1+gain;
+    if(gain<=0)return;
+    if((c.brk||0)>.05||(c.thr||0)<=0)return;
+    const base=Math.min(b.maxSpeed,Math.sqrt(Math.max(1,b.thrust-b.rolling)/b.drag));
+    const cap=base*(1+gain);
+    if(c.speed>=cap)return;
+    const cut=Math.min(.65,slip*(dr.dragCut||0)*train*(dr.waterGain||0)+tow*(tw.dragCut||0)*(tw.waterGain||0));
+    const accel=Math.min(2.5,b.drag*c.speed*c.speed*cut+(c.thr||0)*b.thrust*(tw.powerGain||0)*tow*(tw.waterGain||0));
+    c.speed=Math.min(cap,c.speed+accel*dt);
+    if(c.moveDirTo)c.moveDirTo(c.vel).multiplyScalar(c.speed);
+    x.speed=Math.abs(c.speed);
   }
 
   // --- 레이스 알림 (main.js가 꺼내 감): 최고 랩 ---
@@ -719,6 +759,7 @@ export async function createRaceSystem(o) {
     updateTow(dt, time, racing);
     // DRS
     if (drs) drs.step(dt, time, racing);
+    for (const x of [me, ...bots]) waterAero(x, dt, racing);
     // 간격 기록
     if (racing) {
       mark(me, time);
@@ -937,7 +978,8 @@ export async function createRaceSystem(o) {
     opponents.render(dt, elapsed, camera, (e) => [e.name, `P${e.position || ''}`]);
     if (slipFx) {
       const src = me.slipSrc && me.slipSrc.view && me.draft > 0.03 ? me.slipSrc.view : null;
-      const gain = Math.min(DC.topMax ?? 1, (me.draft || 0) * (DC.topGain ?? 0.04) * (1 + Math.min(2, car.draftTrain || 0) * (DC.trainGain ?? 0))); // HUD '+n%'
+      const water = car.mode === 'boat' && car.surface === 'water';
+      const gain = Math.min(water ? .12 : DC.topMax ?? 1, (me.draft || 0) * (DC.topGain ?? 0.04) * (1 + Math.min(2, car.draftTrain || 0) * (DC.trainGain ?? 0)) * (water ? SLIP_OLD ? 0 : DC.waterGain || 0 : 1)); // HUD '+n%': 물의 공통 배율도 그대로 표시
       slipFx.update(dt, camera, { racing: racingNow && !me.finished, draft: me.draft || 0, charge: me.slip || 0, gain, src, myPos: car.pos, tow: me.tow || 0, towOn: towOn(), sling: !!me.slingFx });
       me.slingFx = false;
     }
