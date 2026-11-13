@@ -699,22 +699,72 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if(jumpSoon&&o.dm>-12&&o.dm<35)jumpTraffic=true;
     }
     st.laneHold=Math.max(0,st.laneHold-dt);
+    st.overtakeCool=Math.max(0,(st.overtakeCool||0)-dt);
+    const intent=(level.master ? .95 : level.pace>.95 ? .82 : level.pace>.8 ? .6 : .35)*(.7+.3*aggr);
+    const keyOf=o=>o.id??o.pos;
+    const actualGap=o=>{
+      if(!o.pos||Math.abs(o.dm)>60)return o.dm;
+      const dx=o.pos.x-car.pos.x,dz=o.pos.z-car.pos.z,tan=ti.sample?.tan||car.fwd;
+      const gap=(dx*tan.x+dz*tan.z)/Math.max(.01,Math.hypot(tan.x,tan.z));
+      return Math.hypot(dx,dz)<65&&Math.abs(o.pos.y-car.pos.y)<5&&Math.abs(gap-o.dm)<10?gap:o.dm;
+    };
+    let turnSide=0,straightM=30+v*3;
+    for(let q=0;q<straightM/ds;q+=3){const j=W(i0+q);if(Math.abs(L.curvature[j])>1/150){turnSide=-Math.sign(L.curvature[j]);straightM=q*ds;break;}if(prof.brake[j])straightM=Math.min(straightM,q*ds+40);}
+    const options=(leader,side=0)=>{
+      const spread=clamp(3.1+Math.max(0,speed-leader.speed-2)*.2,3.1,3.8);
+      return [0,-spread,spread].filter(off=>Math.abs(off-leader.lane)>2.8&&(!side||Math.sign(off-leader.lane)===side)&&fits(off)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-7&&o.dm<18&&Math.abs(o.lane-off)<2.65));
+    };
+    const safeWindow=()=>{for(let q=0;q<(25+v*2.5)/ds;q+=3){const j=W(i0+q);if(narrowAt(j)||jumpZone?.[j]||S[j].roll||S[j].gap||track.isWaterT?.(j/N))return false;}return true;};
+    const mergeHazard=!safeWindow();
+    let move=st.overtake;
+    let leader=move&&peers.find(o=>move.key!=null&&keyOf(o)===move.key);
+    if(move&&move.key==null){let best=8;for(const o of peers){const score=Math.abs(o.dm-move.dm)+2*Math.abs(o.lane-move.lane);if(score<best){best=score;leader=o;}}}
+    const endMove=()=>{st.overtake=null;st.overtakeCool=1.5;st.laneHold=0;move=null;};
+    const changeSide=()=>{const off=options(leader,-move.side)[0];if(off==null)return false;move.off=off;move.side=Math.sign(off-leader.lane);move.switched=true;st.overtakeSwitches=(st.overtakeSwitches||0)+1;return true;};
+    if(move){
+      move.age+=dt;
+      if(!leader||narrowSoon||risky||mergeHazard||ctx.finished||move.age>25)endMove();
+      else{
+        const gap=actualGap(leader),closing=Math.max(0,speed-leader.speed);
+        if(gap<move.bestGap-.5){move.bestGap=gap;move.noGain=0;}else move.noGain=(move.noGain||0)+dt;
+        if((move.phase==='approach'&&move.age>1.5&&gap>7&&gap>move.bestGap+5)||(move.phase==='pass'&&move.noGain>3&&gap>6)){endMove();}
+        if(move)move.outside=move.phase==='pass'&&cornerSoon&&turnSide&&move.side!==turnSide&&gap>7?(move.outside||0)+dt:0;
+        if(move&&(gap < -9-Math.max(0,leader.speed-speed)*2||move.outside>1.2))endMove();
+        else if(move){
+          const safeSwitch=!move.switched&&!brakeSoon&&!cornerSoon&&gap>Math.max(6.3,4.8+closing*.8);
+          const defended=(leader.lane-move.startLane)*move.side>.8&&Math.abs(leader.lane-move.off)<2.8;
+          if((defended||!fits(move.off))&&safeSwitch)changeSide();
+          if(move.phase==='approach'){
+            const off=options(leader,move.side)[0];if(off!=null)move.off=off;
+            const laneTime=Math.max(0,2.4-Math.abs(leader.lat-myLat))/2.6+.35;
+            const pullAt=5.2+closing*laneTime+v*.03;
+            if(gap<pullAt&&fits(move.off)&&(!cornerSoon||move.side===turnSide)&&(!brakeSoon||move.side===turnSide))move.phase='pass';
+          }else if(!fits(move.off)&&gap>7)endMove();
+        }
+      }
+    }
     let want=st.laneTarget;
-    const launchColumns = ctx.since < 6 && !narrowSoon && !brakeSoon && !cornerSoon;
-    if (launchColumns) {
-      // 출발 직선은 두 그리드 열 유지: 차선 변경 때문에 가속 모드 진입이 늦어지지 않음.
-      want = clamp(st.gridLat-L.offset[i0], L.lo[i0]+.35-L.offset[i0], L.hi[i0]-.35-L.offset[i0]);
-    } else if(narrowSoon) {
-      // 옆 차를 가로질러 가운데로 가지 않음. 조금 뒤인 차가 간격을 만든 뒤 합류.
-      want=0;
-    } else {
-      const blocked=front&&front.dm<15+Math.max(0,speed-front.speed)*2.2;
-      if(blocked && !brakeSoon && !cornerSoon) {
-        attack={dM:front.dm,o:front};
-        const options=[0,-3.1,3.1].filter(off=>fits(off)&&!crosses(off)&&!peers.some(o=>o.dm>-7&&o.dm<18&&Math.abs(o.lane-off)<2.65));
-        if(options.length){options.sort((a,b)=>Math.abs(a-st.lane)-Math.abs(b-st.lane));want=options[0];st.laneHold=1.2;busy=true;}
-      } else if(st.laneHold<=0&&!crosses(0)&&!cornerSoon)want=0;
-      if(!fits(want)){want=0;st.laneHold=0;}
+    const launchColumns=ctx.since<6&&!narrowSoon&&!brakeSoon&&!cornerSoon;
+    if(launchColumns)want=clamp(st.gridLat-L.offset[i0],L.lo[i0]+.35-L.offset[i0],L.hi[i0]-.35-L.offset[i0]);
+    else if(narrowSoon||mergeHazard)want=0;
+    else{
+      if(!move&&front&&!ctx.finished&&!risky&&st.overtakeCool<=0&&!mergeHazard){
+        const closing=Math.max(0,speed-front.speed),gap=actualGap(front),minClosing=.6+(1-intent)*1.2;
+        if(gap>5.2&&gap<Math.min(55,Math.max(25,v*.8))&&(closing>minClosing||(gap<15&&st.heldT>.8&&st.tgt0>front.speed+minClosing))&&!cornerSoon&&straightM>Math.max(25,v*.8)){
+          const choices=options(front).sort((a,b)=>Math.abs(a-st.lane)-Math.abs(b-st.lane));
+          const off=brakeSoon?choices.find(x=>Math.sign(x-front.lane)===turnSide):choices[0];
+          if(off!=null){move=st.overtake={key:keyOf(front),off,side:Math.sign(off-front.lane),startLane:front.lane,phase:gap<4.8+v*.05+3?'pass':'approach',base:Math.abs(st.lane)<2?0:Math.round(st.lane/3.1)*3.1,bestGap:gap,switched:false,age:0,outside:0,dm:front.dm,lane:front.lane,sep:Math.abs(front.lat-myLat),sepV:0};leader=front;st.overtakeStarts=(st.overtakeStarts||0)+1;}
+        }
+      }
+      if(move){
+        move.dm=leader.dm+(leader.speed-speed)*dt;move.lane=leader.lane;
+        const separation=Math.abs(leader.lat-myLat),rate=clamp((separation-move.sep)/Math.max(.001,dt),-8,8);
+        move.sepV+=(rate-move.sepV)*Math.min(1,dt*8);move.sep=separation;
+        want=move.phase==='approach'?move.base+move.side*.45:move.off;
+        st.laneHold=1.2;busy=true;attack={dM:leader.dm,o:leader};
+        if(move.phase==='pass'&&brakeSoon&&turnSide===move.side&&actualGap(leader)>0&&actualGap(leader)<22&&separation>2.7&&speed>leader.speed+.3)lateBrake=intent;
+      }else if(st.laneHold<=0&&!crosses(0)&&!cornerSoon)want=0;
+      if(!move&&!fits(want)){want=0;st.laneHold=0;}
     }
     if(!launchColumns&&Math.abs(want-actualLane)>.15&&crosses(want)) {
       const blockedBy=beside.filter(o=>(want-o.lane)*(actualLane-o.lane)<0||Math.abs(want-o.lane)<2.6);
@@ -725,18 +775,24 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const laneRate = cornerSoon && speed > 35 ? 1.6 : 2.6;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
     let lane=st.lane;
-    // 실제 진행할 줄을 가로막는 앞차만 제동. 여유 거리에서 앞차와 같은 속도.
-    const gapM=4.8+Math.max(0,speed)*.05; // 차 충돌 길이4.7m + 속도 여유, 줄 서도 무리가 길게 늘어지지 않음
-    for(const o of peers) {
-      const dLat=o.lat-myLat;
-      if(o.dm>0&&o.dm<100&&Math.abs(dLat)<2.25&&Math.abs(o.lane-lane)<2.6) {
-        follow=Math.min(follow,Math.sqrt(Math.max(0,o.speed*o.speed+2*7*gHere*(o.dm-gapM))));
+    // 차체가 비키는 데 걸릴 시간과 앞차에 닿을 시간을 비교. 예측이 안 맞으면 먼저 제동.
+    const gapM=4.8+Math.max(0,speed)*.05;
+    for(const o of peers){
+      const dLat=o.lat-myLat,gap=actualGap(o),closing=Math.max(0,speed-o.speed);
+      if(gap>0&&gap<100&&Math.abs(dLat)<2.25){
+        const target=!!move&&o===leader;
+        const desired=clamp(L.offset[i0]+st.laneTarget,L.lo[i0]+.2,L.hi[i0]-.2);
+        const toSide=target&&move.sepV>.5?Math.max(0,2.25-Math.abs(dLat))/move.sepV:Infinity;
+        const envelope=2.6+Math.sqrt(Math.max(0,2.2*2.2-dLat*dLat))+.2;
+        const toRear=closing>.1?(gap-envelope)/closing:Infinity;
+        const clearing=(!cornerSoon||Math.abs(dLat)>1.5)&&target&&move.phase==='pass'&&Math.abs(desired-o.lat)>2.7&&toSide+.25<toRear&&gap>5;
+        if(!clearing){
+          if(target){const room=gap-gapM;follow=Math.min(follow,Math.max(0,o.speed+Math.sign(room)*Math.sqrt(10*gHere*Math.abs(room))));}
+          else if(Math.abs(o.lane-lane)<2.6||gap<gapM+closing*2+3)follow=Math.min(follow,Math.sqrt(Math.max(0,o.speed*o.speed+2*7*gHere*(o.dm-gapM))));
+        }
+        if(gap<envelope+closing*.2+closing*closing/16)follow=Math.min(follow,Math.max(0,o.speed-2));
       }
-      if(Math.abs(o.dm)<4.7&&Math.abs(dLat)<2.1) {
-        const away=dLat>0?-1:1;
-        const room=myLat+away*.8>L.lo[i0]&&myLat+away*.8<L.hi[i0];
-        if(room)shove+=away*.05*(2.1-Math.abs(dLat));
-      }
+      if(Math.abs(o.dm)<4.7&&Math.abs(dLat)<2.1){const away=dLat>0?-1:1;const room=myLat+away*.8>L.lo[i0]&&myLat+away*.8<L.hi[i0];if(room)shove+=away*.05*(2.1-Math.abs(dLat));}
     }
     const inSide=0;
 
@@ -845,17 +901,16 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul) * aeroTop);
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
     else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) tgt = Math.min(tgt, vTop * st.paceMul * eq.topMul * aeroTop);
-    // 앞이 막혀 2초 넘게 거의 멈춰 있으면: 1.5초 동안은 앞차를 신경 쓰지 않고 밀고 나감 (영원히 기다리지 않게)
+    // 앞이 막혀 거의 멈춰 있으면 추월 경로를 다시 준비
     if (follow < 3 && Math.abs(speed) < 3 && ctx.since > 1) st.blockedT += dt;
     else st.blockedT = Math.max(0, st.blockedT - dt);
     if (st.blockedT > 2) {
-      st.pushT = 1.5;
+      st.passT = 4; // 멈춰도 앞차를 밀지 않고 빈 줄을 다시 찾음
       st.blockedT = 0;
     }
     // 자석 도로(루프·벽): 위로 올라가는 동안 진행 거리가 짧게 계산되어 앞차가 아주 가까워 보임 → 앞차 때문에 줄이지 않음 (멈추면 떨어짐)
     const onMagnet = car.surface === 'magnet' || (ti.sample && ti.sample.roll) || car.up.y < 0.8;
-    if (st.pushT > 0) st.pushT -= dt;
-    else if (!onMagnet) {
+    if (!onMagnet) {
       // 앞차 때문에 속도를 줄이고 있는 시간 → 1.5초 넘으면 '추월 시도' 4초 (그동안 또 막히면 계속)
       if (follow < tgt - 0.3 && speed > 10 && !ctx.finished) st.heldT += dt;
       else st.heldT = Math.max(0, st.heldT - dt * 0.5);
@@ -872,7 +927,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1) };
+    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1) };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {
@@ -904,6 +959,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     /** 복귀(리스폰) 뒤: 줄·실수 초기화 */
     reset(grid = false) {
       st.lane = st.laneTarget = 0;
+      st.overtake=null;st.overtakeCool=0;
       st.fly = null;
       st.flyI = 0;
       st.mistake = null;

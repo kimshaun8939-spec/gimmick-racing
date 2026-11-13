@@ -1,4 +1,5 @@
-// 변신 소리: 가속은 패널 열림 쉬익 → 레일 모터 위이잉 → 단계 잠금 → 철컥 (1.0초)
+import { accelProfile } from './carBody_accel.js';
+// accel2: 21대별 정밀 서보·래칫·유압·블로워·전자음·귀여운 팝 등 전용 리듬.
 //   위이잉 = 모터(서보)가 도는 소리: 톱니파가 올라가거나(변신) 내려감(되돌아감)
 //   착, 착 = 부품이 하나씩 자리 잡는 짧은 금속음 (잡음을 높은 대역만 남겨 아주 짧게)
 //   철컥 = 마지막에 낮고 묵직하게 잠기는 소리
@@ -46,6 +47,41 @@ export function createTransformSfx() {
     src.stop(t + 0.08);
   }
 
+  // 같은 모터음을 높낮이만 바꾸지 않고 음원·리듬도 전용으로 예약한다.
+  function tone(t, duration, from, to, type, volume) {
+    const osc=ctx.createOscillator(), g=ctx.createGain(); osc.type=type;
+    osc.frequency.setValueAtTime(from,t);osc.frequency.exponentialRampToValueAtTime(Math.max(20,to),t+duration);
+    g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(volume,t+.012);
+    g.gain.exponentialRampToValueAtTime(.0001,t+duration);
+    osc.connect(g).connect(out);osc.start(t);osc.stop(t+duration+.02);
+  }
+  function accelSound(up,t) {
+    const game=window.game;
+    const p=accelProfile(game?.model?.look || {carId:game?.carId});
+    const d=p.duration*(up?1:.82), heavy=['heavy','hydraulic','blower'].includes(p.sound);
+    const pop=p.sound==='pop', electric=['electric','silk'].includes(p.sound);
+    const at=u=>t+d*(up?u:1-u);
+    if(pop) {
+      p.steps.forEach((s,i)=>tone(at(s),.13,p.f0*(1+i*.16),p.f1*(1+i*.10),'sine',.10));
+      tone(t+d*.24,d*.50,p.f0*.6,p.f1*.8,'triangle',.035);
+    } else if(electric) {
+      tone(t+.04,d*.86,up?p.f0:p.f1,up?p.f1:p.f0,'sine',.055);
+      tone(t+.09,d*.76,up?p.f0*1.5:p.f1*1.5,up?p.f1*1.5:p.f0*1.5,'triangle',.022);
+      p.steps.forEach((s,i)=>tone(at(s),.055,820+i*170,1260+i*190,'sine',.035));
+    } else if(p.sound==='precision'||p.sound==='ratchet') {
+      p.steps.forEach((s,i)=>{click(at(s),p.f0*4+i*210,.08);tone(at(s),.045,up?p.f0:p.f1,up?p.f1:p.f0,'triangle',.035);});
+      if(p.sound==='ratchet')tone(t+d*.25,d*.45,up?180:360,up?360:180,'sawtooth',.018);
+    } else {
+      tone(t+.08,d*.75,up?p.f0:p.f1,up?p.f1:p.f0,heavy?'sawtooth':'triangle',heavy?.035:.025);
+      p.steps.forEach((s,i)=>{click(at(s),heavy?650+i*180:1700+i*220,.10);tone(at(s),.10,heavy?110:220,heavy?45:95,'triangle',heavy?.10:.06);});
+    }
+    // 묵직한 유압은 낮은 잠금, 정밀 기계는 짧은 걸쇠, 전기는 맑은 확인음.
+    const end=t+d;
+    if(electric)tone(end,.13,p.f1,p.f1*1.25,'sine',.045);
+    else if(pop)tone(end,.14,640,980,'sine',.075);
+    else {click(end,heavy?900:2800,heavy?.14:.09);tone(end,heavy?.16:.06,heavy?110:320,heavy?42:170,'triangle',heavy?.16:.055);}
+  }
+
   return {
     setMuted(m) {
       muted = m;
@@ -60,7 +96,8 @@ export function createTransformSfx() {
       const mode = window.game?.car?.mode || 'normal';
       const accel = mode === 'accel' || (!up && recentMode === 'accel');
       recentMode = mode;
-      const dur = accel ? (up ? 1.00 : .80) : (up ? .55 : .4);
+      if (accel) { accelSound(up,t); return; }
+      const dur = up ? .55 : .4;
       // 패널 잠금 해제 → 공기 빠지는 쉬익 → 레일 모터 → 날개 잠금.
       const air = ctx.createBufferSource(); air.buffer = noiseBuf;
       const airFilter = ctx.createBiquadFilter(); airFilter.type = 'highpass'; airFilter.frequency.value = 2800;
@@ -86,7 +123,7 @@ export function createTransformSfx() {
       osc.start(t);
       osc.stop(t + dur + 0.02);
       // 착, 착 (부품이 자리 잡음)
-      const steps = accel ? (up ? [.32, .60, .84] : [.18, .43, .62]) : (up ? [.14, .27, .4] : [.12, .26]);
+      const steps = up ? [.14, .27, .4] : [.12, .26];
       steps.forEach((s, i) => click(t + s, 2100 + i * 430, 0.14));
       // 철컥 (마지막 잠김): 낮은 음이 빠르게 떨어짐 + 짧은 금속음
       const end = t + dur;

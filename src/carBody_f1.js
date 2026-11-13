@@ -234,11 +234,15 @@ export function buildF1({ add, body, M }) {
   const fWing = new THREE.Group();
   body.add(fWing);
   const SW = 0.11;
+  const accelFlaps = [];
   for (const side of [-1, 1]) {
     put(carbon, foil(0, side * 0.985, 2.63, 0.125, 0.44, 0.04, 0.015, SW), fWing);
-    put(paint, foil(side * 0.13, side * 0.975, 2.47, 0.185, 0.2, 0.03, 0.045, SW), fWing);
-    put(paint, foil(side * 0.15, side * 0.97, 2.345, 0.25, 0.17, 0.028, 0.055, SW), fWing);
-    put(accent, foil(side * 0.19, side * 0.965, 2.235, 0.318, 0.13, 0.026, 0.055, SW), fWing);
+    for (const [n, row] of [[0,[.13,.975,2.47,.185,.20,.030,.045]], [1,[.15,.970,2.345,.25,.17,.028,.055]], [2,[.19,.965,2.235,.318,.13,.026,.055]]]) {
+      const [a,b,z,y,ch,t,rise] = row;
+      const flap = new THREE.Group(); flap.position.set(0,y,z); fWing.add(flap);
+      put(n===2?accent:paint, foil(side*a,side*b,0,0,ch,t,rise,SW),flap);
+      accelFlaps.push(flap);
+    }
     // 끝판 + 포인트 줄 + 발판 + 작은 날개
     const ex = side * 0.99;
     put(paint, plate([[2.76, 0.09], [2.74, 0.19], [2.45, 0.36], [2.06, 0.43], [2.02, 0.09]], 0.028, ex, side * -0.06, 2.4), fWing);
@@ -275,7 +279,7 @@ export function buildF1({ add, body, M }) {
 
   flush();
   return {
-    helmet, fWing, spoiler, drs,
+    helmet, fWing, spoiler, drs, accelFlaps,
     A: {
       // 가속 모드 통풍구: 새 사이드포드 윗면에 맞춤
       vents: [[0.56, 0.722, -0.2], [0.55, 0.722, -0.46], [0.53, 0.716, -0.72]],

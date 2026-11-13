@@ -23,8 +23,8 @@
 //
 // 주행 모드 (car.mode, 1 일반 / 2 가속 / 3 배 / 4 비행. 부스터와 겹쳐 쓸 수 있음)
 //   일반(normal): 기본 모습
-//   가속(accel): 1.05초 동안 덮개 열림 → 흡입구·노즐 전개 → 날개·디퓨저 확장 → 잠금
-//     carBody_accel.js의 15스타일 장착표, 차체 하강·은은한 빛·짧은 파란 제트. 되돌아갈 때는 0.85초 역순.
+//   가속(accel): 21대 전용 장치·리듬, 0.82~1.4초. carBody_accel.js 참고.
+//     물리/모드 규칙은 그대로, 해제는 전개의 82% 시간으로 역순.
 //     불꽃 길이는 가속 페달(car.thr)과 속도에 비례
 //   배(boat): 바퀴가 옆으로 눕혀지며(수평) 차체 쪽으로 접혀 올라감 → 아래에서 보트 선체(흰/빨강, 뾰족한 뱃머리)가 솟음
 //     → 뒤에 선외기 2개가 나타나 물속으로 내려감 (프로펠러는 car.thr로 회전, 땅 위에선 선외기를 들어 올림)
@@ -56,7 +56,7 @@ import { buildWedge } from './carBody_wedge.js';
 import { buildVan } from './carBody_van.js';
 import { applyCostume, dressCar } from './carCostumes.js';
 import { buildRacingBoat } from './carBody_boat.js';
-import { buildAccelKit } from './carBody_accel.js';
+import { buildAccelKit, accelIdentity } from './carBody_accel.js';
 
 const DRIFT_COLORS = [0xffffff, 0x4fc3ff, 0xff9a2e];
 const FORM_COLORS = { spike: new THREE.Color('#7dff6a') };
@@ -353,6 +353,7 @@ function knobGeometry(r, wd) {
 
 export function createCarModel(lookOrColor = '#e8463a') {
   const normalized = normalizeLook(lookOrColor);
+  normalized.accelId = accelIdentity(normalized);
   const look = normalized.costume ? applyCostume(normalized, normalized.costume) : normalized;
   const color = look.body;
   const root = new THREE.Group(); // 위치와 방향
@@ -397,6 +398,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   // ------------------------------------------------------------------ 차체 (차 종류마다 다름) + 변신 부품 자리(A)
   const shell = (BUILDERS[look.style] || buildF1)({ add, body, root, M, look });
+  // 변신·실내·빛 효과를 붙이기 전의 기본 차체만 충돌 크기에 포함.
+  const hitboxMeshes = [];
+  body.traverse(o => { if (o.isMesh) hitboxMeshes.push(o); });
   const shellMeshes = [];
   body.traverse(m => { if (m.isMesh && (m.material === paint || m.material === accent)) shellMeshes.push(m); });
   const { helmet, fWing, spoiler, drs } = shell;
@@ -561,43 +565,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const glowTex = glowTexture();
   const accelGlow = new THREE.MeshStandardMaterial({ color: '#bddfff', emissive: '#54baff', emissiveIntensity: 1.4, roughness: 0.3 });
   accelGlow.userData.live = true;
-  const nitroOuter = new THREE.MeshBasicMaterial({ color: '#3f9eff', transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
-  const nitroCore = new THREE.MeshBasicMaterial({ color: '#bfe4ff', transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-  const nitroDisc = new THREE.MeshBasicMaterial({ color: '#e6f4ff' });
-  if (look.costume) { accelGlow.color.set(look.accent); accelGlow.emissive.set(look.trim); nitroOuter.color.set('#64bbff'); }
-  // 사이드포드 위 통풍구 (아가미처럼 뒤로 누우며 솟음)
-  const ventGeo = new THREE.BoxGeometry(0.3, 0.1, 0.05).translate(0, 0.05, 0);
-  const vents = [];
-  for (const side of [-1, 1]) {
-    for (const [x, y, z] of A.vents) {
-      const v = add(ventGeo, accelGlow, side * x, y, z);
-      v.castShadow = false;
-      vents.push(v);
-    }
-  }
-  // 노즈 위 빛나는 줄 (흰 줄 위에 겹침)
-  const glowStripe = add(new THREE.BoxGeometry(A.glow.w, 0.022, A.glow.len), accelGlow, 0, A.glow.y, A.glow.z);
-  glowStripe.rotation.x = A.glow.rot;
-  glowStripe.castShadow = false;
-  // 니트로 배기관 2개: 사이드포드 끝에서 뒤로 미끄러져 나옴 (디퓨저와 뒷날개 아래 빔 사이, 스파이크 부스터보다 낮고 안쪽)
-  const nitros = [-1, 1].map((side) => {
-    const g = new THREE.Group();
-    g.position.set(side * A.nitro.x, A.nitro.y, A.nitro.z);
-    body.add(g);
-    if (['kart', 'buggy', 'van', 'rocket'].includes(look.style)) {
-      add(new THREE.BoxGeometry(.035,.12,.28), carbon, 0,.09,.04,g);
-      add(new THREE.BoxGeometry(.19,.025,.22), trim, 0,0,.08,g);
-    }
-    add(new THREE.CylinderGeometry(0.065, 0.075, 0.42, 12).rotateX(Math.PI / 2), darkMetal, 0, 0, 0, g);
-    add(new THREE.TorusGeometry(0.075, 0.02, 4, 12), accelGlow, 0, 0, -0.21, g).castShadow = false;
-    add(new THREE.CircleGeometry(0.055, 12).rotateY(Math.PI), nitroDisc, 0, 0, -0.19, g).castShadow = false;
-    // 불꽃 (바깥 주황 + 안쪽 청백)
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 1.3, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.65), nitroOuter);
-    const core = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.8, 8, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.4), nitroCore);
-    flame.position.z = core.position.z = -0.22;
-    g.add(flame, core);
-    return { g, flame, core };
-  });
+  accelGlow.color.set(look.trim); accelGlow.emissive.set(look.costume ? look.trim : look.accent);
   // 바닥 언더글로우 (땅에 깔리는 주황 빛)
   const underglow = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, 5.2).rotateX(-Math.PI / 2),
@@ -754,6 +722,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
     susp.castShadow = true;
     root.add(susp);
     susp.scale.set(side * (Math.abs(x) - inner), 1, 1);
+    steer.traverse(o => { if (o.isMesh) hitboxMeshes.push(o); });
+    hitboxMeshes.push(susp);
     wheels.push({ steer, spin, front, susp, side, ax: Math.abs(x), r, z, inner });
   }
 
@@ -845,32 +815,11 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   /** 가속 모드 진행도 p에 맞춰 부품 배치 (poseSpike 뒤에 불러야 함: body.position.y에 더함) */
   function poseAccel(p, time) {
-    const sSquat = easeInOut(stage(p, 0.12, 0.9)); // 차체가 낮게 깔림
-    const sVent = easeOutBack(stage(p, 0.20, 0.62)); // 통풍구 열림
-    const sPipe = easeOutBack(stage(p, 0.35, 0.82)); // 배기관 미끄러져 나옴
-    const sStripe = easeInOut(stage(p, 0.72, 1.0)); // 노즈 줄 빛남
-    const sDrs = easeInOut(stage(p, 0.4, 0.9)); // DRS 열림
-    const sGlow = stage(p, 0.6, 1.0); // 언더글로우
-
-    body.position.y -= 0.065 * sSquat;
-    accelKit.pose(p, Math.max(boatP, flyP, spikeP));
-    for (const v of vents) {
-      v.visible = sVent > 0.01;
-      v.scale.set(1, Math.max(0.001, sVent), 1);
-      v.rotation.x = -0.5 * sVent;
-    }
-    glowStripe.visible = sStripe > 0.01;
-    glowStripe.scale.z = Math.max(0.001, sStripe);
-    for (const n of nitros) {
-      n.g.visible = sPipe > 0.01;
-      n.g.position.z = A.nitro.z + A.nitro.dz * sPipe;
-      const nozzleSize = ['kart','buggy','van'].includes(look.style) ? 2.25 : look.style === 'rocket' ? 1.9 : 1.45;
-      const nozzleK = nozzleSize * (0.5 + 0.5 * Math.max(0.001, sPipe));
-      n.g.scale.set(nozzleK, nozzleK, nozzleK * .72);
-      n.g.position.x = Math.sign(n.g.position.x) * (A.nitro.x + (look.style === 'van' ? .58 : 0) * sPipe);
-    }
+    const sDrs = easeInOut(stage(p, .48, .87));
+    const sGlow = stage(p, .7, 1);
+    accelKit.pose(p, Math.max(boatP, flyP, spikeP), time);
     // 2026-11-12 drs: 가속 모드는 윗판을 조금만 (예전 0.33 → 0.1), 진짜 DRS(car.drs)는 크게 열림 → 뒤에서 보면 날개 틈이 확 벌어짐
-    drs.rotation.x = A.drsRest - 0.1 * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
+    drs.rotation.x = A.drsRest - accelKit.drs * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
     underglow.visible = sGlow > 0.01;
     underglow.material.opacity = sGlow * (0.18 + 0.025 * Math.sin(time * 3));
     if (costumeFx?.luxury && boatP < .1 && flyP < .1) {
@@ -944,7 +893,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   }
 
   const costumeFx = dressCar({ root, body, A, shell, M, look, add, wheels, shellMeshes, loft });
-  const accelKit = buildAccelKit({ body, spoiler, A, M, look, add, light: accelGlow });
+  const accelKit = buildAccelKit({ body, spoiler, A, M, look, add, light: accelGlow, shell });
   const cockpit = buildCockpit({ body, A, M, look, add });
 
   // 처음엔 모드 부품을 숨겨 둠 (첫 sync 전)
@@ -953,7 +902,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   poseWheels(0);
   poseFly(0, 0);
   for (const wg of wings) wg.flame.visible = wg.core.visible = wg.trail.visible = false;
-  for (const n of nitros) n.flame.visible = n.core.visible = false;
+
   for (const s of sprays) s.visible = false;
   wake.visible = false;
   // 부스터(스파이크) 부품·불꽃도 접어 둠 → sync 없이 홈 화면 미리보기로 써도 평소 모습
@@ -1027,9 +976,28 @@ export function createCarModel(lookOrColor = '#e8463a') {
     body.position.y = transformingIn ? Math.sin(p * Math.PI) * 0.35 : 0;
   }
 
+  // 기본 자세에서 한 번만 측정. 실제 꼭짓점을 쓰므로 회전된 날개의 빈 여백도 제외.
+  root.updateMatrixWorld(true);
+  const normalBox = new THREE.Box3();
+  const vertex = new THREE.Vector3();
+  for (const mesh of hitboxMeshes) {
+    let visible = true;
+    for (let o = mesh; o; o = o.parent) if (!o.visible) { visible = false; break; }
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (!visible || mesh.userData.fpInterior || !mats.some(mat => mat.visible && mat.blending !== THREE.AdditiveBlending && mat.opacity > 0)) continue;
+    const positions = mesh.geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) normalBox.expandByPoint(vertex.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld));
+  }
+  const normalBounds = Object.freeze({
+    front: normalBox.max.z, back: -normalBox.min.z,
+    half: Math.max(Math.abs(normalBox.min.x), Math.abs(normalBox.max.x)),
+    bottom: normalBox.min.y, height: normalBox.max.y - normalBox.min.y,
+  });
+
   let disposed = false;
   return {
     root,
+    normalBounds, // 일반 모드 기본 외형 크기(+z 앞, root 원점 기준), 애니메이션과 무관
     /** 1인칭 시점용 (camViews.js, 2026-11-12): 부품 자리(A.helmet = 운전자 머리), 헬멧, 기울기 그룹 */
     fp: { A, helmet, body, eye: cockpit.eye, interior: cockpit.interior },
     /** 이 차의 모습 설정 (style, 색 등) */
@@ -1073,8 +1041,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
         flyP = flyOn ? 1 : 0;
         gearP = gearUp ? 1 : 0;
       } else {
-        // 순서 있는 기계 동작 (가속 1.05초 / 풀기 0.85초, 배·비행은 기존 시간)
-        accelP = clamp01(accelP + (accelOn ? dt / 1.05 : -dt / 0.85));
+        // 차마다 전개 시간이 다르며 해제는 같은 기구를 역순으로 수납.
+        accelP = clamp01(accelP + (accelOn ? dt / accelKit.duration : -dt / (accelKit.duration * .82)));
         drsP = clamp01(drsP + ((car.drs || 0) > 0.5 ? dt / 0.2 : -dt / 0.15));
         boatP = clamp01(boatP + (boatOn ? dt / 0.7 : -dt / 0.5));
         flyP = clamp01(flyP + (flyOn ? dt / 0.6 : -dt / 0.45));
@@ -1180,6 +1148,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       costumeFx?.update(time, boatP);
       poseBoat(boatP, boatOn, THREE.MathUtils.lerp(1.25, 0.08, waterK));
       // 변신하는 동안 차체가 살짝 들렸다가 "철컥" 내려앉음 (흔들림 없이 한 번)
+      if (mode === 'accel' || accelP > 0) clunkT = 1; // 전용 스쿼트/통통 리듬을 사용
       if (clunkT < 1) {
         clunkT = Math.min(1, clunkT + dt / (mode === 'accel' ? 1.05 : .7));
         body.position.y += 0.06 * Math.sin(Math.PI * clunkT) - 0.02 * Math.sin(Math.PI * stage(clunkT, 0.75, 1));
@@ -1245,18 +1214,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
         bo.flameIn.scale.set(1, 1, fk * (0.9 + Math.random() * 0.2));
       }
 
-      // 니트로 불꽃: 배기관이 다 나온 뒤 점화. 가속 페달과 속도에 비례해 길어지고, 부스트 중엔 더 길게
-      const nitroLit = accelP > 0.86;
       const push = Math.max(0, thr);
-      const nk = 0.3 + push * (0.5 + 1.0 * Math.min(1, spd / 57)) + (car.boostTime > 0 ? 0.6 : 0);
       accelGlow.emissiveIntensity *= .85 + .15 * push;
-      for (const n of nitros) {
-        n.flame.visible = n.core.visible = nitroLit;
-        if (!nitroLit) continue;
-        const wide = 1 + 0.25 * push;
-        n.flame.scale.set(wide, wide, nk * .24 * (0.93 + Math.sin(time * 43) * .07));
-        n.core.scale.set(1, 1, nk * .25 * (0.96 + Math.sin(time * 61) * .04));
-      }
 
       // 프로펠러: 공회전은 천천히, 가속 페달을 밟으면 빠르게 (후진이면 반대로)
       if (boatP > 0.5) propAngle += dt * (4 + 45 * Math.abs(thr)) * (thr < 0 ? -1 : 1);

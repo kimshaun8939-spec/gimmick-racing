@@ -14,6 +14,7 @@
 //   - 다운포스: 빠를수록 차가 눌려 접지력이 커짐. 공기 저항 때문에 최고 속도가 자연스럽게 정해짐
 import * as THREE from 'three';
 import { analyzeCorners } from './cornerInfo.js';
+import { hitboxFor } from './carHitbox.js';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -70,6 +71,7 @@ function signedAngle(a, b, up) {
 }
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(); // 레일 검사용 임시 벡터
+const _wallSide = new THREE.Vector3(), _wallCorner = new THREE.Vector3();
 // 땅 위 이동(매 스텝, 차마다)에 쓰는 임시 벡터 (렉 줄이기 2: 예전엔 스텝마다 새 벡터 7~8개 → 쓰레기 청소로 가끔 멈칫)
 const _mv = new THREE.Vector3(), _md = new THREE.Vector3(), _org = new THREE.Vector3(), _dir = new THREE.Vector3(), _np = new THREE.Vector3(), _probe = new THREE.Vector3(), _down = new THREE.Vector3();
 
@@ -80,6 +82,7 @@ export class Car {
    */
   constructor(cfg, track) {
     this.cfg = cfg;
+    this.hitbox = hitboxFor(cfg); // 기본 모델의 바퀴·앞/뒷날개 포함 크기 (look별 한 번)
     this.track = track;
     this.pos = new THREE.Vector3();
     this.up = WORLD_UP.clone();
@@ -496,7 +499,7 @@ export class Car {
   /**
    * 그랑프리 가드레일 안쪽에 붙잡아 둠
    *   벽 충돌은 차 가운데에서 쏘는 레이 하나라서, 비스듬히 박으면 차 앞부분이 레일을 1 m 넘게 뚫고 들어갔음
-   *   → 차 네 귀퉁이(앞 2.5 m, 뒤 2.3 m, 옆 1 m) 중 하나라도 레일 선을 넘으면 그만큼 안쪽으로 밀고, 바깥으로 가는 속도는 없앰
+   *   → 차마다 기본 모델에서 읽은 네 귀퉁이(바퀴·앞/뒷날개 포함) 중 하나라도 레일 선을 넘으면 그만큼 안쪽으로 밀고, 바깥으로 가는 속도는 없앰
    */
   keepInsideRail() {
     const ti = this.trackInfo;
@@ -509,7 +512,8 @@ export class Car {
     const outX = s.right.x * sg, outZ = s.right.z * sg;
     // 귀퉁이가 바깥쪽으로 얼마나 나가 있는지 (차 가운데 기준)
     const fo = this.fwd.x * outX + this.fwd.z * outZ, so = side.x * outX + side.z * outZ;
-    const reach = Math.max(2.5 * fo, -2.3 * fo) + Math.abs(so) * 1.0;
+    const box = this.hitbox;
+    const reach = Math.max(box.front * fo, -box.back * fo) + Math.abs(so) * box.half;
     const excess = Math.abs(ti.lateral) + reach - (lim - 0.05);
     if (excess <= 0) return;
     this.pos.x -= outX * excess;
@@ -997,7 +1001,19 @@ export class Car {
     const dist = move.length();
     if (dist > 1e-6) {
       const origin = _org.copy(this.pos).addScaledVector(this.up, 0.6);
-      const wall = this.track.castRay(origin, _dir.copy(move).divideScalar(dist), dist + 2.0);
+      const direction = _dir.copy(move).divideScalar(dist), box = this.hitbox;
+      const side = _wallSide.crossVectors(this.up, this.fwd).normalize();
+      // 가운데 레이의 고정 2 m 대신 차 상자가 이 방향으로 뻗은 길이.
+      const along = direction.dot(this.fwd), across = direction.dot(side);
+      const reach = Math.max(box.front * along, -box.back * along) + box.half * Math.abs(across);
+      let wall = this.track.castRay(origin, direction, dist + reach);
+      if (wall && wall.normal.dot(this.up) >= 0.5) wall = null;
+      // 얇은 기둥·벽 끝이 앞날개 옆을 통과하지 않도록 네 귀퉁이도 이동 거리만큼 검사.
+      for (let i = 0; i < 4; i++) {
+        _wallCorner.copy(origin).addScaledVector(this.fwd, i < 2 ? box.front : -box.back).addScaledVector(side, i % 2 ? box.half : -box.half);
+        const cornerHit = this.track.castRay(_wallCorner, direction, dist + 0.02);
+        if (cornerHit && cornerHit.normal.dot(this.up) < 0.5 && (!wall || cornerHit.distance < wall.distance)) wall = cornerHit;
+      }
       if (wall && wall.normal.dot(this.up) < 0.5) {
         // 너무 가파른 면 = 벽. 벽을 따라 미끄러지며 살짝 튕김
         const v = this.moveDir.multiplyScalar(f);

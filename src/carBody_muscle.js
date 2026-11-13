@@ -64,14 +64,17 @@ export function buildMuscle({ add, body, M }) {
     add(new THREE.BoxGeometry(0.12, 0.012, 0.95), accent, sx, 1.27, -0.45).castShadow = false;
     add(new THREE.BoxGeometry(0.12, 0.012, 0.5), accent, sx, 0.93, -2.3).castShadow = false;
   }
+  const blower = new THREE.Group(); body.add(blower);
+  const butterflies = [];
   // 슈퍼차저(블로워): 보닛을 뚫고 솟은 은색 상자 + 벨트 + 위 흡입구(나비 판 2개)
-  add(new THREE.BoxGeometry(0.42, 0.2, 0.62), metal, 0, 0.88, 1.35);
-  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.44, 0.015, 0.03), carbon, 0, 0.83 + i * 0.03, 1.66).castShadow = false;
-  add(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 16).rotateX(Math.PI / 2), carbon, 0, 0.86, 1.7);
-  add(new THREE.BoxGeometry(0.5, 0.12, 0.34), carbon, 0, 1.04, 1.4);
+  add(new THREE.BoxGeometry(0.42, 0.2, 0.62), metal, 0, 0.88, 1.35, blower);
+  for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.44, 0.015, 0.03), carbon, 0, 0.83 + i * 0.03, 1.66, blower).castShadow = false;
+  add(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 16).rotateX(Math.PI / 2), carbon, 0, 0.86, 1.7, blower);
+  add(new THREE.BoxGeometry(0.5, 0.12, 0.34), carbon, 0, 1.04, 1.4, blower);
   for (const sx of [-0.12, 0.12]) {
-    add(new THREE.BoxGeometry(0.2, 0.012, 0.26), metal, sx, 1.105, 1.4).castShadow = false;
-    add(new THREE.BoxGeometry(0.03, 0.03, 0.26), trim, sx, 1.12, 1.4).castShadow = false;
+    const flap = new THREE.Group(); flap.position.set(sx,1.105,1.4); blower.add(flap); butterflies.push(flap);
+    add(new THREE.BoxGeometry(.2,.012,.26), metal, 0,0,0,flap).castShadow=false;
+    add(new THREE.BoxGeometry(0.03, 0.03, 0.26), trim, 0, .015, 0, flap).castShadow = false;
   }
   for (const side of [-1, 1]) {
     // 둥근 헤드라이트 4개 + 크롬 테
@@ -167,7 +170,7 @@ export function buildMuscle({ add, body, M }) {
   const helmet = makeHelmet(add, body, M);
   helmet.position.set(0.3, 0.98, -0.45);
   return {
-    helmet, fWing, spoiler, drs,
+    helmet, fWing, spoiler, drs, blower, butterflies,
     A: {
       wheels: W,
       tuck: { f: [0.82, 0.6], r: [0.9, 0.72] },

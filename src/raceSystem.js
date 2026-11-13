@@ -114,13 +114,10 @@ export async function createRaceSystem(o) {
   // 칸 k: 4.2m 엇갈림, 같은 열8.4m. 라인 가까운 두 열로 첫 코너 강제 합류를 줄임.
   const halfW = (track.width || 16) / 2; // checkStuck의 도로 바깥 판정에도 사용
   function slot(k) {
-    const dist = 9 + 4.2 * k;
+    const dist = 9 + 8 * k; // 그려진 그리드 칸과 같게 (pack2의 4.2m 촘촘한 배치는 되돌림, 사용자 요청 2026-11-13 '그리드 박스에는 있어야지')
     let t = 1 - dist / L;
     t -= Math.floor(t);
-    const i=Math.round(t*line.N)%line.N, lo=line.lo[i]+1.25, hi=line.hi[i]-1.25;
-    const column=Math.min(1.55,Math.max(.6,(hi-lo)/2));
-    const center=Math.max(lo+column,Math.min(hi-column,line.offset[i]));
-    return {t,lat:center+(k%2===0?-1:1)*column};
+    return { t, lat: (k % 2 === 0 ? -1 : 1) * Math.min(3.4, halfW * 0.42) };
   }
   let mySlot = null; // 온라인: 호스트가 정해 주는 칸
   let gridTotal = null;
@@ -712,10 +709,10 @@ export async function createRaceSystem(o) {
             if (dx * dx + dy * dy + dz * dz > 3600) continue;
             const fl = Math.hypot(bc.fwd.x, bc.fwd.z) || 1, fx = bc.fwd.x / fl, fz = bc.fwd.z / fl;
             if (Math.abs(dy) > 4 && !(b.offMain && e.offMain)) continue; // 한쪽은 하늘, 한쪽은 땅
-            others.push({ progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep, fin: !!e.finished });
+            others.push({ id: e.id, progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep, fin: !!e.finished });
             continue;
           }
-          others.push({ progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos, fin: !!e.finished });
+          others.push({ id: e.id, progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos, fin: !!e.finished });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
