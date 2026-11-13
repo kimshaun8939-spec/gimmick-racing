@@ -9,7 +9,7 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { hitboxFor, obbOverlap } from './carHitbox.js';
+import { hitboxFor, obbOverlap, advanceHitbox, constrainHitbox } from './carHitbox.js';
 import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
@@ -251,8 +251,7 @@ export async function createRaceSystem(o) {
   const contactRadii = new WeakMap();
   function contactRadius(c) {
     const h = hitboxFor(c);
-    if (!contactRadii.has(h)) contactRadii.set(h, Math.hypot(Math.max(h.front,h.back),h.half,Math.max(Math.abs(h.bottom),Math.abs(h.bottom+h.height))));
-    return contactRadii.get(h);
+    return Math.hypot(Math.max(h.front,h.back),h.half,Math.max(Math.abs(h.bottom),Math.abs(h.bottom+h.height)));
   }
   /** a, b = Car (또는 b = 움직이지 않는 상대 모습) */
   function collide(a, b, bStatic) {
@@ -260,6 +259,7 @@ export async function createRaceSystem(o) {
     if (a.pos.distanceToSquared(b.pos) > (contactRadius(a)+contactRadius(b))**2) return;
     const contact = obbOverlap(a, b);
     if (!contact.hit || contact.depth <= 1e-7) return;
+    a._hitboxMoved=true;if(!bStatic)b._hitboxMoved=true;
     const best = contact.depth;
     _n.copy(contact.normal); // SAT의 겹친 면 b → a. depth와 짝인 법선을 유지.
     let sideHit = false;
@@ -688,6 +688,8 @@ export async function createRaceSystem(o) {
   let paceT = 0, racingNow = false;
   /** 물리 한 스텝 (main.js의 고정 스텝마다) */
   function step(dt, phase, time, playerProgress) {
+    // 봇의 첫 간격 판단부터 온라인 상대의 실제 외형을 사용한다.
+    for(const e of opponents.entries)if(e.remote)e.view.look=e.look;
     const racing = phase !== 'countdown';
     stats.time = racing ? time : 0;
     // 플레이어 진행
@@ -742,6 +744,11 @@ export async function createRaceSystem(o) {
     // 차끼리 충돌 (플레이어 + 봇), 온라인 상대는 움직이지 않는 벽처럼 (내 차만 밀림)
     // 완주한 봇은 (천천히 돌며 길을 막으므로) 다른 차와 부딪히지 않음
     const bodies = [car, ...bots.filter((b) => !b.finished).map((b) => b.car)];
+    for(const c of bodies)c._hitboxPeers=bodies;
+    for (const e of opponents.entries) if (e.remote && e.target) {
+      e.view.look=e.look;e.view._hitboxPeers=bodies;
+      e.view.hitboxProgress=e.target.accelProgress??e.target.accelP;advanceHitbox(e.view,dt);
+    }
     if (NOSPIN) for (const c of bodies) applyNudge(c, dt);
     for (let i = 0; i < bodies.length; i++) for (let k = i + 1; k < bodies.length; k++) collide(bodies[i], bodies[k], false);
     for (const e of opponents.entries) {
@@ -750,6 +757,31 @@ export async function createRaceSystem(o) {
       e.view.look = e.look;
       collide(car, e.view, true);
       for (const b of bots) collide(b.car, e.view, true);
+    }
+    // hitbox2: 3대 이상 연쇄 접촉도 같은 스텝 안에 풀기. 속도/요/잔여 밀림은 재적용하지 않음.
+    const remotes=opponents.entries.filter(e=>e.remote&&e.target).map(e=>e.view);
+    for(let pass=0;pass<128;pass++) {
+      let remaining=0;
+      const separate=(a,b,staticB)=>{
+        if(a.pos.distanceToSquared(b.pos)>(contactRadius(a)+contactRadius(b))**2)return;
+        const h=obbOverlap(a,b);if(!h.hit||h.depth<.0001)return;
+        remaining=Math.max(remaining,h.depth);
+        const amount=h.depth+.002,share=staticB?1:.5;
+        a._hitboxMoved=true;if(!staticB)b._hitboxMoved=true;
+        a.pos.addScaledVector(h.normal,amount*share);
+        if(!staticB)b.pos.addScaledVector(h.normal,-amount*(1-share));
+      };
+      for(let i=0;i<bodies.length;i++)for(let j=i+1;j<bodies.length;j++)separate(bodies[i],bodies[j],false);
+      for(const c of bodies)for(const r of remotes)separate(c,r,true);
+      for(const c of bodies)constrainHitbox(c);
+      if(remaining<.0001){
+        // 레일/벽 보정이 방금 떨어뜨린 다른 쌍을 다시 밀어 붙일 수 있다. 보정 뒤 기준으로 끝낸다.
+        let clear=true;
+        const check=(a,b)=>{if(a.pos.distanceToSquared(b.pos)<=(contactRadius(a)+contactRadius(b))**2){const h=obbOverlap(a,b);if(h.hit&&h.depth>=.0001)clear=false;}};
+        for(let i=0;i<bodies.length;i++)for(let j=i+1;j<bodies.length;j++)check(bodies[i],bodies[j]);
+        for(const c of bodies)for(const r of remotes)check(c,r);
+        if(clear)break;
+      }
     }
     // 슬립스트림
     racingNow = racing;

@@ -693,7 +693,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const along=Math.abs((f.x*tx+f.z*tz)/fl), across=Math.abs((f.x*tz-f.z*tx)/fl);
       return front==null ? box.half*along+Math.max(box.front,box.back)*across : box[front?'front':'back']*along+box.half*across;
     };
-    const sideSpace = o => ownBox.half + boxOf(o).half;
+    const sideSpace = o => projection(ownBox,car.fwd,null) + projection(boxOf(o),o.fwd,null);
     const rearSpace = o => projection(ownBox,car.fwd,true)+projection(boxOf(o),o.fwd,false);
     const beside = peers.filter(o => Math.abs(o.dm) < (ownBox.front+ownBox.back+boxOf(o).front+boxOf(o).back)*.5);
     const crosses = off => beside.some(o => (off-o.lane)*(actualLane-o.lane)<0 || Math.abs(off-o.lane)<sideSpace(o)+.12);

@@ -1005,27 +1005,54 @@ export function createCarModel(lookOrColor = '#e8463a') {
     body.position.y = transformingIn ? Math.sin(p * Math.PI) * 0.35 : 0;
   }
 
-  // 기본 자세에서 한 번만 측정. 실제 꼭짓점을 쓰므로 회전된 날개의 빈 여백도 제외.
-  root.updateMatrixWorld(true);
-  const normalBox = new THREE.Box3();
-  const vertex = new THREE.Vector3();
-  for (const mesh of hitboxMeshes) {
-    let visible = true;
-    for (let o = mesh; o; o = o.parent) if (!o.visible) { visible = false; break; }
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    if (!visible || mesh.userData.fpInterior || !mats.some(mat => mat.visible && mat.blending !== THREE.AdditiveBlending && mat.opacity > 0)) continue;
-    const positions = mesh.geometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) normalBox.expandByPoint(vertex.fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld));
+  // hitbox2: 실제 단단한 메시만 측정. 복장/가속 키트 포함, 실내/빛/불꽃 제외.
+  function collisionPoints() {
+    root.updateMatrixWorld(true);
+    const inverse = root.matrixWorld.clone().invert(), groups = new Map();
+    const v = new THREE.Vector3(), mat = new THREE.Matrix4();
+    root.traverse(mesh => {
+      if (!mesh.isMesh || mesh.userData.fpInterior) return;
+      for (let n=mesh;n&&n!==root;n=n.parent) if (!n.visible || n.userData.fpInterior) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (!materials.some(m => m.visible && m.opacity > .5 && !m.userData.reviewEffect && !m.isShaderMaterial && m.blending !== THREE.AdditiveBlending)) return;
+      const wheel = wheels.find(w => { for(let n=mesh;n&&n!==root;n=n.parent) if(n===w.steer)return true;return false; });
+      const key = wheel || body;
+      if (!groups.has(key)) groups.set(key,{points:[],wheel:!!wheel,front:!!wheel?.front,pivot:wheel ? new THREE.Vector3().setFromMatrixPosition(wheel.steer.matrixWorld).applyMatrix4(inverse) : body.position.clone()});
+      const points=groups.get(key).points, p=mesh.geometry.attributes.position;
+      const local=new THREE.Matrix4().multiplyMatrices(inverse,mesh.matrixWorld),instance=new THREE.Matrix4();
+      for(let k=0;k<(mesh.isInstancedMesh?mesh.count:1);k++){
+        mat.copy(local);if(mesh.isInstancedMesh){mesh.getMatrixAt(k,instance);mat.multiply(instance);}
+        for(let i=0;i<p.count;i++)points.push(v.fromBufferAttribute(p,i).applyMatrix4(mat).clone());
+      }
+    });
+    return [...groups.values()];
   }
-  const normalBounds = Object.freeze({
-    front: normalBox.max.z, back: -normalBox.min.z,
-    half: Math.max(Math.abs(normalBox.min.x), Math.abs(normalBox.max.x)),
-    bottom: normalBox.min.y, height: normalBox.max.y - normalBox.min.y,
-  });
+  function measureHitbox(p=0) {
+    // 측정 동안만 자세를 바꾸고 모든 노드를 복원. 모델 모양은 바꾸지 않는다.
+    const saved=[],materials=new Map();root.traverse(n=>{
+      saved.push([n,n.position.clone(),n.quaternion.clone(),n.scale.clone(),n.visible]);
+      for(const m of n.material?(Array.isArray(n.material)?n.material:[n.material]):[])
+        if(!materials.has(m))materials.set(m,{color:m.color?.clone(),emissive:m.emissive?.clone(),opacity:m.opacity,intensity:m.emissiveIntensity});
+    });
+    const old=[accelP,boatP,flyP,spikeP,drsP];
+    accelP=p;boatP=flyP=spikeP=drsP=0;
+    body.rotation.set(0,0,0);poseSpike(0,false);poseFly(0,0);poseBoat(0,false,1.45);poseAccel(p,0,0,0,0);poseWheels(0);
+    for(const w of wheels) {w.steer.rotation.y=0;w.spin.rotation.x=0;}
+    const result=collisionPoints();
+    [accelP,boatP,flyP,spikeP,drsP]=old;
+    for(const [n,pos,q,scale,visible] of saved){n.position.copy(pos);n.quaternion.copy(q);n.scale.copy(scale);n.visible=visible;}
+    for(const [m,s]of materials){if(s.color)m.color.copy(s.color);if(s.emissive)m.emissive.copy(s.emissive);m.opacity=s.opacity;if(s.intensity!=null)m.emissiveIntensity=s.intensity;}
+    root.updateMatrixWorld(true);
+    return result;
+  }
+  const normalBox = new THREE.Box3().setFromPoints(collisionPoints().flatMap(g=>g.points));
+  const normalBounds = Object.freeze({front:normalBox.max.z,back:-normalBox.min.z,half:Math.max(Math.abs(normalBox.min.x),Math.abs(normalBox.max.x)),bottom:normalBox.min.y,height:normalBox.max.y-normalBox.min.y});
 
   let disposed = false;
   return {
     root,
+    collisionPoints, measureHitbox,
+    collisionInfo: {duration:accelKit.duration,lean:A.lean,pitch:A.pitch ?? A.lean*.7},
     normalBounds, // 일반 모드 기본 외형 크기(+z 앞, root 원점 기준), 애니메이션과 무관
     /** 1인칭 시점용 (camViews.js, 2026-11-12): 부품 자리(A.helmet = 운전자 머리), 헬멧, 기울기 그룹 */
     fp: { A, helmet, body, eye: cockpit.eye, interior: cockpit.interior },
@@ -1077,6 +1104,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
         flyP = clamp01(flyP + (flyOn ? dt / 0.6 : -dt / 0.45));
         gearP = clamp01(gearP + (gearUp ? dt / 0.45 : -dt / 0.45));
       }
+      if (car._hitboxState) accelP = car._hitboxState.p;
       // 바퀴 접힘: 배 모드(변신 앞부분에서 접힘)와 비행 중 착륙 장치 중 큰 쪽
       const wheelQ = Math.max(clamp01(boatP / 0.55), gearP);
       const onWater = car.grounded && car.surface === 'water' ? 1 : 0;
@@ -1107,6 +1135,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       basis.makeBasis(xAxis, car.up, car.fwd);
       qTarget.setFromRotationMatrix(basis);
       driftYaw = THREE.MathUtils.lerp(driftYaw, car.drifting ? car.driftDir * -0.15 : 0, 1 - Math.exp(-8 * dt));
+      if (car._hitboxState) driftYaw=car._hitboxState.drift;
       qDrift.setFromAxisAngle(Y, driftYaw);
       qTarget.multiply(qDrift);
       // 바퀴(root에 붙음)도 같이 기울도록 모드 기울기는 root에 줌
@@ -1137,6 +1166,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
         pitchV += (kS * (targetPitch - pitchNow) - cS * pitchV) * h;
         pitchNow += pitchV * h;
       }
+      if (car._hitboxState) { lean=car._hitboxState.lean; pitchNow=car._hitboxState.pitch; driftYaw=car._hitboxState.drift; }
       body.rotation.z = -lean;
       body.rotation.x = pitchNow;
 
@@ -1288,6 +1318,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
         wg.trail.visible = trailK > 0.02;
         if (wg.trail.visible) wg.trail.scale.set(1 + 1.5 * trailK, 1 + 1.5 * trailK, 2 + 12 * trailK);
       }
+      car._hitboxState?.display?.(this,car,time);
     },
     /** 테스트용: 스파이크 변신 진행도를 직접 지정 */
     debugPose(p) {

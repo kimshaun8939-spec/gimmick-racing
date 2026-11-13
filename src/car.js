@@ -14,7 +14,7 @@
 //   - 다운포스: 빠를수록 차가 눌려 접지력이 커짐. 공기 저항 때문에 최고 속도가 자연스럽게 정해짐
 import * as THREE from 'three';
 import { analyzeCorners } from './cornerInfo.js';
-import { hitboxFor } from './carHitbox.js';
+import { hitboxFor, constrainHitbox } from './carHitbox.js';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -82,7 +82,9 @@ export class Car {
    */
   constructor(cfg, track) {
     this.cfg = cfg;
-    this.hitbox = hitboxFor(cfg); // 기본 모델의 바퀴·앞/뒷날개 포함 크기 (look별 한 번)
+    // 벽·레일도 차끼리 접촉과 같은 현재 변신 외곽을 읽는다.
+    Object.defineProperty(this, 'hitbox', { get: () => hitboxFor(this) });
+    hitboxFor(this);
     this.track = track;
     this.pos = new THREE.Vector3();
     this.up = WORLD_UP.clone();
@@ -508,6 +510,9 @@ export class Car {
    *   → 차마다 기본 모델에서 읽은 네 귀퉁이(바퀴·앞/뒷날개 포함) 중 하나라도 레일 선을 넘으면 그만큼 안쪽으로 밀고, 바깥으로 가는 속도는 없앰
    */
   keepInsideRail() {
+    // 공중/비행 중에도 물리 시계에 맞춰 가속 외형 진행도를 갱신한다.
+    const box = this.hitbox;
+    constrainHitbox(this);
     const ti = this.trackInfo;
     if (!this.track.railLimit || !this.grounded || this.flying || !ti) return;
     const lim = this.track.railLimit(ti);
@@ -518,7 +523,6 @@ export class Car {
     const outX = s.right.x * sg, outZ = s.right.z * sg;
     // 귀퉁이가 바깥쪽으로 얼마나 나가 있는지 (차 가운데 기준)
     const fo = this.fwd.x * outX + this.fwd.z * outZ, so = side.x * outX + side.z * outZ;
-    const box = this.hitbox;
     const reach = Math.max(box.front * fo, -box.back * fo) + Math.abs(so) * box.half;
     const excess = Math.abs(ti.lateral) + reach - (lim - 0.05);
     if (excess <= 0) return;
