@@ -23,7 +23,7 @@
 //
 // 주행 모드 (car.mode, 1 일반 / 2 가속 / 3 배 / 4 비행. 부스터와 겹쳐 쓸 수 있음)
 //   일반(normal): 기본 모습
-//   가속(accel): 21대 전용 대형 장치·넓어진 하체, 1.02~1.4초. carBody_accel.js 참고.
+//   가속(accel): 21대 전용 낮은 옆 장치·흐르는 빛·넓어진 하체, 1.02~1.4초. carBody_accel.js 참고.
 //     물리/모드 규칙은 그대로, 해제는 전개의 82% 시간으로 역순.
 //     불꽃 길이는 가속 페달(car.thr)과 속도에 비례
 //   배(boat): 바퀴가 옆으로 눕혀지며(수평) 차체 쪽으로 접혀 올라감 → 아래에서 보트 선체(흰/빨강, 뾰족한 뱃머리)가 솟음
@@ -568,10 +568,15 @@ export function createCarModel(lookOrColor = '#e8463a') {
   accelGlow.color.set(look.trim); accelGlow.emissive.set(look.costume ? look.trim : look.accent);
   // 바닥 언더글로우 (땅에 깔리는 주황 빛)
   const underglow = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 5.2).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: glowTex, color: look.costume ? look.trim : '#63baff', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.PlaneGeometry(3.4, 5.2).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: glowTex, color: look.costume ? look.trim : look.body, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
+  underglow.material.userData.live = true;
   underglow.position.y = 0.035;
+  // 바퀴 바깥 림의 얇은 빛 링: 조향·트랙 확장·접힘을 원래 바퀴와 함께 탄다.
+  const rimLight = new THREE.MeshBasicMaterial({color: look.costume ? look.trim : look.body, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide});
+  rimLight.userData.live = true;
+
   root.add(underglow);
 
   // ------------------------------------------------------------------ 배 모드 부품 (평소엔 숨어 있음)
@@ -727,6 +732,12 @@ export function createCarModel(lookOrColor = '#e8463a') {
     wheels.push({ steer, spin, front, susp, side, ax: Math.abs(x), r, z, inner });
   }
 
+  const accelRims = wheels.map((w,i) => {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(w.r*.71,w.r*.77,16).rotateY(Math.PI/2),rimLight);
+    ring.position.x=w.side*(WHEELS[i][4]*.5+.012);ring.userData.accelMoving=true;
+    w.steer.add(ring);return ring;
+  });
+
   // ------------------------------------------------------------------ 효과
   // 드리프트 불꽃 (뒷바퀴 뒤)
   const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -821,11 +832,14 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const wide = easeInOut(stage(p, .08, .75)) * (1 - Math.max(boatP, flyP, spikeP));
     body.scale.set(1 + accelKit.bodyWide * wide, 1, 1 + accelKit.bodyLong * wide);
     fWing.scale.x = 1 + .18 * wide;
-    spoiler.scale.x = 1 + .14 * wide;
+    spoiler.scale.x = 1;
     // 2026-11-12 drs: 가속 모드는 윗판을 조금만 (예전 0.33 → 0.1), 진짜 DRS(car.drs)는 크게 열림 → 뒤에서 보면 날개 틈이 확 벌어짐
     drs.rotation.x = A.drsRest - accelKit.drs * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
-    underglow.visible = sGlow > 0.01;
-    underglow.material.opacity = sGlow * (0.18 + 0.025 * Math.sin(time * 3));
+    const groundMode = 1 - Math.max(boatP,flyP,spikeP);
+    rimLight.opacity = sGlow * .64 * groundMode;
+    for(const rim of accelRims)rim.visible = sGlow > .01 && groundMode > .65;
+    underglow.visible = sGlow > 0.01 && groundMode > .65;
+    underglow.material.opacity = sGlow * (0.29 + 0.025 * Math.sin(time * 3));
     if (costumeFx?.luxury && boatP < .1 && flyP < .1) {
       underglow.visible = true;
       underglow.material.opacity = Math.max(underglow.material.opacity, .065 + .015 * Math.sin(time * 1.3));
@@ -899,6 +913,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
 
   const costumeFx = dressCar({ root, body, A, shell, M, look, add, wheels, shellMeshes, loft });
   const accelKit = buildAccelKit({ body, spoiler, A, M, look, add, light: accelGlow, shell });
+  underglow.material.color.copy(accelKit.colour);
+  rimLight.color.copy(accelKit.colour);
   const cockpit = buildCockpit({ body, A, M, look, add });
 
   // 처음엔 모드 부품을 숨겨 둠 (첫 sync 전)
