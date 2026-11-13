@@ -435,8 +435,9 @@ function createUi(net, { roster, isHost, onStartNow, onLobby, onHome }) {
     <div class="nr-res">
       <div class="card">
         <h3>🏁 온라인 결과 <small>방 ${esc(net.code)}</small></h3>
+        <p class="nr-again-help">한 판 더 하려면 모두 같은 방의 로비로 돌아가 준비 완료를 눌러요. 방장이 출발해요.</p>
         <div class="rows"></div>
-        <div class="btns"><button class="gm-btn primary" data-a="lobby">↺ 로비로 돌아가기</button><button class="gm-btn" data-a="home">홈으로</button><button class="gm-btn small" data-a="hide">닫기</button></div>
+        <div class="btns"><button class="gm-btn primary" data-a="lobby">↺ 같은 방에서 다시 하기</button><button class="gm-btn" data-a="home">홈으로</button><button class="gm-btn small" data-a="hide">닫기</button></div>
       </div>
     </div>`;
   document.body.appendChild(root);
@@ -482,7 +483,7 @@ function createUi(net, { roster, isHost, onStartNow, onLobby, onHome }) {
     if (main && resOpen && !main.classList.contains('nr-inline-actions')) {
       // 온라인은 혼자 재시작/다음 맵 대신 같은 방으로 돌아감. 기존 결과 버튼 줄 안에 둠.
       main.classList.add('nr-inline-actions');
-      main.innerHTML = '<button class="gm-btn primary big" data-a="lobby">🌐 로비로 돌아가기</button><button class="gm-btn big" data-a="live">📋 온라인 순위</button>';
+      main.innerHTML = '<button class="gm-btn primary big" data-a="lobby" title="같은 방의 로비로 돌아가 모두 준비한 뒤 출발해요">↻ 같은 방에서 다시 하기</button><button class="gm-btn big" data-a="live">📋 온라인 순위</button>';
       main.addEventListener('click', onClick);
     }
     root.classList.toggle('embedded', !!main && resOpen);
@@ -645,6 +646,7 @@ function injectCss() {
 #netRace.docked .nr-badge, #netRace.docked .nr-toasts, #netRace.docked .nr-emotes { display: none; }
 #netRace { z-index: 45; }
 #netRace .nr-res .card { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - var(--nr-top, 62px) - 60px); display: flex; flex-direction: column; overflow: hidden; }
+#netRace .nr-again-help { color:#c4cee2; font-size:12px; line-height:1.5; margin:0 0 12px; flex-shrink:0; }
 #netRace .nr-res .rows { min-height: 0; overflow: auto; }
 #netRace .nr-res h3, #netRace .nr-res .btns { flex-shrink: 0; }
 @media (max-height: 500px) { #netRace .nr-res { top: 12px; left: 16px; right: 16px; } #netRace .nr-res .card { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 24px); margin: 0 auto; } }

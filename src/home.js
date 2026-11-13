@@ -832,6 +832,7 @@ export async function runHome() {
     const me = online.me();
     box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>혼자 달린 완주 기록만 · 이름 + 비밀번호 4자리</small></h3>
       <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
+      <p class="ol-help">👻 같이 달리기: 저장된 주행과 겨루는 타임 어택이에요. 같은 차로 출발해요.<br>+시간은 1위와의 차이예요.</p>
       <div class="h-olboard"><div class="none">불러오는 중…</div></div>
       <div class="h-olme">${olMeHtml(me)}</div>`;
     if (me) online.refresh().then((m2) => {
@@ -860,7 +861,7 @@ export async function runHome() {
           return `<li class="${cls}" style="--i:${i}">${rank}
             <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${r.license ? licenseChip(r.license, 18) : mine && academy.top() ? licenseChip(academy.top(), 18) : ''}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}</small></span></span>
             <span class="ol-time"><strong>${fmtTime(r.total)}</strong>${r.assist ? ASSIST_TAG : ''}<small>${i === 0 ? (r.best_lap && lapsN > 1 ? `최고 랩 ${fmtTime(r.best_lap)}` : '1위') : `+${(r.total - first).toFixed(3)}`}</small></span>
-            <button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button></li>`;
+            <button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)} 고스트와 같이 달리기" title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button></li>`;
         })
         .join('')}</ol>`;
     } catch (err) {
@@ -1107,7 +1108,7 @@ export async function runHome() {
     time: '⏱️ 혼자 달리며 고스트(내 최고 기록)와 겨뤄요. 구간마다 빨라졌는지 느려졌는지 알려 줘요',
     net: '🌐 방을 만들어 코드를 친구에게 보내거나, 친구 코드로 들어가요. 모두 준비되면 같이 출발해요',
     free: '🧭 봇·고스트 없이 혼자 달려요. 코스를 익히거나 레이싱 라인을 연습할 때 좋아요',
-    champ: '🏆 같은 봇들과 여러 맵을 차례로 달려요. 1위 25점 · 2위 18점 · 3위 15점… 시즌이 끝나면 점수로 챔피언을 정해요',
+    champ: '🏆 같은 봇들과 여러 맵을 차례로 달려요. 1~8위는 25·18·15·12·10·8·6·4점! 합계가 높으면 우승해요. 동점이면 우승 횟수 → 가장 높은 순위로 비교해요. 진행은 자동 저장돼요',
   };
   for (const box of views.mode.querySelectorAll('.h-mode')) {
     const opts = box.querySelector('.opts');
@@ -1424,9 +1425,22 @@ export async function runHome() {
       renderOnline();
     }
     else if (act === 'olGhost') {
-      const nick = b.dataset.nick, car = b.dataset.car;
-      setLast({ map: olMap, car, mode: 'time' });
-      launch(raceUrl(olMap, car, { mode: 'time', ghost: b.dataset.pid, ghostCar: car, ghostName: nick }), mapOf(olMap).title, `👻 ${nick} 고스트와 · ${carOf(car).name}`);
+      const nick = b.dataset.nick, car = b.dataset.car, map = olMap, pid = b.dataset.pid;
+      b.disabled = true;
+      b.setAttribute('aria-busy', 'true');
+      try {
+        const json = await online.ghost(map, car, pid);
+        if (!json) return toast('이 기록에는 고스트가 없어요. 다른 기록의 👻를 골라 주세요');
+        // 다음 화면에서 같은 주행 파일을 두 번 받지 않도록 한 번만 전달해요.
+        try { sessionStorage.setItem('gimmick.friendGhost.pending', JSON.stringify({ map, car, pid, json, at: Date.now() })); } catch {}
+        setLast({ map, car, mode: 'time' });
+        launch(raceUrl(map, car, { mode: 'time', ghost: pid, ghostCar: car, ghostName: nick }), mapOf(map).title, `👻 ${nick} 고스트와 · ${carOf(car).name}`);
+      } catch {
+        toast('고스트를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요');
+      } finally {
+        b.disabled = false;
+        b.removeAttribute('aria-busy');
+      }
     }
     else if (act === 'olCopy') {
       const code = online.myCode();

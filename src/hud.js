@@ -67,9 +67,9 @@ function champHtml(c) {
     .map((m, i) => `<span class="${i < c.no ? 'done' : ''}${i === c.no - 1 ? ' now' : ''}">${esc(m)}</span>`)
     .join('');
   return `<div class="champ"><div class="ct">🏆 챔피언십 ${c.final ? '최종 순위' : `${c.no}/${c.total} 경기 뒤 순위`}</div><div class="cmaps">${dots}</div>
-    <table class="cst"><tr class="hd"><td>순위</td><td>이름</td><td>이번 경기</td><td>점수</td></tr>${c.table
+    <table class="cst"><tr class="hd"><td>순위</td><td>이름</td><td>이번 경기</td><td>합계</td></tr>${c.table
       .map((r) => `<tr class="${r.isPlayer ? 'me' : ''}"><td>${r.pos}</td><td class="nm"><i style="background:${esc(r.color)}"></i>${esc(r.name)}${r.wins ? ` <small>🏆×${r.wins}</small>` : ''}</td><td class="gain">${r.gained ? '+' + r.gained : '-'}</td><td><b>${r.points}</b></td></tr>`)
-      .join('')}</table></div>`;
+      .join('')}</table><p class="res-rule">1~8위: 25·18·15·12·10·8·6·4점 · 합계가 높으면 우승해요.<br>동점이면 우승 횟수 → 가장 높은 순위로 비교해요. 진행은 이 브라우저에 자동 저장돼요.</p></div>`;
 }
 /** 꽃가루 (우승·시즌 우승) */
 function confetti(box, n = 70) {
@@ -579,7 +579,7 @@ export function createHud(track) {
       if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜거나 견인(뒤처지면 끌어당겨 줌)을 받고 달린 기록">🛟 도움 켬</span>');
       // 레이스(봇·온라인): 순위 결과표, 구간 기록표
       const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
-      const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>` : '';
+      const standHtml = info.standings && info.standings.length > 1 ? `<table class="stand">${standRows(info.standings)}</table>${info.standings.some(r => r.projected) ? '<p class="res-rule res-projected">≈는 아직 달리는 차의 예상 기록이에요.</p>' : ''}` : '';
       // 랩·섹터를 한 표로 묶고 긴 경주만 펼쳐 보기.
       const hasSectors = !!info.sectorLaps?.length;
       const lapRow = (t, i) => '<tr class="' + (t === best ? 'best' : '') + '"><td>L' + (i + 1) + (t === best ? ' ★' : '') + '</td><td>' + fmtTime(t) + '</td>' + (hasSectors ? [0,1,2].map(k => { const sp = info.sectorLaps[i]?.[k]; return '<td style="color:' + (SC[sp?.color] || '#bccbdf') + '">' + (sp ? sp.time.toFixed(3) : '—') + '</td>'; }).join('') : '') + '</tr>';
@@ -655,7 +655,16 @@ export function createHud(track) {
     /** 결과표의 순위 부분만 다시 (봇이 계속 들어오는 중) */
     updateStandings(rows) {
       const t = el.results.querySelector('table.stand');
-      if (t && rows) t.innerHTML = standRows(rows);
+      if (t && rows) {
+        t.innerHTML = standRows(rows);
+        const projected = rows.some(r => r.projected);
+        let note = el.results.querySelector('.res-projected');
+        if (projected && !note) {
+          t.insertAdjacentHTML('afterend', '<p class="res-rule res-projected">≈는 아직 달리는 차의 예상 기록이에요.</p>');
+          note = el.results.querySelector('.res-projected');
+        }
+        if (note) note.hidden = !projected;
+      }
       const positionNote = el.results.querySelector('.res-rank h3 > small');
       const playerRow = rows?.find(r => r.isPlayer);
       if (positionNote && playerRow) positionNote.textContent = playerRow.pos + '위 / ' + rows.length;

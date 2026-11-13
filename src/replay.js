@@ -12,7 +12,7 @@ const MAX_FRAMES = HZ * 60 * 15; // 15분
 const F = 13; // 차 한 대 값 수: 위치3 · 앞3 · 위3 · 속도 · 핸들 · 상태 비트 · 액셀
 const MODES = ['normal', 'accel', 'boat', 'fly'];
 const CAMS = ['tv', 'chase', 'onboard'];
-const CAM_NAME = { tv: '📺 TV', chase: '🎥 뒤따라가기', onboard: '🏎 운전석' };
+const CAM_NAME = { tv: '📺 TV', chase: '🎥 뒤따라가기', onboard: '🏎 1인칭' };
 const TV_GAP = 110; // TV 카메라 간격 (m)
 
 /**
@@ -175,14 +175,14 @@ export function createReplay(o) {
     views.forEach((v, k) => {
       const c = cars[k];
       if (c.isPlayer) {
-        model.root.visible = true;
+        model.root.visible = !(camMode === 'onboard' && k === focus);
         model.sync(v, dt, elapsed);
         return;
       }
       const e = c.entry;
       if (!e || !e.model || opponents.entries.indexOf(e) < 0) return; // 나간 상대
       const d = v.pos.distanceTo(camera.position);
-      e.model.root.visible = d < 450;
+      e.model.root.visible = d < 450 && !(camMode === 'onboard' && k === focus);
       if (e.proxy) e.proxy.visible = false;
       if (d < 450) e.model.sync(v, dt, elapsed);
       if (e.tag && e.tag.sprite) {
@@ -223,9 +223,15 @@ export function createReplay(o) {
       camera.lookAt(_look.copy(v.pos).addScaledVector(v.fwd, 4).addScaledVector(v.up, 0.9));
       camera.fov = 66;
     } else {
-      camera.position.copy(v.pos).addScaledVector(v.up, 1.0).addScaledVector(v.fwd, 0.1);
+      const targetModel = cars[focus].isPlayer ? model : cars[focus].entry?.model;
+      const eye = targetModel?.fp?.eye;
+      const helmet = targetModel?.fp?.A?.helmet;
+      const right = _cp.crossVectors(v.up, v.fwd).normalize();
+      // 차마다 눈높이와 앞뒤 자리가 달라요. 보고 있는 차체는 syncModels에서 숨겨 앞길을 확보해요.
+      camera.position.copy(v.pos).addScaledVector(v.up, eye?.y ?? ((helmet?.[1] ?? .9) + .1))
+        .addScaledVector(v.fwd, eye?.z ?? .1).addScaledVector(right, eye?.x ?? 0);
       camera.up.copy(v.up);
-      camera.lookAt(_look.copy(v.pos).addScaledVector(v.fwd, 25).addScaledVector(v.up, 0.6));
+      camera.lookAt(_look.copy(camera.position).addScaledVector(v.fwd, 25).addScaledVector(v.up, -.7));
       camera.fov = 78;
     }
     camera.updateProjectionMatrix();
@@ -242,7 +248,7 @@ export function createReplay(o) {
     bar = document.createElement('div');
     bar.id = 'rpBar';
     bar.innerHTML = `<div class="rp-top"><b>🎬 리플레이</b><span class="rp-car"></span><span class="rp-time"></span></div>
-      <p class="rp-help">완주한 주행을 다시 보는 화면이에요. 아래 막대를 끌어 원하는 순간으로 이동하세요.</p>
+      <p class="rp-help">완주한 주행을 다시 보는 화면이에요. 아래 막대로 시간을 옮기고, 시점 버튼으로 TV → 뒤따라가기 → 1인칭을 바꿔 보세요. ‘결과로’는 성적표로 돌아가요.</p>
       <input class="rp-seek" type="range" min="0" max="1000" value="0" aria-label="재생 위치">
       <div class="rp-btns">
         <button class="gm-btn small" data-rp="back" title="5초 뒤로 (←)">⏪ 5초</button>
@@ -251,7 +257,7 @@ export function createReplay(o) {
         <button class="gm-btn small" data-rp="speed" title="배속 (F)">1×</button>
         <button class="gm-btn small" data-rp="cam" title="카메라 (C)">📺 TV</button>
         <button class="gm-btn small" data-rp="car" title="다른 차 보기 (↑/↓)" ${cars.length < 2 ? 'disabled' : ''}>${cars.length < 2 ? '🚗 내 차만 있음' : '🚗 다른 차'}</button>
-        <button class="gm-btn small" data-rp="exit" data-res="home" title="나가기 (Esc)">✕ 나가기</button>
+        <button class="gm-btn small" data-rp="exit" data-res="home" title="결과로 돌아가기 (Esc)">↩ 결과로</button>
       </div>`;
     root.prepend(bar); // 패드 B(= #results의 첫 [data-res="home"])가 '나가기'를 누르게 맨 앞에
     bar.querySelectorAll('[data-rp]').forEach((b) =>
@@ -358,7 +364,8 @@ export function createReplay(o) {
     document.body.classList.remove('replaying');
     root.querySelectorAll(':scope > .res').forEach((e) => (e.style.display = ''));
     // 상대 모델은 원래대로 (다음 화면에서 opponents가 LOD·이름표를 다시 정함)
-    for (const c of cars || []) if (c.entry) c.entry.lod = null;
+    model.root.visible = true;
+    for (const c of cars || []) if (c.entry) { c.entry.lod = null; if (c.entry.model) c.entry.model.root.visible = true; }
     camera.fov = savedFov;
     camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();

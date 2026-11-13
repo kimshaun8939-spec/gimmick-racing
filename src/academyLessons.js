@@ -230,7 +230,7 @@ function exitWhy(ctx, c) {
   const k = ctx.car.cfg.corner || {};
   if (!c) return '코너를 끝까지 못 지났어요';
   if (c.noBrake === false) return '에이펙스 뒤에 브레이크를 밟았어요';
-  if (c.thrAvg != null && c.thrAvg < (k.exitThrottle ?? 0.75)) return `에이펙스를 지나면 ${ctx.kbd('throttle')}를 더 일찍, 꾹`;
+  if (c.thrAvg != null && c.thrAvg < (k.exitThrottle ?? 0.75)) return `에이펙스를 지난 뒤에는 ${ctx.kbd('throttle')}를 놓지 말고 꾹 유지해요`;
   if (c.latErr != null && c.latErr > (k.exitTol ?? 2.5)) return '탈출에서 바깥쪽까지 넓게 (라인을 따라)';
   if (c.ratio != null && c.ratio < (k.exitSpeedRatio ?? 0.8)) return '너무 느려요. 브레이크 키를 더 일찍 떼요';
   return '잔디에 닿았어요';
@@ -302,6 +302,7 @@ RUN.brake = {
         const rows = [by.brake];
         // (핸들 곧게는 판정 안 함: 코너에 따라 레이싱 라인이 브레이크 중에 이미 꺾이기 시작해서 자동 운전도 꺾으며 밟음)
         if (D.brakeD == null) rows.push(row('hard', 'bad', '한 번에 세게', '브레이크를 안 밟았어요'));
+        else if (X.brkMax === 0 && !Number.isFinite(D.minV)) rows.push(row('hard', 'bad', '한 번에 세게', '코너 앞 제동 구간까지 못 갔어요. 먼저 직선에서 가속한 뒤 빨간 라인에서 짧게 꾹 눌러요'));
         else if (X.brkMax < 0.55) rows.push(row('hard', 'bad', '한 번에 세게', `너무 살살 밟았어요 (${Math.round(X.brkMax * 100)}%). 짧게 꾹!`));
         else if (X.brkMax < 0.8) rows.push(row('hard', 'meh', '한 번에 세게', `조금 약해요 (${Math.round(X.brkMax * 100)}%). 처음엔 끝까지 꾹`));
         else rows.push(row('hard', 'ok', '한 번에 세게', `좋아요! ${Math.round(X.brkMax * 100)}%로 꾹 밟았어요`));

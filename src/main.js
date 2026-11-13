@@ -285,11 +285,18 @@ const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
 const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList, mode: recordMode() });
 // 온라인 순위표에서 고른 다른 사람 고스트: ?ghost=<사람 id>&ghostCar=<차>&ghostName=<이름> (같은 맵)
 const FRIEND_GHOST = ghost && params.get('ghost') && online.enabled ? { id: params.get('ghost'), car: params.get('ghostCar') || carId, name: params.get('ghostName') || '친구' } : null;
+let friendGhostReady = Promise.resolve();
 if (FRIEND_GHOST) {
-  Promise.all([online.ghost(mapName, FRIEND_GHOST.car, FRIEND_GHOST.id), import('./carRoster.js').then((m) => m.loadCarConfig(FRIEND_GHOST.car))])
+  let pendingGhost = null;
+  try {
+    const pending = JSON.parse(sessionStorage.getItem('gimmick.friendGhost.pending') || 'null');
+    sessionStorage.removeItem('gimmick.friendGhost.pending');
+    if (pending && pending.map === mapName && pending.car === FRIEND_GHOST.car && pending.pid === FRIEND_GHOST.id && Date.now() - pending.at < 300000) pendingGhost = pending.json;
+  } catch {}
+  friendGhostReady = Promise.all([pendingGhost ? Promise.resolve(pendingGhost) : online.ghost(mapName, FRIEND_GHOST.car, FRIEND_GHOST.id), import('./carRoster.js').then((m) => m.loadCarConfig(FRIEND_GHOST.car))])
     .then(([json, cfg]) => {
       if (json && ghost.useFriend(json, cfg.look, FRIEND_GHOST.name)) hud.toast(`👻 ${FRIEND_GHOST.name} 고스트와 달려요`);
-      else hud.toast('고스트를 불러오지 못했어요');
+      else hud.toast('이 고스트는 현재 코스와 맞지 않아요. 홈 → 내 기록에서 다른 👻를 골라 주세요');
     })
     .catch((err) => {
       console.warn('친구 고스트', err);
@@ -1118,6 +1125,9 @@ const batcher = (() => {
   };
   return batchStatic(staticRoots, { debug: params.has('batchdebug'), cellFor });
 })();
+// 친구 차를 바꾸는 동안 재질을 버리면 compileAsync의 준비 확인이 끊길 수 있어요.
+// 다운로드는 위에서 시작하고, 고스트 모델까지 준비한 뒤 셰이더를 만들어요.
+await friendGhostReady;
 resetRace();
 // 미리 데우기 (렉 줄이기 2): 불러오는 화면 동안 모든 셰이더·모양을 그래픽카드에 올려 둠 → 처음 보이는 순간 멈칫하지 않음 (prewarm.js, ?prewarm=0 이면 끔)
 if (params.get('prewarm') !== '0') {

@@ -509,7 +509,7 @@ export function createDrill(game, P) {
         else {
           let why = '잔디에 닿았어요';
           if (c.noBrake === false) why = '에이펙스 뒤에 브레이크를 밟았어요';
-          else if (c.thrAvg != null && c.thrAvg < (ck.exitThrottle ?? 0.75)) why = `에이펙스를 지나면 ${kbd('throttle')}를 더 일찍, 꾹`;
+          else if (c.thrAvg != null && c.thrAvg < (ck.exitThrottle ?? 0.75)) why = `에이펙스를 지난 뒤에는 ${kbd('throttle')}를 놓지 말고 꾹 유지해요`;
           else if (c.latErr != null && c.latErr > (ck.exitTol ?? 2.5)) why = '바깥쪽까지 넓게 나가요 (라인을 따라)';
           else if (c.ratio != null && c.ratio < (ck.exitSpeedRatio ?? 0.8)) why = '너무 느려요. 브레이크 키를 더 일찍 떼요';
           rows.push({ id: 'gas', ok: c.thrAvg >= 0.6 && c.noBrake ? 'meh' : 'bad', title, text: why + dl });

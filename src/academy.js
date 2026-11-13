@@ -167,7 +167,7 @@ export function startAcademy(game) {
   // ------------------------------------------------------------------ 상태
   let phase = 'card', ended = false;
   let L = null, meta = null, spot = null, P = null, judge = null, demo = null, st = null, target = null;
-  let slow = false, ts = 1, waitT = 0, tries = 0, lastRes = null;
+  let slow = false, ts = 1, waitT = 0, tries = 0, lastRes = null, stopReason = null;
 
   function pause(on) {
     game.paused = on;
@@ -284,6 +284,7 @@ export function startAcademy(game) {
         <div class="ac-intro"><div class="ac-art">${academyArt(meta.art)}</div><div class="ac-txt">${L.intro(ctx, spot, target)}</div></div>
         <div class="ac-goalrow"><b>성적표 항목</b>${goals}<em>✓ 모두 = 🥇 · 75% = 🥈 · 50% = 🥉</em></div>`;
     }
+    $('.tut-card .tut-body').insertAdjacentHTML('beforeend', medalRules());
     const demoOk = L.demo !== false;
     $('.tut-card .tut-btns').innerHTML =
       btn('home', exam ? '‹ 시험 그만두기' : '‹ 아카데미') + '<span class="sp"></span>' +
@@ -348,6 +349,7 @@ export function startAcademy(game) {
     cardWrap.classList.remove('on');
     burst.classList.remove('on');
     seen.length = 0;
+    stopReason = null;
     st = { age: 0, far: null, stuck: 0, off: 0, mo: null };
     pause(false);
     if (L.standing) {
@@ -440,11 +442,11 @@ export function startAcademy(game) {
       }
     }
     const ok = res.rows.filter((r) => r.ok === 'ok').length;
-    const head = res.respawn ? '길을 벗어났어요' : medal === 3 ? '완벽해요! 금메달!' : medal === 2 ? '은메달! 거의 다 왔어요' : medal === 1 ? '동메달! 감 잡았어요' : '괜찮아요, 한 번 더!';
+    const head = stopReason === 'stuck' ? '차가 멈췄어요' : stopReason === 'off' ? '길을 벗어났어요' : res.respawn ? '복귀해서 연습이 끝났어요' : medal === 3 ? '완벽해요! 금메달!' : medal === 2 ? '은메달! 거의 다 왔어요' : medal === 1 ? '동메달! 감 잡았어요' : '괜찮아요, 한 번 더!';
     frame(`${chipText()} · 성적표`, MEDALS[medal] || '🏁', head);
     $('.tut-card').classList.add('tdr', 'ac-rep');
     const worst = res.rows.find((r) => r.ok === 'bad') || res.rows.find((r) => r.ok === 'meh');
-    const tip = worst ? `다음엔 이것만: ${worst.text}` : '이 느낌 그대로 레이스에서도!';
+    const tip = stopReason === 'stuck' ? `가속 ${K('throttle')}을 눌러 다음 코너까지 달려요. 시범을 다시 보고 같은 자리에서 도전해요.` : stopReason === 'off' ? `코너 전에 가속을 떼고 속도를 줄여요. 초록 라인을 따라 도로로 돌아와요.` : worst ? `다음엔 이것만: ${retryTip(worst)}` : '이 느낌 그대로 레이스에서도!';
     let footer = '';
     if (exam) {
       const m = lic();
@@ -456,7 +458,7 @@ export function startAcademy(game) {
     }
     if (!exam) footer += rewardSummary(rewardBefore);
     $('.tut-card .tut-body').innerHTML = `
-      <div class="ac-medal ${MEDAL_CLS[medal]}"><div class="disc"><span>${medal ? MEDALS[medal] : '🏁'}</span></div><div class="lbl">${MEDAL_NAMES[medal]}<small>${Math.round(pts * 100)}점 · ✓ ${ok}/${res.rows.length}</small></div></div>
+      <div class="ac-medal ${MEDAL_CLS[medal]}"><div class="disc"><span>${medal ? MEDALS[medal] : '🏁'}</span></div><div class="lbl">${MEDAL_NAMES[medal]}<small>${Math.round(pts * 100)}점 · ✓ ${ok}/${res.rows.length}</small>${medalRules(true)}</div></div>
       <div class="tdr-rows">${res.rows.map((r) => `<div class="tdr-row ${r.ok}"><span class="ic">${r.ok === 'ok' ? '✓' : r.ok === 'meh' ? '△' : '✗'}</span><b>${esc(r.title)}</b><span>${r.text}</span></div>`).join('')}</div>
       <div class="tdr-tip">💡 ${tip}</div>
       ${footer}`;
@@ -464,6 +466,24 @@ export function startAcademy(game) {
     chime(medal >= 2);
     quietRewards();
     open('.tut-card .tut-btns .primary');
+  }
+  function medalRules(compact = false) {
+    if (compact) return '<span class="ac-medal-limits">🥉 50 · 🥈 75 · 🥇 100점</span>';
+    return '<p class="ac-score-rule">🥉 50점 · 🥈 75점 · 🥇 100점<small>✓ 한 항목 만점 · △ 절반 · ✗ 0점 · 평균으로 계산해요.<br>복귀·도로 이탈·멈춤으로 끝나면 메달 없음' + (slow ? ' · 🐢 천천히는 은메달까지' : '') + '</small></p>';
+  }
+  function retryTip(r) {
+    const hints = {
+      'brake:hard': '빨간 라인이 시작되면 브레이크를 짧게 꾹 누르고, 목표 속도가 되면 놓아요.',
+      'kerb:kin': '코너를 계속 돌아 안쪽 빨강·흰 연석까지 붙어요. 잔디까지 넘지는 마세요.',
+      'kerb:apex': '초록 라인을 따라 코너 안쪽까지 달린 뒤 다시 가속해요.',
+      'drs:pass': 'DRS 직선에서는 가속을 계속 눌러요. 앞차 바로 뒤를 따라가다가 가까워지면 옆으로 나와요.',
+      'slip:pass': '앞차 바로 뒤에서 가속을 유지하고, 거의 닿기 전에 옆으로 나와 추월해요.',
+      'fly:zone': '마지막 고리를 지나면 상승을 놓고, 착륙장을 향해 하강을 눌러요. 하늘길 옆으로 멀리 벗어나지 마세요.',
+      'fly:land': '마지막 고리 뒤에서는 상승을 놓고 착륙장 위에서 하강을 눌러요.',
+      'boat:time': '가속은 계속 누르고, 굽은 물길에서만 드리프트와 조향을 짧게 함께 써요.',
+      'drift:hold': '코너에서 드리프트를 누른 채 꺾어요. 각도가 초록 칸을 넘으면 반대로 살짝 꺾어 잡아요.',
+    };
+    return hints[lessonId + ':' + r.id] || r.text;
   }
   function rewardSummary(before) {
     const xp = Math.max(0,profile.get().xp-before.xp), coins = Math.max(0,pitMeta.get().coins-before.coins);
@@ -481,7 +501,7 @@ export function startAcademy(game) {
       const last = exam.i >= m.tasks.length - 1;
       if (passed) return btn('quitExam', '시험 그만두기') + '<span class="sp"></span>' + (exam.tries < 2 && medal < 3 ? btn('again', '↺ 한 번 더 (좋은 쪽 기록)') : '') + btn('nextTask', `${last ? '결과 보기' : '다음 과제'} › ${enterK}`, 'primary');
       if (exam.tries < 2) return btn('quitExam', '시험 그만두기') + '<span class="sp"></span>' + (L.demo !== false ? btn('demo', '▶ 시범 보기') : '') + btn('again', `↺ 두 번째 기회 ${enterK}`, 'primary');
-      return btn('quitExam', '시험 그만두기') + '<span class="sp"></span>' + btn('nextTask', `결과 보기 › ${enterK}`, 'primary');
+      return btn('quitExam', '시험 그만두기') + '<span class="sp"></span>' + btn('nextTask', `${last ? '결과 보기' : '다음 과제'} › ${enterK}`, 'primary');
     }
     const nx = nextLesson();
     const good = medal >= 2;
@@ -633,7 +653,10 @@ export function startAcademy(game) {
       else st.stuck += dt;
       if (car.offK > 0.85 && car.grounded && car.mode !== 'boat' && car.mode !== 'fly' && !car.flying) st.off += dt;
       else st.off = Math.max(0, st.off - dt * 2);
-      if (st.stuck > 6 || st.off > 3) r = 'out';
+      if (st.stuck > 6 || st.off > 3) {
+        stopReason = st.off > 3 ? 'off' : 'stuck';
+        r = 'out';
+      }
     }
     // 순간 글자 · 깜빡일 키
     if (P.momentAt && !L.standing) {

@@ -174,6 +174,7 @@ export function createRacingLineFx(scene, track, car) {
 /** 화면 위쪽 가운데에 잠깐 뜨는 "에이펙스!" 글자 */
 function createApexPopup() {
   const el = document.createElement('div');
+  el.className = 'racing-line-notice';
   Object.assign(el.style, {
     position: 'fixed', left: '50%', top: '24%', transform: 'translate(-50%, 0) scale(1)', pointerEvents: 'none',
     font: '800 26px/1.1 system-ui, sans-serif', letterSpacing: '0.04em', color: '#ffd23a', textAlign: 'center',
@@ -211,6 +212,7 @@ function createApexPopup() {
  */
 function createCornerPopup() {
   const el = document.createElement('div');
+  el.className = 'racing-line-notice';
   Object.assign(el.style, {
     position: 'fixed', left: '50%', top: 'calc(24% + 36px)', transform: 'translate(-50%, 0)', pointerEvents: 'none',
     font: '700 15px/1.2 system-ui, sans-serif', letterSpacing: '0.03em', color: '#fff', textAlign: 'center', whiteSpace: 'nowrap',

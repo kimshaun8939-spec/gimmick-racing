@@ -358,3 +358,9 @@
  #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-x { grid-column:2; grid-row:1; align-self:start; }
  #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-btns { margin-top:10px; }
 }
+
+/* 출시 전 품질 검사 5차: 성적 기준은 설명과 결과에서 함께 보여요. */
+#tutorial .ac-score-rule{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:rgba(255,210,58,.08);color:#ffe5a0;font-size:13px;font-weight:800;line-height:1.5}
+#tutorial .ac-score-rule small{display:block;margin-top:4px;color:#c4cee2;font-size:12px;font-weight:500}
+
+#tutorial.acad .ac-medal-limits{display:block;margin-top:6px;color:#ffe5a0;font-size:12px;line-height:1.5;font-weight:800;white-space:nowrap}

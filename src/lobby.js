@@ -65,7 +65,7 @@ export async function openLobby(opts = {}) {
   el.innerHTML = `
     <div class="lb-bg"></div>
     <div class="lb-top">
-      <div class="lb-title"><span class="globe">🌐</span><div><b>온라인 멀티플레이</b><small>방 만들기 → 초대 링크 공유 → 친구와 함께 출발</small></div></div>
+      <div class="lb-title"><span class="globe">🌐</span><div><b>온라인 멀티플레이</b><small>${opts.room ? '같은 방에서 한 판 더 · 각자 준비 완료 → 방장이 출발' : '방 만들기 → 초대 링크 공유 → 친구와 함께 출발'}</small></div></div>
       <button class="gm-btn small" data-act="close">✕ 닫기 <kbd>Esc</kbd></button>
     </div>
     <div class="lb-view" data-view="entry"></div>

@@ -301,7 +301,9 @@ export function createItems(o) {
     s.hits++;
     s.hitFxT = 0.6; // 맞은 차 둘레가 잠깐 빨갛게
     if (isMe(e)) {
-      say(text);
+      say(text + ' · 잠깐 감속해요. 가속해서 속도를 되찾아요');
+      s.notice = text.startsWith('🛢') ? '🛢 기름 · 감속!' : '🎯 로켓 · 감속!';
+      s.noticeT = 2;
       sfx('hit');
       if (hud.flash) hud.flash('#ff6a4a', 0.5);
       if (hud.shake) hud.shake(0.35);
@@ -319,7 +321,11 @@ export function createItems(o) {
     s.holdT = 0;
     s.useAt = 1.5 + Math.random() * 3;
     s.used++;
-    if (me) hudDirty = true;
+    if (me) {
+      hudDirty = true;
+      const messages = { boost: '🚀 부스터! 잠깐 빨라져요', shield: '🛡 방어막! 다음 공격을 한 번 막아요', oil: '🛢 뒤에 기름을 놓았어요. 뒤차가 밟으면 감속해요', rocket: '🎯 앞차를 향해 로켓 발사!' };
+      if (messages[kind]) say(messages[kind]);
+    }
     if (kind === 'boost') {
       c.itemBoostT = CFG.boostSec;
       if (me) send({ k: 'fx', fx: 'boost' });
@@ -497,7 +503,7 @@ export function createItems(o) {
         const dx = p.x - oil.pos.x, dz = p.z - oil.pos.z;
         if (dx * dx + dz * dz < (CFG.oilR + 0.9) ** 2 && Math.abs(p.y - oil.pos.y) < 1.6 && c.grounded) {
           const blocked = st(e).shieldT > 0;
-          const got = hit(e, CFG.oilSlow, '🛢 기름을 밟았어요! 미끌');
+          const got = hit(e, CFG.oilSlow, '🛢 기름을 밟았어요!');
           if (got || blocked) {
             oil.t = 0;
             oil.mesh.visible = false;
@@ -559,7 +565,10 @@ export function createItems(o) {
   const css = document.createElement('style');
   css.textContent = `
 #itemHud { position: fixed; left: max(270px, calc(50% - 250px)); bottom: 20px; transform: translateX(-100%); display: flex; align-items: flex-end; gap: 8px; z-index: 31; pointer-events: none; font-family: inherit; user-select: none; -webkit-user-select: none; }
-#itemHud .slot { position: relative; width: 66px; height: 66px; border-radius: 16px; background: rgba(10, 14, 26, 0.72); border: 2px solid rgba(255,255,255,0.35); display: flex; align-items: center; justify-content: center; font-size: 36px; line-height: 1; pointer-events: auto; cursor: pointer; touch-action: none; transition: transform 0.12s, border-color 0.2s; }
+#itemHud .slot { position: relative; width: 66px; height: 66px; border-radius: 16px; background: rgba(10, 14, 26, 0.72); border: 2px solid rgba(255,255,255,0.35); display: flex; align-items: center; justify-content: center; font-size: 36px; line-height: 1; color:#fff; font-family:inherit; pointer-events: auto; cursor: pointer; touch-action: none; transition: transform 0.12s, border-color 0.2s; }
+#itemHud .slot.s2::after { content:'다음'; position:absolute; top:-18px; left:0; width:100%; color:#e1e8f8; font:800 12px/1.2 system-ui,sans-serif; text-align:center; text-shadow:0 1px 3px #000; }
+#itemHud .item-name { max-width:150px; color:#fff3c4; font:800 12px/1.4 system-ui,sans-serif; text-shadow:0 1px 3px #000; }
+#itemHud .slot.s1:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 #itemHud .slot.s2 { width: 46px; height: 46px; font-size: 24px; border-radius: 12px; opacity: 0.85; }
 #itemHud .slot.has { border-color: #ffd23a; box-shadow: 0 0 14px rgba(255, 190, 40, 0.55); }
 #itemHud .slot.roul { border-color: #fff; }
@@ -573,12 +582,15 @@ export function createItems(o) {
 #itemWarn { position: fixed; left: 50%; top: 24%; transform: translateX(-50%); padding: 8px 22px; border-radius: 12px; background: rgba(200, 30, 20, 0.85); color: #fff; font: 900 26px/1.1 system-ui, sans-serif; letter-spacing: 0.04em; z-index: 6; pointer-events: none; display: none; animation: itemWarnBlink 0.35s steps(2) infinite; }
 @keyframes itemWarnBlink { 50% { opacity: 0.45; } }
 @media (max-width: 900px), (pointer: coarse) { #itemHud { left: 50%; bottom: auto; top: 70px; transform: translateX(-50%) scale(0.85); transform-origin: top center; } }
+body.touch-on.item-race #toast { top:146px; font-size:13px; line-height:1.4; white-space:normal; text-align:center; max-width:min(420px, calc(100vw - 40px)); }
+body.touch-on.item-race #itemWarn { top:146px; font-size:15px; padding:6px 14px; z-index:33; }
 body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translateX(-50%) scale(0.85); transform-origin: top center; }
 `;
   document.head.appendChild(css);
+  document.body.classList.add('item-race');
   const box = document.createElement('div');
   box.id = 'itemHud';
-  box.innerHTML = `<div class="col"><div class="fx"></div><div class="gl">🔥 드리프트 게이지</div><div class="gauge"><i></i></div></div><div class="slot s2"></div><div class="slot s1"><span></span><kbd></kbd></div>`;
+  box.innerHTML = `<div class="col"><div class="fx" role="status"></div><div class="item-name"></div><div class="gl">🔥 드리프트 게이지</div><div class="gauge"><i></i></div></div><div class="slot s2" title="다음 아이템 · 지금 것을 쓰면 이 칸이 앞으로 와요"></div><button type="button" class="slot s1" aria-label="아이템 사용"><span></span><kbd></kbd></button>`;
   document.body.appendChild(box);
   const warn = document.createElement('div');
   warn.id = 'itemWarn';
@@ -587,11 +599,11 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
   const el = { s1: box.querySelector('.s1'), s1i: box.querySelector('.s1 span'), kbd: box.querySelector('kbd'), s2: box.querySelector('.s2'), g: box.querySelector('.gauge i'), fx: box.querySelector('.fx') };
   for (const ev of ['pointerdown', 'touchstart']) {
     el.s1.addEventListener(ev, (x) => {
-      x.preventDefault();
       x.stopPropagation();
-      if (ev === 'pointerdown') usePlayer();
+      // click을 유지해야 터치·키보드·화면 읽기 도구에서도 쓸 수 있어요.
     }, { passive: false });
   }
+  el.s1.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); usePlayer(); });
   let roulI = 0, roulAcc = 0, lastG = -1, lastFx = '', warnOn = false;
   function drawHud(dt) {
     const s = st(raceSys.me);
@@ -611,13 +623,18 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
     if (hudDirty) {
       el.s2.textContent = s.slots[1] ? ITEMS[s.slots[1]].icon : '';
       el.s2.className = 'slot s2' + (s.slots[1] ? ' has' : '');
-      el.kbd.textContent = keyLabel('booster', 'E');
+      el.kbd.textContent = document.body.classList.contains('touch-on') ? '누르기' : keyLabel('booster', 'E');
+      const item = s.slots[0] && ITEMS[s.slots[0]];
+      box.querySelector('.item-name').textContent = item ? item.icon + ' ' + item.name + ' · 지금 사용' : '🎁 상자를 통과해 획득';
+      el.s1.setAttribute('aria-label', item ? item.name + ' 사용' : '빈 아이템 칸 · 상자를 통과해 획득해요');
+      el.s2.setAttribute('aria-label', s.slots[1] ? '다음 아이템: ' + ITEMS[s.slots[1]].name : '다음 아이템 없음');
       hudDirty = false;
     }
     const g = Math.round(s.gauge * 100);
     if (g !== lastG) el.g.style.width = (lastG = g) + '%';
     const c = carOf(raceSys.me);
-    const fx = s.shieldT > 0 ? `🛡 ${Math.ceil(s.shieldT)}초` : c.itemBoostT > 0 ? '🚀 부스터!' : c.itemSlowT > 0 ? '⚡ 감전!' : '';
+    if (s.noticeT > 0) s.noticeT = Math.max(0, s.noticeT - dt);
+    const fx = s.noticeT > 0 ? s.notice : s.shieldT > 0 ? `🛡 ${Math.ceil(s.shieldT)}초` : c.itemBoostT > 0 ? '🚀 부스터!' : c.itemSlowT > 0 ? '⚡ 감전!' : '';
     if (fx !== lastFx) el.fx.textContent = lastFx = fx;
     const w = rockets.some((r) => r.on && r.target === raceSys.me);
     if (w !== warnOn) warn.style.display = (warnOn = w) ? 'block' : 'none';
@@ -675,7 +692,7 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
   }
   function reset() {
     for (const s of states.values()) {
-      Object.assign(s, { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, gauge: 0, shockT: 0, hitFxT: 0, hits: 0, used: 0, picked: 0 });
+      Object.assign(s, { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, gauge: 0, shockT: 0, hitFxT: 0, noticeT: 0, notice: '', hits: 0, used: 0, picked: 0 });
       s.aura.visible = s.flame.visible = false;
     }
     for (const e of racers()) {
@@ -829,6 +846,7 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
       box.remove();
       warn.remove();
       css.remove();
+      document.body.classList.remove('item-race');
     },
   };
 }
