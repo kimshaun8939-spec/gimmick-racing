@@ -22,9 +22,13 @@ function stripeTexture() {
   const g = c.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 64, 0);
   grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.22, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.06, 'rgba(5,12,24,0.95)');
+  grad.addColorStop(0.18, 'rgba(5,12,24,1)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,1)');
   grad.addColorStop(0.5, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.78, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.75, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.82, 'rgba(5,12,24,1)');
+  grad.addColorStop(0.94, 'rgba(5,12,24,0.95)');
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 64, 4);
@@ -84,7 +88,7 @@ export function createRacingLineFx(scene, track, car) {
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeBoundingSphere();
   const mat = new THREE.MeshBasicMaterial({
-    map: stripeTexture(), vertexColors: true, transparent: true, depthWrite: false,
+    map: stripeTexture(), vertexColors: true, transparent: true, depthWrite: false, toneMapped: false,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -126,7 +130,7 @@ export function createRacingLineFx(scene, track, car) {
       else if (diff > -1.5) tmp.copy(GREEN).lerp(YELLOW, (diff + 1.5) / 2.3);
       else tmp.copy(GREEN);
       // 차 바로 아래와 먼 끝은 흐리게
-      let a = 0.8;
+      let a = 0.94; // 밝은 눈·모래·빛나는 도로에서도 윤곽을 남김
       if (k < back + 4) a *= THREE.MathUtils.clamp((k - back + 4) / 8, 0, 1);
       a *= THREE.MathUtils.clamp((count - k) / (ahead * 0.3), 0, 1);
       if (water(i)) a = 0;
@@ -174,7 +178,7 @@ export function createRacingLineFx(scene, track, car) {
 /** 화면 위쪽 가운데에 잠깐 뜨는 "에이펙스!" 글자 */
 function createApexPopup() {
   const el = document.createElement('div');
-  el.className = 'racing-line-notice';
+  el.className = 'racing-line-notice apex-notice';
   Object.assign(el.style, {
     position: 'fixed', left: '50%', top: '24%', transform: 'translate(-50%, 0) scale(1)', pointerEvents: 'none',
     font: '800 26px/1.1 system-ui, sans-serif', letterSpacing: '0.04em', color: '#ffd23a', textAlign: 'center',
@@ -212,7 +216,7 @@ function createApexPopup() {
  */
 function createCornerPopup() {
   const el = document.createElement('div');
-  el.className = 'racing-line-notice';
+  el.className = 'racing-line-notice corner-notice';
   Object.assign(el.style, {
     position: 'fixed', left: '50%', top: 'calc(24% + 36px)', transform: 'translate(-50%, 0)', pointerEvents: 'none',
     font: '700 15px/1.2 system-ui, sans-serif', letterSpacing: '0.03em', color: '#fff', textAlign: 'center', whiteSpace: 'nowrap',

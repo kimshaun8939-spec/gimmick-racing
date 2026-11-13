@@ -250,7 +250,9 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
       gapEl.textContent = `◀ ${near.gap.toFixed(1)}초`;
       nameEl.textContent = near.e.name || '';
       const c = near.e.color;
-      nameEl.style.color = typeof c === 'string' ? c : c != null && c.getHexString ? `#${c.getHexString()}` : '';
+      // 차 색은 테두리로만 구분하고 이름은 늘 밝게 읽히게 해요.
+      nameEl.style.color = '#f3f6fb';
+      tagEl.style.borderLeftColor = typeof c === 'string' ? c : c != null && c.getHexString ? `#${c.getHexString()}` : '#f3f6fb';
     }
   }
 

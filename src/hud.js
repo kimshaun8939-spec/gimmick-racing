@@ -291,7 +291,7 @@ export function createHud(track) {
       el.time.textContent = fmtTime(s.time);
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
       const bestTxt = s.record ? `최고 기록 ${fmtTime(s.record)}${s.recordNote ? ` · ${s.recordNote}` : ''}` : `최고 랩 ${fmtTime(s.best)}`;
-      if (bestTxt !== el.best._t) el.best.textContent = el.best._t = bestTxt;
+      if (bestTxt !== el.best._t) { el.best.textContent = el.best._t = bestTxt; el.best.title = bestTxt; }
       el.speed.textContent = Math.round(spd(s.speed));
       // 속도감: 200 km/h 넘으면 숫자가 따뜻하게 빛나고, 부스터 중에는 초록빛
       const fastNow = s.speed >= 200;
@@ -368,6 +368,11 @@ export function createHud(track) {
           toastTimer = 0;
         } else if (toastTimer <= 0) el.toast.style.opacity = 0;
       }
+      // 큰 안내를 읽는 동안 코너 칭찬은 겹치지 않게 잠깐 숨겨요.
+      const courseWarning = ['foundryToast', 'mirageToast'].some(id => Number(document.getElementById(id)?.style.opacity) > 0);
+      document.body.classList.toggle('hud-message', !!persistentToast || toastTimer > 0 || bannerTimer > 0 || bigTimer > 0 || courseWarning);
+      const drivingView = window.game?.camViews?.effective || 'chase';
+      if (document.body.dataset.drivingView !== drivingView) document.body.dataset.drivingView = drivingView;
       drawMinimap(s.carPos, s.carYaw, s.others);
       // 슬립스트림·견인 칩(#draftBox·#towBox)과 바람 줄(#draftLines)은 2026-11-12부터 src/slipFx.js가 그림 (raceSystem.update)
       if (bannerTimer > 0) {
@@ -381,7 +386,8 @@ export function createHud(track) {
         if (on)
           s.sectors.forEach((c, i) => {
             const box = secBoxes[i];
-            const txt = c.time == null ? '-' : c.color === 'live' ? c.time.toFixed(1) : c.time.toFixed(3);
+            const compact = touchWanted() && innerHeight <= 380 && innerWidth > innerHeight;
+            const txt = c.time == null ? '-' : c.time.toFixed(c.color === 'live' || compact ? 1 : 3);
             if (box._t !== txt) box.span.textContent = box._t = txt;
             if (box._c !== c.color) {
               box.div.className = 'sec ' + c.color + (c.color !== 'live' && c.color !== 'none' ? ' flash' : '');

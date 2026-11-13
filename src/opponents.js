@@ -120,20 +120,25 @@ function nameTag(color) {
       last = key;
       const g = c.getContext('2d');
       g.clearRect(0, 0, 256, 64);
-      g.fillStyle = 'rgba(10,14,24,0.72)';
+      g.fillStyle = 'rgba(7,12,23,0.92)';
       g.beginPath();
       g.roundRect(4, 8, 248, 48, 12);
       g.fill();
       g.fillStyle = color;
       g.fillRect(4, 8, 10, 48);
-      g.font = '800 26px "Malgun Gothic", system-ui, sans-serif';
+      g.font = '800 28px "Malgun Gothic", system-ui, sans-serif';
       g.fillStyle = '#ffd23a';
       g.textBaseline = 'middle';
       g.fillText(sub, 24, 33);
       const w = g.measureText(sub).width;
       g.fillStyle = '#ffffff';
-      g.font = '700 24px "Malgun Gothic", system-ui, sans-serif';
-      g.fillText(text, 24 + w + (sub ? 10 : 0), 33, 220 - w);
+      g.font = '700 28px "Malgun Gothic", system-ui, sans-serif';
+      const maxName = 220 - w - (sub ? 10 : 0);
+      let name = Array.from(String(text)), label = name.join('');
+      while (g.measureText(label).width > maxName && name.length) {
+        name.pop(); label = name.join('') + '…';
+      }
+      g.fillText(label, 24 + w + (sub ? 10 : 0), 33);
       tex.needsUpdate = true;
     },
   };
@@ -146,6 +151,7 @@ export function createOpponents(scene) {
   const _q = new THREE.Quaternion();
   const _m = new THREE.Matrix4();
   const _x = new THREE.Vector3();
+  const _tagPoint = new THREE.Vector3();
 
   /** 화면용 부품 (모델 + 모형 + 이름표) */
   function makeVisual(entry) {
@@ -242,6 +248,11 @@ export function createOpponents(scene) {
   /** 매 화면: 모델 위치·LOD·이름표 */
   function render(dt, elapsed, camera, labelFn) {
     _cam.copy(camera.position);
+    camera.updateMatrixWorld();
+    const tags = [];
+    // 화면 높이·시야각에 따라 이름표가 5~9px로 작아지지 않게 실제 픽셀로 맞춤.
+    const tagW = innerHeight <= 500 ? 112 : 128, tagH = tagW / 4;
+    const tagUnit = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.max(1, innerHeight);
     for (const e of entries) {
       if (e.remote) steerRemote(e, dt);
       const v = e.view;
@@ -276,10 +287,25 @@ export function createOpponents(scene) {
       e.tag.sprite.visible = showTag;
       if (showTag) {
         e.tag.sprite.position.copy(v.pos).addScaledVector(v.up, 2.1 + d * 0.006);
+        e.tag.sprite.scale.set(tagW * tagUnit, tagH * tagUnit, 1);
+        _tagPoint.copy(e.tag.sprite.position).project(camera);
+        const x = (_tagPoint.x + 1) * innerWidth / 2, y = (1 - _tagPoint.y) * innerHeight / 2;
+        if (_tagPoint.z < -1 || _tagPoint.z > 1 || x < 0 || x > innerWidth || y < 0 || y > innerHeight) {
+          e.tag.sprite.visible = false;
+          continue;
+        }
+        tags.push({ sprite: e.tag.sprite, d, x0: x - tagW / 2 - 3, x1: x + tagW / 2 + 3, y0: y - tagH / 2 - 3, y1: y + tagH / 2 + 3 });
         const [text, sub] = labelFn ? labelFn(e) : [e.name, ''];
         e.tag.set(text, sub);
         e.tag.sprite.material.opacity = Math.min(1, (TAG_DIST - d) / 60);
       }
+    }
+    // 가까운 차를 우선. 겹치는 이름표만 숨기고 차에서 떨어진 자리로 옮기지는 않음.
+    const placed = [];
+    tags.sort((a, b) => a.d - b.d);
+    for (const tag of tags) {
+      if (placed.some(p => tag.x0 < p.x1 && tag.x1 > p.x0 && tag.y0 < p.y1 && tag.y1 > p.y0)) tag.sprite.visible = false;
+      else placed.push(tag);
     }
   }
 

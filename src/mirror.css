@@ -54,3 +54,12 @@ body.touch-on #rearMirror .rm-name { max-width: 56px; }
 
 /* 리플레이·ESC 메뉴 중엔 숨김 */
 body.replaying #rearMirror, body:has(#pauseMenu.on) #rearMirror { display: none !important; }
+
+/* launchqa6: 작은 거울에서도 이름·간격은 실제 12px 이상. */
+#rearMirror .rm-tag { font-size: 12px; background: rgba(7, 12, 23, 0.92); border-left: 3px solid #f3f6fb; }
+body.touch-on #rearMirror .rm-tag { font-size: 12px; padding: 1px 5px 2px; gap: 5px; }
+body.touch-on #rearMirror .rm-name { max-width: 64px; }
+
+@media (orientation: portrait) {
+  body.touch-on #rearMirror { left: calc(100% - max(10px, env(safe-area-inset-right)) - 78px); top: 280px; width: 150px; height: 38px; }
+}

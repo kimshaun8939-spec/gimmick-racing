@@ -132,3 +132,12 @@ body.touch-on #slipDock { right: auto; left: 50%; transform: translateX(-50%) sc
  #results.on,#results .res,#results .new-record .total,#results .new-lap .total,#results .record-chip::after { animation:none!important; }
  #results .record-particles,#results .confetti,#results .mt-finish-art,#results .record-chip::after { display:none!important; }
 }
+
+/* launchqa6: 터치에서도 효과 이름·숫자를 축소하지 않고 읽어요. */
+#slipDock :is(#draftBox, #towBox, #drsBox) { font-size: 12px; background-color: rgba(7,16,28,.92); }
+body.touch-on #slipDock { transform: translateX(-50%); }
+body.touch-on #slipDock #draftBox { width: 198px; }
+
+@media (orientation: portrait) {
+  body.touch-on #slipDock { left: max(8px, env(safe-area-inset-left)); right: auto; top: 276px; transform: none; align-items: flex-start; }
+}
