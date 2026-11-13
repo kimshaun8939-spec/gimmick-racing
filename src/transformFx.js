@@ -1,5 +1,5 @@
 import { accelProfile } from './carBody_accel.js';
-// accel2: 21대별 정밀 서보·래칫·유압·블로워·전자음·귀여운 팝 등 전용 리듬.
+// accel3: 21대별 정밀 서보·래칫·유압·블로워·전자음·귀여운 팝 등 전용 리듬.
 //   위이잉 = 모터(서보)가 도는 소리: 톱니파가 올라가거나(변신) 내려감(되돌아감)
 //   착, 착 = 부품이 하나씩 자리 잡는 짧은 금속음 (잡음을 높은 대역만 남겨 아주 짧게)
 //   철컥 = 마지막에 낮고 묵직하게 잠기는 소리
@@ -76,6 +76,8 @@ export function createTransformSfx() {
       p.steps.forEach((s,i)=>{click(at(s),heavy?650+i*180:1700+i*220,.10);tone(at(s),.10,heavy?110:220,heavy?45:95,'triangle',heavy?.10:.06);});
     }
     // 묵직한 유압은 낮은 잠금, 정밀 기계는 짧은 걸쇠, 전기는 맑은 확인음.
+    // 큰 차체 레일과 하체가 잠기는 낮은 울림. 기존 차별 리듬/음색은 유지.
+    tone(at(.56), heavy?.22:.15, heavy?86:145, heavy?32:58, 'triangle', heavy?.14:electric?.045:pop?.06:.075);
     const end=t+d;
     if(electric)tone(end,.13,p.f1,p.f1*1.25,'sine',.045);
     else if(pop)tone(end,.14,640,980,'sine',.075);

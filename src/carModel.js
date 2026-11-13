@@ -23,7 +23,7 @@
 //
 // 주행 모드 (car.mode, 1 일반 / 2 가속 / 3 배 / 4 비행. 부스터와 겹쳐 쓸 수 있음)
 //   일반(normal): 기본 모습
-//   가속(accel): 21대 전용 장치·리듬, 0.82~1.4초. carBody_accel.js 참고.
+//   가속(accel): 21대 전용 대형 장치·넓어진 하체, 1.02~1.4초. carBody_accel.js 참고.
 //     물리/모드 규칙은 그대로, 해제는 전개의 82% 시간으로 역순.
 //     불꽃 길이는 가속 페달(car.thr)과 속도에 비례
 //   배(boat): 바퀴가 옆으로 눕혀지며(수평) 차체 쪽으로 접혀 올라감 → 아래에서 보트 선체(흰/빨강, 뾰족한 뱃머리)가 솟음
@@ -818,6 +818,10 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const sDrs = easeInOut(stage(p, .48, .87));
     const sGlow = stage(p, .7, 1);
     accelKit.pose(p, Math.max(boatP, flyP, spikeP), time);
+    const wide = easeInOut(stage(p, .08, .75)) * (1 - Math.max(boatP, flyP, spikeP));
+    body.scale.set(1 + accelKit.bodyWide * wide, 1, 1 + accelKit.bodyLong * wide);
+    fWing.scale.x = 1 + .18 * wide;
+    spoiler.scale.x = 1 + .14 * wide;
     // 2026-11-12 drs: 가속 모드는 윗판을 조금만 (예전 0.33 → 0.1), 진짜 DRS(car.drs)는 크게 열림 → 뒤에서 보면 날개 틈이 확 벌어짐
     drs.rotation.x = A.drsRest - accelKit.drs * sDrs - (A.drsOpen ?? 1.2) * easeInOut(drsP);
     underglow.visible = sGlow > 0.01;
@@ -837,7 +841,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
       // 앞바퀴는 좁은 노즈 옆으로, 뒷바퀴는 사이드포드 위로 비켜 접힘
       const tk = w.front ? A.tuck.f : A.tuck.r;
       const stow = easeInOut(stage(boat, .18, .75));
-      const ax = THREE.MathUtils.lerp(w.ax, THREE.MathUtils.lerp(tk[0], Math.min(.4, w.ax * .48), stow), sTuck);
+      const wide = easeOutBack(stage(accelP, .08, .59)) * (1 - Math.max(boatP, flyP, spikeP));
+      const ax = THREE.MathUtils.lerp(w.ax + accelKit.trackOut * wide, THREE.MathUtils.lerp(tk[0], Math.min(.4, w.ax * .48), stow), sTuck);
       const y = THREE.MathUtils.lerp(w.r, THREE.MathUtils.lerp(tk[1], .28, stow), sTuck);
       w.steer.visible = boat < .76;
       w.susp.visible = boat < .68;
