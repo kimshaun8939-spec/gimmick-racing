@@ -18,7 +18,8 @@ import { kbd as kbdTd } from './tutorialDemo.js';
 import { RUN, pickSpots, fmt } from './academyLessons.js';
 import { LESSONS, LICENSES, academy, lessonMeta, licenseMeta, scoreRows, medalFor, MEDALS, MEDAL_NAMES } from './academyStore.js';
 import { academyArt, licenseBadge } from './academyArt.js';
-import { profile, showXpPill } from './profile.js';
+import { profile } from './profile.js';
+import { meta as pitMeta } from './meta.js';
 import { paintOf } from './unlocks.js';
 
 const EX_KEY = 'gimmick.academy.exam';
@@ -409,6 +410,7 @@ export function startAcademy(game) {
 
   // ------------------------------------------------------------------ 성적표
   function showReport() {
+    const rewardBefore = { xp: profile.get().xp, coins: pitMeta.get().coins };
     let res;
     try {
       res = judge.result();
@@ -452,6 +454,7 @@ export function startAcademy(game) {
     } else if (saved) {
       footer = `<div class="ac-save">${saved.improved ? `🎉 새 메달! <b>${MEDALS[saved.best]} ${MEDAL_NAMES[saved.best]}</b>${saved.xp ? ` · <span class="xp">+${saved.xp} XP</span>` : ''}` : `내 최고 ${saved.best ? `${MEDALS[saved.best]} ${MEDAL_NAMES[saved.best]}` : '—'}`}${slow ? ' · 🐢 천천히로 달렸어요 (🥈까지)' : ''}</div>`;
     }
+    if (!exam) footer += rewardSummary(rewardBefore);
     $('.tut-card .tut-body').innerHTML = `
       <div class="ac-medal ${MEDAL_CLS[medal]}"><div class="disc"><span>${medal ? MEDALS[medal] : '🏁'}</span></div><div class="lbl">${MEDAL_NAMES[medal]}<small>${Math.round(pts * 100)}점 · ✓ ${ok}/${res.rows.length}</small></div></div>
       <div class="tdr-rows">${res.rows.map((r) => `<div class="tdr-row ${r.ok}"><span class="ic">${r.ok === 'ok' ? '✓' : r.ok === 'meh' ? '△' : '✗'}</span><b>${esc(r.title)}</b><span>${r.text}</span></div>`).join('')}</div>
@@ -459,8 +462,16 @@ export function startAcademy(game) {
       ${footer}`;
     $('.tut-card .tut-btns').innerHTML = reportButtons(medal);
     chime(medal >= 2);
-    if (xpRes) setTimeout(() => showXpPill(xpRes), 500);
+    quietRewards();
     open('.tut-card .tut-btns .primary');
+  }
+  function rewardSummary(before) {
+    const xp = Math.max(0,profile.get().xp-before.xp), coins = Math.max(0,pitMeta.get().coins-before.coins);
+    return xp || coins ? '<div class="ac-save">이번 보상 합계 · <b>+'+xp+' XP</b> · ⬡ +'+coins+' 피트 코인<small style="display:block;margin-top:4px">레슨·업적·목표 보상 포함 · XP는 레벨, 코인은 꾸미기에 써요</small></div>' : '';
+  }
+  function quietRewards() {
+    document.getElementById('xpPill')?.remove();
+    window.dispatchEvent(new CustomEvent('gimmick:resultsOpen'));
   }
   function reportButtons(medal) {
     if (exam) {
@@ -489,6 +500,7 @@ export function startAcademy(game) {
 
   // ------------------------------------------------------------------ 시험 결과
   async function showExamFinal() {
+    const rewardBefore = { xp: profile.get().xp, coins: pitMeta.get().coins };
     const m = lic();
     const res = m.tasks.map((t, j) => exam.results[j] || { task: t, pts: 0, medal: 0 });
     const pass = res.every((r) => r.medal >= m.need);
@@ -522,12 +534,13 @@ export function startAcademy(game) {
           <ul class="ac-rew">${grant ? `<li>🏅 배지: 홈 · 결과 화면 · 온라인 순위표에 보여요</li><li>🎨 새 차 색 <b style="color:${paint.body || '#fff'}">${esc(paint.name)}</b> (차 고르기 → 색)</li><li class="xp">+${grant.xp} XP</li>` : '<li>이미 가진 라이선스예요. 다시 합격!</li>'}</ul></div></div>
          <div class="tdr-rows">${rows}</div>`
       : `<p>모든 과제에서 <b>${MEDALS[m.need]} ${MEDAL_NAMES[m.need]}</b> 이상이면 합격이에요. 레슨에서 먼저 연습하고 다시 도전해요!</p><div class="tdr-rows">${rows}</div>`;
+    if (pass) $('.tut-card .tut-body').insertAdjacentHTML('beforeend', rewardSummary(rewardBefore));
     $('.tut-card .tut-btns').innerHTML =
       btn('home', '🎓 아카데미로') + '<span class="sp"></span>' +
       (pass ? (nextLic ? btn('nextExam', `${esc(nextLic.name)} 시험 ›`) : '') + (grant ? btn('paint', '🎨 색 바꾸러 가기') : '') : btn('examAgain', `↺ 시험 다시 ${enterK}`, 'primary'));
     if (pass) $('.tut-card .tut-btns .gm-btn:last-child').classList.add('primary');
     chime(pass);
-    if (xpRes) setTimeout(() => showXpPill(xpRes), 700);
+    quietRewards();
     open('.tut-card .tut-btns .primary');
   }
 

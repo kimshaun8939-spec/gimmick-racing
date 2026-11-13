@@ -198,7 +198,7 @@ export async function runHome() {
       </button>
       <!-- 차·맵·방식 고르기 타일은 없앰 (사용자 요청 2026-11-11): 레이스 시작 → 차 → 맵 → 방식 순서로 차례대로 -->
       <div class="hx-steps"><span><b>1</b> 차</span><i>›</i><span><b>2</b> 맵</span><i>›</i><span><b>3</b> 방식</span><i>›</i><span><b>▶</b> 출발</span></div>
-      <button class="mt-home-goals" data-act="metaGoals" data-nav><span>◷</span><div><b>오늘의 피트 미션</b><small></small></div><em>목표 보기 ›</em></button>
+      <button class="gm-btn hx-learn" data-act="tutorial" data-nav><span>🚦</span><span><b>처음이라면 · 튜토리얼</b><small>출발·브레이크·자동 변신을 차근차근</small></span><span>›</span></button>
       <div class="hx-sec"><span>더 보기</span></div>
       <div class="h-menu hx-grid hx-4">
         <button class="gm-btn h-item hx-tile" data-go="meta" data-nav style="--tc:#ffd366"><span class="ic">✦</span><span class="t"><b>업적과 목표</b><small>87개 도전 · 나만의 드라이버 여정</small></span></button>
@@ -206,7 +206,7 @@ export async function runHome() {
         <button class="gm-btn h-item hx-tile" data-go="academy" data-nav style="--tc:#ffcf3f"><span class="ic">🎓</span><span class="t"><b>아카데미</b><small>코너 요령 배우고 메달 모으기</small></span></button>
         <button class="gm-btn h-item hx-tile" data-act="multi" data-nav style="--tc:#5fd0ff"><span class="ic">🌐</span><span class="t"><b>온라인</b><small>방 코드로 친구와 함께</small></span></button>
         <button class="gm-btn h-item hx-tile" data-go="records" data-nav style="--tc:#c79bff"><span class="ic">🏆</span><span class="t"><b>${online.enabled ? '기록과 순위' : '내 기록'}</b><small>${online.enabled ? '내 최고 기록 · 세계 순위' : '맵마다 내 최고 기록'}</small></span></button>
-        <button class="gm-btn h-item hx-tile" data-act="tutorial" data-nav style="--tc:#7dff6a"><span class="ic">🚦</span><span class="t"><b>튜토리얼</b><small>첫 출발부터 자동 변신까지</small></span></button>
+        <button class="gm-btn h-item hx-tile mt-home-goals" data-act="metaGoals" data-nav style="--tc:#7dff6a"><span class="ic">◷</span><div class="t"><b>오늘의 목표</b><small></small></div></button>
       </div>
     </div>
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
@@ -906,12 +906,12 @@ export async function runHome() {
       <div class="ax">
         <div class="ax-head">
           <button class="gm-btn small ax-back" data-go="main" data-nav>‹ 홈으로</button>
-          <div class="ax-title"><span class="ic">🎓</span><div><b>드라이빙 아카데미</b><small>설명 → 시범 주행 → 따라 하기 → 성적표 · 메달을 모으고 라이선스를 따요</small></div></div>
+          <div class="ax-title"><span class="ic">🎓</span><div><b>드라이빙 아카데미</b><small>먼저 레슨으로 연습해요 · 시험을 통과하면 라이선스 배지를 받아요</small></div></div>
           <div class="ax-sum"><span>🥇 <b>${sum.gold}</b></span><span>🥈 <b>${sum.silver}</b></span><span>🥉 <b>${sum.bronze}</b></span><span class="n">레슨 ${sum.done}/${sum.total}</span>${top ? `<span class="lic">${licenseChip(top, 24)}</span>` : ''}</div>
         </div>
         <div class="ax-body">
           <div class="ax-lessons h-panel">${groups}</div>
-          <div class="ax-side h-panel"><h3 class="ax-sh">🪪 라이선스 시험 <small>아무것도 잠그지 않아요 · 보상은 배지·색·XP</small></h3>${LICENSES.map(licCard).join('')}</div>
+          <div class="ax-side h-panel"><h3 class="ax-sh">🪪 라이선스 시험 <small>선택 도전 · C → B → A → S 순서 · 배지·색·XP 보상</small></h3>${LICENSES.map(licCard).join('')}</div>
         </div>
         <div class="ax-foot"><span class="ax-car">🏎️ ${esc(carOf(carId).name)} · 이 차로 연습해요 · 차는 '레이스 시작'에서 바꿔요</span></div>
       </div>`;

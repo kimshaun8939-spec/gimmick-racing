@@ -345,3 +345,16 @@
 .ax-back { flex:none; order:3; margin-left:auto; }
 @media (max-width:720px) { .ax-title { min-width:0; } .ax-sum { order:4; flex-basis:100%; } .ax-back { order:2; } }
 @media (max-height:520px) { .ax-head { gap:8px; } .ax-sum .n { display:none; } }
+
+/* launchqa3 · 긴 성적표는 내용만 스크롤하고 다음 행동은 보이게. */
+#tutorial.acad .ac-card:is(.ac-rep,.ac-final) { display:flex; flex-direction:column; max-height:calc(100dvh - 32px); overflow:hidden; }
+#tutorial.acad .ac-card:is(.ac-rep,.ac-final)>.tut-body { flex:1 1 auto; min-height:0; overflow-y:auto; }
+#tutorial.acad .ac-card:is(.ac-rep,.ac-final)>:is(.tut-top,.tut-hero,.tut-btns) { flex-shrink:0; }
+.ac-lictx .ac-rew b { display:inline; font:inherit; }
+@media(max-width:600px) {
+ #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-top { display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:6px 8px; }
+ #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-chip { grid-column:1; grid-row:1; white-space:normal; line-height:1.5; }
+ #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .ac-crumb { grid-column:1; grid-row:2; min-width:0; font-size:12px; white-space:normal; }
+ #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-x { grid-column:2; grid-row:1; align-self:start; }
+ #tutorial.acad .ac-card:is(.ac-rep,.ac-final) .tut-btns { margin-top:10px; }
+}

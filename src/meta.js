@@ -13,7 +13,7 @@ let run=null, notifyQueue=[],notifyBusy=false;
 const emit=(name,detail)=>{try{window.dispatchEvent(new CustomEvent(name,{detail}));}catch{}};
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state));dirty=false;return true;}catch{emit('gimmick:metaError',{message:'저장 공간이 부족해요. 이 창을 닫기 전에 브라우저 저장 공간을 확인해 주세요.'});return false;}}
 export function ensureMetaStyle(){if(typeof document==='undefined'||document.querySelector('link[data-meta]'))return;const ln=document.createElement('link');ln.rel='stylesheet';ln.href=new URL('./meta.css',import.meta.url).href;ln.dataset.meta='1';document.head.appendChild(ln);}
-function announce(d){if(silent||typeof document==='undefined')return;notifyQueue.push(d);if(notifyQueue.length>8)notifyQueue.splice(1,notifyQueue.length-8);nextNotice();}
+function announce(d){if(silent||typeof document==='undefined'||window.game?.race?.phase==='finished'||window.game?.tutorial?.academy||document.getElementById('results')?.classList.contains('on'))return;notifyQueue.push(d);if(notifyQueue.length>8)notifyQueue.splice(1,notifyQueue.length-8);nextNotice();}
 function nextNotice(){if(notifyBusy||!notifyQueue.length)return;notifyBusy=true;ensureMetaStyle();const d=notifyQueue.shift();const el=document.createElement('div');el.className='mt-notice';el.setAttribute('role','status');el.setAttribute('aria-live','polite');const badge=document.createElement('span');badge.className='mt-notice-medal';badge.textContent=d.icon||'✦';const txt=document.createElement('div');const small=document.createElement('small');small.textContent=d.kicker||'업적 달성';const b=document.createElement('b');b.textContent=d.name;const reward=document.createElement('em');reward.textContent='⬡ +'+d.coins+' 피트 코인'+(d.xp?' · +'+d.xp+' XP':'');txt.append(small,b,reward);el.append(badge,txt);document.body.append(el);setTimeout(()=>el.classList.add('out'),3600);setTimeout(()=>{el.remove();notifyBusy=false;nextNotice();},4100);}
 function credit(amount,reason){amount=Math.floor(num(amount));if(!amount)return;state.coins+=amount;state.earned+=amount;state.history.push({at:Date.now(),amount,reason});state.history=state.history.slice(-30);if(run)run.coins+=amount;dirty=true;}
 function bonusXP(amount){if(!amount)return;if(run)run.xp+=amount;profile.bonus(amount);}
@@ -35,6 +35,7 @@ export function bootMeta(){if(started)return;started=true;ensureMetaStyle();peri
  const today=calendar(),login=state.login;if(login.day!==today.daily){const prev=login.day?Math.floor(Date.parse(login.day+'T12:00:00Z')/86400000):0;login.streak=today.serial-prev===1?num(login.streak)+1:1;login.day=today.daily;login.total=num(login.total)+1;login.reward=40+10*Math.min(7,login.streak);credit(login.reward,'오늘의 피트 체크인');state.stats.loginDays=login.total;}
  // 초기 로딩에서는 작은 완료 알림을 몰아서 띄우지 않음. 보상·업적 자체는 지급.
  silent=true;reconcileAcademy();silent=false;save();
+ window.addEventListener('gimmick:resultsOpen',()=>{notifyQueue=[];document.querySelectorAll('.mt-notice').forEach(el=>el.remove());});
  window.addEventListener('gimmick:academy',reconcileAcademy);window.addEventListener('pagehide',()=>dirty&&save());document.addEventListener('visibilitychange',()=>{if(document.hidden&&dirty)save();});window.addEventListener('storage',e=>{if(e.key===KEY){state=load();dirty=false;emit('gimmick:meta');}});
 }
 export const meta={

@@ -31,8 +31,8 @@ export const SETTING_DEFS = [
 
   { group: '주행', key: 'gearbox', label: '변속 방식', desc: () => `게임 중 ${keybinds.main('gearbox')} 키로도 바꿔요 (수동: ${keybinds.main('shiftUp')} 올림 · ${keybinds.main('shiftDown')} 내림)`, type: 'choice',
     options: [['auto', '자동'], ['manual', '수동']], def: 'auto' },
-  { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: () => `도로 위 추천 길 (${keybinds.main('racingLine')} 키)`, type: 'toggle', def: true },
-  { group: '주행', key: 'autoPause', label: '자동 일시정지', desc: '다른 창을 보면 게임을 멈춰요', type: 'toggle', def: true },
+  { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: () => `초록 = 가속 · 노랑 = 속도 줄일 준비 · 빨강 = 브레이크 (${keybinds.main('racingLine')} 키)`, type: 'toggle', def: true },
+  { group: '주행', key: 'autoPause', label: '자동 일시정지', desc: '다른 창을 보면 혼자 하는 게임을 멈춰요 (온라인 경기는 계속돼요)', type: 'toggle', def: true },
 
   // 조향 느낌·운전 도움 (input.js·assists.js가 조작 명령에 적용)
   { group: '조향 · 운전 도움', key: 'steerSens', label: '조향 감도', desc: '핸들을 꺾는 양 (키보드·패드)', type: 'choice',
@@ -50,7 +50,7 @@ export const SETTING_DEFS = [
     options: [['auto', '자동'], ['on', '켜기'], ['off', '끄기']], def: 'auto' },
   { group: '터치 (휴대폰)', key: 'touchSteer', label: '터치 조향', desc: '끌기 = 왼쪽 아무 데나 대고 옆으로 끈 만큼 · 버튼 = ◀ ▶', type: 'choice',
     options: [['pad', '끌기'], ['buttons', '버튼']], def: 'pad' },
-  { group: '터치 (휴대폰)', key: 'touchSize', label: '버튼 크기', desc: '', type: 'choice',
+  { group: '터치 (휴대폰)', key: 'touchSize', label: '버튼 크기', desc: '휴대폰 가속·브레이크·드리프트 버튼의 크기', type: 'choice',
     options: [['s', '작게'], ['m', '보통'], ['l', '크게']], def: 'm' },
   { group: '터치 (휴대폰)', key: 'tilt', label: '기울여 조향', desc: '휴대폰을 핸들처럼 좌우로 기울여요 (iPhone은 처음에 허락을 물어요)', type: 'toggle', def: false },
 
@@ -62,7 +62,7 @@ export const SETTING_DEFS = [
   { group: '게임패드', tab: 'pad', key: 'padVibe', label: '진동', desc: '연석·잔디·부딪힘에서 패드가 떨려요 (지원하는 패드만)', type: 'toggle', def: true },
 
   // 레이스 (main.js·봇·고스트가 settings.values.X ?? 기본값으로 읽음. 키 이름·값은 .debug/agents/contracts.md 약속)
-  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '맵 최고 = 어느 차로 달렸든 이 맵에서 내 가장 빠른 기록 · 이 차 최고 = 지금 차의 기록 (없으면 다른 차 최고). 화면의 "최고 기록"도 같이 바뀜', type: 'choice',
+  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '예전 주행을 보여 주는 반투명 차예요 (부딪히지 않음). 맵 최고 = 어느 차로 달렸든 이 맵에서 내 가장 빠른 기록 · 이 차 최고 = 지금 차의 기록 (없으면 다른 차 최고). 화면의 "최고 기록"도 같이 바뀜', type: 'choice',
     options: [['off', '끔'], ['best', '맵 최고 (모든 차)'], ['car', '이 차 최고'], ['bot', '봇 기록']], def: 'best' },
   { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
@@ -75,7 +75,7 @@ export const SETTING_DEFS = [
   { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,
     options: [[3, '3경기'], [5, '5경기']], def: 5 },
 
-  { group: '표시', key: 'unit', label: '속도 단위', desc: '', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
+  { group: '표시', key: 'unit', label: '속도 단위', desc: 'km/h = 시속 킬로미터 · mph = 시속 마일', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
   { group: '표시', key: 'mirror', label: '백미러', desc: '자동 = 다른 차가 바로 뒤에 붙으면 화면 위에 작은 백미러가 내려와요 · 항상 = 상대가 있는 레이스에서 늘 보임', type: 'choice',
     options: [['auto', '자동'], ['on', '항상'], ['off', '끔']], def: 'auto' },
@@ -189,6 +189,15 @@ export function createSettingsPanel(opts = {}) {
   const root = document.createElement('div');
   root.className = 'gm-settings';
   wrap.appendChild(root);
+  const help = document.createElement('div');
+  help.className = 'gm-set-help';
+  help.innerHTML = '<span>처음이면 부드러운 조향과 약한 운전 도움을 추천해요. 도움을 쓰면 기록에 🛟 표시가 남아요.</span><button class="gm-btn" data-nav>초보 추천 적용</button><output class="gm-set-feedback" role="status" aria-live="polite"></output>';
+  root.appendChild(help);
+  const feedback = text => { help.querySelector('output').textContent = text; };
+  help.querySelector('button').addEventListener('click', () => {
+    for (const [key, value] of Object.entries({gearbox:'auto',racingLine:true,steerSens:1,steerRamp:'smooth',brakeAssist:'light',steerAssist:'light',tcs:true})) settings.set(key, value);
+    feedback('초보 추천 적용: 자동 변속 · 라인 켬 · 부드러운 조향 · 약한 브레이크/조향 도움 · 헛바퀴 방지 켬');
+  });
   const keyPanel = createKeybindPanel({ sound: uiSound });
   keyPanel.el.hidden = true;
   wrap.appendChild(keyPanel.el);
@@ -268,9 +277,10 @@ export function createSettingsPanel(opts = {}) {
   }
   const foot = document.createElement('div');
   foot.className = 'gm-set-foot';
-  foot.innerHTML = `<span>바꾸면 바로 적용되고 자동으로 저장돼요${opts.inGame ? '' : ''}</span><button class="gm-btn small" data-nav tabindex="0">기본값으로 되돌리기</button>`;
+  foot.innerHTML = `<span>바꾸면 바로 저장돼요 · 초기화는 일반·패드 설정에 적용 (조작키·패드 버튼 배치는 각 탭에서)</span><button class="gm-btn small" data-nav tabindex="0">기본값으로 되돌리기</button>`;
   foot.querySelector('button').addEventListener('click', () => {
     settings.reset();
+    feedback('설정값을 기본으로 되돌렸어요. 바꾼 조작키·패드 버튼 배치는 유지돼요.');
     uiSound('select');
   });
   root.appendChild(foot);

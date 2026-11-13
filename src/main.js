@@ -3,7 +3,6 @@
 //   ESC = 일시정지 메뉴(pauseMenu.js), 설정(settings.js)은 바꾸는 즉시 아래 applySettings로 적용
 import { setMix, duckAudio } from './audioMix.js'; // 소리 크기 조절판: 다른 소리 파일보다 먼저 불러와야 함
 import * as THREE from 'three';
-import { buildTrack } from './track.js';
 import { Car } from './car.js';
 import { createCarModel } from './carModel.js';
 import { initCarLighting } from './carLighting.js';
@@ -11,8 +10,6 @@ import { createKeyboardInput, emptyControls } from './input.js';
 import { keybinds } from './keybinds.js';
 import { COURSE_TIPS, showCourseGuide } from './courseGuide.js';
 import { createHud } from './hud.js';
-import { buildScenery } from './scenery.js';
-import { buildProps } from './props.js';
 import { batchStatic, batchLocal } from './staticBatch.js';
 import { prewarm } from './prewarm.js'; // 불러올 때 셰이더·모양 미리 올리기 (렉 줄이기 2)
 import { createOffroadFx } from './offroadFx.js';
@@ -188,17 +185,23 @@ resize();
 // --- 게임 오브젝트 ---
 // 맵 전용 모듈: 맵 json에 "module": "neonMap" 처럼 적으면 src/neonMap.js의 buildTrack/buildScenery/buildProps를 씀 (없는 함수는 기본 것)
 const mapMod = trackData.module ? await import(`./${trackData.module}.js`) : null;
+// 전용 코스가 주는 함수가 있으면 기본 코스·그랑프리 풍경은 지금 받지 않아요.
+const [defaultTrack, defaultScenery, defaultProps] = await Promise.all([
+  mapMod?.buildTrack ? null : import('./track.js'),
+  mapMod?.buildScenery ? null : import('./scenery.js'),
+  mapMod?.buildProps ? null : import('./props.js'),
+]);
 const sceneBeforeMap = new Set(scene.children); // 트랙·풍경이 새로 넣은 것만 묶어 그리기 대상 (staticBatch.js)
 await loadingStage(2, '달릴 도로를 만들어요');
 performance.mark('load:start');
-const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : buildTrack(trackData, scene);
+const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : defaultTrack.buildTrack(trackData, scene);
 performance.mark('load:track');
 await loadingStage(3, '풍경과 코스 기믹을 준비해요');
-const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : buildScenery(track, scene);
+const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : defaultScenery.buildScenery(track, scene);
 const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
 performance.mark('load:scenery');
 await loadingStage(4, '차와 출발선을 준비해요');
-const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : buildProps(track, scene);
+const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : defaultProps.buildProps(track, scene);
 performance.mark('load:props');
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));

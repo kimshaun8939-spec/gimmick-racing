@@ -557,16 +557,18 @@ export function createHud(track) {
       const total = lapTimes.reduce((a, b) => a + b, 0);
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
+      const canCompare = !route.has('room') && route.get('mode') !== 'item' && !(info.standings?.length > 1);
+      const modeName = route.has('room') ? (route.get('mode') === 'item' ? '온라인 아이템전' : '온라인 레이스') : info.champ ? '챔피언십' : route.get('mode') === 'item' ? '아이템전' : route.get('mode') === 'time' ? '타임 어택' : info.standings?.length > 1 ? '봇 레이스' : '혼자 달리기';
       // 최고 기록 = 완주 시간 (여러 바퀴면 모든 바퀴 합)으로 판단 (사용자 요청 2026-11-10)
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
-      if (info.newRace) badges.push('<span class="badge record-chip">🏆 새 최고 기록!</span>');
+      if (canCompare && info.newRace) badges.push('<span class="badge record-chip">🏆 새 최고 기록!</span>');
       const pn = info.prevNote ? ` · ${esc(info.prevNote)}` : ''; // 다른 차로 낸 기록이면 그 차 이름
-      if (info.newRace && info.prevRace) badges.push(`<span class="badge gray">이전 ${fmtTime(info.prevRace)}${pn} → <strong class="record-delta">${diffTxt}</strong></span>`);
-      if (!info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)}${pn} (${diffTxt})</span>`);
-      if (info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
-      if (info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
-      else if (info.newLap && !info.newRace) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
+      if (canCompare && info.newRace && info.prevRace) badges.push(`<span class="badge gray">이전 ${fmtTime(info.prevRace)}${pn} → <strong class="record-delta">${diffTxt}</strong></span>`);
+      if (canCompare && !info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)}${pn} (${diffTxt})</span>`);
+      if (canCompare && info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
+      if (canCompare && info.newLap && lapTimes.length > 1) badges.push('<span class="badge gray">⚡ 최고 랩 갱신</span>');
+      else if (canCompare && info.newLap && !info.newRace) badges.push('<span class="badge">⚡ 새 최고 랩!</span>');
       if (info.assist) badges.push('<span class="badge gray" title="브레이크·조향 도움을 켜거나 견인(뒤처지면 끌어당겨 줌)을 받고 달린 기록">🛟 도움 켬</span>');
       // 레이스(봇·온라인): 순위 결과표, 구간 기록표
       const SC = { purple: '#c98bff', green: '#5cff8a', yellow: '#ffd23a' };
@@ -594,7 +596,7 @@ export function createHud(track) {
       const champBlock = ch ? '<details class="res-detail res-champ"><summary>🏆 시즌 ' + (champMe?.pos || '—') + '위 · ' + (champMe?.points || 0) + '점' + (ch.final ? ' · 최종' : ' · ' + ch.no + '/' + ch.total + '경기') + '</summary>' + champHtml(ch) + '</details>' : '';
       el.results.innerHTML = `<div class="res res-dashboard${standHtml || ch ? ' wide has-rivals' : ''}${ch && ch.final ? ' final' : ''}${info.newRace ? ' new-record' : info.newLap ? ' new-lap' : ''}">
         <div class="res-head">
-        <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
+        <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''} · ${modeName}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
         <div class="res-clock"><small>완주 시간</small><div class="total">${fmtTime(total)}</div></div>
         <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>
@@ -609,7 +611,7 @@ export function createHud(track) {
         <div class="btns">
           <div class="ra-main">
             ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
-            ${ch && info.hasNext && !ch.final ? nextBtn(info) : ''}
+            ${ch && (info.hasNext || ch.final) ? nextBtn(info) : ''}
           </div>
           <div class="ra-sub">
             ${info.replay ? '<button class="gm-btn sub" data-res="replay"><span class="ic">▶</span>리플레이</button>' : ''}
@@ -625,6 +627,9 @@ export function createHud(track) {
         }),
       );
       el.results.classList.add('on');
+      // 완주 보상은 결과 표에서 합계를 보여 줌. 별도의 XP·업적 알림은 겹치지 않게 정리.
+      document.getElementById('xpPill')?.remove();
+      window.dispatchEvent(new CustomEvent('gimmick:resultsOpen'));
       if (info.meta && !info.newRace && !info.newLap && !reducedResultsMotion()) {
         playMetaCelebration(el.results.querySelector('.res'), info.meta.celebration);
       }

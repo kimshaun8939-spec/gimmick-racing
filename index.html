@@ -247,6 +247,18 @@
       #bigText { font-size: 80px; }
     }
   </style>
+  <!-- 외부 파일을 받는 동안에도 첫 로딩 화면은 바로 보여요. -->
+  <style>
+    #loading { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:#0b1020; color:#eef3ff; font-family:system-ui,sans-serif; text-align:center; padding:24px; }
+    #loading .ld { width:min(440px,100%); }
+    #loading .logo { font-size:32px; font-weight:900; color:#ffcf3f; }
+    #loading .map { margin:16px 0 8px; font-size:20px; font-weight:800; }
+    #loading .status,#loading .tip { line-height:1.6; }
+    #loading .tip { color:#bdcbe1; font-size:14px; margin-top:18px; }
+    #loading .barx { height:6px; margin:20px 0 12px; background:#ffffff20; border-radius:8px; overflow:hidden; }
+    #loading .barx i { display:block; width:20%; height:100%; background:#ffcf3f; }
+    body:has(#loading:not(.out)) > :is(.hud,#menuBtn,#slingFlash) { visibility:hidden; }
+  </style>
   <!-- 홈 화면·ESC 메뉴·설정·결과·로딩 화면 스타일 -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -331,23 +343,6 @@
   <!-- 로딩 화면 (main.js가 맵·차 이름을 채움) -->
   <div id="loading"><div class="ld"><div class="logo">기믹 레이싱</div><div class="map" id="ldMap">출발 준비 중</div><div class="car" id="ldCar"></div><div class="barx" id="ldProgress" aria-hidden="true"><i></i></div><div class="status" id="ldStatus" role="status" aria-live="polite">게임을 불러오고 있어요</div><div class="tip" id="ldTip">한 대의 차로 땅 · 물 · 하늘까지. 변신은 차가 알아서 해요.</div></div></div>
 
-  <script type="module">
-    // 새로 올린 게임이 브라우저에 남은 예전 파일(캐시) 때문에 안 바뀌던 것 막기 (2026-11-13)
-    //   deploy.sh가 version.json을 만듦 → 버전이 바뀌었으면 파일을 한 번 새로 받아 캐시를 바꾼 뒤 시작
-    try {
-      // 로컬 서버에는 배포용 version.json이 없으므로 요청하지 않음. 공개 주소의 캐시 갱신은 유지.
-      const localDev = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-      const r = localDev ? null : await fetch('version.json', { cache: 'no-store' });
-      if (r?.ok) {
-        const ver = await r.json();
-        let old = null; try { old = localStorage.getItem('gimmick.ver'); } catch {}
-        if (ver.v && ver.v !== old) {
-          await Promise.all((ver.files || []).map((f) => fetch(f, { cache: 'reload' }).catch(() => {})));
-          try { localStorage.setItem('gimmick.ver', ver.v); } catch {}
-        }
-      }
-    } catch {}
-    await import('./src/main.js');
-  </script>
+  <script type="module" src="src/boot.js"></script>
 </body>
 </html>

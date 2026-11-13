@@ -2509,3 +2509,15 @@ body #lobby .lb-modehelp { color:#c3d4ec; background:#101d31; border:1px solid #
 @media(max-width:900px),(pointer:coarse) { #home .kb-preset-summary :is(span,b) { font-size:12px!important; } }
 
 body:has(.course-guide) > .hud,body:has(.course-guide) :is(#menuBtn,#touchCtl,#itemHud) { visibility:hidden; }
+
+/* launchqa3 · 첫 출발 바로 아래에서 입문을 찾게 해요. */
+#home .gm-btn.hx-learn { display:flex; align-items:center; gap:12px; text-align:left; min-height:54px; padding:9px 14px; white-space:normal; border-color:#7dff6a70; background:linear-gradient(110deg,#244338,#142238); flex-shrink:0; }
+#home .hx-learn>span:nth-child(2) { flex:1; min-width:0; }
+#home .hx-learn b { display:block; color:#b5ffa5; font-size:16px; }
+#home .hx-learn small { display:block; color:#c4d5d0; font-size:12px; line-height:1.5; margin-top:3px; }
+#home .hx-grid .mt-home-goals small { white-space:normal; line-height:1.5; }
+.gm-set-help { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:12px 14px; margin:0 0 14px; border:1px solid #84bfa766; border-radius:10px; color:#c8d9ee; background:#18342c; font-size:12px; line-height:1.6; }
+.gm-set-help>span { flex:1; min-width:180px; }
+.gm-set-help .gm-btn { min-height:44px; }
+.gm-set-feedback { display:block; width:100%; min-height:18px; color:#c9f5bd; font-size:12px; }
+@media(max-width:719px) { #home .gm-btn.hx-learn { min-height:58px; padding:8px 11px; gap:8px; } #home .hx-learn b { font-size:14px; } }
