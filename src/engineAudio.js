@@ -324,10 +324,13 @@ export function createEngineAudio(sound = {}) {
     src.start(t, Math.random() * 1.0, 0.8);
   }
 
-  window.addEventListener('keydown', () => {
+  // 터치로 처음 출발해도 엔진 출력이 0으로 남지 않게 키보드와 같은 준비를 해요.
+  const wake = () => {
     if (!ctx) init();
-    else if (ctx.state === 'suspended') ctx.resume();
-  });
+    else if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  };
+  window.addEventListener('keydown', wake);
+  window.addEventListener('pointerdown', wake, { passive: true });
   document.addEventListener('visibilitychange', () => {
     if (!ctx) return;
     if (document.hidden) ctx.suspend();

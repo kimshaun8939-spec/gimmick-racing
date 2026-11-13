@@ -48,6 +48,7 @@ export function buildMoonProps(track, scene) {
     } else if (actx.state === 'suspended') actx.resume();
   };
   window.addEventListener('keydown', wake);
+  window.addEventListener('pointerdown', wake, { passive: true });
   function chime(kind) {
     if (!actx || actx.state !== 'running' || settings.get('muted')) return;
     const t0 = actx.currentTime;

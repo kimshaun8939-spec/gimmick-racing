@@ -211,7 +211,7 @@ export function createVolcanoAudio() {
   A.erupt = (strength = 1, dist = 900, pan = 0) => {
     if (!ok()) return;
     const t = ctx.currentTime + Math.min(4, dist / SPEED_OF_SOUND);
-    const v = 0.7 * Math.max(0.3, Math.min(1.4, strength)), d = panner(pan * 0.6);
+    const v = 0.4 * Math.max(0.3, Math.min(1.4, strength)), d = panner(pan * 0.6);
     brown(d, t, 5.5, v, 160, 0.04);
     noise(d, t, 1.6, v * 0.5, 'lowpass', 900, 80, 0.7, 0.01);
     tone(d, t, 3.2, v * 0.7, 52, 24);

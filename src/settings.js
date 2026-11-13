@@ -3,6 +3,7 @@
 //   - 화면은 소리 / 화면·그래픽 / 주행 / 레이스 / 표시 묶음. 마우스 또는 키보드(↑↓ 고르기, ←→ 바꾸기)로 조절
 //   - 위쪽 탭: [일반 설정] [조작키] [게임패드] (조작키 = keybinds.js의 createKeybindPanel, 게임패드 = gamepad.js의 createPadPanel)
 //   - tab: 'pad'인 설정은 게임패드 탭에 보임. hidden: true는 화면에 안 보이는 설정 (홈의 다른 화면에서 바꿈)
+import { setMix } from './audioMix.js';
 import { keybinds, PRESETS, createKeybindPanel, codeLabel, actionVisible } from './keybinds.js';
 import { pad, createPadPanel } from './gamepad.js';
 import { touchWanted } from './touch.js';
@@ -146,6 +147,13 @@ function createStore() {
 }
 
 export const settings = createStore();
+// 홈·대기실에서도 공통 출력의 설정을 바로 맞춰요.
+function syncSoundMix() {
+  const s = settings.values;
+  setMix({ master: s.masterVol, engine: s.engineVol, fx: s.fxVol, muted: s.muted });
+}
+syncSoundMix();
+settings.onChange(syncSoundMix);
 // 자동 품질의 현재 화면 비용 단계. 저장된 사용자 설정과 구분하며, 물리에는 쓰지 않아요.
 export const graphicsBudget = { tier: 0 };
 export function graphicsTier() {
@@ -157,8 +165,8 @@ export function graphicsTier() {
 let uiCtx = null;
 export function uiSound(kind = 'move') {
   try {
-    const v = settings.get('muted') ? 0 : settings.get('masterVol') * settings.get('fxVol');
-    if (v <= 0.001) return;
+    if (settings.get('muted') || settings.get('masterVol') <= 0.001 || settings.get('fxVol') <= 0.001) return;
+    const v = 1; // 크기 조절은 공통 믹서에서 한 번만
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     if (!uiCtx) uiCtx = new AC();

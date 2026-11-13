@@ -710,16 +710,18 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
   if (document.body) document.body.append(fx, label);
   let flash = 0, labelT = 0;
   // 포털 소리 (우우웅 + 쉬익). N 키로 엔진 소리를 끄면 같이 꺼짐
-  let actx = null, muted = false;
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyN') muted = !muted;
+  let actx = null;
+  // 키·터치 모두 소리를 준비해요. 음소거 상태는 공통 믹서 한 곳에서만 기억해요.
+  const wakeAudio = () => {
     if (!actx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) actx = new AC();
-    } else if (actx.state === 'suspended') actx.resume();
-  });
+    } else if (actx.state === 'suspended') actx.resume().catch(() => {});
+  };
+  window.addEventListener('keydown', wakeAudio);
+  window.addEventListener('pointerdown', wakeAudio, { passive: true });
   function whoosh(down) {
-    if (!actx || muted || actx.state !== 'running') return;
+    if (!actx || actx.state !== 'running') return;
     const t0 = actx.currentTime;
     const n = Math.floor(actx.sampleRate * 1.5);
     const buf = actx.createBuffer(1, n, actx.sampleRate);

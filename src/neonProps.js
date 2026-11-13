@@ -193,16 +193,18 @@ export function buildNeonProps(track, scene) {
   }
 
   // 부딪힘 소리 (플레이어 차만): 라바콘 = 통, 상자 = 쿵. N 키·설정 음소거로 같이 꺼짐 (audioMix가 효과음 크기 조절)
-  let actx = null, muted = false, lastSnd = 0;
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyN') muted = !muted;
+  let actx = null, lastSnd = 0;
+  // 키·터치 모두 소리를 준비해요. 음소거 상태는 공통 믹서 한 곳에서만 기억해요.
+  const wakeAudio = () => {
     if (!actx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) actx = new AC();
-    } else if (actx.state === 'suspended') actx.resume();
-  });
+    } else if (actx.state === 'suspended') actx.resume().catch(() => {});
+  };
+  window.addEventListener('keydown', wakeAudio);
+  window.addEventListener('pointerdown', wakeAudio, { passive: true });
   function thunk(type, speed) {
-    if (!actx || muted || actx.state !== 'running') return;
+    if (!actx || actx.state !== 'running') return;
     try {
       const st = window.game && window.game.settings && window.game.settings.values;
       if (st && st.muted) return;
