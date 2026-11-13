@@ -825,10 +825,10 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const Y = new THREE.Vector3(0, 1, 0);
 
   /** 가속 모드 진행도 p에 맞춰 부품 배치 (poseSpike 뒤에 불러야 함: body.position.y에 더함) */
-  function poseAccel(p, time) {
+  function poseAccel(p, time, throttle=.7, speed=0, dt=1/60) {
     const sDrs = easeInOut(stage(p, .48, .87));
     const sGlow = stage(p, .7, 1);
-    accelKit.pose(p, Math.max(boatP, flyP, spikeP), time);
+    accelKit.pose(p, Math.max(boatP, flyP, spikeP), time, throttle, speed, dt);
     const wide = easeInOut(stage(p, .08, .75)) * (1 - Math.max(boatP, flyP, spikeP));
     body.scale.set(1 + accelKit.bodyWide * wide, 1, 1 + accelKit.bodyLong * wide);
     fWing.scale.x = 1 + .18 * wide;
@@ -1164,7 +1164,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       // 비행 모드 (땅에선 날개가 살짝 들리고, 날면 펴짐)
       poseFly(flyP, gearP);
       // 주행 모드 (스파이크가 정한 body.position.y에 더함)
-      poseAccel(accelP, time);
+      poseAccel(accelP, time, thr, spd, dt);
       // 선외기: 물 위에선 물속으로 내리고(살짝 트림), 땅이나 공중에선 들어 올림
       costumeFx?.update(time, boatP);
       poseBoat(boatP, boatOn, THREE.MathUtils.lerp(1.25, 0.08, waterK));

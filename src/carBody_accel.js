@@ -1,4 +1,4 @@
-// accel4: 중앙 시야를 비우는 낮은 옆 기구·차별 리듬·빛 흐름.
+// flame: 4차의 낮은 기구 유지. 공유 셰이더로 붉은 불꽃·전기 플라스마·불티.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const clamp=x=>Math.max(0,Math.min(1,x));
@@ -30,10 +30,163 @@ export function accelProfile(look={}) {
  return {id,duration:s[0],sound:s[1],steps:s[2],f0:s[3],f1:s[4]};
 }
 
+
+// flame: 한 재질/차당 한 호출. 불꽃, 입구 번짐, 불티, 열 아지랑이는 모두 작은 인스턴스 쿼드.
+// 모든 차가 이 재질을 공유하고 onBeforeRender에서 그 차의 uniform만 갱신한다.
+let sharedFire=null,fireUsers=0,fireSerial=0;
+function acquireFire(){
+ if(!sharedFire){
+  sharedFire=new THREE.ShaderMaterial({
+   name:'accel-combustion-plasma',transparent:true,depthWrite:false,side:THREE.DoubleSide,
+   blending:THREE.CustomBlending,blendSrc:THREE.SrcAlphaFactor,blendDst:THREE.OneMinusSrcAlphaFactor,toneMapped:false,
+   uniforms:{uTime:{value:0},uPower:{value:0},uSpeed:{value:0},uOn:{value:0},uPop:{value:0},uElectric:{value:0},uAccent:{value:new THREE.Color()}},
+   vertexShader:`
+    attribute vec4 fireData; attribute float fireHeight;
+    uniform float uTime,uPower,uSpeed,uOn,uPop,uElectric;
+    varying vec2 vUv; varying vec4 vFire;
+    void main(){
+     float kind=fireData.x, seed=fireData.y;
+     float beat=1.0+.07*sin(uTime*37.0+seed*23.0)+.045*sin(uTime*61.0+seed*41.0);
+     float len=fireData.z*(.20+1.16*uPower+.20*uSpeed)*beat*(1.0+.22*uPop);
+     float pulse=(.78+.22*uPower)*(1.0+.04*sin(uTime*43.0+seed*29.0));
+     vec4 origin=modelViewMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
+     vec3 axis=(modelViewMatrix*instanceMatrix*vec4(0.,0.,-1.,0.)).xyz;
+     vec3 dir=normalize(axis);
+     vec3 side=cross(dir,normalize(-origin.xyz));
+     side=length(side)>.001?normalize(side):vec3(1.,0.,0.);
+     vec3 bx=(modelViewMatrix*instanceMatrix*vec4(1.,0.,0.,0.)).xyz;
+     vec3 by=(modelViewMatrix*instanceMatrix*vec4(0.,1.,0.,0.)).xyz;
+     // 납작한 슬롯은 보는 각도에 맞는 타원 단면. 넓은 폭을 세로 불기둥으로 돌리지 않는다.
+     float wide=length(vec2(dot(side,bx)*fireData.w,dot(side,by)*fireHeight))*pulse;
+     vec3 p=origin.xyz;
+     float age=fract(uTime*(.85+.3*seed)+seed*17.0);
+     if(kind<.5){
+      p+=axis*(uv.y*len)+side*(position.x*wide);
+     }else if(kind<1.5){
+      // 입구 광륜은 카메라를 바라보는 작은 스프라이트, 차체 뒤 낮은 위치 고정.
+      p+=(bx*position.x*fireData.w+by*position.y*fireHeight)*(1.18+.45*uPop);
+     }else{
+      float travel=kind<2.5?age:fract(age+.37);
+      p+=axis*(len*(.18+1.12*travel));
+      p+=side*(sin(seed*74.0+travel*7.0)*wide*(.16+.30*travel));
+      p.y+=(kind<2.5?.08:.13)*sin(seed*19.0+travel*5.0)*travel;
+      float size=kind<2.5?.016+.018*seed:.055+.06*travel;
+      p.xy+=position.xy*size*(kind<2.5?1.:1.7);
+     }
+     vUv=vec2(uv.x*2.-1.,uv.y);vFire=vec4(kind,seed,age,uOn);
+     gl_Position=projectionMatrix*vec4(p,1.);
+    }`,
+   fragmentShader:`
+    precision highp float;
+    uniform float uTime,uPower,uSpeed,uPop,uElectric;
+    uniform vec3 uAccent;
+    varying vec2 vUv; varying vec4 vFire;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
+    void main(){
+     float x=vUv.x,y=vUv.y,seed=vFire.y,t=uTime;
+     vec3 col;float alpha;
+     if(vFire.x<.5){
+      float n=noise(vec2(x*3.+seed*31.,y*9.-t*13.));
+      float fine=noise(vec2(x*9.-t*2.,y*23.-t*27.+seed*13.));
+      // 소용돌이치는 불꽃 혀. 끝이 뾰족해지며 투명하게 사라진다.
+      float sway=sin(y*10.-t*24.+seed*17.)*.09*y;
+      float r=abs(x+sway);
+      float envelope=pow(max(0.,1.-y),.68)*(.72+.20*sin(y*3.14));
+      envelope*=.64+.45*n+.18*fine;
+      float edge=1.-smoothstep(envelope-.13,envelope+.03,r);
+      float tongue=noise(vec2(x*5.+seed*9.,t*11.));
+      edge*=1.-smoothstep(.64+.24*tongue,1.,y);
+      float core=(1.-smoothstep(.05,.42,r))* (1.-smoothstep(.12,.57,y));
+      col=mix(vec3(.95,.012,.001),vec3(1.,.31,.008),1.-smoothstep(.15,.80,y));
+      col=mix(col,vec3(1.,.83,.27),core*.80);
+      col=mix(col,vec3(1.8,1.65,1.34),core*core*.92);
+      col*=.80+.30*n+.12*fine;
+      // 3개의 희미한 마하 다이아몬드. 별도 메시/호출 없음.
+      float d=0.;for(int i=0;i<3;i++){
+       float c=.22+float(i)*.22+.012*sin(t*12.+seed);
+       float diamond=abs(y-c)/.065+r/(.32-float(i)*.055);
+       d+=pow(max(0.,1.-diamond),2.);
+      }
+      col+=mix(vec3(.45,.40,.20),uAccent*.30,.18)*d*.65;
+      if(uElectric>.5){
+       float arc=exp(-abs(x-.19*sin(y*29.-t*37.+seed*13.)) * 54.);
+       col=mix(vec3(.025,.19,1.),vec3(.64,.93,1.),core)+arc*vec3(.6,.85,1.);
+       col+=uAccent*d*.12;
+      }
+      alpha=edge*(.86+.12*n)*(1.-smoothstep(.70,1.,y));
+      alpha*=.66+.30*uPower;
+     }else if(vFire.x<1.5){
+      float r=length(vec2(x,(y-.5)*2.));
+      float hot=exp(-r*r*12.),halo=exp(-r*r*4.0);
+      col=mix(vec3(1.,.16,.015),vec3(1.,.94,.64),hot);
+      if(uElectric>.5)col=mix(vec3(.02,.25,1.),vec3(.78,.98,1.),hot);
+      col+=uAccent*pow(max(0.,1.-abs(r-.7)*5.),2.)*.10;
+      alpha=(hot*.38+halo*.11)*(1.+uPop*.65);
+     }else{
+      float r=length(vec2(x,(y-.5)*2.));
+      float life=sin(vFire.z*3.14159);
+      col=uElectric>.5?vec3(.22,.63,1.):vec3(1.,.24,.025);
+      alpha=max(0.,1.-r)*life*(vFire.x<2.5?.58:.035)*(.25+.75*uPower);
+      if(vFire.x>2.5)col=mix(col,vec3(.5,.58,.66),.65);
+     }
+     alpha*=vFire.w;if(alpha<.003)discard;
+     gl_FragColor=vec4(col,alpha);
+    }`
+  });
+  sharedFire.userData.live=true;sharedFire.userData.sharedFlame=true;
+ }
+ fireUsers++;return sharedFire;
+}
+function buildFire(body,emitters,id,colour){
+ const material=acquireFire(),perPort=7,phaseOffset=(fireSerial++*.61803398875)%1;
+ const geo=new THREE.PlaneGeometry(1,1);
+ const data=new Float32Array(emitters.length*perPort*4),heights=new Float32Array(emitters.length*perPort);
+ for(let j=0;j<emitters.length;j++)for(let k=0;k<perPort;k++){
+  const e=emitters[j],i=(j*perPort+k)*4;
+  heights[j*perPort+k]=e.height;
+  data.set([k===0?0:k===1?1:k<5?2:3,(j*.371+k*.173+Object.keys(SPECS).indexOf(id)*.113+phaseOffset)%1,e.len,e.width],i);
+ }
+ geo.setAttribute('fireData',new THREE.InstancedBufferAttribute(data,4));
+ geo.setAttribute('fireHeight',new THREE.InstancedBufferAttribute(heights,1));
+ const mesh=new THREE.InstancedMesh(geo,material,emitters.length*perPort);
+ mesh.name='accel-fire-'+id;mesh.frustumCulled=false;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+ mesh.userData.accelMoving=true;body.add(mesh);
+ const state={time:0,power:.7,speed:0,on:0,pop:0,electric:id==='volt'||id==='nova'?1:0};
+ mesh.onBeforeRender=()=>{
+  const u=material.uniforms;u.uTime.value=state.time;u.uPower.value=state.power;u.uSpeed.value=state.speed;
+  u.uOn.value=state.on;u.uPop.value=state.pop;u.uElectric.value=state.electric;u.uAccent.value.copy(colour);
+  material.uniformsNeedUpdate=true;
+ };
+ const inv=new THREE.Matrix4(),m=new THREE.Matrix4(),shift=new THREE.Matrix4();
+ let previous=0,popAge=1;
+ return {
+  update(p,other,time,throttle,speed,dt){
+   const on=smooth(phase(p,.76,.97))*(1-smooth(phase(other,.1,.35)));
+   // 점화/소화 때 노즐 주변만 0.18초 팡 켜졌다 사라진다.
+   if((on>.03&&previous<=.03)||(on<.94&&previous>=.94))popAge=0;
+   popAge+=Math.min(.1,Math.max(0,dt));previous=on;
+   state.pop=Math.max(0,1-popAge/.18);state.time=time;
+   const goal=clamp(throttle),blend=dt>=1?1:1-Math.exp(-Math.max(0,dt)*15);
+   state.power+=(goal-state.power)*blend;state.speed=clamp(Math.abs(speed)/70);state.on=on;
+   mesh.visible=on>.001;
+   body.updateWorldMatrix(true,false);inv.copy(body.matrixWorld).invert();
+   for(let j=0;j<emitters.length;j++){
+    const e=emitters[j];e.node.updateWorldMatrix(true,false);
+    if(e.node.parent){m.multiplyMatrices(inv,e.node.matrixWorld);e.local??=new THREE.Matrix4();e.local.copy(m);}else m.copy(e.local);
+    shift.makeTranslation(0,0,e.z);m.multiply(shift);
+    for(let k=0;k<perPort;k++)mesh.setMatrixAt(j*perPort+k,m);
+   }
+   mesh.instanceMatrix.needsUpdate=true;
+  },
+  dispose(){mesh.removeFromParent();mesh.dispose();geo.dispose();if(--fireUsers===0){sharedFire.dispose();sharedFire=null;}}
+ };
+}
+
 export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  const profile=accelProfile(look),id=profile.id;
  const kit=new THREE.Group();kit.name='accel-'+id;body.add(kit);
- const motions=[],spinners=[];
+ const motions=[],spinners=[],emitters=[];
  const group=(name,x=0,y=0,z=0,parent=kit)=>{const g=new THREE.Group();g.name=name;g.position.set(x,y,z);parent.add(g);return g;};
  const box=(w,h,d,mat,x=0,y=0,z=0,parent=kit)=>add(new THREE.BoxGeometry(w,h,d),mat,x,y,z,parent);
  const slab=(pts,t,mat,parent=kit)=>{const s=new THREE.Shape();s.moveTo(...pts[0]);for(const p of pts.slice(1))s.lineTo(...p);return add(new THREE.ExtrudeGeometry(s,{depth:t,bevelEnabled:false}).rotateX(Math.PI/2),mat,0,0,0,parent);};
@@ -67,9 +220,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    const g=group(name,x,y,z,parent);cyl(r*.78,r,.38,M.darkMetal,0,0,0,g,true);
    add(new THREE.TorusGeometry(r,.025,4,10),M.trim,0,0,-.20,g);
    add(new THREE.CircleGeometry(r*.72,10).rotateY(Math.PI),M.dark,0,0,-.17,g);
-   const flameMat=new THREE.MeshBasicMaterial({color:look.costume?look.trim:'#ffab45',transparent:true,opacity:.48,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});flameMat.userData.live=true;
-   const flame=add(new THREE.ConeGeometry(r*.75,1.10,8,1,true).rotateX(-Math.PI/2).translate(0,0,-.55),flameMat,0,0,-.21,g);
-   spinners.push((p,t)=>{flame.visible=p>.86;flame.scale.z=.36+.035*Math.sin(t*39);});
+   emitters.push({node:g,z:-.21,width:r*1.65,height:r*1.65,len:id==='rocket'?1.55:id==='kart'?.66:id==='buggy'?.86:.80});
    g.userData.continuous=true;return g;
  };
  let squat=.025,pitch=0,hop=0,drs=.12;
@@ -366,12 +517,8 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
      const fairing=fin([[d*.96,-h*.38],[d*.96,h*.12],[d*.1,h*.50],[-d*.52,h*.48],[-d*.52,-h*.48]],.045,M.paint,g);fairing.position.x=side*w*.48;
    }
    move(g,.32+(x>0?.07:0),.91,q=>{reveal(g,q);g.scale.set(Math.max(.001,q),Math.max(.001,q),Math.max(.001,q));g.position.x=x+Math.sign(x)*.16*q;g.position.z=z-.08*q;g.rotation.z=cant*q;});
-   // 움직이는 불꽃은 고정 부품 완료 병합에서 분리한다.
-   const fire=group(name+'-plume',x,y,z);fire.userData.continuous=true;
-   const fm=new THREE.MeshBasicMaterial({color:colour,transparent:true,opacity:.52,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false});fm.userData.live=true;
-   const flame=add(new THREE.ConeGeometry(.5,.95,shape==='delta'?3:6,1,true).rotateX(-Math.PI/2).translate(0,0,-.48),fm,0,0,-d*.51,fire);
-   flame.scale.set(w*.55,h*.55,shape==='ring'?.36:.46);
-   spinners.push((p,t)=>{const q=smooth(phase(p,.78,1));fire.visible=q>.001;fire.position.set(x+Math.sign(x)*.16*q,y,z-.08*q);fire.rotation.z=cant*q;fire.scale.set(1,1,q*(.96+.04*Math.sin(t*31)));fm.opacity=(shape==='ring'?.20:.32)*q;});
+   // 노즐의 수/위치/단면은 4차 그대로. 불꽃만 공용 인스턴스 렌더러에 등록.
+   emitters.push({node:g,z:-d*.51,width:w*.88,height:h*.88,len:shape==='ring'?.95:id==='nova'?1.22:.93});
    return g;
  };
  switch(id) {
@@ -436,6 +583,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  });
  // 기존 배기에도 차별/코스튬 색 적용. live 재질은 공유 병합에 섞이지 않는다.
  kit.traverse(m=>{if(m.isMesh&&m.material.isMeshBasicMaterial&&m.material.transparent&&m.material.userData.live)m.material.color.copy(colour);});
+ const fire=buildFire(body,emitters,id,colour);
  squat=Math.max(squat,drop);
 
  kit.traverse(m=>{if(m.isMesh)m.userData.accelMoving=true;});
@@ -462,8 +610,8 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  }
  return {
    ...profile,drs,squat,pitch,trackOut,bodyWide,bodyLong,colour,
-   dispose(){unlock();stream.dispose();},
-   pose(p,other=0,time=0){
+   dispose(){unlock();stream.dispose();fire.dispose();},
+   pose(p,other=0,time=0,throttle=.7,speed=0,dt=1/60){
      if(p<1||other>.1)unlock();
      kit.visible=p>.001&&other<.35;
      // 완료 병합에 포함되지 않는 기존 날개도 매번 절대값으로 배치.
@@ -474,6 +622,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
      const k=smooth(phase(p,.12,.92));body.position.y-=squat*k;
      body.position.y+=hop*Math.sin(phase(p,.1,.95)*Math.PI*2)**2*(p<1?1:0);
      body.rotation.x+=pitch*k;
+     fire.update(p,other,time,throttle,speed,dt);
      if(p>=1&&other<.1)lockKit();
    },
  };
