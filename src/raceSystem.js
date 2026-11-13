@@ -9,15 +9,14 @@
 //   간격: 한 바퀴를 M개 지점으로 나눠 각 차가 지점을 지난 시각을 적어 두고, 같은 지점을 지난 시각 차이 = 간격 (F1 방식)
 import * as THREE from 'three';
 import { Car } from './car.js';
-import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, prepareBotPace, balanceBotConfig, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
+import { hitboxFor, obbOverlap } from './carHitbox.js';
+import { createBotDriver, BOT_LEVELS, BOT_NAMES, pickBotCars, profileFor, rng, flightPlan, CLOSE, PACK, RUBBER_BAND } from './bots.js';
 import { fmtTime, records } from './records.js';
 import { fastTrack } from './fastTrack.js';
 import { settings } from './settings.js';
 import { createSlipFx } from './slipFx.js';
 import { createDrs } from './drs.js';
 
-const CAR_R = 1.05; // 차끼리 충돌: 차 하나 = 앞뒤 원 2개 (반지름)
-const CAR_OFF = 1.3; // 원 중심이 차 가운데에서 앞뒤로 떨어진 거리
 const RESTITUTION = 0.25;
 const SIDE_SCRUB = 0.0003; // 옆으로 비빌 때 닿은 스텝마다 두 차가 잃는 앞 속도 비율 (100스텝 ≈ 0.8초 = 3%)
 
@@ -83,13 +82,8 @@ export async function createRaceSystem(o) {
     const picks = pickBotCars(roster, carId, nBots, seed);
     const names = BOT_NAMES.slice().sort(() => rand() - 0.5);
     const cfgs = await Promise.all(picks.map((p) => o.loadCarConfig(p.id)));
-    // 사람의 잠금/선택/그리드와 무관하게 같은 등급 전체를 기준으로 자동 보정.
-    const cls = (roster.cars || []).find(p => p.id === carId)?.class;
-    const classCars = (roster.cars || []).filter(p => !cls || p.class === cls);
-    const classCfgs = await Promise.all(classCars.map(p => o.loadCarConfig(p.id)));
-    prepareBotPace(track, classCfgs);
     picks.forEach((p, i) => {
-      const cfg = balanceBotConfig(track, cfgs[i]);
+      const cfg = cfgs[i]; // cars.json tune 그대로, 사람과 같은 Car 물리
       legacyDraft(cfg);
       const bc = new Car(cfg, botTrack);
       bc.manual = false;
@@ -111,7 +105,7 @@ export async function createRaceSystem(o) {
   const all = () => [me, ...opponents.entries];
 
   // --- 출발 그리드 ---
-  // 칸 k: 4.2m 엇갈림, 같은 열8.4m. 라인 가까운 두 열로 첫 코너 강제 합류를 줄임.
+  // 칸 k: 9 + 8k m, 엇갈린 두 열. 사용자가 되돌린 실제 그리드 유지.
   const halfW = (track.width || 16) / 2; // checkStuck의 도로 바깥 판정에도 사용
   function slot(k) {
     const dist = 9 + 8 * k; // 그려진 그리드 칸과 같게 (pack2의 4.2m 촘촘한 배치는 되돌림, 사용자 요청 2026-11-13 '그리드 박스에는 있어야지')
@@ -254,49 +248,31 @@ export async function createRaceSystem(o) {
       c.vel.copy(c.moveDir).multiplyScalar(c.speed);
     } else c.vel.copy(v);
   }
+  const contactRadii = new WeakMap();
+  function contactRadius(c) {
+    const h = hitboxFor(c);
+    if (!contactRadii.has(h)) contactRadii.set(h, Math.hypot(Math.max(h.front,h.back),h.half,Math.max(Math.abs(h.bottom),Math.abs(h.bottom+h.height))));
+    return contactRadii.get(h);
+  }
   /** a, b = Car (또는 b = 움직이지 않는 상대 모습) */
   function collide(a, b, bStatic) {
-    if (Math.abs(a.pos.y - b.pos.y) > 2.2) return;
-    const dx = a.pos.x - b.pos.x, dz = a.pos.z - b.pos.z;
-    if (dx * dx + dz * dz > 36) return;
-    let best = 0;
-    for (const sa of [CAR_OFF, -CAR_OFF])
-      for (const sb of [CAR_OFF, -CAR_OFF]) {
-        const ax = a.pos.x + a.fwd.x * sa, az = a.pos.z + a.fwd.z * sa;
-        const bx = b.pos.x + b.fwd.x * sb, bz = b.pos.z + b.fwd.z * sb;
-        const ex = ax - bx, ez = az - bz;
-        const d = Math.hypot(ex, ez);
-        const depth = 2 * CAR_R - d;
-        if (depth > best && d > 1e-4) {
-          best = depth;
-          _n.set(ex / d, 0, ez / d);
-        }
-      }
-    if (best <= 0) return;
-    // 옆으로 나란히 닿을 때 (hard2): 앞뒤 원끼리 닿으면 밀어내는 방향에 앞뒤 성분이 많이 섞여서
-    //   조금 앞선 차는 앞으로 튕겨 빨라지고 뒤 차는 브레이크가 걸렸음 (옆으로 밀고 들어온 쪽이 늘 이김: 1.5초 밀기에 +15 / −15 km/h) → 앞뒤 성분을 덜어냄 (앞뒤로 1.8 m 안이면 전부)
+    // 각 외형의 실제 크기로 보수적인 구 검사를 먼저 한다. 고정 6m 제한 없음.
+    if (a.pos.distanceToSquared(b.pos) > (contactRadius(a)+contactRadius(b))**2) return;
+    const contact = obbOverlap(a, b);
+    if (!contact.hit || contact.depth <= 1e-7) return;
+    const best = contact.depth;
+    _n.copy(contact.normal); // SAT의 겹친 면 b → a. depth와 짝인 법선을 유지.
     let sideHit = false;
-    if (!bStatic && Math.abs(a.fwd.x * b.fwd.x + a.fwd.z * b.fwd.z) > 0.8) {
-      const fl = Math.hypot(a.fwd.x, a.fwd.z) || 1, fx = a.fwd.x / fl, fz = a.fwd.z / fl;
-      const along = Math.abs((b.pos.x - a.pos.x) * fx + (b.pos.z - a.pos.z) * fz); // a 기준 b가 앞뒤로 떨어진 거리
-      if (along < 2.6) {
-        // 나란히 (뒤에서 박는 경우 = 앞뒤 2.6 m 넘게 떨어짐은 그대로)
-        sideHit = true;
-        const an = _n.x * fx + _n.z * fz;
-        const k = Math.min(1, (2.6 - along) / 0.8);
-        _n.x -= fx * an * k;
-        _n.z -= fz * an * k;
-        if (Math.hypot(_n.x, _n.z) < 0.2) {
-          // 거의 겹쳐 있음: a의 옆 방향으로 (b가 있는 반대쪽)
-          const sd = (a.pos.x - b.pos.x) * -fz + (a.pos.z - b.pos.z) * fx >= 0 ? 1 : -1;
-          _n.set(-fz * sd, 0, fx * sd);
-        }
-        const nl = Math.hypot(_n.x, _n.z) || 1;
-        _n.x /= nl;
-        _n.z /= nl;
-      }
+    if (Math.abs(a.fwd.dot(b.fwd)) > 0.8) {
+      const ah = hitboxFor(a), bh = hitboxFor(b);
+      const along = Math.abs(_pa.copy(b.pos).sub(a.pos).dot(a.fwd));
+      const sideLimit = Math.min(ah.front + ah.back, bh.front + bh.back) * .55;
+      _pb.crossVectors(a.up || car.up, a.fwd).normalize();
+      sideHit = Math.abs(_pb.dot(_n)) > .7 && along < sideLimit;
     }
     stats.contacts++;
+    const contactKind = Math.abs(_n.dot(a.fwd)) < .7 ? 'side' : 'rear';
+    stats[contactKind] = (stats[contactKind] || 0) + 1;
     const hits = stats.byCar || (stats.byCar = {});
     for (const c of bStatic ? [a] : [a,b]) {
       const id = c === car ? 'me' : c.cfg?.carId;
@@ -480,7 +456,11 @@ export async function createRaceSystem(o) {
     const step = m * dt;
     _wd.set(n.x / m, 0, n.z / m);
     const tr = c.track || track;
-    const hit = tr.castRay(_wo.copy(c.pos).addScaledVector(c.up, 0.6), _wd, step + 1.2);
+    const hb = hitboxFor(c);
+    _pb.crossVectors(c.up, c.fwd).normalize();
+    const f = _wd.dot(c.fwd), s = _wd.dot(_pb);
+    const reach = Math.max(hb.front * f, -hb.back * f) + hb.half * Math.abs(s);
+    const hit = tr.castRay(_wo.copy(c.pos).addScaledVector(c.up, 0.6), _wd, step + reach);
     if (hit && hit.normal && Math.abs(hit.normal.y) < 0.5) {
       // 벽: 벽으로 들어가는 성분을 없앰
       const nx = hit.normal.x, nz = hit.normal.z, nl = Math.hypot(nx, nz) || 1;
@@ -703,16 +683,17 @@ export async function createRaceSystem(o) {
         for (const e of all()) {
           if (e === b || (e.finished && !b.finished && !e.isPlayer)) continue; // 완주하고 천천히 도는 봇은 피하지 않음 (부딪힘도 없음)
           const human = e === me || !!e.remote;
+          if (e.remote) e.view.look = e.look;
           if (b.offMain || e.offMain) {
             // 둘 중 하나가 비행 루트 위: 진행 거리 대신 실제 위치 차이 (60 m 안만), 내 차 앞 방향 기준 앞뒤·옆
             const ep = e.view.pos, dx = ep.x - bc.pos.x, dy = ep.y - bc.pos.y, dz = ep.z - bc.pos.z;
             if (dx * dx + dy * dy + dz * dz > 3600) continue;
             const fl = Math.hypot(bc.fwd.x, bc.fwd.z) || 1, fx = bc.fwd.x / fl, fz = bc.fwd.z / fl;
             if (Math.abs(dy) > 4 && !(b.offMain && e.offMain)) continue; // 한쪽은 하늘, 한쪽은 땅
-            others.push({ id: e.id, progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, pos: ep, fin: !!e.finished });
+            others.push({ id: e.id, progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, fwd: e.view.fwd, hitbox: hitboxFor(e.view), pos: ep, fin: !!e.finished });
             continue;
           }
-          others.push({ id: e.id, progM: near(b, e), lat: e.lateral, speed: e.speed, human, pos: e.view.pos, fin: !!e.finished });
+          others.push({ id: e.id, progM: near(b, e), lat: e.lateral, speed: e.speed, human, fwd: e.view.fwd, hitbox: hitboxFor(e.view), pos: e.view.pos, fin: !!e.finished });
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
@@ -740,6 +721,7 @@ export async function createRaceSystem(o) {
     for (const e of opponents.entries) {
       if (!e.remote || !e.target) continue;
       e.lateral = track.nearest(e.view.pos).lateral; // 봇이 온라인 상대도 피하게
+      e.view.look = e.look;
       collide(car, e.view, true);
       for (const b of bots) collide(b.car, e.view, true);
     }
@@ -788,7 +770,7 @@ export async function createRaceSystem(o) {
   /** 마스터 도움 h(0~1)를 차 성능에 반영 (봇 차의 cfg는 봇마다 따로라 다른 차에 영향 없음) */
   function masterHelp(b, h, calm) {
     const mc = level.master, cfg = b.car.cfg, B = b.mBase;
-    if (!B) return;
+    if (!B || !RUBBER_BAND) return; // 기본은 자기 차 원래 성능. 기존 도움은 rb=1 호환 경로만.
     const g = 1 + mc.gripMax * h;
     cfg.tire.lateral = B.lat * g;
     cfg.steerLat = B.steerLat * g;
