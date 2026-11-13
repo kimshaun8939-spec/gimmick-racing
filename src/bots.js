@@ -58,7 +58,9 @@ export const BOT_LEVELS = {
 BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
-  master: { help: [0.925, 0.925], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.1, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 8 },
+  // 고정 운전 실력만 상향. 차 cfg/숨은 슬립스트림은 바꾸지 않음.
+  lead: 0.12, brakeK: 1.03, noise: 0.004, fly: { speed: 55 },
+  master: { help: [1, 1], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.16, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 3 },
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
 
@@ -301,7 +303,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     phase: rand() * 10,
     mistake: null, mistakeT: 0, nextMistake: level.mistakeEvery * (0.4 + rand()),
     t: 0, boostCool: 2 + rand() * 4,
-    paceMul: 1, // 바깥(raceSystem)이 고무줄 효과로 조절
+    paceMul: 1, // 기본 마스터는 고정 계획 배수; 숨은 고무줄은 rb=1에서만
     blockedT: 0, pushT: 0,
     heldT: 0, passT: 0, // 앞차에 막힌 시간, 추월 시도 남은 시간
     passSide: 0, // 추월하러 빠진 쪽 (앞차 기준 −1 왼쪽 / +1 오른쪽)
@@ -583,7 +585,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
 
     // --- pack2: 차 사이의 공간을 먼저 확인하고, 같은 줄 앞차만 따라감 ---
     let follow = Infinity, busy = false, lateBrake = 0, hold = 0, shove = 0, attack = null;
-    const myLat = ti.lateral, gHere = gAt(i0), pushing = st.passT > 0;
+    // 실제 지상 제동력에는 중력 배수가 없음. 마스터는 그 제동력으로 계획한다.
+    // 다른 단계의 기존 여유와 물리는 그대로 둔다.
+    const myLat = ti.lateral, gHere = level.master ? 1 : gAt(i0), pushing = st.passT > 0;
     const jumpSoon = !!jumpZone && !!jumpZone[i0];
     const boatQueue = car.mode === 'boat' && car.surface === 'water';
     let narrowSoon = jumpSoon || boatQueue, brakeSoon = false, cornerSoon = false, packAhead = false, jumpTraffic = false;
@@ -695,9 +699,12 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     else if(narrowSoon||mergeHazard)want=0;
     else{
       if(!move&&front&&!ctx.finished&&!risky&&st.overtakeCool<=0){
-        const closing=Math.max(0,speed-front.speed),gap=actualGap(front),minClosing=bold?.2:1.1;
+        // 마스터끼리는 작은 속도 차로 코너에서 싸우지 않고 직선의 뚜렷한 기회를 쓴다.
+        // 사람 상대는 기존의 과감한 추월 판단을 유지한다.
+        const cooperative=!!level.master&&!front.human;
+        const closing=Math.max(0,speed-front.speed),gap=actualGap(front),minClosing=cooperative?1.2:bold?.2:1.1;
         const trapped=gap<25&&st.heldT>(bold?.25:.9)&&st.tgt0>front.speed+.15;
-        if(gap>rearSpace(front)+.3&&gap<Math.min(65,Math.max(30,v*1.1))&&(closing>minClosing||trapped)&&(bold||!cornerSoon)){
+        if(gap>rearSpace(front)+.3&&gap<Math.min(65,Math.max(30,v*1.1))&&(closing>minClosing||trapped)&&(bold||!cornerSoon)&&(!cooperative||!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2))){
           const choices=options(front).sort((a,b)=>{
             const cost=x=>Math.abs(x-st.lane)+(brakeSoon&&Math.sign(x-front.lane)!==turnSide?1.1:0);
             return cost(a)-cost(b);
