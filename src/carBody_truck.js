@@ -182,13 +182,13 @@ export function buildTruck({ add, body, M, look }) {
     for (const side of [-1, 1]) {
       // 굵은 뒤 쇼크업소버 2개씩 (가는 축 + 색 스프링 통)
       for (const zz of [-1.2, -1.9]) {
-        const a = [side * 0.55, y0 + 0.5, zz], b = [side * 0.9, y0 - 0.12, -1.55];
+        const a = [side * 0.55, y0 + 0.5, zz], b = [side * 0.65, y0 - 0.12, -1.55];
         T(a, b, 0.028, metal);
         const mid = (k) => a.map((v, i) => v + (b[i] - v) * k);
         T(mid(0.05), mid(0.6), 0.06, accent);
       }
       // 뒤 트레일링 암
-      T([side * 0.42, y0 - 0.02, -0.5], [side * 0.86, r - 0.1, -1.55], 0.045, carbon);
+      T([side * 0.42, y0 - 0.02, -0.5], [side * 0.66, r - 0.1, -1.55], 0.045, carbon);
       // 캐빈 뒤 롤바 → 짐칸 뒤로
       T([side * 0.75, y0 + 0.66, -0.7], [side * 0.7, y0 + 1.08, -1.2], 0.04, trim, spoiler);
       T([side * 0.7, y0 + 1.08, -1.2], [side * 0.75, y0 + 0.66, -2.45], 0.04, trim, spoiler);

@@ -39,7 +39,7 @@ export function buildKart({ add, body, M, look }) {
   T([-0.34, 0.12, 0.35], [0.34, 0.12, 0.35]);
   T([-0.34, 0.12, -0.45], [0.34, 0.12, -0.45]);
   T([-0.34, 0.12, -1.12], [0.34, 0.12, -1.12]);
-  T([-0.64, 0.28, -0.98], [0.64, 0.28, -0.98], 0.035, metal); // 뒤 차축
+  T([-0.64, 0.28, -0.98], [0.64, 0.28, -0.98], 0.035, metal).userData.wheelJoint = true; // 뒤 차축: 타이어 안쪽 허브에 들어가는 정상 연결
 
   // ---- 코 덮개 + 줄무늬
   const nose = [R(1.5, 0.32, 0.1, 0.26, 4), R(1.28, 0.46, 0.09, 0.33), R(0.95, 0.42, 0.1, 0.36), R(0.78, 0.3, 0.12, 0.34)];
@@ -143,8 +143,8 @@ export function buildKart({ add, body, M, look }) {
   const drs = box(1.2, 0.035, 0.1, accent, 0, 0.36, -1.38, spoiler);
   drs.rotation.x = 0.2;
   for (const s of [-1, 1]) {
-    add(new THREE.CylinderGeometry(0.075, 0.075, 0.075, 10), paint, s * 0.73, 0.3, -1.3, spoiler);
-    box(0.03, 0.12, 0.2, trim, s * 0.75, 0.3, -1.3, spoiler);
+    add(new THREE.CylinderGeometry(0.075, 0.075, 0.075, 10), paint, s * 0.73, 0.3, -1.48, spoiler);
+    box(0.03, 0.12, 0.2, trim, s * 0.75, 0.3, -1.48, spoiler);
     T([s * 0.34, 0.12, -1.12], [s * 0.34, 0.28, -1.3], 0.02, trim, spoiler);
   }
   box(0.02, 0.14, 0.02, trim, 0, 0.4, -1.36, spoiler);
@@ -165,7 +165,7 @@ export function buildKart({ add, body, M, look }) {
       spines: [[-0.62, 0.98], [-0.85, 0.86], [-1.05, 0.7], [-1.25, 0.55]],
       booster: { x: 0.42, y0: 0.3, y1: 0.62, z0: -0.35, dz: -0.95 },
       lift: { y: 0.3, z: -1.25, h: 0.18 },
-      stab: [0.74, 0.32, -1.32],
+      stab: [0.74, 0.48, -1.57],
       tailFin: [0, 0.66, -0.85],
       wing: [0.62, 0.3, 0.0],
       nitro: { x: 0.32, y: 0.4, z: -1.1, dz: -0.35 },

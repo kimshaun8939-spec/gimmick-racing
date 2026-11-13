@@ -37,6 +37,7 @@
 //   배 모드가 아닌데 물에 빠지면(car.sink 0~1) 차가 기수를 숙이며 물속으로 가라앉음
 import * as THREE from 'three';
 import { buildWheel } from './carBody_wheels.js';
+import { wheelWells } from './carBody_clearance.js';
 import { buildCockpit } from './carBody_cockpit.js';
 import { applyCarLighting } from './carLighting.js';
 import { buildF1 } from './carBody_f1.js';
@@ -405,6 +406,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
   body.traverse(m => { if (m.isMesh && (m.material === paint || m.material === accent)) shellMeshes.push(m); });
   const { helmet, fWing, spoiler, drs } = shell;
   const A = { ...BASE_ANCHORS, ...shell.A };
+  // 펜더/차체에는 조향·서스펜션 여유가 있는 열린 휠하우스. 축/쇼크는 허브에 연결해야 하므로 제외.
+  wheelWells(hitboxMeshes.filter(m => {m.geometry.computeBoundingBox();const s=m.geometry.boundingBox.getSize(new THREE.Vector3());return m.geometry.type!=='CylinderGeometry' && m.geometry.type!=='TubeGeometry';}),body,A.wheels);
 
   // ------------------------------------------------------------------ 비행 모드: 사이드포드에서 펼쳐지는 날개 (엔진, 항법등, 비행운은 아래에서 붙임)
   // 차체와 같은 도장(paint)으로 칠하고, 흰 앞전·흰 줄무늬·카본 뒷전으로 F1 차체 무늬(흰 노즈 줄, 카본 앞날개)와 맞춤
@@ -429,7 +432,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const wingFlapGeo = band([[0, -0.9], [3.25, -0.6], [3.25, -0.75], [0, -1.1]], 0.012);
   const wings = [-1, 1].map((side) => {
     const pivot = new THREE.Group(); // 날개 뿌리 (rotation.z = 상반각)
-    pivot.position.set(side * A.wing[0], A.wing[1], A.wing[2]);
+    const wingY=Math.max(A.wing[1],...A.wheels.map(w=>2*w[3]+.16));
+    pivot.position.set(side * A.wing[0],wingY,A.wing[2]);
+    add(new THREE.BoxGeometry(.08,wingY-A.wing[1]+.10,.28),carbon,0,-(wingY-A.wing[1])*.5,0,pivot);
     body.add(pivot);
     const wing = new THREE.Group(); // 펼쳐지는 부분 (scale.x)
     pivot.add(wing);
@@ -666,7 +671,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
   for (const wg of wings) {
     // 날개 아래 제트 엔진 (z = 0이 엔진 가운데, 앞이 +z)
     const e = new THREE.Group();
-    e.position.set(wg.side * 1.15, -0.26, -0.15);
+    e.position.set(wg.side * 1.60, -0.26, -0.15);
     wg.pivot.add(e);
     add(jetGeos.body, paint, 0, 0, 0, e);
     add(jetGeos.lip, wingEdge, 0, 0, 0.45, e).castShadow = false;
@@ -858,8 +863,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
       const wide = easeOutBack(stage(accelP, .08, .59)) * (1 - Math.max(boatP, flyP, spikeP));
       const ax = THREE.MathUtils.lerp(w.ax + accelKit.trackOut * wide, THREE.MathUtils.lerp(tk[0], Math.min(.4, w.ax * .48), stow), sTuck);
       const y = THREE.MathUtils.lerp(w.r, THREE.MathUtils.lerp(tk[1], .28, stow), sTuck);
-      w.steer.visible = boat < .76;
-      w.susp.visible = boat < .68;
+      w.steer.visible = boat < .76 && q < .92;
+      w.susp.visible = boat < .68 && q < .86;
       w.steer.position.set(w.side * ax, y, w.z);
       w.steer.rotation.z = w.side * (Math.PI / 2) * sFold; // 아래쪽이 바깥으로 들리며 눕혀짐
       w.susp.position.y = y;
@@ -911,7 +916,10 @@ export function createCarModel(lookOrColor = '#e8463a') {
     if (transformingIn) body.position.y += Math.sin(p * Math.PI) * 0.25;
   }
 
+  const preCostume = new Set();body.traverse(m=>preCostume.add(m));
   const costumeFx = dressCar({ root, body, A, shell, M, look, add, wheels, shellMeshes, loft });
+  const costumeSolids=[];body.traverse(m=>{if(m.isMesh&&!preCostume.has(m))costumeSolids.push(m);});
+  wheelWells(costumeSolids,body,A.wheels);
   const accelKit = buildAccelKit({ body, spoiler, A, M, look, add, light: accelGlow, shell });
   underglow.material.color.copy(accelKit.colour);
   rimLight.color.copy(accelKit.colour);

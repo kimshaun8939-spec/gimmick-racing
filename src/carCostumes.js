@@ -115,6 +115,7 @@ export function dressCar({ root, body, A, shell, M, look, add, wheels, shellMesh
   M.accent.roughness=.24;M.accent.metalness=surface.metal?.8:.32;
   M.trim.roughness=.23;M.trim.metalness=.78;
   const neon=new THREE.MeshStandardMaterial({color:c.look.trim,emissive:c.look.trim,emissiveIntensity:c.glow?.65:.04,metalness:.55,roughness:.26});
+  neon.userData.reviewEffect=true; // 얇은 발광선/림 빛: 단단한 장치 겹침 검사에서는 빛으로 구분
   const animated=c.unlockLevel>=35; if(animated)neon.userData.live=true;
   const parts=new Set(c.parts||[]), wx=Math.max(...A.wheels.map(w=>Math.abs(w[0]))), rear=A.stab[2], wingY=A.stab[1], half=Math.min(1.33,wx+.3);
   const road=new THREE.Group();body.add(road);
@@ -152,7 +153,7 @@ export function dressCar({ root, body, A, shell, M, look, add, wheels, shellMesh
   if(parts.has('slattedWing')){for(let i=0;i<3;i++)wing(half,.16,wingY+.12+i*.07,rear-.28+i*.23,i%2?M.accent:M.trim,.05);}
   if(parts.has('lowWing')){shell.spoiler.scale.y=.83;wing(half*.94,.32,wingY+.07,rear,M.accent);}
   if(parts.has('wideWing')){shell.drs.scale.x=1.3;wing(half,.62,wingY+.18,rear,M.paint);}
-  if(parts.has('shark'))fin(0,A.tailFin[1]-.12,A.tailFin[2]-.25,1.55,.66,M.accent);
+  if(parts.has('shark')){const len=look.style==='proto'?1.05:1.55,z=look.style==='proto'?Math.min(A.tailFin[2]-.25,A.helmet[2]-.28-len*.48):A.tailFin[2]-.25;fin(0,A.tailFin[1]-.12,z,len,.66,M.accent);}
   if(parts.has('twinFins')||parts.has('rocketFins'))for(const side of [-1,1])fin(side*(wx-.18),A.tailFin[1]-.25,A.tailFin[2]-.48,1.22,parts.has('rocketFins')?.82:.6,M.paint);
   if(parts.has('spine')){for(const side of [-1,1])fin(side*.3,A.tailFin[1]-.08,A.tailFin[2]-.4,1.3,.45,M.trim);}
   if(parts.has('scoop')||parts.has('cowling')){
@@ -189,11 +190,12 @@ export function dressCar({ root, body, A, shell, M, look, add, wheels, shellMesh
   }
   // 대형 스플리터: 앞바퀴 좌표에서 전방으로. 앞 오버행이 다른 카트/드래그스터도 대응.
   if(c.kit!=='classic')for(const side of [-1,1]){
-    const fz=A.wheels.find(w=>w[2])[1]+.64, span=wx+.2;
-    slab([[side*(wx-.2),fz-.5],[side*span,fz-.46],[side*(span+.03),fz+.15],[side*(wx-.3),fz+.12]],.035,M.carbon,.2,shell.fWing);
+    const fw=A.wheels.find(w=>w[2]),frontX=Math.abs(fw[0]),fz=fw[1]+fw[3]+.24,span=frontX+.2;
+    slab([[side*(frontX-.2),fz-.24],[side*span,fz-.20],[side*(span+.03),fz+.15],[side*(frontX-.3),fz+.12]],.035,M.carbon,.2,shell.fWing);
     fin(side*span,.2,fz-.1,.6,.2,M.accent,shell.fWing);
     box(.045,.03,1.65,neon,side*(wx+.05),.2,-.12,road);
-    if(c.unlockLevel>=15){const blade=box(.29,.03,.43,M.accent,side*(wx+.02),.44,fz-.17,shell.fWing);blade.rotation.z=side*.2;blade.rotation.x=.16;}
+    if(['rocket','truck'].includes(look.style))box(.08,.5,.34,M.carbon,side*(frontX-.17),.43,fz-.06,shell.fWing);
+    if(c.unlockLevel>=15){const blade=box(.29,.03,.43,M.accent,side*(frontX+.02),.44,fz+.04,shell.fWing);blade.rotation.z=side*.2;blade.rotation.x=.16;}
   }
   for(const w of wheels){
     const wd=A.wheels.find(a=>Math.abs(Math.abs(a[0])-w.ax)<1e-5&&a[1]===w.z)?.[4]||.3;

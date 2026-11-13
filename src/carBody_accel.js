@@ -273,7 +273,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    for(const [n,f]of (shell.accelFlaps||[]).entries()){const i=n%3;move(f,junior?.40+i*.10:.04+i*.11,junior?.67+i*.10:.20+i*.11,q=>f.rotation.x=-(junior?.30:.52)*q,false);}
    for(const side of [-1,1]) {
      if(junior) {
-       const g=hinge('junior-outrigger',side,.77,.43,-.78,.63,1.20,.02,.42,-.78,M.carbon);
+       const g=hinge('junior-outrigger',side,.70,.43,.56,.43,.70,.02,.42,-.18,M.carbon);
        box(.3,.035,.12,M.accent,side*.18,.02,-.28,g);
      } else for(let i=0;i<5;i++) {
        const g=group('sequential-cooling-louver',side*(.56-i*.028),.727-i*.012,-.28-i*.16);
@@ -285,14 +285,14 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    const nova=id==='nova'; squat=.045; drs=.26;
    // 롱테일/중앙 샤크핀 대신 차체 옆 낮은 슬라이딩 냉각 레일.
    for(const side of [-1,1]){
-     const rail=group(nova?'nova-split-keel':'proto-side-channel',side*.90,.52,-.95);
-     fin([[.65,0],[.36,.17],[-.90,.17],[-1.12,0]],.065,M.carbon,rail);
-     box(.045,.025,1.35,light,0,.17,-.15,rail);
-     box(.23,.045,.80,M.accent,side*.10,.015,-.28,rail);
-     move(rail,nova?.10+(side>0?.13:0):.03,nova?.65:.45,q=>{reveal(rail,q);rail.position.x=side*(.90+.34*q);rail.scale.y=Math.max(.001,q);});
-     const tail=group(nova?'nova-side-slider':'proto-side-slider',side*1.10,.42,-1.6);
+     const rail=group(nova?'nova-split-keel':'proto-side-channel',side*.82,.52,-.22);
+     fin([[.42,0],[.26,.17],[-.48,.17],[-.62,0]],.065,M.carbon,rail);
+     box(.045,.025,.85,light,0,.17,-.04,rail);
+     box(.23,.045,.62,M.accent,side*.10,.015,-.04,rail);
+     move(rail,nova?.10+(side>0?.13:0):.03,nova?.65:.45,q=>{reveal(rail,q);rail.position.x=side*(.82+.16*q);rail.scale.y=Math.max(.001,q);});
+     const tail=group(nova?'nova-side-slider':'proto-side-slider',side*.92,.42,-.25);
      box(.20,.12,.65,M.paint,0,0,0,tail);box(.12,.025,.48,light,0,.068,0,tail);
-     move(tail,nova?.48:.25,1,q=>{reveal(tail,q);tail.position.z=-1.55-.20*q;tail.scale.z=Math.max(.001,q);});
+     move(tail,nova?.48:.25,1,q=>{reveal(tail,q);tail.position.z=-.25-.10*q;tail.scale.z=Math.max(.001,q);});
      const shutter=group('headlamp-shutter',side*.7,.48,2.48);
      box(.38,.045,.45,M.carbon,0,0,0,shutter);
      move(shutter,.69,.97,q=>{reveal(shutter,q);shutter.scale.z=Math.max(.001,q);},false);
@@ -300,15 +300,15 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  } else if(id==='hyper') {
    squat=.085;drs=.35;
    for(const side of [-1,1]){
-     const g=group('butterfly-aero',side*.89,.65,-.28);
-     slab([[0,.68],[side*.62,.72],[side*1.34,-.65],[side*.98,-1.62],[0,-1.20]],.035,M.carbon,g);
+     const g=group('butterfly-aero',side*.89,.65,.12);
+     slab([[0,.68],[side*.62,.72],[side*1.34,-.65],[side*.98,-.62],[0,-.55]],.035,M.carbon,g);
      box(.055,.022,1.15,M.trim,side*.51,.02,-.28,g).rotation.y=side*.20;
      box(.045,.10,.15,M.darkMetal,0,-.05,.46,g);
      move(g,.07+(side>0?.09:0),.78,q=>g.rotation.z=side*.12*q);
-     const cheek=hinge('front-active-cheek',side,.85,.37,2.12,.30,.54,.40,.93,.30,M.carbon);
+     const cheek=hinge('front-active-cheek',side,.70,.37,2.48,.24,.25,.40,.93,.30,M.carbon);
      box(.20,.015,.04,M.trim,side*.16,.022,.18,cheek);
      for(let i=0;i<6;i++){
-       const led=group('flow-cell',side*1.01,.52,1.45-i*.53);box(.018,.02,.24,light,0,0,0,led);
+       const led=group('flow-cell',side*1.01,.52,.72-i*.26);box(.018,.02,.24,light,0,0,0,led);
        move(led,.08+i*.12,.22+i*.12,q=>{reveal(led,q);led.scale.z=Math.max(.001,q);},false);
      }
    }
@@ -317,9 +317,10 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    // 전기차에는 연소 노즐 대신 양옆 배터리 냉각판 8장과 뒤 고리 열교환기.
    for(const side of [-1,1])for(let i=0;i<4;i++){
      const g=group('battery-cooling-petal',side*.91,.38,.36-i*.36);
-     slab([[0,.12],[side*.72,.26],[side*.86,-.22],[0,-.13]],.025,M.carbon,g);
+     box(.40,.09,.16,M.carbon,-side*.18,-.015,0,g);
+     slab([[0,.10],[side*.72,.16],[side*.86,-.13],[0,-.10]],.025,M.carbon,g);
      box(.28,.012,.018,light,side*.23,.018,.07,g);
-     move(g,.04+i*.13,.30+i*.13,q=>{g.rotation.z=side*.20*q;g.position.x=side*(.91+.34*q);});
+     move(g,.04+i*.13,.30+i*.13,q=>{g.rotation.z=side*.20*q;g.position.x=side*(.91+.10*q);});
    }
    const bridge=group('induction-bridge',0,.40,-1.95);
    for(const side of [-1,1])box(.045,.12,.08,M.trim,side*.64,.06,0,bridge);
@@ -342,8 +343,8 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  } else if(id==='midnight') {
    squat=.065;drs=.36;
    for(const side of [-1,1]){
-     const g=group('night-swing-wing',side*.98,.56,-1.60);
-     slab([[0,.18],[side*1.02,.38],[side*1.48,-.48],[side*.38,-.78],[0,-.27]],.035,M.carbon,g);
+     const g=group('night-swing-wing',side*.98,.56,-.10);
+     slab([[0,.18],[side*1.02,.38],[side*.84,-.38],[side*.38,-.55],[0,-.27]],.035,M.carbon,g);
      box(.55,.015,.035,M.trim,side*.46,.025,-.26,g);
      box(.045,.28,.08,M.darkMetal,0,-.14,0,g);
      move(g,side<0?.03:.23,side<0?.60:.80,q=>{reveal(g,q);g.rotation.y=-side*(1-q)*1.40;g.position.y=.56+.015*q;});
@@ -404,21 +405,21 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  } else if(id==='buggy'||id==='kart') {
    const kart=id==='kart';hop=kart?.07:.09;drs=0;
    for(const side of [-1,1]){
-     const x=kart?.57:.79,y=kart?.37:.49,z=kart?-1.48:-2.03;
-     const pod=exhaust(kart?'soda-rocket':'spring-rocket',side*x,y,z,kart?.25:.32);
-     cyl(kart?.24:.30,kart?.24:.30,kart?.52:.72,M.accent,0,0,.32,pod,true);
-     box(.08,.13,.56,M.carbon,-side*.15,-.12,.32,pod);
+     const x=kart?.32:.40,y=kart?.39:.52,z=kart?-1.86:-2.39;
+     const pod=exhaust(kart?'soda-rocket':'spring-rocket',side*x,y,z,kart?.20:.245);
+     cyl(kart?.185:.225,kart?.185:.225,kart?.40:.53,M.accent,0,0,.32,pod,true);
+     box(.10,.13,kart?.64:.89,M.carbon,-side*.10,-.12,.35,pod);
      if(kart){
        add(new THREE.TorusGeometry(.16,.025,4,10),M.accent,0,0,.06,pod);
        box(.12,.07,.09,M.accent,0,.20,.02,pod);
      }else fin([[.16,0],[-.2,.23],[-.2,0]],.035,M.accent,pod).position.x=side*.14;
-     move(pod,side<0?.05:.34,side<0?.45:.74,q=>{reveal(pod,q);pod.position.y=y+(kart?.04:.04)*q;pod.position.x=side*(x+(kart?.30:.42)*q);pod.rotation.y=-side*.12*q;});
+     move(pod,side<0?.05:.34,side<0?.45:.74,q=>{reveal(pod,q);pod.position.y=y+(kart?.04:.04)*q;pod.position.x=side*(x+.035*q);pod.rotation.y=-side*.12*q;});
    }
  } else if(id==='scorpion') {
    drs=0;
    // 관절 꼬리를 옆으로 접힌 집게 암으로 전환. 관절 시간차는 그대로.
    for(const side of [-1,1]){
-     const root=group('scorpion-side-root',side*.86,.48,-1.10);
+     const root=group('scorpion-side-root',side*.66,.48,.38);
      box(.48,.13,.22,M.carbon,side*.24,0,0,root);
      const joint=group('scorpion-side-elbow',side*.45,0,0,root);
      box(.16,.12,.62,M.accent,0,0,-.25,joint);
@@ -432,12 +433,12 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  } else if(id==='hatch') {
    squat=.035;drs=.23;
    for(const side of [-1,1]){
-     const duck=group('hot-hatch-side-extension',side*.95,.55,-1.30);
-     box(.40,.055,.62,M.carbon,side*.16,0,0,duck);box(.30,.022,.06,light,side*.16,.04,-.24,duck);
+     const duck=group('hot-hatch-side-extension',side*.95,.55,-.20);
+     box(.65,.055,.62,M.carbon,0,0,0,duck);box(.30,.022,.06,light,side*.16,.04,-.24,duck);
      move(duck,.03,.64,q=>{reveal(duck,q);duck.position.x=side*(.95+.22*q);duck.scale.x=Math.max(.001,q);duck.rotation.z=side*.12*q;});
    }
    for(const side of [-1,1])for(let i=0;i<3;i++){
-     const g=group('fender-fan',side*.9,.67,1.03-i*.18);box(.13,.025,.14,M.accent,0,0,0,g);
+     const g=group('fender-fan',side*.85,.74,.65-i*.18);box(.13,.025,.14,M.accent,0,0,0,g);
      move(g,.32+i*.14,.58+i*.14,q=>g.rotation.z=side*.85*q);
    }
  } else if(id==='roadster') {
@@ -461,35 +462,36 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
        const stack=group('pickup-twin-stack',side*.44,.13,-.25,base);cyl(.12,.12,.75,M.darkMetal,0,0,0,stack,true).rotation.x=0;
        box(.18,.48,.18,M.carbon,0,.15,0,stack);cyl(.14,.12,.26,M.trim,0,.43,.12,stack).rotation.x=.95;
      }else{
-       const fan=turbine('desert-cooling-fan',side*.29,.24,-.12,.37,base);fan.rotation.x=-.33;
+       const fan=turbine('desert-cooling-fan',side*.29,.24,-.12,.25,base);fan.rotation.x=-.33;
      }
    }
    if(farm){box(.74,.20,.64,M.accent,0,.16,.02,base);box(.60,.035,.025,light,0,.27,.35,base);}
    else box(1.0,.03,.10,M.trim,0,.50,0,base);
-   move(base,.12,.87,q=>{reveal(base,q);base.position.y=.72+.025*q;base.scale.set(1.2,.52,1.10);base.rotation.x=-(farm?.05:.12)*q;});
+   move(base,.12,.87,q=>{reveal(base,q);base.position.y=.72+.025*q;base.scale.set(1,.52,1.10);base.rotation.x=-(farm?.05:.12)*q;});
    base.userData.continuous=!farm;
    for(const side of [-1,1])hinge('bed-hatch',side,.6,.96,-1.38,.28,.94,.02,.40,.92,M.accent);
  } else if(id==='cube') {
    drs=0;hop=.025;
    // 짐/서프보드와 겹치지 않게 지붕 뒤 오버행에 힌지로 연결한 리프트.
-   const lift=group('cargo-low-fan',0,.36,-1.75);
+   const lift=group('cargo-low-fan',0,.64,-1.75);
    for(const side of [-1,1])box(.055,.53,.055,M.metal,side*.34,.26,-.12,lift);
    box(.82,.07,.58,M.carbon,0,.52,-.18,lift);
    for(const side of [-1,1]){box(.12,.31,.60,M.accent,side*.31,.77,-.18,lift);box(.055,.46,.055,M.carbon,side*.34,.25,-.12,lift);}
    const jet=turbine('roof-turbofan',0,.65,-.21,.52,lift);
    box(.055,.21,.12,M.carbon,0,-.34,0,jet);
    move(lift,.23,.92,q=>{reveal(lift,q);lift.scale.set(1.45,Math.max(.001,.48*q),.80);});lift.userData.continuous=true;
-   for(const side of [-1,1])hinge('van-delivery-wing',side,.91,.65,-.82,.75,1.50,.02,.55,.18,M.accent);
+   for(const side of [-1,1])hinge('van-delivery-wing',side,.88,.65,-.15,.52,.88,.02,.55,.18,M.accent);
  } else if(id==='razor') {
    squat=.06;drs=.22;
    // 뒤 창 위 부채꼴 계단 루버. 날카로운 쐐기 꼬리가 순서대로 펼쳐짐.
    for(let i=0;i<5;i++){
-     const g=group('wedge-stair-blade',0,.82+i*.008,-.85-i*.25);
-     slab([[-.76,0],[.76,0],[1.16,-.44],[-1.16,-.44]],.035,i%2?M.carbon:M.accent,g);
-     box(1.16,.012,.025,M.trim,0,.022,-.22,g);
-     move(g,.02+i*.12,.32+i*.12,q=>{g.rotation.x=-.08*q;g.position.y=.82+i*.008;g.position.z=-.85-i*.25-.04*q;});
+     const g=group('wedge-stair-blade',0,.95+i*.008,-1.20-i*.25);
+     slab([[-.55,0],[.55,0],[.62,-.22],[-.62,-.22]],.035,i%2?M.carbon:M.accent,g);
+     box(.96,.012,.025,M.trim,0,.022,-.11,g);
+     for(const side of [-1,1])box(.035,.18,.12,M.carbon,side*.40,-.09,-.10,g);
+     move(g,.02+i*.12,.32+i*.12,q=>{g.rotation.x=-.08*q;g.position.y=.95+i*.008;g.position.z=-1.20-i*.25-.04*q;});
    }
-   for(const side of [-1,1])hinge('razor-splitter',side,.82,.25,2.10,.33,.72,.50,.98,-.20,M.carbon);
+   for(const side of [-1,1])hinge('razor-splitter',side,.68,.25,2.56,.24,.28,.50,.98,-.20,M.carbon);
  }
 
  // 낮아진 차고와 넓어진 트랙. 차체/뒷날개 길이는 늘리지 않고 중앙을 비워 둔다.
@@ -524,12 +526,15 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  const axle=Math.max(...A.wheels.map(w=>Math.abs(w[0])));
  const small=id==='kart';
  for(const side of [-1,1]) {
-   const g=group('wide-'+id+'-sill',side*(axle-.20),small?.22:.29,small?-.25:-.48);
-   const [front,middle,tail]=sillShape, len=small?1.25:2.50;
-   slab([[0,len*.46],[side*front,len*.34],[side*middle,-len*.20],[side*tail,-len*.57],[0,-len*.65]],.075,M.carbon,g);
-   box(.055,.035,len*.75,light,side*middle*.80,.025,-.05,g);
-   box(.13,.055,len*.60,M.accent,side*.10,.03,-.15,g);
-   move(g,.08+(side>0?.06:0),.59,q=>{reveal(g,q);g.scale.x=Math.max(.001,q);});
+   const frontAxle=A.wheels.find(w=>w[2]),rearAxle=A.wheels.find(w=>!w[2]);
+   const frontZ=frontAxle[1]-frontAxle[3]-.20,rearZ=rearAxle[1]+rearAxle[3]+.20;
+   const g=group('wide-'+id+'-sill',side*(axle-.20),small?.22:.29,(frontZ+rearZ)*.5);
+   box(Math.max(.30,axle-.47),.23,.16,M.carbon,-side*Math.max(.15,(axle-.47)*.5),.12,0,g);
+   const [front,middle,tail]=sillShape, len=(frontZ-rearZ)/1.12;
+   slab([[0,len*.50],[side*front,len*.35],[side*middle,-len*.18],[side*tail,-len*.48],[0,-len*.50]],.075,M.carbon,g);
+   box(.055,.035,len*.60,light,side*middle*.80,.025,0,g);
+   box(.13,.055,len*.55,M.accent,side*.10,.03,0,g);
+   move(g,.08+(side>0?.06:0),.59,q=>{reveal(g,q);g.scale.x=Math.max(.001,q);g.position.x=side*(.20+(axle-.40)*q);});
  }
  // 추진부도 전용 실루엣: 직사각 벤투리, 삼각 제트, 타원 배기, 전기 고리.
  // 단면 도형만 공유하고 개수·비율·위치·벌어지는 방향은 21대 각각 정한다.
@@ -542,7 +547,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
    y=Math.min(y,id==='volt'?.49:.46);d=Math.min(.46,d*.68);
    const g=group(name,x,y,rear+.12);
    // 고정 받침은 범퍼 내부까지 들어가고 관 앞쪽과 겹쳐 붙는다.
-   const fixed=group(name+'-mount',x,y,rear+.13);
+   const fixed=group(name+'-mount',x,y,rear+.13);fixed.userData.structuralMount=true;
    box(w*1.04,h*1.02,.12,M.carbon,0,0,0,fixed);
    for(const s of [-1,1])box(.045,h*1.08,.17,M.metal,s*w*.50,0,-.035,fixed);
    if(id==='f1'||id==='junior')box(w*.70,.14,.52,M.carbon,-Math.sign(x)*.14,-h*.55,.20,fixed);
@@ -577,8 +582,9 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  }
 
  if(id==='rally')for(const side of [-1,1]){
-   const g=group('rally-foldout-mudguard',side*.94,.65,-1.48);
-   slab([[0,.62],[side*.28,.76],[side*.67,.05],[side*.58,-.78],[0,-.64]],.055,M.accent,g);
+   const g=group('rally-foldout-mudguard',side*.94,.98,-1.48);
+   box(.32,.08,.24,M.carbon,-side*.16,.04,0,g);
+   slab([[0,.62],[side*.28,.76],[side*.50,.05],[side*.45,-.65],[0,-.64]],.055,M.accent,g);
    box(.045,.18,.72,M.paint,side*.61,.04,-.32,g);
    box(.045,.035,.72,light,side*.58,.055,-.22,g);
    move(g,.28+(side>0?.12:0),.85,q=>{reveal(g,q);g.scale.x=Math.max(.001,q);g.rotation.z=side*.20*q;});
@@ -586,7 +592,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
  // 포뮬러는 낮고 폭넓은 보조판. 가운데를 높이 올리지 않는다.
  if(id==='f1'||id==='junior')for(const s of [-1,1]) {
    const junior=id==='junior';
-   const g=group('formula-wide-endplane',s*1.10,.43,-.90);
+   const g=group('formula-wide-endplane',s*.92,.43,-.12);
    slab(junior?[[0,.25],[s*.52,.32],[s*.77,-.36],[s*.58,-.50],[0,-.42]]:[[0,.27],[s*.66,.40],[s*.98,-.30],[s*.83,-.54],[0,-.52]],.055,junior?M.paint:M.accent,g);
    if(junior)box(.56,.045,.20,M.accent,s*.40,.13,-.14,g);
    box(.045,junior?.17:.25,junior?.43:.66,M.carbon,s*(junior?.73:.88),.10,-.13,g);

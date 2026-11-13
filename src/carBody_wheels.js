@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 export function buildWheel(add,spin,steer,M,look,r,width,side){
   const formula=['f1','proto'].includes(look.style),classic=look.style==='roadster',kart=look.style==='kart',offroad=look.tire==='knobby';
-  const R=r*(offroad?.55:formula?.65:.69),h=width/2, seg=16;
+  const R=r*(offroad?.55:formula?.65:.69),h=width/2, seg=(offroad||look.style==='rally')?12:14;
   const profile=[[R*.97,-h*.94],[r*.83,-h],[r*.975,-h*.79],[r,-h*.5],[r,h*.5],[r*.975,h*.79],[r*.83,h],[R*.97,h*.94],[R*.97,-h*.94]].map(([x,y])=>new THREE.Vector2(x,y));
   add(new THREE.LatheGeometry(profile,seg).rotateZ(Math.PI/2),M.rubber,0,0,0,spin);
   const rim=[],detail=[],brake=[];

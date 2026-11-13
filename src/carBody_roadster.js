@@ -132,9 +132,9 @@ export function buildRoadster({ add, body, M }) {
   }
   // ---------------- 옆 배기관 (오른쪽: 보닛에서 나온 관 3개 → 긴 크롬 관) + 열 가리개
   for (let i = 0; i < 3; i++) rod(chrome, [0.6, 0.5, 1.0 - i * 0.16], [0.72, 0.36, 0.84 - i * 0.16], 0.028);
-  add(new THREE.CylinderGeometry(0.055, 0.055, 2.5, 10).rotateX(Math.PI / 2), chrome, 0.735, 0.36, -0.42);
-  add(new THREE.CylinderGeometry(0.07, 0.06, 0.16, 10).rotateX(Math.PI / 2), chrome, 0.735, 0.36, -1.72);
-  add(new THREE.CircleGeometry(0.05, 10).rotateY(Math.PI), dark, 0.735, 0.36, -1.802).castShadow = false;
+  add(new THREE.CylinderGeometry(0.055, 0.055, 1.45, 10).rotateX(Math.PI / 2), chrome, 0.735, 0.36, 0.10);
+  add(new THREE.CylinderGeometry(0.07, 0.06, 0.16, 10).rotateX(Math.PI / 2), chrome, 0.735, 0.36, -0.70);
+  add(new THREE.CircleGeometry(0.05, 10).rotateY(Math.PI), dark, 0.735, 0.36, -0.782).castShadow = false;
   for (let i = 0; i < 5; i++) deco(dark, 0.02, 0.07, 0.1, 0.795, 0.37, 0.2 - i * 0.17);
   // 왼쪽: 뒤 배기구 하나
   add(new THREE.CylinderGeometry(0.05, 0.055, 0.22, 12).rotateX(Math.PI / 2), chrome, -0.4, 0.33, -2.2);
