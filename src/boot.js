@@ -52,6 +52,10 @@ try {
       say('연결을 다시 확인하며 게임을 준비해요');
     }
   }
+  // 업데이트 막대의 100%는 갱신 파일만 뜻해요. 화면에 필요한 나머지는 별도 준비예요.
+  progress?.classList.remove('progress');
+  const fill = progress?.querySelector('i');
+  if (fill) fill.style.width = '';
   say('기본 파일을 받고 있어요 · ' + count + '개 도착');
   if (home) {
     // 주행 물리·봇·다른 코스는 레이스를 시작할 때 main.js가 불러와요.

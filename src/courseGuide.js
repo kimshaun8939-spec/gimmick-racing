@@ -2,6 +2,7 @@
 import { confirmDialog, settings } from './settings.js';
 import { touchWanted } from './touch.js';
 import { keybinds } from './keybinds.js';
+import { pad, padKbd } from './gamepad.js';
 
 export const COURSE_TIPS = {
   glacier: ['넓은 고속 코스예요. 직선 끝 빨간 라인 전에 속도를 줄여요', '눈밭은 느리고 미끄러워요. 도로 안쪽으로 부드럽게 돌아와요'],
@@ -25,17 +26,23 @@ export function showCourseGuide({ map, title, mode, championship, params, onClos
   const tips = COURSE_TIPS[map];
   if (!tips) return state;
   const touch = touchWanted();
-  const drive = touch
+  const usingPad = pad.connected() && !touch;
+  const label = id => usingPad ? pad.label(id) : keybinds.label(id);
+  const drive = usingPad
+    ? '왼쪽 스틱 조향 · ' + label('throttle') + ' 가속 · ' + label('brake') + ' 브레이크 · ' + label('respawn') + ' 복귀'
+    : touch
     ? (settings.get('tilt') ? '휴대폰을 좌우로 기울여 조향' : settings.get('touchSteer') === 'buttons' ? '왼쪽 ◀ ▶ 버튼으로 조향' : '왼쪽 화면을 옆으로 끌어 조향') + ' · 오른쪽 ▲ 가속 / ▼ 브레이크 · ↺ 복귀'
     : keybinds.label('throttle') + ' 가속 · ' + keybinds.label('brake') + ' 브레이크 · ' + keybinds.label('respawn') + ' 복귀';
-  const fly = map === 'gp' ? (touch ? '\n비행: 💨 버튼이 ⬆ 상승으로 바뀌고 ⬇ 하강 버튼이 생겨요.' : '\n비행: ' + keybinds.label('climb') + ' 상승 · ' + keybinds.label('dive') + ' 하강') : '';
+  const fly = map === 'gp' ? (touch ? '\n비행: 💨 버튼이 ⬆ 상승으로 바뀌고 ⬇ 하강 버튼이 생겨요.' : '\n비행: ' + label('climb') + ' 상승 · ' + label('dive') + ' 하강') : '';
   const rules = mode === 'item'
-    ? '\n🎁 상자를 지나 아이템 획득 → 화면 위 아이템 칸' + (touch ? '을 눌러 사용해요.' : '을 누르거나 ' + keybinds.label('booster') + ' 키로 사용해요.')
+    ? '\n🎁 상자를 지나 아이템 획득 → 화면 위 아이템 칸' + (touch ? '을 눌러 사용해요.' : '을 누르거나 ' + label('booster') + (usingPad ? ' 버튼으로 사용해요.' : ' 키로 사용해요.'))
     : championship ? '\n🏆 여러 코스의 순위 점수를 합쳐 챔피언을 정해요. 결과에서 다음 경기로 이어가요.'
-    : mode === 'time' ? '\n⏱️ 고스트는 기록을 보여 주는 차예요. 부딪히지 않으며, 완주한 총 시간으로 경쟁해요.' : '';
+    : mode === 'time' ? '\n⏱️ 고스트는 기록을 보여 주는 차예요. 부딪히지 않으며, 완주한 총 시간으로 경쟁해요.' : mode === 'race' && params.get('rookie') === '1' ? '\n💨 앞차 뒤에서는 바람 저항이 줄어요. 🧲 뒤처지면 자동 견인이 도와줘요. 직접 누를 버튼은 없어요.' : '';
   state.open = true;
   const answer = confirmDialog(title + ' · 처음 달리나요?', tips.map(t => '• ' + t).join('\n') + fly + rules + '\n\n' + drive + '\n빨간불 5개가 모두 꺼진 뒤 가속하세요. 지금은 출발 신호가 멈춰 있어요.', '확인하고 출발', '홈으로');
-  document.querySelector('.gm-confirm')?.classList.add('course-guide');
+  const dialog = document.querySelector('.gm-confirm');
+  dialog?.classList.add('course-guide');
+  if (usingPad) { const hint = dialog?.querySelector('[data-r="1"] kbd'); if (hint) hint.outerHTML = padKbd(0); }
   answer.then(ok => {
     if (ok) { try { localStorage.setItem(key, 'seen'); } catch {} }
     state.open = false;

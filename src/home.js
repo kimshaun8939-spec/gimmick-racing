@@ -187,6 +187,8 @@ export async function runHome() {
   const carMark = carMarkBox.querySelector('b');
 
   // ------------------------------------------------------------------ 메인 메뉴
+  let completedFirst = false, completedTutorial = false;
+  try { completedFirst = !!localStorage.getItem('gimmick.firstComplete'); completedTutorial = localStorage.getItem(TUT_KEY) === 'done'; } catch {}
   views.main.innerHTML = `
     <div class="h-main hx">
       <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b><small>땅 · 물 · 하늘 · 우주까지 달리는 기믹 레이싱</small></div>
@@ -198,7 +200,7 @@ export async function runHome() {
       </button>
       <!-- 차·맵·방식 고르기 타일은 없앰 (사용자 요청 2026-11-11): 레이스 시작 → 차 → 맵 → 방식 순서로 차례대로 -->
       <div class="hx-steps"><span><b>1</b> 차</span><i>›</i><span><b>2</b> 맵</span><i>›</i><span><b>3</b> 방식</span><i>›</i><span><b>▶</b> 출발</span></div>
-      <button class="gm-btn hx-learn" data-act="tutorial" data-nav><span>🚦</span><span><b>처음이라면 · 튜토리얼</b><small>출발·브레이크·자동 변신을 차근차근</small></span><span>›</span></button>
+      <button class="gm-btn hx-learn" ${completedFirst && completedTutorial ? 'data-go="academy"' : 'data-act="tutorial"'} data-nav><span>${completedFirst && completedTutorial ? '🎓' : '🚦'}</span><span><b>${completedFirst ? (completedTutorial ? '다음 도전 · 아카데미' : '다음 연습 · 튜토리얼') : '처음이라면 · 튜토리얼'}</b><small>${completedFirst ? (completedTutorial ? '짧은 코너 연습으로 메달과 코인을 모아요' : '브레이크·코너를 익히고 다른 맵에 도전해요') : '출발·브레이크·자동 변신을 차근차근'}</small></span><span>›</span></button>
       <div class="hx-sec"><span>더 보기</span></div>
       <div class="h-menu hx-grid hx-4">
         <button class="gm-btn h-item hx-tile" data-go="meta" data-nav style="--tc:#ffd366"><span class="ic">✦</span><span class="t"><b>업적과 목표</b><small>87개 도전 · 나만의 드라이버 여정</small></span></button>
@@ -953,6 +955,7 @@ export async function runHome() {
     if (name === 'meta') metaPage.render();
     refreshMetaHome();
     refreshSummary();
+    padHint();
     if (focus) {
       const target =
         name === 'car' ? views.car.querySelector('.h-carcard.sel')
@@ -1151,6 +1154,7 @@ export async function runHome() {
       raceMode === 'net' ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>'
       : raceMode === 'champ' ? (champState() ? '▶ 시즌 이어 하기 <kbd>Enter</kbd>' : '🏆 시즌 시작 <kbd>Enter</kbd>')
       : `${m ? m.icon : ''} 출발! <kbd>Enter</kbd>`;
+    padHint();
   }
 
   // ------------------------------------------------------------------ 챔피언십 (race 담당의 championship.js)
@@ -1305,7 +1309,7 @@ export async function runHome() {
     settings.set('racingLine', true);
     settings.set('gearbox', 'auto');
     setLast({ map: 'glacier', car: 'f1', mode: 'race' });
-    launch(raceUrl('glacier', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0 }), '첫 레이스 · 빙하 하이웨이', '넓은 코스 · 쉬운 봇 3대');
+    launch(raceUrl('glacier', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0, guide: 1 }), '첫 레이스 · 빙하 하이웨이', '넓은 코스 · 쉬운 봇 3대');
   }
   function startTutorial() {
     if (launching) return;
@@ -1613,11 +1617,22 @@ export async function runHome() {
   showName();
   showMute();
   // 게임패드가 연결되면 아래 안내에 패드 버튼도
-  const padHint = () => {
+  function padHint() {
+    const on = pad.connected();
     const h = $('.h-foot .padhint');
-    h.hidden = !pad.connected();
-    if (!h.hidden) h.innerHTML = `🎮 ${padKbd(0)} 확인 ${padKbd(1)} 뒤로 ${padKbd(4)}${padKbd(5)} 탭`;
-  };
+    h.hidden = !on;
+    if (on) h.innerHTML = `🎮 스틱/방향 버튼 고르기 · ${padKbd(0)} 확인 ${padKbd(1)} 뒤로 ${padKbd(4)}${padKbd(5)} 탭`;
+    home.querySelectorAll('.h-foot .gm-hint > span:not(.padhint)').forEach(el => { el.hidden = on; el.style.display = on ? 'none' : ''; });
+    home.querySelectorAll('[data-view="map"] .bar kbd, [data-view="mode"] .bar kbd, .h-qe kbd').forEach(el => {
+      const key = el.dataset.keyboardHint || el.textContent;
+      el.dataset.keyboardHint = key;
+      el.hidden = on && key === 'Backspace';
+      el.style.display = el.hidden ? 'none' : '';
+      el.textContent = on ? ({ Enter: pad.name(0), Q: pad.name(4), E: pad.name(5) })[key] || key : key;
+    });
+    const mapHint = home.querySelector('.mp-lhint');
+    if (mapHint) mapHint.textContent = on ? '방향 버튼 고르기 · ' + pad.name(0) + ' 다음' : '↑↓←→ 고르기 · Enter 다음';
+  }
   padHint();
   pad.onConnect(padHint);
   window.home = { show, selectCar, selectMap, start, startTutorial, openLobby, preview, welcome: welcomeDialog, champ: champStart, get mode() { return raceMode; }, get view() { return view; }, get carId() { return carId; }, get mapId() { return mapId; } };
@@ -2068,6 +2083,14 @@ function firstDriveDialog(onMode) {
     select.value = keybinds.preset();
     let choice = 'tutorial', step = 0;
     const keyPreview = () => {
+      const usePad = pad.connected() && !touchMode;
+      wrap.querySelector('.nf-keyboard-label').hidden = touchMode || usePad;
+      if (usePad) {
+        wrap.querySelector('.nf-keys').innerHTML = '<small>🎮 왼쪽 스틱으로 조향</small>' + [['throttle', '가속'], ['brake', '브레이크'], ['respawn', '복귀']].map(([id, label]) => '<span><b>' + label + '</b>' + pad.html(id) + '</span>').join('');
+        wrap.querySelector('.nf-touch').innerHTML = padKbd(0) + ' 확인 · ' + padKbd(1) + ' 뒤로 · 스틱/방향 버튼으로 고르기';
+        return;
+      }
+      if (!touchMode) wrap.querySelector('.nf-touch').textContent = '휴대폰은 화면 버튼, 게임패드는 연결 후 버튼을 누르면 돼요.';
       if (touchMode) {
         wrap.querySelector('.nf-keys').innerHTML = '<small>두 손가락으로 편하게 운전해요</small><span><b>왼손</b>◀ 끌어서 조향 ▶</span><span><b>오른손</b>▲ 가속 · ▼ 브레이크</span><span><b>길 밖에서는</b>↺ 복귀</span>';
         return;
@@ -2077,6 +2100,7 @@ function firstDriveDialog(onMode) {
     };
     select.addEventListener('change', () => { keybinds.selectPreset(select.value); keyPreview(); });
     keyPreview();
+    const offPad = pad.onConnect(keyPreview);
     const forms = [['normal', '🚗 도로에서는 자동차'], ['accel', '🔥 직선에서 가속 모드'], ['boat', '🚤 물에 닿으면 배로'], ['fly', '✈️ 활주로에서는 비행기로']];
     let form = 0;
     const showForm = () => { onMode(forms[form][0]); wrap.querySelector('.nf-form').textContent = forms[form][1]; form = (form + 1) % forms.length; };
@@ -2086,7 +2110,7 @@ function firstDriveDialog(onMode) {
       setNick(cleanNick(input.value) || randomNick());
       keybinds.selectPreset(select.value);
       try { localStorage.setItem('gimmick.firstRun', 'ready'); localStorage.setItem(TUT_KEY, localStorage.getItem(TUT_KEY) || 'asked'); } catch {}
-      clearInterval(timer); onMode('normal'); wrap.remove();
+      clearInterval(timer); offPad(); onMode('normal'); wrap.remove();
       window.removeEventListener('keydown', onKey, true);
       resolve(choice);
     }
@@ -2110,7 +2134,7 @@ function firstDriveDialog(onMode) {
     function onKey(e) {
       e.stopImmediatePropagation();
       const controls = [...wrap.querySelectorAll('button,input,select')].filter((x) => x.getClientRects().length);
-      if (e.key === 'Tab') { e.preventDefault(); const i = controls.indexOf(document.activeElement); controls[(i + (e.shiftKey ? -1 : 1) + controls.length) % controls.length].focus(); }
+      if (e.key === 'Tab' || (e.gmPad && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))) { e.preventDefault(); const i = controls.indexOf(document.activeElement); const back = e.shiftKey || e.code === 'ArrowUp' || e.code === 'ArrowLeft'; controls[(i + (back ? -1 : 1) + controls.length) % controls.length].focus(); }
       else if (e.key === 'Escape') { e.preventDefault(); if (step) wrap.querySelector('[data-nf="back"]').click(); else setup('home'); }
       else if (e.key === 'Enter' && document.activeElement !== select) { e.preventDefault(); if (document.activeElement?.tagName === 'BUTTON') document.activeElement.click(); else if (step) finish(); }
     }

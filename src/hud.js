@@ -1,7 +1,7 @@
 import { keybinds } from './keybinds.js';
 import { mixState } from './audioMix.js';
 import { touchWanted } from './touch.js';
-import { pad as gamepad } from './gamepad.js';
+import { pad as gamepad, padKbd } from './gamepad.js';
 import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
@@ -146,7 +146,7 @@ export function createHud(track) {
     rookieHint.hidden = !show;
     if (!show) return;
     const text = s.countdown ? '<b>불이 모두 꺼지면 출발!</b>지금은 가속에서 손을 떼고 기다려요.'
-      : s.time < 10 ? '<b>첫 코너까지 천천히 익혀요</b>' + rookieKey('throttle') + ' 가속 · 핸들은 짧게 톡톡'
+      : s.time < 10 ? '<b>가속과 조향을 천천히 익혀요</b>' + rookieKey('throttle') + ' 가속 · 핸들은 짧게 톡톡'
       : '<b>도로의 색이 브레이크 타이밍이에요</b>🟢 가속 · 🟡 가속 놓기 · 🔴 ' + rookieKey('brake') + ' 브레이크';
     if (text !== rookieText) { rookieHint.innerHTML = text; rookieText = text; }
   }
@@ -283,6 +283,10 @@ export function createHud(track) {
   return {
     update(s) {
       firstHints(s);
+      const usePad = gamepad.usingPad();
+      const menuLabel = '☰ 메뉴 · ' + (usePad ? gamepad.label('menu') : keybinds.label('menu'));
+      const menuButton = document.getElementById('menuBtn');
+      if (menuButton && menuButton.textContent !== menuLabel) menuButton.textContent = menuLabel;
       el.lap.textContent = s.label || `LAP ${s.lap}/${s.laps}`;
       el.time.textContent = fmtTime(s.time);
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
@@ -329,7 +333,8 @@ export function createHud(track) {
       el.tach.classList.toggle('limiter', s.limiter);
       el.gear.textContent = s.gear < 1 ? 'R' : String(s.gear);
       el.gear.classList.toggle('shifting', s.shifting);
-      el.gearMode.textContent = s.manual ? `수동 · ${keybinds.label('shiftUp')}↑ ${keybinds.label('shiftDown')}↓` : `자동 · ${keybinds.label('gearbox')}`;
+      const gearKey = id => usePad ? gamepad.label(id) : keybinds.label(id);
+      el.gearMode.textContent = s.manual ? `수동 · ${gearKey('shiftUp')}↑ ${gearKey('shiftDown')}↓` : `자동 · ${gearKey('gearbox')}`;
       // 주행 모드 표시, 가라앉는 중 경고
       for (const [name, box] of Object.entries(el.modes)) box.classList.toggle('on', (s.mode || 'normal') === name);
       el.sinkWarn.style.opacity = s.sink > 0 ? Math.min(1, 0.4 + s.sink).toFixed(2) : 0;
@@ -435,8 +440,10 @@ export function createHud(track) {
       el.raceGaps.innerHTML =
         (info.ahead ? `<div class="a">▲ ${escH(info.ahead.name)}${info.ahead.gap ? ` ${g(info.ahead.gap)} 앞` : ''}</div>` : '<div class="a">🏁 선두!</div>') +
         (info.behind ? `<div class="b">▼ ${escH(info.behind.name)}${info.behind.gap ? ` ${g(info.behind.gap)} 뒤` : ''}</div>` : '');
+      // 순위가 막 바뀐 순간 계산 쪽에서 '+-0.025' 같은 값이 와도 이중 부호를 보이지 않게 해요.
+      const towerGap = x => /^\+[-−]\d+(?:\.\d+)?$/.test(String(x)) ? '+0.000' : x;
       el.tower.innerHTML = info.tower
-        .map((r) => `<div class="tw${r.isPlayer ? ' me' : ''}${r.finished ? ' done' : ''}"><b>${r.pos}</b><i style="background:${escH(r.color)}"></i><span>${escH(r.name)}${r.remote ? ' 🌐' : ''}</span><em>${escH(r.gap)}</em></div>`)
+        .map((r) => `<div class="tw${r.isPlayer ? ' me' : ''}${r.finished ? ' done' : ''}"><b>${r.pos}</b><i style="background:${escH(r.color)}"></i><span>${escH(r.name)}${r.remote ? ' 🌐' : ''}</span><em>${escH(towerGap(r.gap))}</em></div>`)
         .join('');
     },
     /** 화면 위 띠 알림: 남은 바퀴·마지막 바퀴·최고 랩 (kind = 'final' | 'laps' | 'fastest' | 'champ') */
@@ -619,6 +626,11 @@ export function createHud(track) {
             <button class="gm-btn sub" data-res="home"><span class="ic">🏠</span>홈으로</button>
           </div>
         </div></div>`;
+      if (gamepad.connected()) {
+        const restartKey = el.results.querySelector('[data-res="restart"] kbd');
+        if (restartKey) restartKey.outerHTML = padKbd(0);
+        el.results.querySelector('[data-res="home"]')?.insertAdjacentHTML('beforeend', padKbd(1));
+      }
       el.results.querySelectorAll('[data-res]').forEach((b) =>
         b.addEventListener('click', (ev) => {
           ev.preventDefault();

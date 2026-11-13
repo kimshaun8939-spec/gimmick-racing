@@ -109,13 +109,20 @@ function build() {
     b.addEventListener('lostpointercapture', up);
     b.addEventListener('contextmenu', (e) => e.preventDefault());
   });
+  // 메뉴는 클릭이 끝난 뒤 열어요. pointerdown에서 열면 같은 손가락의 click이
+  // 새 메뉴의 빈 배경으로 넘어가 창이 곧바로 닫힐 수 있어요.
+  root.querySelector('[data-tap="menu"]').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    lastTouchUse = performance.now();
+    sendEsc();
+  });
   // 한 번 누르는 버튼
-  root.querySelectorAll('[data-tap]').forEach((b) =>
+  root.querySelectorAll('[data-tap]:not([data-tap="menu"])').forEach((b) =>
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       lastTouchUse = performance.now();
-      if (b.dataset.tap === 'menu') sendEsc();
-      else for (const fn of actionListeners) fn(b.dataset.tap);
+      for (const fn of actionListeners) fn(b.dataset.tap);
       b.classList.add('on');
       setTimeout(() => b.classList.remove('on'), 140);
     }),

@@ -4,7 +4,7 @@
 import { createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { fmtTime } from './records.js';
 import { actionsFor } from './keybinds.js';
-import { pad } from './gamepad.js';
+import { pad, padKbd } from './gamepad.js';
 
 /**
  * @param {object} o
@@ -50,6 +50,8 @@ export function createPauseMenu(o) {
 
   function renderInfo() {
     const i = o.getInfo();
+    const resumeKey = root.querySelector('[data-act="resume"] kbd');
+    if (resumeKey) resumeKey.outerHTML = pad.usingPad() ? padKbd(1) : '<kbd>Esc</kbd>';
     root.querySelector('.pm-head h2').textContent = i.online ? '온라인 메뉴' : '일시정지';
     root.querySelector('.pm-head small').textContent = i.online ? '온라인 경기는 계속돼요. 내 차는 가속을 멈춰요' : '계속하기를 누르면 이어서 달려요';
     root.querySelector('[data-act="restart"]').style.display = i.online ? 'none' : '';

@@ -2521,3 +2521,9 @@ body:has(.course-guide) > .hud,body:has(.course-guide) :is(#menuBtn,#touchCtl,#i
 .gm-set-help .gm-btn { min-height:44px; }
 .gm-set-feedback { display:block; width:100%; min-height:18px; color:#c9f5bd; font-size:12px; }
 @media(max-width:719px) { #home .gm-btn.hx-learn { min-height:58px; padding:8px 11px; gap:8px; } #home .hx-learn b { font-size:14px; } }
+
+/* launchqa4: 작은 맵 카드에서도 코스 이름을 끝까지 읽어요. */
+@media (max-width: 600px) {
+  .mp-list .h-map .t { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .mp-list .h-map .t b { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
+}
