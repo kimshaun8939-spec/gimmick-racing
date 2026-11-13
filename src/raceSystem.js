@@ -142,7 +142,7 @@ export async function createRaceSystem(o) {
       b.nextMark = 0;
     }
     Object.assign(me, { finished: false, finishTime: null, bestLap: null, lapTimes: [], progress: p.t - 1, draft: 0 });
-    for (const e of [me, ...bots]) Object.assign(e, { draft: 0, slip: 0, slipSrc: null, slings: 0, tow: 0, towUsed: 0, towMax: 0, slingFx: false });
+    for (const e of [me, ...bots]) Object.assign(e, { draft: 0, _pullSrc: null, _pullT: 0, slip: 0, slipSrc: null, slings: 0, tow: 0, towUsed: 0, towMax: 0, slingFx: false });
     for (const b of bots) b.car.draft = b.car.assistDraft = b.car.tow = b.car.slingT = 0;
     car.draft = car.tow = car.slingT = 0;
     if (drs) drs.reset();
@@ -519,7 +519,19 @@ export async function createRaceSystem(o) {
   }
   function updateDraft(x, dt, racing) {
     const want = racing ? draftFor(x) : 0;
-    const k = want > (x.draft || 0) ? 3 : 5; // 들어갈 땐 천천히, 빠질 땐 빨리
+    let k = want > (x.draft || 0) ? 3 : 5; // 들어갈 땐 천천히, 빠질 땐 빨리
+    // 2026-11-14 사용자 요청 "빠질 때만 잠깐 유지": 앞차 뒤에서 옆으로 빠져 나란히 서는 동안(앞차가 아직 가까이 있음)은
+    //   슬립스트림이 바로 끊기지 않고 약 1초에 걸쳐 줄어듦 (car.json draft.pullOutHold초 동안 k = pullOutK). 사람·봇 같은 규칙. &slip=old면 예전
+    if (!SLIP_OLD) {
+      if (x.slipCand && (x.draft || 0) > 0.3) { x._pullSrc = x.slipCand; x._pullT = 0; }
+      const ps = x._pullSrc;
+      if (ps && want < (x.draft || 0)) {
+        const d = near(x, ps), dl = Math.abs((ps.lateral || 0) - (x.lateral || 0));
+        x._pullT = (x._pullT || 0) + dt;
+        if (d > -3 && d < DRAFT_MAX && dl > DRAFT_LAT * 0.8 && x._pullT < (DC.pullOutHold ?? 1)) k = DC.pullOutK ?? 1.2;
+        else if (x._pullT >= (DC.pullOutHold ?? 1)) x._pullSrc = null;
+      }
+    }
     x.draft = (x.draft || 0) + (want - (x.draft || 0)) * Math.min(1, dt * k);
     // 0 근처 자르기는 원할 때(want)도 0일 때만 (예전엔 매 스텝 잘라서 want < 0.4 = 19 m보다 먼 슬립스트림은 아예 안 생겼음. &slip=old는 예전 그대로)
     if (x.draft < 0.01 && (SLIP_OLD || want < 0.01)) x.draft = 0;
@@ -576,16 +588,19 @@ export async function createRaceSystem(o) {
   const towOn = () => !TOW_URL_OFF && settings.values.tow !== false && (bots.length > 0 || opponents.entries.some((e) => e.remote));
   function towWant(x, ahead, lead, time) {
     const c = x.view;
-    if (!lead || x === lead || x.finished || x.remote || !c || time < (TC.startDelay ?? 8)) return 0;
-    if (c.flying || !c.grounded || c.mode === 'fly' || x.offMain) return 0;
-    if (c.surface === 'water' && (TOW_OLD || !(TC.waterGain > 0))) return 0;
+    // want는 목표 세기, strength는 보간 뒤 실제 세기. 사람/봇 같은 함수를 기록한다.
+    const info=x.towInfo||(x.towInfo={}); Object.assign(info,{reason:"active",gLeader:null,gAhead:null,gap:null});
+    const zero=reason=>{x.towInfo.reason=reason;return 0;};
+    if (!lead || x === lead || x.finished || x.remote || !c || time < (TC.startDelay ?? 8)) return zero(!lead?"noLeader":x===lead?"leader":x.finished?"finished":x.remote?"remote":!c?"noCar":"startDelay");
+    if (c.flying || !c.grounded || c.mode === 'fly' || x.offMain) return zero(c.flying?'flying':!c.grounded?'airborne':c.mode==='fly'?'fly':'offMain');
+    if (c.surface === 'water' && (TOW_OLD || !(TC.waterGain > 0))) return zero("water");
     const ti = c.trackInfo;
-    if (towCalm && ti && towCalm[Math.min(towCalm.length - 1, Math.max(0, Math.floor(ti.t * towCalm.length)))]) return 0;
-    if (c.gravityScale && c.gravityScale() < 0.95) return 0; // 저중력: 빨라지면 날아감
+    if (towCalm && ti && towCalm[Math.min(towCalm.length - 1, Math.max(0, Math.floor(ti.t * towCalm.length)))]) return zero("jumpCalm");
+    if (c.gravityScale && c.gravityScale() < 0.95) return zero("lowGravity"); // 저중력: 빨라지면 날아감
     if (RUBBER_BAND && x !== me) {
       const st = x.driver && x.driver.state;
-      if (MASTER || (x.cuDraft || 0) > 0.01 || (st && (st.paceMul > 1.001 || st.paceMul < 0.999 || st.calm))) return 0; // 따라잡기로 빨라지거나(어려움 &cu=1) 늦춰지는(쉬움) 봇은 견인 없음
-      if (st && st.closeOn && st.eq && st.eq.keep > 1.001) return 0; // 접전(bots.js CLOSE)으로 이미 당겨지는 봇은 견인 없음 (겹치지 않게)
+      if (MASTER || (x.cuDraft || 0) > 0.01 || (st && (st.paceMul > 1.001 || st.paceMul < 0.999 || st.calm))) return zero("rubberBand"); // 따라잡기로 빨라지거나(어려움 &cu=1) 늦춰지는(쉬움) 봇은 견인 없음
+      if (st && st.closeOn && st.eq && st.eq.keep > 1.001) return zero("close"); // 접전(bots.js CLOSE)으로 이미 당겨지는 봇은 견인 없음 (겹치지 않게)
     }
     // 견인 3차 (2026-11-12, 사용자 "그냥 멀수록 속도가 많이 빨라지게"): 간격 = max(바로 앞차와의 간격, 1등과의 간격 × leadShare)
     //   → startSec초부터 fullSec초까지 간격에 비례해서 세짐 (멀수록 그만큼 더 빨라짐). 무리 전체가 1등과 멀어도 1등 몫 때문에 다 같이 빨라짐
@@ -593,7 +608,9 @@ export async function createRaceSystem(o) {
     const gL = secOf(gapBetween(lead, x, time));
     const gA = ahead && ahead !== lead ? secOf(gapBetween(ahead, x, time)) : gL;
     const sec = TOW_OLD ? gL : Math.max(gA, gL * (TC.leadShare ?? 0.5));
+    Object.assign(x.towInfo,{gLeader:gL,gAhead:gA,gap:sec});
     const s0 = TC.startSec ?? 2.5, s1 = TC.fullSec ?? 10;
+    if(sec<=s0)x.towInfo.reason="withinStart";
     const k = Math.max(0, Math.min(1, (sec - s0) / Math.max(0.1, s1 - s0)));
     // curve < 1: 처음 몇 초에서 빨리 세지고 멀수록 계속 커짐 (0.5 = 제곱근: 3초 39%, 5초 55%, 10초 83%, 14초 100%)
     return TOW_OLD ? k : Math.pow(k, TC.curve ?? 1);
@@ -620,11 +637,14 @@ export async function createRaceSystem(o) {
         }
       }
       const want = on ? towWant(x, ref, lead, time) : 0;
+      if (!on) x.towInfo = {reason:racing?"disabled":"countdown",gLeader:null,gAhead:null,gap:null};
+      x.towInfo.want = want;
       const cur = x.tow || 0;
       const r = want > cur ? TC.rampIn ?? 1.5 : TC.rampOut ?? 0.5;
       x.tow = cur + (want - cur) * Math.min(1, dt / Math.max(0.05, r));
       if (x.tow < 0.01 && want < 0.01) x.tow = 0;
       x.view.tow = x.tow;
+      x.towInfo.strength = x.tow;
       if (x.tow > (x.towMax || 0)) x.towMax = x.tow;
       if (x === me && x.tow > 0 && !x.finished) x.towUsed = (x.towUsed || 0) + x.tow * dt; // 기록 '도움 켬' 판정용 (가장 센 견인 기준 초)
     }

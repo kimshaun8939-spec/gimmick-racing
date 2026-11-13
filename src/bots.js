@@ -59,7 +59,7 @@ BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
   // 고정 운전 실력만 상향. 차 cfg/숨은 슬립스트림은 바꾸지 않음.
-  lead: 0.12, brakeK: 1.03, noise: 0.004, fly: { speed: 55 },
+  lead: 0.02, brakeK: 1.03, noise: 0.001, fly: { speed: 55 },
   master: { help: [1, 1], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.16, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 3 },
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
@@ -257,6 +257,62 @@ function gravityArray(track) {
   return g;
 }
 
+
+
+function masterDriveModel(cfg) {
+  const cm = lineCarModel(cfg), A = cfg.modes.accel;
+  const df = v => cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
+  const grip = v => A && !cfg.modes.manualSelect && v >= A.autoSpeed / 3.6 ? A.gripFactor : 1;
+  return {
+    ...cm,
+    // 가속 예측표가 아니라 '지금 속도에서 제동 가능한 상한'을 만든다.
+    // 탈출 보상/견인으로 이미 얻은 속도를 옛 가속 표 때문에 버리지 않게 하며,
+    // 실제 가속·접지·최고 속도는 원래 Car 물리가 그대로 제한한다.
+    aAcc: () => 1e4,
+    // 원래 물리는 가속 모드의 gripFactor를 타이어에만 적용한다.
+    // 제동 무게 이동으로 더 도는 여유도 계획에만 반영한다 (cfg를 바꾸지 않음).
+    aLat: v => 1.08 * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), cfg.tire.lateral * (1 + df(v)) * grip(v)),
+    aBrake: v => .96 * Math.min(cfg.brake, cfg.tire.brakeGrip * (1 + df(v)) * grip(v)) + cfg.aero.drag * v * v + cfg.aero.rolling,
+  };
+}
+
+// 실제로 받은 공통 공력 효과만 계획에 반영한다. 차 cfg/물리는 바꾸지 않는다.
+function aeroPlan(line, cfg, base, car, cache, master = false) {
+  if (!BOT_AERO || !car.grounded || car.surface === 'magnet' || car.up.y < .8 || (car.gravityScale && car.gravityScale() < .95) || car.mode === 'boat' || car.mode === 'fly') return base;
+  const D = cfg.draft || {}, T = cfg.tow || {}, R = cfg.drs || {};
+  // 작은 변화마다 전체 코스 계획을 다시 만들지 않도록 아래쪽 1/16 단위로 묶는다.
+  // 보간이 0.999999999999...에 수렴한 경우는 1로 취급해 최대 효과 누락을 막는다.
+  const q = value => {
+    const x = clamp(value || 0, 0, 1);
+    return x > 1 - 1e-9 ? 1 : Math.floor(x * 16) / 16;
+  };
+  const slip = q(car.draft), tow = q(car.tow), drs = q(car.drs);
+  const train = 1 + Math.min(2, car.draftTrain || 0) * (D.trainGain || 0);
+  if (!slip && !tow && !drs && !(car.slingT > 0)) return base;
+  const top = (1 + Math.min(D.topMax ?? 1, slip * (D.topGain ?? .04) * train)) * (1 + tow * (T.topGain || 0)) * (1 + drs * (R.topGain ?? .04)) * (car.slingT > 0 ? 1 + (D.slingTop ?? .06) : 1);
+  const drag = (1 - Math.min(.75, slip * (D.dragCut ?? .3) * train)) * (1 - tow * (T.dragCut || 0)) * (1 - drs * (R.dragCut ?? .25));
+  const power = 1 + tow * (T.powerGain || 0), pull = slip * (D.pullAccel || 0) * train;
+  const key = [slip, tow, drs, train, car.slingT > 0].join('/');
+  if (cache.has(key)) return cache.get(key);
+  const cm = master ? masterDriveModel(cfg) : lineCarModel(cfg);
+  const A = cfg.modes.accel, auto = A && !cfg.modes.manualSelect ? A.autoSpeed / 3.6 : Infinity;
+  const model = {
+    ...cm,
+    vMax: cm.vMax * top,
+    aAcc: master ? cm.aAcc : v => {
+      const hi = v >= auto;
+      const G = (hi ? cfg.gears.map(g => g * A.gearFactor) : cfg.gears).find(g => g >= v * 1.06) || cfg.gears.at(-1) * (hi ? A.gearFactor : 1);
+      const df = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2), grip = hi ? A.gripFactor : 1;
+      const tire = cfg.tire.traction * (cfg.drivetrain === 'awd' ? (cfg.tire.awdTraction ?? 1.12) : cfg.drivetrain === 'fwd' ? .9 : 1) * (1 + df) * grip;
+      return Math.min(tire, cm.aAcc(v) + cfg.aero.drag * v * v * (1 - drag) + cfg.engine.power * .9 * (hi ? A.powerFactor : 1) * (power - 1) / G) + pull;
+    },
+    aBrake: v => Math.max(.1, cm.aBrake(v) - cfg.aero.drag * v * v * (1 - drag)),
+  };
+  const plan = line.profile(model);
+  if (cache.size >= 48) cache.delete(cache.keys().next().value);
+  cache.set(key, plan);
+  return plan;
+}
 /**
  * @param car   Car (봇 차)
  * @param track 트랙 (racingLine 필요)
@@ -291,7 +347,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (c > 1.0005 || t > 1.0005 || car._packHelp) setCarHelp(car, c, t);
     }
   }
-  const cm = lineCarModel(car.cfg); // 제동력 계산용
+  const exactMaster=!!level.master&&!RUBBER_BAND;
+  if(exactMaster)prof=L.profile(masterDriveModel(car.cfg));
+  const cm = exactMaster?masterDriveModel(car.cfg):lineCarModel(car.cfg); // 제동력 계산용
+  const aeroPlans = new Map();
   const thrK = level.thrK ? Math.min(1, (level.thrK * pace) / level.pace) : 1; // 봇마다 조금씩 다른 액셀 (실력 차이)
   let vTop = 0;
   for (let i = 0; i < N; i++) vTop = Math.max(vTop, prof.speed[i]);
@@ -363,7 +422,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     let f = Infinity;
     for (const o of ctx.others) {
       if (o.progM <= 1 || o.progM > 10 + 0.5 * Math.max(0, speed) || Math.abs(o.lat - myLat) > 2.8) continue;
-      f = Math.min(f, Math.sqrt(o.speed * o.speed * 0.8 + 2 * 6 * Math.max(0, o.progM - 7)), o.progM < 7 ? o.speed - 2 : Infinity);
+      f = Math.min(f, Math.sqrt(o.speed * o.speed * (level.master?1:0.8) + 2 * 6 * Math.max(0, o.progM - 7)), o.progM < 7 ? o.speed - 2 : Infinity);
     }
     return f;
   }
@@ -417,7 +476,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         // 착륙: 내려가는 속도를 6~9 m/s로 (너무 세게 내리면 착지 때 속도를 잃음)
         c.dive = car.vel.y > -6;
         c.climb = car.vel.y < -9;
-        c.throttle = 0.3;
+        c.throttle = level.master ? .65 : .3;
         c.brake = 0;
       }
       return c;
@@ -498,6 +557,24 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     return Math.atan2(uz*vx-ux*vz, ux*vx+uz*vz) / Math.max(1, (Math.hypot(ux,uz)+Math.hypot(vx,vz))/2);
   }
 
+
+
+  // 사람에게도 있는 수동 변속/완벽한 변속을 실제 입력으로 얻는다.
+  // 점프·특수 노면·활주로 진입 전에는 자동으로 돌려 변속 중 이륙을 피한다.
+  function masterShift(c, dt) {
+    if (!level.master || RUBBER_BAND) return c;
+    st.shiftLock = Math.max(0, (st.shiftLock || 0) - dt);
+    const flightEntry = plan && W(plan.rwI - (car.trackInfo?.index || 0)) * ds < APPROACH + 100;
+    car.manual = !st.fly && !flightEntry && car.grounded && car.mode !== 'boat' && car.mode !== 'fly' && car.surface !== 'magnet' && car.up.y > .8 && !st.calm && (!car.gravityScale || car.gravityScale() >= .95);
+    if (!car.manual || car.shiftTimer > 0 || st.shiftLock > 0 || car.gear < 1) return c;
+    const e = car.cfg.engine, G = car.gearSpeeds(), g = car.gear;
+    const rpm = e.redline * Math.abs(car.speed) / G[g - 1];
+    c.shiftUp = c.throttle > .2 && c.brake < .1 && g < G.length && rpm >= Math.min(e.limiter * .985, e.redline * 1.02) && car.rpm >= e.redline * e.perfectShift;
+    c.shiftDown = !c.shiftUp && g > 1 && e.redline * Math.abs(car.speed) / G[g - 2] < e.redline * (c.brake > .1 ? .92 : .86) && (c.brake > .1 || rpm < e.redline * .7);
+    if (c.shiftUp || c.shiftDown) st.shiftLock = .25;
+    return c;
+  }
+
   /**
    * 매 물리 스텝 조작 명령
    * ctx = { since: 출발 신호 뒤 시간, dt, me: { progM, lat }, others: [{ progM, lat, speed }], finished }
@@ -516,7 +593,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if (fc) {
       if (ctx.since < st.react) c.throttle = c.brake = 0;
       if (st.fly !== 'approach') st.dbg = { fly: st.fly, flyI: st.flyI };
-      return c;
+      return masterShift(c,dt);
     }
 
     // --- 같은 단계 봇끼리 비슷하게 (PACK) ---
@@ -829,7 +906,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const OP = PACK.open;
     const openK = RUBBER_BAND && ctx.since < OP.sec && packAhead && level.pace > 0.95 ? OP.k : 1;
     const eqK = st.calm ? Math.min(eq.kMul, eq.kCalm) : eq.kMul;
-    const k = pace * eqK * pm * openK * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
+    const k = (exactMaster?1:pace*pm) * eqK * openK * (ctx.finished ? 0.72 : 1) * (Math.abs(lane) > 1.5 && st.laneHold <= 0 ? 0.985 : 1);
     // 목표 속도: 앞쪽 지점들의 계획 속도 × 실력에서, 거기까지 브레이크로 줄일 수 있는 속도 (계획보다 빠를 때도 제때 제동)
     //   부스터 중에는 직선(계획이 최고 속도) 지점은 제한 없음 → 직선에서 부스터를 브레이크로 끄지 않음
     const boosting = car.form === 'spike';
@@ -842,21 +919,32 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const tailwind = windZones.some(w => w.type === 'tail' && w.dir > 0 && ti.t >= w.t0 && ti.t <= w.t1);
     const aeroTop = (!BOT_AERO ? 1 : car.mode === 'boat' ? car.waterAeroTop || 1 : car.aeroTopMul ? car.aeroTopMul(true) : 1) * (tailwind ? 1.08 : 1);
     const aeroRef = car.mode === 'boat' && cm.boat ? cm.boat.vMax : vTop;
+    // 일반 3단계는 앞차가 제한을 걸면 기존 추종/추월 판단을 유지한다.
+    // 앞이 열린 경우에만 새 공력 계획을 써서 받은 견인의 나머지를 활용한다.
+    const trafficPlan = !exactMaster && Number.isFinite(follow);
+    const activeProf = st.calm || trafficPlan ? prof : aeroPlan(L,car.cfg,prof,car,aeroPlans,exactMaster);
+    st.aeroPlan = activeProf !== prof;
     for (let q = 0; q <= reach; q += q < 8 ? 1 : 3) {
       const iq = W(lead + q);
-      const free = boosting && prof.speed[iq] >= vTop * 0.97 && !prof.brake[iq];
+      const free = boosting && activeProf.speed[iq] >= vTop * 0.97 && !activeProf.brake[iq];
       if (free) continue;
-      let vq = prof.speed[iq] * k;
+      let vq = activeProf.speed[iq] * k;
+      let legacyVq = prof.speed[iq] * k;
       const halfWidth = S[iq].hw ?? (track.width || 16) / 2;
-      if (halfWidth < 7 && car.mode !== 'boat') vq *= 0.96; // 한 줄 산길에서는 같은 안전 여유
+      if (halfWidth < 7 && car.mode !== 'boat') { vq *= 0.96; legacyVq *= 0.96; } // 한 줄 산길에서는 같은 안전 여유
 
       if (Math.abs(lane) > 0.5 && car.mode !== 'boat' && car.surface !== 'magnet' && !S[iq].roll && !S[iq].gap) {
         const signedCurve = pathCurvature(iq, lane), curve = Math.abs(signedCurve);
         const bankLat = 9.81 * Math.sin(S[iq].bank || 0) * Math.sign(signedCurve) * (cm.bankGrip || 0);
         const lat = cm.aLat(vq);
-        if (curve > 0.001) vq = Math.min(vq, Math.sqrt(Math.max(lat*.5, lat+bankLat) / curve) * Math.min(1, k));
+        if (curve > 0.001) {
+          const cap = Math.sqrt(Math.max(lat*.5, lat+bankLat) / curve) * Math.min(1, k);
+          vq = Math.min(vq, cap); legacyVq = Math.min(legacyVq, cap);
+        }
       }
-      if (aeroTop > 1.001 && !prof.brake[iq]) vq *= 1 + (aeroTop - 1) * clamp((prof.speed[iq] / aeroRef - 0.75) / 0.2, 0, 1);
+      if (aeroTop > 1.001 && !prof.brake[iq]) legacyVq *= 1 + (aeroTop - 1) * clamp((prof.speed[iq] / aeroRef - 0.75) / 0.2, 0, 1);
+      // 원래 쓰던 공력 보너스 목표를 낮추지 않고, 가속 제한 때문에 못 쓰던 몫만 더 활용.
+      if(!exactMaster)vq = Math.max(vq, legacyVq);
       if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq) * Math.min(jumpK, 1.12));
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
       if (allow < tgt) tgt = allow;
@@ -922,7 +1010,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         st.boostCool = 3.5 + rand() * 3;
       }
     }
-    return c;
+    return masterShift(c,dt);
   }
 
   return {
@@ -937,6 +1025,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if(grid)st.overtakeStarts=st.overtakeSwitches=st.overtakeWins=0;
       st.fly = null;
       st.flyI = 0;
+      st.shiftLock = 0;
       st.mistake = null;
       st.prevLat = null;
       st.lastFx=st.lastFz=st.actualYaw=null;

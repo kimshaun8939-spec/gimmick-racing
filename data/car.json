@@ -99,6 +99,9 @@
     "assistDragCut": 0.3,
     "assistTopGain": 0.04,
     "trainGain": 0.3,
+    "pullOutHold": 1,
+    "pullOutK": 1.2,
+    "_pullOut": "2026-11-14 사용자 요청 '빠질 때만 잠깐 유지': 앞차 뒤에서 옆으로 빠지는 동안 pullOutHold초는 슬립스트림이 천천히(k=pullOutK) 줄어듦 (raceSystem updateDraft)",
     "legacy": {
       "dragCut": 0.3,
       "topGain": 0.04,
