@@ -6,6 +6,24 @@ import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
+// 표시 값이 같으면 DOM을 다시 만들지 않음. 다른 코드가 바꾼 값도 실제 DOM으로 확인.
+const writeText = (node, value) => { value = String(value); if (node.textContent !== value) node.textContent = value; };
+const writeClass = (node, name, on) => { on = !!on; if (node.classList.contains(name) !== on) node.classList.toggle(name, on); };
+const styleValues = new WeakMap();
+const writeStyle = (node, key, value) => {
+  value = String(value);
+  let values = styleValues.get(node);
+  if (!values) styleValues.set(node, (values = Object.create(null)));
+  let saved = values[key];
+  const current = node.style[key];
+  // CSS가 색을 rgb나 소수 자리로 정규화해도 같은 입력은 다시 쓰지 않음.
+  // 다른 코드가 값을 바꾸면 실제 속성 비교로 알아채 다시 적용한다.
+  if (saved && saved.value === value && saved.actual === current) return;
+  if (current !== value) node.style[key] = value;
+  if (!saved) saved = values[key] = {};
+  saved.value = value; saved.actual = node.style[key];
+};
+
 
 export function fmtTime(sec) {
   if (!isFinite(sec)) return '--:--.---';
@@ -287,12 +305,12 @@ export function createHud(track) {
       const menuLabel = '☰ 메뉴 · ' + (usePad ? gamepad.label('menu') : keybinds.label('menu'));
       const menuButton = document.getElementById('menuBtn');
       if (menuButton && menuButton.textContent !== menuLabel) menuButton.textContent = menuLabel;
-      el.lap.textContent = s.label || `LAP ${s.lap}/${s.laps}`;
-      el.time.textContent = fmtTime(s.time);
+      writeText(el.lap, s.label || `LAP ${s.lap}/${s.laps}`);
+      writeText(el.time, fmtTime(s.time));
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
       const bestTxt = s.record ? `최고 기록 ${fmtTime(s.record)}${s.recordNote ? ` · ${s.recordNote}` : ''}` : `최고 랩 ${fmtTime(s.best)}`;
       if (bestTxt !== el.best._t) { el.best.textContent = el.best._t = bestTxt; el.best.title = bestTxt; }
-      el.speed.textContent = Math.round(spd(s.speed));
+      writeText(el.speed, Math.round(spd(s.speed)));
       // 속도감: 200 km/h 넘으면 숫자가 따뜻하게 빛나고, 부스터 중에는 초록빛
       const fastNow = s.speed >= 200;
       if (fastNow !== el.speed._fast) el.speed.classList.toggle('fast', (el.speed._fast = fastNow));
@@ -301,8 +319,8 @@ export function createHud(track) {
 
       const d = s.cfg.drift;
       const pct = s.drifting ? Math.min(1, s.driftTime / d.level2Time) : 0;
-      el.driftFill.style.width = `${pct * 100}%`;
-      el.driftFill.style.background = ['#ffffff', 'var(--blue)', 'var(--orange)'][s.driftLevel];
+      writeStyle(el.driftFill, 'width', `${pct * 100}%`);
+      writeStyle(el.driftFill, 'background', ['#ffffff', 'var(--blue)', 'var(--orange)'][s.driftLevel]);
       // 드리프트 각도 막대: 초록 칸 = 버티면 좋은 각도 (car.cfg.drift.holdAngle), 바늘 = 지금 각도. 드리프트 중에만 보임
       if (el.driftAng) {
         const on = !!s.drifting;
@@ -316,7 +334,7 @@ export function createHud(track) {
             el.driftWin.style.width = `${px(win[1]) - px(win[0])}%`;
           }
           const a = s.driftAngle || 0, inWin = a >= win[0] && a <= win[1];
-          el.driftNeedle.style.left = `${px(a)}%`;
+          writeStyle(el.driftNeedle, 'left', `${px(a)}%`);
           el.driftNeedle.className = inWin ? 'in' : a > win[1] ? 'over' : '';
         }
       }
@@ -324,24 +342,24 @@ export function createHud(track) {
       // 회전수계: 0 ~ 한계 회전수. 빨간 구간 = 레드라인 이상, 초록 = 출발 구간(카운트다운 중)
       const e = s.cfg.engine;
       const top = e.limiter + 500;
-      el.tachFill.style.width = `${Math.min(1, s.rpm / top) * 100}%`;
-      el.tachRed.style.width = `${(1 - e.redline / top) * 100}%`;
-      el.tachGreen.style.display = 'none'; // 예전 회전수 맞추기 출발 구간 (F1식 출발로 바뀌어 안 씀)
-      el.tachGreen.style.left = `${((e.launchWindow[0] * e.redline) / top) * 100}%`;
-      el.tachGreen.style.width = `${(((e.launchWindow[1] - e.launchWindow[0]) * e.redline) / top) * 100}%`;
-      el.tach.classList.toggle('shiftNow', s.manual && s.gear >= 1 && s.gear < s.cfg.gears.length && s.rpm >= e.redline * e.perfectShift);
-      el.tach.classList.toggle('limiter', s.limiter);
-      el.gear.textContent = s.gear < 1 ? 'R' : String(s.gear);
-      el.gear.classList.toggle('shifting', s.shifting);
+      writeStyle(el.tachFill, 'width', `${Math.min(1, s.rpm / top) * 100}%`);
+      writeStyle(el.tachRed, 'width', `${(1 - e.redline / top) * 100}%`);
+      writeStyle(el.tachGreen, 'display', 'none'); // 예전 회전수 맞추기 출발 구간 (F1식 출발로 바뀌어 안 씀)
+      writeStyle(el.tachGreen, 'left', `${((e.launchWindow[0] * e.redline) / top) * 100}%`);
+      writeStyle(el.tachGreen, 'width', `${(((e.launchWindow[1] - e.launchWindow[0]) * e.redline) / top) * 100}%`);
+      writeClass(el.tach, 'shiftNow', s.manual && s.gear >= 1 && s.gear < s.cfg.gears.length && s.rpm >= e.redline * e.perfectShift);
+      writeClass(el.tach, 'limiter', s.limiter);
+      writeText(el.gear, s.gear < 1 ? 'R' : String(s.gear));
+      writeClass(el.gear, 'shifting', s.shifting);
       const gearKey = id => usePad ? gamepad.label(id) : keybinds.label(id);
-      el.gearMode.textContent = s.manual ? `수동 · ${gearKey('shiftUp')}↑ ${gearKey('shiftDown')}↓` : `자동 · ${gearKey('gearbox')}`;
+      writeText(el.gearMode, s.manual ? `수동 · ${gearKey('shiftUp')}↑ ${gearKey('shiftDown')}↓` : `자동 · ${gearKey('gearbox')}`);
       // 주행 모드 표시, 가라앉는 중 경고
-      for (const [name, box] of Object.entries(el.modes)) box.classList.toggle('on', (s.mode || 'normal') === name);
-      el.sinkWarn.style.opacity = s.sink > 0 ? Math.min(1, 0.4 + s.sink).toFixed(2) : 0;
+      for (const name in el.modes) writeClass(el.modes[name], 'on', (s.mode || 'normal') === name);
+      writeStyle(el.sinkWarn, 'opacity', s.sink > 0 ? Math.min(1, 0.4 + s.sink).toFixed(2) : 0);
       // 타이어 상태: 가장 심한 것 하나만
       const tire = s.wheelspin > 0.3 ? ['휠스핀', '#ff9a2e'] : s.sliding > 0.25 ? ['미끄러짐!', '#ff4b3a'] : s.understeer > 0.6 ? ['언더스티어', '#ffcf3f'] : ['', ''];
-      el.tireState.textContent = tire[0];
-      el.tireState.style.color = tire[1];
+      writeText(el.tireState, tire[0]);
+      writeStyle(el.tireState, 'color', tire[1]);
       if (shiftPerfectTimer > 0) {
         shiftPerfectTimer -= 1 / 60;
         if (shiftPerfectTimer <= 0) el.shiftPerfect.style.opacity = 0;
@@ -370,7 +388,7 @@ export function createHud(track) {
       }
       // 큰 안내를 읽는 동안 코너 칭찬은 겹치지 않게 잠깐 숨겨요.
       const courseWarning = ['foundryToast', 'mirageToast'].some(id => Number(document.getElementById(id)?.style.opacity) > 0);
-      document.body.classList.toggle('hud-message', !!persistentToast || toastTimer > 0 || bannerTimer > 0 || bigTimer > 0 || courseWarning);
+      writeClass(document.body, 'hud-message', !!persistentToast || toastTimer > 0 || bannerTimer > 0 || bigTimer > 0 || courseWarning);
       const drivingView = window.game?.camViews?.effective || 'chase';
       if (document.body.dataset.drivingView !== drivingView) document.body.dataset.drivingView = drivingView;
       drawMinimap(s.carPos, s.carYaw, s.others);
@@ -409,15 +427,15 @@ export function createHud(track) {
 
       // 부스터: 사용 중이면 남은 시간
       const on = s.form === 'spike';
-      booster.el.classList.toggle('active', on);
-      booster.fill.style.width = `${on ? Math.max(0, s.formTime / s.cfg.booster.duration) * 100 : 0}%`;
+      writeClass(booster.el, 'active', on);
+      writeStyle(booster.fill, 'width', `${on ? Math.max(0, s.formTime / s.cfg.booster.duration) * 100 : 0}%`);
       // 비행 정보: 날고 있을 때 높이와 실속 경고
       if (s.mode === 'fly') {
-        el.flightInfo.style.display = 'block';
+        writeStyle(el.flightInfo, 'display', 'block');
         el.flightInfo.textContent = s.flying
           ? `✈️ 높이 ${Math.max(0, s.altitude).toFixed(0)}m${s.speed / 3.6 < s.cfg.modes.fly.minSpeed ? ` · ⚠️ 실속! ${keybinds.label('dive')}로 기수를 내려요` : ''}`
           : s.speed / 3.6 >= s.cfg.modes.fly.takeoffSpeed ? `🛫 ${keybinds.label('climb')}를 누르면 이륙!` : `이륙 속도 ${spd(s.cfg.modes.fly.takeoffSpeed * 3.6).toFixed(0)} ${unitName()}까지 가속`;
-      } else el.flightInfo.style.display = 'none';
+      } else writeStyle(el.flightInfo, 'display', 'none');
     },
     /**
      * 레이스 순위 패널 (raceSystem.hudInfo). null이면 숨김
@@ -504,7 +522,7 @@ export function createHud(track) {
     startLights(n) {
       const box = $('startLights');
       if (!box) return;
-      box.style.display = n < 0 ? 'none' : 'flex';
+      writeStyle(box, 'display', n < 0 ? 'none' : 'flex');
       if (n < 0) return;
       [...box.children].forEach((d, i) => d.classList.toggle('on', i < n));
     },

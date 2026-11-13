@@ -65,6 +65,9 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
 
   const st = { k: 0, want: false, active: false, noneT: 99, near: null, tagT: 0, hudT: 0, hudOk: true, rect: null, rectDirty: true, lastTag: '', calls: 0, ms: 0, renders: 0, reused: 0, flip: false, buildMs: 0 };
   addEventListener('resize', () => (st.rectDirty = true));
+  // 캔버스 크기가 바뀔 때만 레이아웃을 읽음. HUD 갱신 직후 매 화면
+  // clientHeight를 읽으면 같은 화면 배치를 강제로 다시 계산했음.
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { st.rectDirty = true; }).observe(renderer.domElement);
 
   // --- 상대 차 한 덩어리 모형 (거울 전용, 렉 줄이기) ---
   //   봇 차 한 대 = 그림 호출 약 20~30번 → 거울에 5대면 100~150번. 그래서 거울에서는 차 부품 전부를 한 메시로 합친 모형을 씀 (1번)
@@ -221,6 +224,7 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
     const w = el.clientWidth, h = el.clientHeight;
     // CSS가 translateX(-50%)로 가운데 맞춤 → offsetLeft는 옮기기 전 자리라서 폭의 절반을 뺌
     st.rect = { x: Math.round(el.offsetLeft - el.offsetWidth / 2 + el.clientLeft), y: el.offsetTop + el.clientTop, w, h };
+    st.canvasHeight = renderer.domElement.clientHeight || innerHeight;
     st.rectDirty = false;
   }
 
@@ -263,7 +267,7 @@ export function createMirror({ renderer, scene, car, model, raceSys, opponents, 
     if (!r || r.w < 8 || r.h < 8) return;
     const ek = ease(Math.min(1, st.k));
     const h = Math.max(1, r.h * ek);
-    const H = renderer.domElement.clientHeight || innerHeight;
+    const H = st.canvasHeight;
     const glY = H - (r.y + h); // WebGL은 아래에서 위로 셈
     const t0 = performance.now();
     // 두 프레임에 한 번만 장면을 그리고, 그 사이 프레임은 지난 그림(복사해 둔 것)을 붙임 (다 내려온 뒤에만)

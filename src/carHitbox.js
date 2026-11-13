@@ -36,10 +36,15 @@ function convexPairs(p,ordered=false){
 function movingConvex(points,work){
   const n=points.length,order=work.order||(work.order=[]),stack=work.stack||(work.stack=[]);
   if(order.length!==n){order.length=n;for(let i=0;i<n;i++)order[i]=i;}
+  // 변신 중 프레임 합집합이나 거의 같은 좌표의 순서가 뒤집히면 삽입
+  // 정렬은 제곱 비용이 된다. 조금만 흐트러졌을 때만 기존 빠른 경로를
+  // 쓰고, 이동이 많으면 같은 비교/안정 순서의 네이티브 정렬로 마친다.
+  let shifts=0;
   for(let i=1;i<n;i++){
     const index=order[i],p=points[index];let j=i;
-    while(j>0){const q=points[order[j-1]];if(q.x<p.x||q.x===p.x&&q.z<=p.z)break;order[j]=order[j-1];j--;}
+    while(j>0){const q=points[order[j-1]];if(q.x<p.x||q.x===p.x&&q.z<=p.z)break;order[j]=order[j-1];j--;shifts++;}
     order[j]=index;
+    if(shifts>n*2){order.sort((a,b)=>points[a].x-points[b].x||points[a].z-points[b].z);break;}
   }
   let k=0;
   for(let i=0;i<n;i++){
@@ -370,5 +375,9 @@ function publishDisplay(model,car,time){
     }
     if(max<.0001)break;
   }
-  for(const v of displayCars){v.root.position.copy(v.pos);v.root.updateMatrixWorld(true);}
+  // 이번에 sync한 차의 부품은 갱신한다. 앞서 sync한 차는 실제로
+  // 밀린 때만 다시 갱신(8대마다 앞의 1+2+…+8대 전체를 반복하지 않음).
+  for(const other of displayCars)if(other===v||!other.root.position.equals(other.pos)){
+    other.root.position.copy(other.pos);other.root.updateMatrixWorld(true);
+  }
 }

@@ -203,6 +203,65 @@ performance.mark('load:scenery');
 await loadingStage(4, '차와 출발선을 준비해요');
 const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : defaultProps.buildProps(track, scene);
 performance.mark('load:props');
+// 정적인 코스 표본의 정확한 최근접 탐색. 거리식/동점(앞 번호 우선)은
+// 기존 9개 코스와 같다. 구간의 3D 범위 밖 거리만으로 확실히 먼 구간을
+// 제외하므로, 교차 고가도로·코스 밖·복귀 지점도 전체 탐색과 같다.
+function indexTrackNearest(track) {
+  const samples = track.samples, count = samples?.length - 1;
+  if (!count || samples[count].t !== 1 || !samples[0].right) return;
+  const original = track.nearest;
+  function build(start, end) {
+    const node = { start, end, minX: Infinity, minY: Infinity, minZ: Infinity, maxX: -Infinity, maxY: -Infinity, maxZ: -Infinity };
+    for (let i = start; i < end; i++) {
+      const p = samples[i].pos;
+      node.minX = Math.min(node.minX, p.x); node.maxX = Math.max(node.maxX, p.x);
+      node.minY = Math.min(node.minY, p.y); node.maxY = Math.max(node.maxY, p.y);
+      node.minZ = Math.min(node.minZ, p.z); node.maxZ = Math.max(node.maxZ, p.z);
+    }
+    if (end - start > 16) {
+      const mid = (start + end) >>> 1;
+      node.left = build(start, mid); node.right = build(mid, end);
+    }
+    return node;
+  }
+  const tree = build(0, count);
+  function distance(node, pos) {
+    const dx = Math.max(0, node.minX - pos.x, pos.x - node.maxX);
+    const dz = Math.max(0, node.minZ - pos.z, pos.z - node.maxZ);
+    const dy = Math.max(0, node.minY - pos.y, pos.y - node.maxY);
+    return dx ** 2 + dz ** 2 + 3 * dy * dy;
+  }
+  const stack = [], distances = [];
+  track.nearest = function nearestIndexed(pos) {
+    if (track.samples !== samples || samples.length !== count + 1) return original(pos);
+    let best = Infinity, bi = 0, top = 1;
+    stack[0] = tree; distances[0] = 0;
+    while (top) {
+      const bound = distances[--top], node = stack[top];
+      // 부동소수점 경계는 보수적으로 검사. 같은 거리의 작은 번호도 남긴다.
+      if (bound > best + Math.max(1e-9, best * 1e-14)) continue;
+      if (node.left) {
+        const a = distance(node.left, pos), b = distance(node.right, pos);
+        if (a < b) {
+          stack[top] = node.right; distances[top++] = b;
+          stack[top] = node.left; distances[top++] = a;
+        } else {
+          stack[top] = node.left; distances[top++] = a;
+          stack[top] = node.right; distances[top++] = b;
+        }
+      } else for (let i = node.start; i < node.end; i++) {
+        const p = samples[i].pos, dy = p.y - pos.y;
+        const d = (p.x - pos.x) ** 2 + (p.z - pos.z) ** 2 + 3 * dy * dy;
+        if (d < best || d === best && i < bi) { best = d; bi = i; }
+      }
+    }
+    const sample = samples[bi], dx = pos.x - sample.pos.x, dz = pos.z - sample.pos.z;
+    return { index: bi, t: bi / count, sample, dist: Math.hypot(dx, dz), lateral: dx * sample.right.x + dz * sample.right.z };
+  };
+}
+// 이 표본은 맵 생성 뒤 움직이지 않음. 다른/추가 트랙은 원래 탐색을 유지.
+if (params.get('nearestindex') !== '0' && ['gp', 'sea', 'neon', 'moon', 'jungle', 'volcano', 'glacier', 'foundry', 'mirage'].includes(mapName)) indexTrackNearest(track);
+
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));
 const model = createCarModel(carCfg.look || '#e8463a'); // 차마다 모양·색 (carRoster.js의 look)
