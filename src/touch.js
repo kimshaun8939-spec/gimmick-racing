@@ -27,6 +27,16 @@ const actionListeners = new Set();
 let releaseAll = () => {};
 let root = null, mounted = false, lastTouchUse = 0, tiltVal = 0, tiltOn = false;
 
+// PC에서 한 번 만진 뒤 키보드로 돌아오면 터치 HUD가 계속 남지 않게 함.
+// capture로 메뉴가 키를 막기 전에 처리. 휴대폰·태블릿과 강제 켜기 설정은 유지.
+window.addEventListener('keydown', (e) => {
+  if (!e.isTrusted || e.gmPad || !touchSeen || matchMedia('(pointer: coarse)').matches) return;
+  touchSeen = false;
+  lastTouchUse = 0;
+  releaseAll();
+  update();
+}, { capture: true });
+
 /** 메뉴 키처럼 (main.js가 Esc로 메뉴를 엶). input.js는 gmPad 표시가 있는 키를 무시 */
 function sendEsc() {
   const ev = new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true, cancelable: true });
