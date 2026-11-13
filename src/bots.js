@@ -296,12 +296,14 @@ function aeroPlan(line, cfg, base, car, cache, master = false) {
   if (cache.has(key)) return cache.get(key);
   const cm = master ? masterDriveModel(cfg) : lineCarModel(cfg);
   const A = cfg.modes.accel, auto = A && !cfg.modes.manualSelect ? A.autoSpeed / 3.6 : Infinity;
+  // 이 profile 계산 동안 cfg는 바뀌지 않는다. 표본마다 같은 기어 배열을 만들지 않는다.
+  const accelGears = A ? cfg.gears.map(g => g * A.gearFactor) : cfg.gears;
   const model = {
     ...cm,
     vMax: cm.vMax * top,
     aAcc: master ? cm.aAcc : v => {
       const hi = v >= auto;
-      const G = (hi ? cfg.gears.map(g => g * A.gearFactor) : cfg.gears).find(g => g >= v * 1.06) || cfg.gears.at(-1) * (hi ? A.gearFactor : 1);
+      const G = (hi ? accelGears : cfg.gears).find(g => g >= v * 1.06) || cfg.gears.at(-1) * (hi ? A.gearFactor : 1);
       const df = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2), grip = hi ? A.gripFactor : 1;
       const tire = cfg.tire.traction * (cfg.drivetrain === 'awd' ? (cfg.tire.awdTraction ?? 1.12) : cfg.drivetrain === 'fwd' ? .9 : 1) * (1 + df) * grip;
       return Math.min(tire, cm.aAcc(v) + cfg.aero.drag * v * v * (1 - drag) + cfg.engine.power * .9 * (hi ? A.powerFactor : 1) * (power - 1) / G) + pull;

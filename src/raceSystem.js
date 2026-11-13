@@ -685,6 +685,9 @@ export async function createRaceSystem(o) {
       if (!first || laps > 1) notices.push({ type: 'fastest', ...fastest });
     }
   }
+  const stepOthers = [], otherSlots = [], stepRemotes = [];
+  let stepBodies = [];
+  const addOther = (id, progM, lat, speed, human, fwd, hitbox, pos, fin) => { const i = stepOthers.length; const slot = otherSlots[i] || (otherSlots[i] = {}); slot.id=id; slot.progM=progM; slot.lat=lat; slot.speed=speed; slot.human=human; slot.fwd=fwd; slot.hitbox=hitbox; slot.pos=pos; slot.fin=fin; stepOthers.push(slot); };
   let paceT = 0, racingNow = false;
   /** 물리 한 스텝 (main.js의 고정 스텝마다) */
   function step(dt, phase, time, playerProgress) {
@@ -707,8 +710,10 @@ export async function createRaceSystem(o) {
         bc.speed = 0;
         bc.vel.x = bc.vel.z = 0;
       } else {
-        const others = [];
-        for (const e of all()) {
+        const others = stepOthers;
+        others.length = 0;
+        for (let ei = -1; ei < opponents.entries.length; ei++) {
+          const e = ei < 0 ? me : opponents.entries[ei];
           if (e === b || (e.finished && !b.finished && !e.isPlayer)) continue; // 완주하고 천천히 도는 봇은 피하지 않음 (부딪힘도 없음)
           const human = e === me || !!e.remote;
           if (e.remote) e.view.look = e.look;
@@ -718,10 +723,10 @@ export async function createRaceSystem(o) {
             if (dx * dx + dy * dy + dz * dz > 3600) continue;
             const fl = Math.hypot(bc.fwd.x, bc.fwd.z) || 1, fx = bc.fwd.x / fl, fz = bc.fwd.z / fl;
             if (Math.abs(dy) > 4 && !(b.offMain && e.offMain)) continue; // 한쪽은 하늘, 한쪽은 땅
-            others.push({ id: e.id, progM: dx * fx + dz * fz, lat: (b.lateral || 0) + (fx * dz - fz * dx), speed: Math.abs(e.view.speed || 0), human, fwd: e.view.fwd, hitbox: hitboxFor(e.view), pos: ep, fin: !!e.finished });
+            addOther(e.id, dx * fx + dz * fz, (b.lateral || 0) + (fx * dz - fz * dx), Math.abs(e.view.speed || 0), human, e.view.fwd, hitboxFor(e.view), ep, !!e.finished);
             continue;
           }
-          others.push({ id: e.id, progM: near(b, e), lat: e.lateral, speed: e.speed, human, fwd: e.view.fwd, hitbox: hitboxFor(e.view), pos: e.view.pos, fin: !!e.finished });
+          addOther(e.id, near(b, e), e.lateral, e.speed, human, e.view.fwd, hitboxFor(e.view), e.view.pos, !!e.finished);
         }
         const c = b.driver.controls({ since: time, dt, me: { progM: 0, lat: b.lateral }, others, finished: b.finished });
         bc.update(dt, c);
@@ -743,7 +748,13 @@ export async function createRaceSystem(o) {
     }
     // 차끼리 충돌 (플레이어 + 봇), 온라인 상대는 움직이지 않는 벽처럼 (내 차만 밀림)
     // 완주한 봇은 (천천히 돌며 길을 막으므로) 다른 차와 부딪히지 않음
-    const bodies = [car, ...bots.filter((b) => !b.finished).map((b) => b.car)];
+    let bodyCount = 1, bodiesChanged = stepBodies[0] !== car;
+    for (const b of bots) if (!b.finished) { if (stepBodies[bodyCount] !== b.car) bodiesChanged = true; bodyCount++; }
+    if (bodiesChanged || bodyCount !== stepBodies.length) {
+      stepBodies = [car];
+      for (const b of bots) if (!b.finished) stepBodies.push(b.car);
+    }
+    const bodies = stepBodies;
     for(const c of bodies)c._hitboxPeers=bodies;
     for (const e of opponents.entries) if (e.remote && e.target) {
       e.view.look=e.look;e.view._hitboxPeers=bodies;
@@ -759,7 +770,8 @@ export async function createRaceSystem(o) {
       for (const b of bots) collide(b.car, e.view, true);
     }
     // hitbox2: 3대 이상 연쇄 접촉도 같은 스텝 안에 풀기. 속도/요/잔여 밀림은 재적용하지 않음.
-    const remotes=opponents.entries.filter(e=>e.remote&&e.target).map(e=>e.view);
+    const remotes=stepRemotes; remotes.length=0;
+    for(const e of opponents.entries)if(e.remote&&e.target)remotes.push(e.view);
     for(let pass=0;pass<128;pass++) {
       let remaining=0;
       const separate=(a,b,staticB)=>{
