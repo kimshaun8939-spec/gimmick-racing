@@ -16,6 +16,8 @@ import { spaceTrackMaterials } from './gpSpace.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
+// 가장자리 종류 (화산 volcanoTrack.js와 같은 번호): bots.js가 낭떠러지(cliff) 쪽에서는 액셀만 떼지 않고 브레이크를 밟음
+export const EDGE = { open: 0, cliff: 1, wall: 2, rail: 3, lava: 4 };
 const SAMPLE_STEP = 1.87; // 중심선 샘플 간격 (m). 샘플 수는 코스 길이에 맞춰 정함 (예전 3 km 코스 = 1600개)
 const CELL = 4; // 지형 격자 한 칸 (m)
 const CHUNK = 24; // 지형 메시 한 덩어리 = 24×24칸 (그리기 횟수와 충돌 계산 속도의 균형)
@@ -330,12 +332,63 @@ export function buildGrandPrixTrack(data, scene) {
   const sideI = (side) => (side < 0 ? 0 : 1);
   const kerbAt = (i, side) => kerbW[sideI(side)][wrapI(i)];
   const lineSamples = samples.slice(0, SAMPLES);
+
+  // ---------------------------------------------------------------- 우주 위험 구간 (2026-11-15 space2, data.spaceHazards · 생성기 .debug/space_gen.js)
+  //   openEdge: 난간 없는 쪽 (연석 밖은 허공 → 떨어지면 gpSpaceHazards.js가 복귀). 우주 샘플에서만. &space2=0 이면 예전처럼 난간
+  //   pullA: 블랙홀 중력 옆 가속 (m/s², + = 도로 오른쪽 = dimension.blackHole 의 도로 옆 성분), 앞뒤 ramp m에 걸쳐 서서히
+  //   lineMarg: 레이싱 라인이 난간 없는 가장자리에서 더 떨어지는 거리 (m). 블랙홀이 당기는 쪽은 pullMargin, 15 m에 걸쳐 부드럽게
+  const QS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+  const HZ = dim && data.spaceHazards && !(QS && QS.get('space2') === '0') ? data.spaceHazards : null;
+  const openEdge = [new Uint8Array(SAMPLES), new Uint8Array(SAMPLES)]; // [왼쪽, 오른쪽]
+  const pullA = new Float32Array(SAMPLES);
+  const openRuns = [], pullRuns = [];
+  const isOpen = (i, side) => openEdge[sideI(side)][wrapI(i)] === 1;
+  const lineMarg = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
+  if (HZ) {
+    for (const [t0, t1, sd] of HZ.open || []) {
+      const [a, b] = rangeI(t0, t1);
+      for (let i = a; i <= b; i++) {
+        const q = wrapI(i);
+        if (!samples[q].space) continue;
+        if (sd <= 0) openEdge[0][q] = 1;
+        if (sd >= 0) openEdge[1][q] = 1;
+      }
+      openRuns.push({ a, b, side: sd || 0 });
+    }
+    const bhv = new THREE.Vector3(...(dim.blackHole || [0, 0, -1])).setY(0).normalize();
+    const rampN = Math.max(2, Math.round(((HZ.ramp ?? 45) / length) * SAMPLES));
+    for (const z of HZ.pull || []) {
+      const [a, b] = rangeI(z.t0, z.t1);
+      let sum = 0;
+      for (let i = a; i <= b; i++) {
+        const s = S(i);
+        if (!s.space) continue;
+        const comp = bhv.x * s.right.x + bhv.z * s.right.z;
+        pullA[wrapI(i)] = (z.accel || 0) * comp * smooth(0, rampN, i - a) * smooth(0, rampN, b - i);
+        sum += comp;
+      }
+      pullRuns.push({ a, b, sign: Math.sign(sum) || 1, name: z.name || '' });
+    }
+    const raw = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
+    for (let i = 0; i < SAMPLES; i++)
+      for (const side of [-1, 1]) {
+        if (!isOpen(i, side)) continue;
+        raw[sideI(side)][i] = pullA[i] && Math.sign(pullA[i]) === side ? HZ.pullMargin ?? 2 : HZ.lineMargin ?? 0.6;
+      }
+    const R = Math.max(2, Math.round((15 / length) * SAMPLES));
+    for (let n = 0; n < 2; n++)
+      for (let i = 0; i < SAMPLES; i++) {
+        let m = 0;
+        for (let k = -R; k <= R; k++) m = Math.max(m, raw[n][wrapI(i + k)] * (1 - Math.abs(k) / (R + 1)));
+        lineMarg[n][i] = m;
+      }
+  }
   // lineUse 0 → 1: 코너 근처에서만 라인이 흰 선 안쪽에서 연석 위까지 나갈 수 있음
   //   땅에서는 넓힌 연석(2.8 m) 위까지, 다리 위에서는 원래 연석(1.6 m) 위까지
   const lineUse = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
   const lineLimit = (i, side) => {
     const u = lineUse[sideI(side)][wrapI(i)];
-    return HW - LINE_PLAIN + u * Math.max(0, kerbAt(i, side) - LINE_MARGIN + LINE_PLAIN);
+    return HW - LINE_PLAIN + u * Math.max(0, kerbAt(i, side) - LINE_MARGIN + LINE_PLAIN) - lineMarg[sideI(side)][wrapI(i)];
   };
   let racingLine = null;
   const onShortcutSide = (i, side) => {
@@ -353,6 +406,7 @@ export function buildGrandPrixTrack(data, scene) {
     for (let i = i0; i <= i1; i++) {
       const q = wrapI(i);
       if (onShortcutSide(q, side)) continue;
+      if (isOpen(q, side)) continue; // space2: 난간 없는 우주 가장자리는 연석을 안 밟음 (화산 낭떠러지처럼)
       // 2026-11-09 코너 다듬기: 활주로·착륙장이 붙는 쪽(noRail)은 라인이 연석 위로 나가지 않음
       // (활주로 입구 왼쪽 코너에서 라인이 연석 끝까지 붙어 조금만 밀려도 활주로 턱·소품에 부딪혔음)
       if ((data.noRail || []).some(([t0, t1, sd]) => sd === side && inRangeT(samples[q].t, t0, t1))) continue;
@@ -412,13 +466,27 @@ export function buildGrandPrixTrack(data, scene) {
     const cm = sp ? SPM.curb : curbBridgeMat, dm = sp ? SPM.deck : deckMat;
     strip(L, [[-HW - CURB, 0.02], [-HW, 0.02]], cm, { vScale: 4, surface: 'ground' });
     strip(L, [[HW, 0.02], [HW + CURB, 0.02]], cm, { vScale: 4, surface: 'ground' });
-    strip(L, [[-DECK, 0.01], [-HW - CURB, 0.01]], dm, { vScale: 6, surface: 'ground' });
-    strip(L, [[HW + CURB, 0.01], [DECK, 0.01]], dm, { vScale: 6, surface: 'ground' });
+    // space2: 난간 없는 우주 가장자리에는 갓길 상판이 없음 (연석 바로 밖이 허공)
+    const hasDeck = (side) => (s) => !(sp && isOpen(s.i, side));
+    for (const [c, d] of runsIn(L, hasDeck(-1))) strip(L.slice(c, d + 1), [[-DECK, 0.01], [-HW - CURB, 0.01]], dm, { vScale: 6, surface: 'ground' });
+    for (const [c, d] of runsIn(L, hasDeck(1))) strip(L.slice(c, d + 1), [[HW + CURB, 0.01], [DECK, 0.01]], dm, { vScale: 6, surface: 'ground' });
     const th = br.kind === 'viaduct' ? 2.4 : br.kind === 'trestle' ? 1.2 : 1.6;
-    strip(L, [[-DECK - 0.3, 0.25], [-DECK - 0.3, -th], [DECK + 0.3, -th], [DECK + 0.3, 0.25]], deckSideMats[br.kind], { vScale: 8, uScale: 4, shadow: !sp });
+    const sLat = (s, side) => (sp && isOpen(s.i, side) ? HW + CURB + 0.02 : DECK + 0.3);
+    const sTop = (s, side) => (sp && isOpen(s.i, side) ? 0 : 0.25);
+    strip(L, (s) => [[-sLat(s, -1), sTop(s, -1)], [-sLat(s, -1), -th], [sLat(s, 1), -th], [sLat(s, 1), sTop(s, 1)]], deckSideMats[br.kind], { vScale: 8, uScale: 4, shadow: !sp });
     // 우주 유리 다리 밑의 빛 띠
     if (sp) strip(L, [[DECK * 0.7, -th - 0.05], [-DECK * 0.7, -th - 0.05]], SPM.under, { vScale: 10 });
   }
+
+  // space2: 난간 없는 가장자리 = 빛나는 가장자리 선 + 아래로 늘어지는 빛 커튼 (허공이 어디서 시작하는지 잘 보이게)
+  if (HZ)
+    for (const side of [-1, 1])
+      for (const [a, b] of runsOf((i) => isOpen(i, side))) {
+        const L = spanList(a, b), e = HW + CURB;
+        // 연석 위 덮개 (u 0 = 바깥 끝 = 굵은 빛 선) + 가장자리 밑 빛 커튼 14 m
+        strip(L, [[side * (e + 0.05), 0.045], [side * (e - CURB), 0.045]], SPM.edge, { vScale: 6, chunk: 600 });
+        strip(L, [[side * (e + 0.06), 0.03], [side * (e + 0.06), -14]], SPM.curtain, { vScale: 40, chunk: 600 }); // chunk: 구간 하나 = 메시 하나 (그리기 호출 줄이기)
+      }
 
   // ---------------------------------------------------------------- 섬 지형
   // 땅 샘플 해시 (가까운 도로 찾기용)
@@ -921,6 +989,7 @@ export function buildGrandPrixTrack(data, scene) {
     for (let i = 0; i < SAMPLES; i++) {
       const s = samples[i];
       if (noRail.some(([t0, t1, sd]) => sd === side && inRangeT(s.t, t0, t1))) continue;
+      if (isOpen(i, side)) continue; // space2: 난간 없는 우주 가장자리
       if (s.bridge) need[i] = 1;
       else {
         let edge = false;
@@ -956,6 +1025,7 @@ export function buildGrandPrixTrack(data, scene) {
     }
     fill(0, 14);
     fill(1, 8);
+    for (let i = 0; i < SAMPLES; i++) if (isOpen(i, side)) need[i] = 0;
     return need;
   });
   // 레일 위치 (중심선에서 m): 다리 위 = 상판 끝, 땅 = 연석 바깥. 다리 가까운 땅은 두 위치를 부드럽게 이음
@@ -1227,13 +1297,18 @@ export function buildGrandPrixTrack(data, scene) {
   function edgeInfo(pos, near = nearest(pos)) {
     if (onAltPath(pos)) return { kerb: 0, off: 0, runoff: false };
     const k = kerbAt(near.index, near.lateral < 0 ? -1 : 1);
-    return { ...edgeFraction(near.dist, HW, HW + k), runoff: !!near.sample.bridge };
+    return { ...edgeFraction(near.dist, HW, HW + k), runoff: !!near.sample.bridge && !isOpen(near.index, near.lateral < 0 ? -1 : 1) };
   }
+  /** 가장자리 종류 (bots.js: 낭떠러지면 조심). space2: 난간 없는 우주 = cliff */
+  const edgeAt = (i, side) => (isOpen(i, side) ? EDGE.cliff : railSide[sideI(side)][wrapI(i)] ? EDGE.rail : EDGE.open);
+  /** 우주 도로에서 밟을 수 있는 끝 (중심선에서 m): 난간 없는 쪽 = 연석 끝, 다리 = 상판 끝 */
+  const spaceEdgeLat = (i, side) => (isOpen(i, side) ? HW + CURB : samples[wrapI(i)].bridge ? DECK : HW + kerbAt(i, side));
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);
 
   function animate(time) {
     boostMat.map.offset.y = -time * 1.5;
+    if (SPM.edge && SPM.edge.map) SPM.edge.map.offset.y = -time * 0.9; // 우주 가장자리 선이 앞으로 흐름
   }
 
   // placeAt이 어느 지점을 골랐는지 기억 (castRay 참고)
@@ -1264,5 +1339,7 @@ export function buildGrandPrixTrack(data, scene) {
     grandprix: true, surf, roadYAt, heightAt, fieldAt, islands, loops, bridgeRuns, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
     runway, apron, plank, rings, skyPath, inSkyCorridor, onAltPath, altPaths, indexAt, S, spanList, noise,
     dimension, setWorld, get inSpace() { return curWorld; }, buildMs, sampleCount: SAMPLES,
+    // space2 우주 위험 (gpSpaceHazards.js)
+    EDGE, edgeAt, spaceEdgeLat, isOpen, openEdge, pullA, openRuns, pullRuns, spaceHazards: HZ ? { cfg: HZ } : null,
   };
 }

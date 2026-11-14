@@ -72,7 +72,35 @@ export function spaceTrackMaterials() {
     g.fillStyle = grd;
     g.fillRect(0, h * 0.35, w, h * 0.3);
   });
+  // space2: 난간 없는 가장자리 선 (흰·하늘색 점선이 앞으로 흐름) + 밑으로 늘어지는 빛 커튼
+  //   u 0 = 바깥 끝 (허공 쪽): 굵은 흰·하늘색 선, 안쪽 = 분홍·하늘 사선 위험 줄무늬 (난간 있는 연석과 한눈에 다르게)
+  const edgeTex = canvasTexture(64, 64, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let k = -2; k < 4; k++) {
+      g.fillStyle = k % 2 ? 'rgba(255,79,216,0.55)' : 'rgba(56,232,255,0.5)';
+      g.beginPath();
+      g.moveTo(w * 0.2, k * 32);
+      g.lineTo(w, k * 32 + 26);
+      g.lineTo(w, k * 32 + 42);
+      g.lineTo(w * 0.2, k * 32 + 16);
+      g.fill();
+    }
+    g.fillStyle = 'rgba(56,232,255,0.9)';
+    g.fillRect(0, 0, w * 0.2, h);
+    g.fillStyle = 'rgba(255,255,255,1)';
+    g.fillRect(0, 0, w * 0.12, h * 0.6);
+  });
+  const curtainTex = canvasTexture(128, 8, (g, w, h) => {
+    const grd = g.createLinearGradient(0, 0, w, 0);
+    grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grd.addColorStop(0.18, 'rgba(255,255,255,0.4)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, w, h);
+  });
   _trackMats = {
+    edge: new THREE.MeshBasicMaterial({ map: edgeTex, color: '#ffffff', transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, fog: false }),
+    curtain: new THREE.MeshBasicMaterial({ map: curtainTex, color: '#38e8ff', transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }),
     road: new THREE.MeshStandardMaterial({ map: road.map, emissive: '#ffffff', emissiveMap: road.glow, emissiveIntensity: 0.75, roughness: 0.3, metalness: 0.35 }),
     curb: new THREE.MeshStandardMaterial({ map: curb, emissive: '#ffffff', emissiveMap: curbGlow, emissiveIntensity: 0.8, roughness: 0.5 }),
     deck: new THREE.MeshStandardMaterial({ map: deck, emissive: '#2a1a70', emissiveIntensity: 0.35, roughness: 0.4, metalness: 0.4, side: THREE.DoubleSide }),
@@ -1047,6 +1075,7 @@ export function buildSpace(track, scene, { cloudObjects = [], skyFog = null } = 
     });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(40, 7.5), new THREE.MeshBasicMaterial({ map: signTex, side: THREE.DoubleSide, fog: false }));
     sign.position.set(0, RR + 9, 0);
+    sign.rotation.y = Math.PI; // 다가오는 차 쪽을 보게 (예전엔 뒷면이 보여 글자가 뒤집혀 보였음)
     g.add(sign);
     world.add(g);
     animators.push((t) => (spin.rotation.z = t * 0.08));

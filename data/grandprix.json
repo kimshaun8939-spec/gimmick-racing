@@ -1426,6 +1426,49 @@
    "t1": 0.9571
   }
  ],
+ "_우주위험": "우주 차원에서만 생기는 규칙 (gpTrack.js + gpSpaceHazards.js). open = 난간 없는 구간 [t0, t1, 쪽(0 = 양쪽, -1 왼쪽, 1 오른쪽)]: 연석 밖은 허공이라 떨어지면 뒤로 복귀, 가장자리에 빛나는 선. pull = 블랙홀 중력 구간: 블랙홀(dimension.blackHole) 쪽으로 옆으로 끌림 accel(m/s², 도로 옆 방향 성분만큼), pulse = 블랙홀이 숨 쉬듯 세기가 바뀌는 주기(초)와 가장 약할 때 비율, slip = 옆으로 미끄러지는 속도가 줄어드는 비율(1/초), edgeGain = 블랙홀 쪽 가장자리로 갈수록 더 세짐, ramp = 앞뒤로 서서히(m), warn = 미리 알려 주는 거리(m). 사람·봇 같은 힘. fall = 떨어짐 판정 (도로보다 below m 아래 + 길 끝 밖이면 delay초 뒤 복귀). lineMargin = 레이싱 라인이 난간 없는 가장자리에서 더 떨어지는 거리(m) (pull 쪽은 pullMargin)",
+ "spaceHazards": {
+  "open": [
+   [
+    0.2398,
+    0.2644,
+    0
+   ],
+   [
+    0.3147,
+    0.371,
+    0
+   ]
+  ],
+  "pull": [
+   {
+    "t0": 0.2417,
+    "t1": 0.2639,
+    "accel": 2.4,
+    "name": "서쪽 직선"
+   },
+   {
+    "t0": 0.3177,
+    "t1": 0.37,
+    "accel": 2.9,
+    "name": "정거장 직선"
+   }
+  ],
+  "slip": 1,
+  "pulse": {
+   "period": 5.2,
+   "min": 0.55
+  },
+  "edgeGain": 0.35,
+  "ramp": 45,
+  "warn": 160,
+  "fall": {
+   "below": 3,
+   "delay": 0.25
+  },
+  "lineMargin": 0.6,
+  "pullMargin": 2.2
+ },
  "_배치": "gpScenery.js 가 쓰는 위치 t. stands = 관중석 [t, 쪽, 길이, 지붕색], arches = 도로 위 아치 [t, 글자, 색], signs = 안내판 [t, 옆 거리(m, 음수 = 왼쪽), 제목, 설명, 배경색, 강조색, 폭], flagsM = 출발선 앞뒤 깃발 구간(m), crane = 항구 크레인 구간 t, lighthouse = 등대 구간 t",
  "places": {
   "stands": [
