@@ -1013,6 +1013,7 @@ export function buildMoonScenery(track, scene) {
       for (const sd of [-1, 1]) {
         const lat = HW + track.kerbAt(s.i, sd) + 2.3;
         const p = s.pos.clone().addScaledVector(s.right, sd * lat);
+        if (track.onCut && track.onCut(p, 2)) continue; // moon2: 지름길 차선 위에는 안 놓음
         const y = Math.max(ground(p.x, p.z), track.roadYAt(s, sd * (HW + track.kerbAt(s.i, sd))) - 0.4);
         if (y < s.pos.y - 3) continue;
         m4.makeTranslation(p.x, y + 0.1, p.z);
@@ -1163,7 +1164,7 @@ export function buildMoonScenery(track, scene) {
   const beacons = [];
   for (const j of track.jumps || []) {
     const sJ = track.S(j.lipI - track.mS(95));
-    gate(sJ, 'low', ['LUNAR JUMP', `협곡 ${Math.round(j.gapLen)} m · 중력 쿠션이 받쳐 줘요`]);
+    gate(sJ, 'low', ['LUNAR JUMP', track.cut ? `협곡 ${Math.round(j.gapLen)} m · 느리면 쿠션에 걸려 손해` : `협곡 ${Math.round(j.gapLen)} m · 중력 쿠션이 받쳐 줘요`]);
     const lip = j.lip;
     for (const sd of [-1, 1]) {
       const p = lip.pos.clone().addScaledVector(lip.right, sd * (HW + CURB + 1.5));

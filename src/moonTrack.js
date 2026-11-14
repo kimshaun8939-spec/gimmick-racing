@@ -366,6 +366,63 @@ export function buildMoonTrack(data, scene) {
   /** 수평 옆 위치 l에서의 도로 높이 (많이 비틀린 곳은 가운데 높이) */
   const roadYAt = (s, l) => (Math.abs(s.bank) < 0.8 ? s.pos.y + l * Math.tan(s.bank) : s.pos.y);
 
+  // ---------------------------------------------------------------- 크레이터 롱 점프 지름길 (2026-11-15 moon2, data.cut · 생성기 .debug/moon_gen.py)
+  //   점프 A 착지 뒤 갈림길: 본 도로는 왼쪽으로 꺾어 크레이터 테두리를 돌아 T4(제동 코너)로, 지름길은 똑바로 램프 → 저중력으로 크레이터를 넘어
+  //   멀리 있는 착지대 → 루프 앞 직선에 오른쪽에서 합류. 쿠션 없음 = 짧으면 크레이터에 빠져 갈림길 앞으로 복귀(src/moonHazards.js)
+  //   w 0 = 본 도로 면과 같은 높이(갈림·합류에서 턱 없음), 1 = 생성기 높이. altPaths에 넣음 → 위에서는 잔디 감속 없음·바퀴 판정 잠시 멈춤
+  //   &moon2=0 = 지름길 없음 + 예전 쿠션 (코스 모양은 json이라 그대로)
+  const QS = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+  const MOON2 = QS.get('moon2') !== '0';
+  const CUTD = MOON2 && data.cut && data.cut.path && data.cut.path.length > 8 ? data.cut : null;
+  let cut = null;
+  const nearCutR = new Uint8Array(SAMPLES); // 본 도로 오른쪽에 지름길 차선이 붙어 있는 샘플 (연석 넓히기·갓길 판·바닥 빛 안 함)
+  if (CUTD) {
+    const H = CUTD.halfW;
+    const L = CUTD.path.map(([x, z, y, w, kind], k) => ({ pos: new THREE.Vector3(x, y, z), w, kind, q: k * CUTD.step, cut: true, bank: 0, roll: false, gap: kind === 'gap', magnet: false, i: k }));
+    L.forEach((c, k) => {
+      const a = L[Math.max(0, k - 1)].pos, b = L[Math.min(L.length - 1, k + 1)].pos;
+      c.tan = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+      c.right = new THREE.Vector3().crossVectors(c.tan, UP).normalize();
+      // 가장 가까운 본 도로 샘플 (높이 맞추기·겹친 폭 계산)
+      let bd = Infinity, bs = null;
+      for (let i = 0; i < SAMPLES; i++) {
+        const sp = samples[i].pos;
+        if (Math.abs(sp.y - c.pos.y) > 25 || samples[i].roll) continue;
+        const d = (sp.x - c.pos.x) ** 2 + (sp.z - c.pos.z) ** 2;
+        if (d < bd) (bd = d), (bs = samples[i]);
+      }
+      c.near = bs;
+      c.mainLat = (c.pos.x - bs.pos.x) * bs.right.x + (c.pos.z - bs.pos.z) * bs.right.z;
+      c.mainDist = Math.sqrt(bd);
+      if (c.w < 1) {
+        const along = (c.pos.x - bs.pos.x) * bs.tan.x + (c.pos.z - bs.pos.z) * bs.tan.z;
+        const yMain = roadYAt(bs, THREE.MathUtils.clamp(c.mainLat, -HW - CURB, HW + CURB)) + (along * bs.tan3.y) / Math.max(0.3, Math.hypot(bs.tan3.x, bs.tan3.z));
+        c.pos.y = THREE.MathUtils.lerp(yMain, c.pos.y, c.w);
+      }
+    });
+    let dist = 0;
+    L.forEach((c, k) => {
+      if (k) dist += Math.hypot(c.pos.x - L[k - 1].pos.x, c.pos.z - L[k - 1].pos.z);
+      c.dist = dist;
+      const a = L[Math.max(0, k - 1)], b = L[Math.min(L.length - 1, k + 1)];
+      // 램프 끝·착지대 앞(틈 옆)은 바깥 점 대신 자기 점으로 기울기 (틈 건너편 높이로 기울지 않게)
+      const pa = a.gap && !c.gap ? c.pos : a.pos, pb = b.gap && !c.gap ? c.pos : b.pos;
+      c.tan3 = pb.clone().sub(pa).normalize();
+      c.rightB = c.right.clone();
+      c.up = new THREE.Vector3().crossVectors(c.rightB, c.tan3).normalize();
+    });
+    const idx = (kind) => L.findIndex((c) => c.kind === kind);
+    const lipK = idx('gap') - 1, padK = idx('pad');
+    for (const c of L) if (c.mainDist < HW + CURB + H + 4) for (let k = -6; k <= 6; k++) nearCutR[wrapI(c.near.i + k)] = 1;
+    const box = new THREE.Box3().setFromPoints(L.map((c) => c.pos)).expandByScalar(H + 30);
+    box.min.y -= 60;
+    cut = {
+      samples: L, half: H, data: CUTD, lipK, padK, lip: L[lipK], pad: L[padK], box, g: CUTD.g ?? 0.4,
+      lipQ: CUTD.lip, pad0: CUTD.pad0, pad1: CUTD.pad1, mergeQ: CUTD.merge, tFork: CUTD.tFork, tMerge: CUTD.tMerge,
+      kick: CUTD.kick, length: dist,
+    };
+  }
+
   // ---------------------------------------------------------------- 중력 구역 (샘플마다 배수, 경계는 25 m에 걸쳐 부드럽게)
   const zones = (data.gravity || []).map((z, k) => ({ ...z, k }));
   {
@@ -478,9 +535,12 @@ export function buildMoonTrack(data, scene) {
   if (roll) for (let i = roll.a - roll.pad - mS(25); i <= roll.b + roll.pad + mS(10); i++) centerOnly[wrapI(i)] = 0.3;
   // 점프: 립 60 m 앞부터는 가운데 ±1.2 m로 곧게 (비스듬히 뛰면 착지 도로 옆으로 떨어져 속도를 크게 잃었음)
   //   착지 뒤 65 m까지도 곧게 (2차: 공중에서 봇이 착지 뒤 라인 점을 겨냥해 차 머리가 20° 돌아간 채 착지 → 미끄러져 T12 밖으로 나갔음)
-  for (const j of jumps)
-    for (let i = j.lipI - mS(110); i <= j.landI + mS(95); i++)
-      centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(60) || i > j.landI + mS(65) ? HW - 3.5 : 1.2);
+  //   moon2: 점프 A는 착지 뒤 갈림길(왼쪽 꺾임)이 가까워서 가운데 고정을 30 m만 (65 m면 라인이 갈림길 앞에서 급하게 휘어 봇이 착지 직후 브레이크를 밟았음)
+  for (const j of jumps) {
+    const after = cut && j.name === 'A' ? 30 : 65;
+    for (let i = j.lipI - mS(110); i <= j.landI + mS(after + 30); i++)
+      centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(60) || i > j.landI + mS(after) ? HW - 3.5 : 1.2);
+  }
   const lineLimit = (i, side) => {
     const q = wrapI(i);
     const u = lineUse[sideI(side)][q];
@@ -494,7 +554,7 @@ export function buildMoonTrack(data, scene) {
       const w = smooth(0, ramp, i - i0) * smooth(0, ramp, i1 - i);
       const u = lineUse[sideI(side)];
       u[q] = Math.max(u[q], w);
-      if (noWide(q)) continue;
+      if (noWide(q) || (side > 0 && nearCutR[q])) continue;
       const arr = kerbW[sideI(side)];
       arr[q] = Math.max(arr[q], CURB + (KERB_WIDE - CURB) * w);
     }
@@ -654,6 +714,124 @@ export function buildMoonTrack(data, scene) {
     group.add(bar2);
   }
 
+  // ---------------------------------------------------------------- 크레이터 롱 점프 지름길 그리기 (moon2)
+  //   차선: 본 도로와 겹친 곳은 본 도로 바깥만 칠함(겹쳐 그리면 길이 둘로 갈려 보임). 램프 = 하늘색 화살표, 착지대 = 노랑 테두리·흰 화살표
+  //   양옆 하늘색·흰 연석 + 빛 줄 (본 도로와 떨어진 곳만), 램프 끝·착지대 앞 절벽면은 노랑 줄무늬 + 빛 띠
+  const cutGlow = new THREE.MeshBasicMaterial({ color: '#5ff0ff', toneMapped: false, side: THREE.DoubleSide });
+  const padGlow = new THREE.MeshBasicMaterial({ color: '#ffb02e', toneMapped: false, side: THREE.DoubleSide });
+  if (cut) {
+    const H = cut.half, L = cut.samples;
+    const cutRoadMat = new THREE.MeshStandardMaterial({ map: roadTexture(), color: '#d4dae6', roughness: 0.88 });
+    const rampTex = canvasTexture(128, 256, (g, w, h) => {
+      g.fillStyle = '#23272f';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(95,240,255,0.9)';
+      g.lineWidth = 14;
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      for (const y0 of [70, 190]) {
+        g.beginPath();
+        g.moveTo(22, y0 + 34);
+        g.lineTo(64, y0 - 14);
+        g.lineTo(106, y0 + 34);
+        g.stroke();
+      }
+    });
+    const rampMat = new THREE.MeshStandardMaterial({ map: rampTex, emissive: '#ffffff', emissiveMap: rampTex, emissiveIntensity: 0.35, roughness: 0.7 });
+    const padTex = canvasTexture(256, 256, (g, w, h) => {
+      g.fillStyle = '#2b2f37';
+      g.fillRect(0, 0, w, h);
+      // 양옆 노랑·검정 사선 띠
+      for (const x0 of [0, w - 28]) {
+        g.save();
+        g.beginPath();
+        g.rect(x0, 0, 28, h);
+        g.clip();
+        g.fillStyle = '#ffcf3f';
+        g.fillRect(x0, 0, 28, h);
+        g.fillStyle = '#1d1f24';
+        for (let y = -40; y < h + 40; y += 40) {
+          g.beginPath();
+          g.moveTo(x0, y);
+          g.lineTo(x0 + 28, y - 28);
+          g.lineTo(x0 + 28, y - 8);
+          g.lineTo(x0, y + 20);
+          g.fill();
+        }
+        g.restore();
+      }
+      g.strokeStyle = 'rgba(255,255,255,0.85)';
+      g.lineWidth = 12;
+      g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(80, 170);
+      g.lineTo(128, 110);
+      g.lineTo(176, 170);
+      g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.18)';
+      g.fillRect(124, 0, 8, 60);
+      g.fillRect(124, 196, 8, 60);
+    });
+    const padMat = new THREE.MeshStandardMaterial({ map: padTex, roughness: 0.8 });
+    // 본 도로 오른쪽 끝(연석 포함)이 지름길 옆 위치로 어디쯤인가 → 그 바깥만 칠함
+    const tmpE = new THREE.Vector3();
+    const leftEdge = (c) => {
+      const bs = c.near;
+      if (c.mainDist > HW + CURB + H + 6) return -Infinity;
+      tmpE.copy(bs.pos).addScaledVector(bs.right, HW + kerbAt(bs.i, 1) + 0.05).sub(c.pos);
+      return tmpE.x * c.right.x + tmpE.z * c.right.z;
+    };
+    for (const c of L) c.left = Math.max(-H, leftEdge(c));
+    const matOf = (c) => (c.kind === 'ramp' ? rampMat : c.kind === 'pad' ? padMat : cutRoadMat);
+    const runs = [];
+    for (let k = 0; k < L.length; k++) {
+      if (L[k].gap) continue;
+      const m = matOf(L[k]);
+      const last = runs[runs.length - 1];
+      if (last && last.m === m && last.b === k - 1) last.b = k;
+      else runs.push({ a: last && last.b === k - 1 ? k - 1 : k, b: k, m });
+    }
+    for (const r of runs) {
+      const list = L.slice(r.a, r.b + 1);
+      if (list.length < 2) continue;
+      strip(list, (c) => [[Math.min(H - 0.01, c.left), 0.02], [H, 0.02]], r.m, { vScale: r.m === padMat ? 18 : r.m === rampMat ? 6 : 12, uScale: r.m === cutRoadMat ? null : 2 * H, surface: 'ground', chunk: 30 });
+    }
+    // 연석 + 빛 줄: 오른쪽은 늘, 왼쪽은 본 도로와 떨어진 곳만
+    const sepRuns = [], allRuns = [];
+    for (const [arr, ok] of [[sepRuns, (c) => !c.gap && c.left <= -H + 0.01], [allRuns, (c) => !c.gap]]) {
+      let a = -1;
+      for (let k = 0; k <= L.length; k++) {
+        const f = k < L.length && ok(L[k]);
+        if (f && a < 0) a = k;
+        if (!f && a >= 0) arr.push([a, k - 1]), (a = -1);
+      }
+    }
+    for (const [a, b] of allRuns) {
+      if (b - a < 1) continue;
+      const list = L.slice(a, b + 1);
+      strip(list, [[H, 0.03], [H + 1.2, 0.03]], curbMats.low, { vScale: 4, surface: 'ground', chunk: 30 });
+      strip(list, [[H + 1.2, 0.04], [H + 1.2, 0.2]], cutGlow, { vScale: 4 });
+    }
+    for (const [a, b] of sepRuns) {
+      if (b - a < 1) continue;
+      const list = L.slice(a, b + 1);
+      strip(list, [[-H - 1.2, 0.03], [-H, 0.03]], curbMats.low, { vScale: 4, surface: 'ground', chunk: 30 });
+      strip(list, [[-H - 1.2, 0.2], [-H - 1.2, 0.04]], cutGlow, { vScale: 4 });
+    }
+    // 램프 끝 30 m 옆면 (들린 판) + 립 빛 띠, 착지대 앞 절벽면 + 주황 빛 띠
+    const DE = H + 1.4;
+    strip(L.slice(Math.max(0, cut.lipK - 15), cut.lipK + 1), [[-DE, 0.03], [-DE, -4], [DE, -4], [DE, 0.03]], hazMat, { vScale: 4, uScale: 4, shadow: true });
+    strip(L.slice(cut.padK, cut.padK + 4), [[-DE, 0.03], [-DE, -7], [DE, -7], [DE, 0.03]], hazMat, { vScale: 4, uScale: 4 });
+    for (const [c, mat] of [[cut.lip, cutGlow], [cut.pad, padGlow]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(2 * H + 2.6, 0.2, 0.6), mat);
+      bar.position.copy(surf(c, 0, 0.07));
+      bar.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(c.rightB.clone().negate(), c.up, c.tan3));
+      group.add(bar);
+    }
+    cut.glowMat = cutGlow;
+    cut.padGlow = padGlow;
+  }
+
   // ---------------------------------------------------------------- 가드레일 (점프 앞뒤, 코르크스크루 들어가고 나오는 곳, data.rails)
   const railSide = [new Uint8Array(SAMPLES), new Uint8Array(SAMPLES)];
   const setRail = (a, b, side) => {
@@ -770,7 +948,7 @@ export function buildMoonTrack(data, scene) {
     const nearGap = new Uint8Array(SAMPLES);
     const g = mS(12);
     for (let i = 0; i < SAMPLES; i++) if (samples[i].gap || samples[i].roll || samples[i].magnet) for (let k = -g; k <= g; k++) nearGap[wrapI(i + k)] = 1;
-    for (let n = 0; n < 2; n++) for (let i = 0; i < SAMPLES; i++) skirtOK[n][i] = !nearGap[i] && !railSide[n][i] ? 1 : 0;
+    for (let n = 0; n < 2; n++) for (let i = 0; i < SAMPLES; i++) skirtOK[n][i] = !nearGap[i] && !railSide[n][i] && !(n === 1 && nearCutR[i]) ? 1 : 0;
   }
   const skirtAt = (i, side) => skirtOK[side < 0 ? 0 : 1][wrapI(i)] === 1;
   {
@@ -818,6 +996,13 @@ export function buildMoonTrack(data, scene) {
     if (!roadHash.has(k)) roadHash.set(k, []);
     roadHash.get(k).push(s);
   }
+  if (cut)
+    for (const c of cut.samples) {
+      if (c.gap) continue;
+      const k = ckey(Math.floor(c.pos.x / HASH), Math.floor(c.pos.z / HASH));
+      if (!roadHash.has(k)) roadHash.set(k, []);
+      roadHash.get(k).push(c);
+    }
   function roadNear(x, z, r, fn) {
     const x0 = Math.floor((x - r) / HASH), x1 = Math.floor((x + r) / HASH), z0 = Math.floor((z - r) / HASH), z1 = Math.floor((z + r) / HASH);
     for (let a = x0; a <= x1; a++)
@@ -890,14 +1075,36 @@ export function buildMoonTrack(data, scene) {
     }
     return out;
   }
+  /** 지름길 크레이터 구덩이 깊이 (moon2): 램프 끝 ~ 착지대 앞, 지름길 선을 따라 길쭉하게. 본 도로 가까이(ndMain)는 안 팜 */
+  const PIT = cut && cut.data.pit;
+  function pitH(x, z, H, ndMain, ndAll) {
+    if (!PIT) return H;
+    const ax = PIT.x1 - PIT.x0, az = PIT.z1 - PIT.z0, len = Math.hypot(ax, az);
+    const ux = ax / len, uz = az / len;
+    const dx = x - PIT.x0, dz = z - PIT.z0;
+    const a = dx * ux + dz * uz, b = Math.abs(-dx * uz + dz * ux);
+    if (a < -40 || a > len + 40) return H;
+    const u = THREE.MathUtils.clamp(a / len, 0, 1);
+    const hw = PIT.halfW0 + (PIT.halfW1 - PIT.halfW0) * u;
+    const wa = Math.min(smooth(-4, 3, a), 1 - smooth(len - 3, len + 4, a));
+    const wb = 1 - smooth(hw * 0.7, hw + 9, b + noise(x / 9, z / 9, 2) * 4);
+    const fade = smooth(HW + CURB + 3, HW + CURB + 12, ndMain);
+    // 크레이터 테두리: 구덩이 둘레가 1.6 m 솟음 (길에서 떨어진 곳만) → 운전석에서 '크레이터'로 보이게
+    const eb = b / (hw + 4.5), ea = Math.max(0, -a, a - len) / 8;
+    const rim = 1.6 * Math.exp(-(((Math.hypot(Math.max(0, eb - 0.62) / 0.38, ea) - 1) / 0.28) ** 2)) * fade * smooth(HW + CURB + 3, HW + CURB + 10, ndAll);
+    const w = Math.min(wa, wb) * fade;
+    if (w <= 0) return H + rim;
+    return Math.min(H + rim * (1 - w), THREE.MathUtils.lerp(H, PIT.floor + noise(x / 12, z / 12, 2) * 2.5, w));
+  }
   function terrainH(x, z) {
-    let nd = Infinity, ns = null, under = Infinity;
+    let nd = Infinity, ns = null, under = Infinity, ndMain = Infinity;
     roadNear(x, z, 70, (s) => {
       if (!solid(s)) return;
       const p = s.base || s.pos;
       const dx = x - p.x, dz = z - p.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < nd) (nd = d), (ns = s);
+      if (!s.cut && d < ndMain) ndMain = d;
       if (d < HW + CURB + 3) {
         // 앞뒤 4 m 안의 샘플만 + 오르내리는 기울기만큼 보정 (2026-11-10)
         //   예전엔 반지름 13.6 m 안에서 가장 낮은 도로 높이를 써서, 비탈·골짜기에서는 도로 옆 땅이 1~1.5 m 꺼져 턱이 생겼음
@@ -921,7 +1128,7 @@ export function buildMoonTrack(data, scene) {
         const gr = ns.roll ? 0 : ns.tan3.y / (Math.hypot(ns.tan3.x, ns.tan3.z) || 1);
         edgeY = (ns.roll ? p.y : roadYAt(ns, Math.sign(l) * (HW + CURB))) + gr * along - 0.15;
         // 갓길 판이 있는 곳: 판 밑 땅은 0.45 m 더 낮게 (판과 땅이 겹쳐 깜빡이지 않게), 판 끝 지나서 땅이 원래 높이로 올라와 판을 덮음
-        const sk = skirtAt(ns.i, l);
+        const sk = !ns.cut && skirtAt(ns.i, l);
         if (sk) sink = 0.45 * (1 - smooth(HW + CURB + SKW + 0.5, HW + CURB + SKW + 5, nd));
         k = smooth(HW + CURB + 1 + (sk ? SKW : 0), HW + 42, nd);
       }
@@ -938,7 +1145,7 @@ export function buildMoonTrack(data, scene) {
       const cap = p.y - 1.2 + Math.max(0, d - HWR - 4) * 0.8;
       if (cap < H) H = cap;
     });
-    return { H: chasmH(x, z, H), nd: ns ? nd : Infinity };
+    return { H: pitH(x, z, chasmH(x, z, H), ndMain, nd), nd: ns ? nd : Infinity };
   }
 
   // ---------------------------------------------------------------- 지형 메시 (가까운 격자, 충돌 있음)
@@ -1070,6 +1277,11 @@ export function buildMoonTrack(data, scene) {
       const d = (q.x - p.x) ** 2 + (q.z - p.z) ** 2;
       if (d < best) best = d;
     }
+    if (cut)
+      for (const c of cut.samples) {
+        const d = (c.pos.x - p.x) ** 2 + (c.pos.z - p.z) ** 2;
+        if (d < best) best = d;
+      }
     return Math.sqrt(best);
   }
   /** 중력 구역용 빠른 찾기: 지난번 지점 근처만 (멀리 순간이동하면 전체) */
@@ -1092,19 +1304,59 @@ export function buildMoonTrack(data, scene) {
   //   → 느리게(브레이크 밟고·쉬운 봇·느린 차) 뛰어도 쿠션 위를 둥실 떠서 건너감. 빠른 차는 쿠션보다 높이 날아서 그대로
   //   off: 선보다 이만큼 위부터 쿠션 (립 1.4 m → 착지 1.9 m, 착지 도로보다 살짝 위로 띄워 착지 턱에 안 걸리게)
   //   K: 1 m 내려갈 때 줄어드는 중력 배수, GMIN: 가장 세게 밀어 올리는 값(−), DEEP: 이보다 깊이 떨어지면 쿠션 없음
-  const CUSHION = { off0: 1.4, off1: 1.9, K: 0.7, GMIN: -0.75, DEEP: 14, side: HW + 9 };
+  // 2026-11-15 moon2: 쿠션 = "살려 주지만 늦게 내려서 손해" (예전엔 25~200 km/h 무엇이든 손해 없이 착지 → 실패도 선택도 없었음)
+  //   - 립 쪽 off0 1.4 → 0.3: 예전엔 막 뛰어오른 차까지 쿠션이 들어 올려서(중력 −0.1) 모든 점프가 더 멀리 날았음. 이제 제대로 뛴 차는 쿠션에 안 닿음
+  //   - 받쳐 주는 힘(K·GMIN)은 그대로: 약하게 해 봤더니(K 0.35) 80 km/h 차가 착지 절벽에 걸려 협곡에 빠졌음 (봇도 위험) → 안전은 그대로
+  //   - 손해: src/moonHazards.js가 쿠션에 걸려 선보다 가라앉은 동안 앞으로 가는 속도를 초당 0.9 비율로 10 m/s까지 깎음
+  const CUSHION = MOON2 ? { off0: 0.3, off1: 1.9, K: 0.7, GMIN: -0.75, DEEP: 14, side: HW + 9 } : { off0: 1.4, off1: 1.9, K: 0.7, GMIN: -0.75, DEEP: 14, side: HW + 9 };
   for (const j of jumps)
     for (let i = j.lipI; i !== j.landI; i = wrapI(i + 1)) {
       const u = wrapI(i - j.lipI) / Math.max(1, wrapI(j.landI - j.lipI));
       samples[i].cushionOff = CUSHION.off0 + (CUSHION.off1 - CUSHION.off0) * u;
     }
-  function gravityAt(pos) {
-    const s = samples[nearIndexFast(pos)];
-    if (s.cushionOff === undefined) return s.grav;
+  /** 쿠션에 얼마나 깊이 걸렸나 (m, 0 = 안 걸림). moonProps가 앞으로 가는 속도를 깎을 때 씀 */
+  function cushionAt(pos, s = samples[nearIndexFast(pos)]) {
+    if (s.cushionOff === undefined) return 0;
     const d = s.pos.y + s.cushionOff - pos.y;
-    if (d <= 0 || d > CUSHION.DEEP) return s.grav;
-    if (Math.hypot(pos.x - s.pos.x, pos.z - s.pos.z) > CUSHION.side) return s.grav;
+    if (d <= 0 || d > CUSHION.DEEP) return 0;
+    if (Math.hypot(pos.x - s.pos.x, pos.z - s.pos.z) > CUSHION.side) return 0;
+    return d;
+  }
+  function gravityAt(pos) {
+    if (cut) {
+      const g = cutGravity(pos);
+      if (g !== null) return g;
+    }
+    const s = samples[nearIndexFast(pos)];
+    const d = cushionAt(pos, s);
+    if (d <= 0) return s.grav;
     return Math.max(CUSHION.GMIN, s.grav - CUSHION.K * d);
+  }
+  // 지름길 찾기 (지난번 점 근처부터): { k, c, lat, dist, y } 또는 null
+  let cLast = 0;
+  function cutNear(pos, all = true) {
+    if (!cut || !cut.box.containsPoint(pos)) return null;
+    const L = cut.samples;
+    let best = Infinity, bk = cLast;
+    for (let k = 0; k < L.length; k++) {
+      const p = L[k].pos;
+      const d = (p.x - pos.x) ** 2 + (p.z - pos.z) ** 2;
+      if (d < best) (best = d), (bk = k);
+    }
+    cLast = bk;
+    const c = L[bk];
+    const lat = (pos.x - c.pos.x) * c.right.x + (pos.z - c.pos.z) * c.right.z;
+    const along = (pos.x - c.pos.x) * c.tan.x + (pos.z - c.pos.z) * c.tan.z;
+    const y = c.pos.y + (along * c.tan3.y) / Math.max(0.3, Math.hypot(c.tan3.x, c.tan3.z));
+    if (!all && c.gap) return null;
+    return { k: bk, c, lat, dist: Math.sqrt(best), y, q: c.q + along };
+  }
+  /** 지름길 위·위 하늘 = 저중력 (램프 30 m 앞 ~ 착지대 끝, 끝 뒤 40 m에 걸쳐 1로). 본 도로 위는 null */
+  function cutGravity(pos) {
+    const n = cutNear(pos);
+    if (!n || Math.abs(n.lat) > cut.half + 14 || n.q < cut.lipQ - 30 || n.q > cut.pad1 + 40) return null;
+    if (n.c.mainDist < HW + CURB + cut.half && Math.abs(n.lat) > cut.half) return null; // 겹친 차선 옆 = 본 도로
+    return cut.g + (1 - cut.g) * smooth(cut.pad1, cut.pad1 + 40, n.q);
   }
 
   const raycaster = new THREE.Raycaster();
@@ -1150,17 +1402,36 @@ export function buildMoonTrack(data, scene) {
     return null;
   }
 
+  // 지름길(altPaths): 본 도로와 떨어진 부분만 '다른 길' (겹친 차선·합류는 본 도로로 셈 → 바퀴 판정이 오래 멈추지 않게)
+  const altPaths = [];
+  if (cut) altPaths.push({ samples: cut.samples.filter((c) => !c.gap && c.mainDist > HW + CURB + 1.5), half: cut.half + 1.2, cut: true });
+  /** 지름길 위인가 (틈 위 하늘은 아님). margin = 옆으로 더 봐 줄 폭 */
+  function onCut(pos, margin = 1) {
+    const n = cutNear(pos, false);
+    return !!n && !n.c.gap && Math.abs(n.lat) < cut.half + 1.2 + margin && Math.abs(pos.y - n.y) < 6;
+  }
+  const onAltPath = (pos, margin = 1) => {
+    if (!cut) return false;
+    const n = cutNear(pos, false);
+    return !!n && n.c.mainDist > HW + CURB + 1.5 && Math.abs(n.lat) < cut.half + 1.2 + margin && Math.abs(pos.y - n.y) < 6;
+  };
   function isOnRoad(pos, near = nearest(pos)) {
     if (near.sample.magnet) return true;
-    return near.dist < HW + kerbAt(near.index, near.lateral < 0 ? -1 : 1);
+    return near.dist < HW + kerbAt(near.index, near.lateral < 0 ? -1 : 1) || onCut(pos, 0);
   }
   function edgeInfo(pos, near = nearest(pos)) {
     if (near.sample.magnet || near.sample.roll) return { kerb: 0, off: 0, runoff: false };
     const k = kerbAt(near.index, near.lateral < 0 ? -1 : 1);
+    if (cut && near.dist > HW + 0.5 && onCut(pos, 0)) {
+      // 지름길 위: 지름길 가장자리 기준 (연석 1.2 m)
+      const n = cutNear(pos, false);
+      return { ...edgeFraction(Math.abs(n.lat), cut.half, cut.half + 1.2), runoff: false };
+    }
     return { ...edgeFraction(near.dist, HW, HW + k), runoff: false };
   }
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);
+  const minimapParts = cut ? [{ pts: cut.samples.filter((c, k) => k % 2 === 0 && c.mainDist > HW).map((c) => [c.pos.x, c.pos.z]), color: '#5ff0ff', dash: [4, 3] }] : null;
 
   // 중력 쿠션 그림 (2차): 협곡 위 립→착지 사이에 하늘색 빛 그물 + 위로 흐르는 화살표 → "느려도 둥실 건너갈 수 있음"이 보이게
   const cushionTex = canvasTexture(128, 128, (g, w, h) => {
@@ -1195,19 +1466,25 @@ export function buildMoonTrack(data, scene) {
     magnetMat.emissiveIntensity = 0.5 + Math.sin(time * 3) * 0.15;
     magTex.offset.y = -time * 0.6;
     lipGlow.color.setHSL(0.52, 1, 0.6 + Math.sin(time * 6) * 0.15);
+    if (cut) {
+      cutGlow.color.setHSL(0.52, 1, 0.55 + Math.sin(time * 4) * 0.12);
+      padGlow.color.setHSL(0.1, 1, 0.55 + Math.sin(time * 5 + 1) * 0.15);
+    }
   }
   const sampleAtTracked = (t) => (lastSampled = sampleAt(t));
   const buildMs = Math.round(performance.now() - buildT0);
 
   return {
     data, width: W, length, samples, sampleAt: sampleAtTracked, nearest, nearestRaw, castRay, boostPadAt: () => null, animate, outline,
-    shortcut: null, shortcutDist: () => Infinity, onShortcut: () => false, isOnRoad, edgeInfo, racingLine, lineY, kerbWidth: CURB, kerbAt, group, groundMeshes,
+    shortcut: null, shortcutDist: () => Infinity, onShortcut: (pos) => onAltPath(pos), isOnRoad, edgeInfo, racingLine, lineY, kerbWidth: CURB, kerbAt, group, groundMeshes,
     arena: false, pad: null, inPad: () => false, spawn: null,
     sea: null, inSea: () => false, waterRanges: [], isWaterT: () => false, buoys: [],
     // gpCorners.js(코너 표시판)가 쓰는 그랑프리 방식 값: 우주(네온) 표시판으로
     grandprix: true, inSpace: true, surf, roadYAt, heightAt, fieldAt, railLimit, railRuns, railSide, deckHalf: HW + CURB + 1.2, curb: CURB,
-    onAltPath: () => false, altPaths: [], runway: null, apron: null, plank: null, rings: [], skyPath: [], inSkyCorridor: () => false,
-    indexAt, S, spanList, noise, dimension: null, setWorld() {}, buildMs, sampleCount: SAMPLES,
+    onAltPath, altPaths, runway: null, apron: null, plank: null, rings: [], skyPath: [], inSkyCorridor: () => false,
+    indexAt, S, spanList, noise, dimension: null, setWorld() {}, buildMs, sampleCount: SAMPLES, minimapParts,
+    // moon2 크레이터 롱 점프 지름길 (없으면 null): moonHazards.js·moonScenery가 씀
+    cut, cutNear, onCut, cushionAt, cushion: CUSHION, moon2: MOON2,
     // 달 전용
     // 4차: 메인에게 부탁한 색 (offroadFx 코스 밖 조각 = 회색 레골리스, gpCorners 에이펙스 불빛 = 하늘색). 연결 전에는 안 쓰임
     offroadColors: ['#8d8a84', '#a39f97', '#6f6c67', '#b7b2a8'], apexColor: '#5ff0ff',

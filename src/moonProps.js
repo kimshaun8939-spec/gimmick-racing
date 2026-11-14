@@ -5,6 +5,7 @@
 //   - 안전장치: 루프 안에서 거의 멈춰 버리면(천장에 붙어 못 움직임) 1.2초 뒤 자동 복귀
 import * as THREE from 'three';
 import { settings } from './settings.js';
+import { createMoonHazards } from './moonHazards.js';
 
 const DUST_N = 720;
 
@@ -93,6 +94,10 @@ export function buildMoonProps(track, scene) {
     rumble();
   };
   window.addEventListener('moonlaunch', onLaunch);
+
+  // moon2 (2026-11-15): 크레이터 롱 점프 지름길 + 약해진 쿠션 + 알림 (src/moonHazards.js, track.cut이 없으면 null)
+  const hz = createMoonHazards(track, scene, { showToast, chime });
+  if (hz) group.add(hz.group);
 
   // ---------------------------------------------------------------- 달 먼지 (점 묶음 하나)
   const dPos = new Float32Array(DUST_N * 3), dVel = new Float32Array(DUST_N * 3), dLife = new Float32Array(DUST_N), dCol = new Float32Array(DUST_N * 3);
@@ -254,6 +259,7 @@ export function buildMoonProps(track, scene) {
   function update(dt, car) {
     if (!car) return;
     guideAll(dt, car);
+    if (hz) hz.update(dt, car);
     carDust(car, dt, true);
     const rs = window.game && window.game.raceSys;
     if (rs && rs.bots)
@@ -267,7 +273,7 @@ export function buildMoonProps(track, scene) {
     // 구역 바뀜 → 알림
     if (key !== lastKey) {
       const s = car.trackInfo && car.trackInfo.sample;
-      if (key === 'low' && s && s.zone) showToast(`🌙 저중력 구역 ${s.zone.g.toFixed(2)} G`, '점프가 둥실 — 멀리 날아가요', '#38d8ff'), chime('low');
+      if (key === 'low' && s && s.zone) showToast(`🌙 저중력 구역 ${s.zone.g.toFixed(2)} G`, hz && s.zone.name === 'LOW-G A' ? '점프 뒤 갈림길 — 빠르면 오른쪽 롱 점프로 크레이터를 넘어요' : '점프가 둥실 — 멀리 날아가요', '#38d8ff'), chime('low');
       else if (key === 'high' && s && s.zone) showToast(`⬇ 고중력 구역 ${s.zone.g.toFixed(2)} G`, '차가 무거워져요 — 착지·내리막 조심', '#ff8a2a'), chime('high');
       else if (key === 'loop' && !inLoop) showToast('🔄 중력 루프', '자석 도로 — 핸들은 곧게, 속도 유지!', '#b87cff'), chime('loop');
       if (key === 'loop') inLoop = true;
@@ -298,7 +304,8 @@ export function buildMoonProps(track, scene) {
   }
 
   let lastShown = '';
-  function animate() {
+  function animate(time) {
+    if (hz) hz.animate(time ?? performance.now() / 1000);
     dGeo.attributes.position.needsUpdate = true;
     dGeo.attributes.color.needsUpdate = true;
     // 중력계 글자 (바뀔 때만)
@@ -324,7 +331,8 @@ export function buildMoonProps(track, scene) {
     stuckT = new WeakMap();
     toastT = 0;
     toast.style.opacity = '0';
+    if (hz) hz.reset();
   }
 
-  return { group, update, reset, animate, loopGuide: assist, assist, props: [], cubes: [], barricade: null, barricades: [], hud };
+  return { group, update, reset, animate, loopGuide: assist, assist, props: [], cubes: [], barricade: null, barricades: [], hud, moonHz: hz };
 }
