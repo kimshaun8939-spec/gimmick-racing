@@ -37,6 +37,7 @@
 //   배 모드가 아닌데 물에 빠지면(car.sink 0~1) 차가 기수를 숙이며 물속으로 가라앉음
 import * as THREE from 'three';
 import { buildWheel } from './carBody_wheels.js';
+import { hullIndices, hullPoints, hullOff } from './hullCache.js';
 import { wheelWells } from './carBody_clearance.js';
 import { buildCockpit } from './carBody_cockpit.js';
 import { applyCarLighting } from './carLighting.js';
@@ -1006,27 +1007,61 @@ export function createCarModel(lookOrColor = '#e8463a') {
   }
 
   // hitbox2: 실제 단단한 메시만 측정. 복장/가속 키트 포함, 실내/빛/불꽃 제외.
+  // 느린 노트북 (2026-11-14): 부모 안에서 자리·모양이 '처음 만들 때'와 같은 부품은 '그대로 있는 부품'으로 부모별로 모아
+  //   그 볼록 껍질을 한 번만 계산하고 부모 행렬로 옮김 (볼록 껍질은 이동·회전·크기 변환을 그대로 따라감 → 결과 외곽은 같음).
+  //   가속 모드에서 차체(body)가 넓어져도 그 안 부품은 '그대로'. 기준은 늘 '처음 만들 때 자세'라서 몇 번째로 재든 결과가 같음.
+  //   부모 하나뿐인 바퀴 묶음은 껍질 그대로라 carHitbox가 다시 껍질을 안 구함(hulled). ?hullcache=0 = 예전(모든 꼭짓점)
   function collisionPoints() {
     root.updateMatrixWorld(true);
     const inverse = root.matrixWorld.clone().invert(), groups = new Map();
     const v = new THREE.Vector3(), mat = new THREE.Matrix4();
+    const off = hullOff(), first = !cpInit;
+    if (first) { cpInit = true; root.traverse(n => { if (!n.isMesh) return; const inst=new THREE.Matrix4(), an=anchorOf(n); for (let k=0;k<(n.isInstancedMesh?n.count:1);k++){ if(n.isInstancedMesh)n.getMatrixAt(k,inst); relTo(n,an,n.isInstancedMesh?inst:null,mat); cpRef.set(n.id*4096+k,{g:n.geometry.attributes.position,ver:n.geometry.attributes.position.version,e:Float64Array.from(mat.elements),pts:null}); } }); }
     root.traverse(mesh => {
       if (!mesh.isMesh || mesh.userData.fpInterior) return;
       for (let n=mesh;n&&n!==root;n=n.parent) if (!n.visible || n.userData.fpInterior) return;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       if (!materials.some(m => m.visible && m.opacity > .5 && !m.userData.reviewEffect && !m.isShaderMaterial && m.blending !== THREE.AdditiveBlending)) return;
-      const wheel = wheels.find(w => { for(let n=mesh;n&&n!==root;n=n.parent) if(n===w.steer)return true;return false; });
-      const key = wheel || body;
+      const wheel = wheelOf(mesh), key = wheel || body, an = wheel ? wheel.steer : mesh.parent;
       if (!groups.has(key)) groups.set(key,{points:[],wheel:!!wheel,front:!!wheel?.front,pivot:wheel ? new THREE.Vector3().setFromMatrixPosition(wheel.steer.matrixWorld).applyMatrix4(inverse) : body.position.clone()});
-      const points=groups.get(key).points, p=mesh.geometry.attributes.position;
+      const grp=groups.get(key), points=grp.points, p=mesh.geometry.attributes.position;
       const local=new THREE.Matrix4().multiplyMatrices(inverse,mesh.matrixWorld),instance=new THREE.Matrix4();
       for(let k=0;k<(mesh.isInstancedMesh?mesh.count:1);k++){
-        mat.copy(local);if(mesh.isInstancedMesh){mesh.getMatrixAt(k,instance);mat.multiply(instance);}
-        for(let i=0;i<p.count;i++)points.push(v.fromBufferAttribute(p,i).applyMatrix4(mat).clone());
+        if(mesh.isInstancedMesh)mesh.getMatrixAt(k,instance);
+        if(!off){
+          relTo(mesh,an,mesh.isInstancedMesh?instance:null,mat);
+          const rk=mesh.id*4096+k, r=cpRef.get(rk);
+          if(r&&r.g===p&&r.ver===p.version&&sameMat(r.e,mat.elements)){
+            if(!r.pts){const idx=hullIndices(mesh.geometry);r.pts=[];for(let q=0;q<idx.length;q++)r.pts.push(v.fromBufferAttribute(p,idx[q]).applyMatrix4(mat).clone());}
+            const a=grp.anchors||(grp.anchors=new Map());let l=a.get(an);if(!l)a.set(an,l=[]);l.push(rk);continue;
+          }
+        }
+        mat.copy(local);if(mesh.isInstancedMesh)mat.multiply(instance);
+        const idx=hullIndices(mesh.geometry);for(let q=0;q<idx.length;q++)points.push(v.fromBufferAttribute(p,idx[q]).applyMatrix4(mat).clone());
       }
     });
+    const pm=new THREE.Matrix4();
+    for(const g of groups.values()){
+      if(!g.anchors)continue;
+      const single=g.points.length===0&&g.anchors.size===1;
+      for(const [par,keys] of g.anchors){
+        const sk=keys.join(',');let h=cpHull.get(sk);
+        if(!h){const src=[];for(const rk of keys)for(const x of cpRef.get(rk).pts)src.push(x);h=hullPoints(src);if(h!==src)h.ok=true;cpHull.set(sk,h);}
+        if(single&&h.ok)g.hulled=true;
+        pm.multiplyMatrices(inverse,par.matrixWorld);
+        for(const x of h)g.points.push(x.clone().applyMatrix4(pm));
+      }
+      delete g.anchors;
+    }
     return [...groups.values()];
   }
+  let cpInit=false;
+  const cpRef=new Map(), cpHull=new Map(), cpWheel=new WeakMap();
+  function wheelOf(mesh){let w=cpWheel.get(mesh);if(w===undefined){w=wheels.find(w=>{for(let n=mesh;n&&n!==root;n=n.parent)if(n===w.steer)return true;return false;})||null;cpWheel.set(mesh,w);}return w;}
+  function anchorOf(mesh){const w=wheelOf(mesh);return w?w.steer:mesh.parent;}
+  // anchor 기준 행렬 = 메시부터 anchor 바로 아래까지 지역 행렬을 곱한 값 (같은 지역 행렬이면 비트까지 같음)
+  function relTo(mesh,an,instance,out){out.copy(mesh.matrix);if(instance)out.multiply(instance);for(let n=mesh.parent;n&&n!==an;n=n.parent)out.premultiply(n.matrix);return out;}
+  const sameMat=(a,b)=>{for(let i=0;i<16;i++)if(a[i]!==b[i])return false;return true;};
   function measureHitbox(p=0) {
     // 측정 동안만 자세를 바꾸고 모든 노드를 복원. 모델 모양은 바꾸지 않는다.
     const saved=[],materials=new Map();root.traverse(n=>{

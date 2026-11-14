@@ -5,6 +5,8 @@ import { createCarModel, normalizeLook } from './carModel.js';
 const profiles=new Map(), objects=new WeakMap(), DEFAULT_LOOK={};
 const EPS=1e-7, UP=new THREE.Vector3(0,1,0), Z=new THREE.Vector3(0,0,1);
 const clamp=x=>Math.max(0,Math.min(1,x));
+const HB_Q=typeof location!=='undefined'?new URLSearchParams(location.search).get('hbtol'):null;
+const HB_TOL=HB_Q!=null?+HB_Q:.003, HB_STEER=HB_Q!=null?+HB_Q*3:.01; // rad (차 끝 약 3 m에서 0.9 cm) / 핸들 (앞바퀴 0.24°)
 // 바퀴는 y축으로만 조향한다. x/z 외곽과 y 최솟값/최댓값을 만드는
 // 실제 꼭짓점만 먼저 계산해도 최종 2D 외곽/높이는 완전히 같다.
 const keepGroup=g=>g;
@@ -85,18 +87,62 @@ function profileFor(source){
   const key=JSON.stringify(Object.keys(look).sort().map(k=>[k,look[k]]));
   let pr=profiles.get(key);
   if(!pr){
+    const hb0=globalThis.__hbLog?performance.now():0;
     const model=createCarModel(look), frames=new Map();
     pr={key,info:model.collisionInfo,frames,frame(i){
       i=Math.max(0,Math.min(64,i));if(frames.has(i))return frames.get(i);
-      const groups=model.measureHitbox(i/64).map(g=>wheelOutline({...g,points:hull3(g.points)}));
-      const value={groups,...bounds(groups.flatMap(g=>g.points))};frames.set(i,value);if(frames.size===65)model.dispose();return value;
+      const hb0=globalThis.__hbLog?performance.now():0;
+      const groups=model.measureHitbox(i/64).map(g=>wheelOutline({...g,points:g.hulled?g.points:hull3(g.points)}));
+      const value={groups,...bounds(groups.flatMap(g=>g.points))};frames.set(i,value);if(frames.size===65)model.dispose();if(hb0)globalThis.__hbLog.push([warmNow?'wframe':'frame',hb0,performance.now()-hb0]);return value;
     }};
     pr.normal=pr.frame(0);pr.accel=pr.frame(64);pr.first=pr.frame(1);
     pr.clearTime=Math.max(.1,...pr.first.points.map(v=>v.distanceTo(insideNormal(v,pr.normal))/2));
     profiles.set(key,pr);
+    if(globalThis.__hbLog)globalThis.__hbLog.push(['profile',hb0,performance.now()-hb0]);
+    if(WARM&&typeof window!=='undefined'&&!globalThis.game?.race)warmAll(pr); // 불러오는 중(window.game 전, 그 전엔 window.game = <canvas id=game>)이면 지금 다 잼
+    else warmLater(pr);
   }
   if(source&&typeof source==='object')objects.set(source,{pr,input,values:input&&typeof input==='object'?{...input}:null,count:input&&typeof input==='object'?Object.keys(input).length:0});
   return pr;
+}
+// 느린 노트북 (2026-11-14, 사용자 "처음에 많은 차가 한꺼번에 가속 모드가 될 때 렉"): 변신 외곽 65장을 그 순간에 다 재면
+//   차 8대 × 65장이 한꺼번에 몰려 몇 초씩 멈췄음 → 불러오는 화면에서 차가 만들어질 때 다 재고(warmAll),
+//   레이스 중에 새로 생긴 차(온라인 등)만 남는 시간에 조금씩(warmLater). 한 장은 순수 함수라 언제·어떤 순서로 재도 결과가 같음
+//   (carModel collisionPoints의 기준 = '처음 만들 때 자세'). ?hbwarm=0 = 예전(필요할 때 잼). globalThis.__hbLog = [] 면 비용 기록
+const WARM=typeof location==='undefined'||new URLSearchParams(location.search).get('hbwarm')!=='0';
+const warmQ=[];let warmOn=false,warmRR=0,warmNow=false,warmEnd=0;
+// 순서: 변신 시작 순간 needsClearance가 쓰는 준비 외곽(8,16,…,56 → reserve) 먼저, 그다음 2→63 차례로.
+//   여러 차를 한 장씩 돌아가며 재서 출발 직후 모든 차가 같은 곳까지 준비됨.
+const WARM_ORDER=[8,16,24,32,40,48,56,'reserve'];for(let i=2;i<64;i++)if(i%8)WARM_ORDER.push(i);
+function warmJob(pr,job){warmNow=true;try{if(job==='reserve')reserveProfile(pr);else pr.frame(job);}finally{warmNow=false;}}
+// 불러오는 화면: 한 번에 다 (느린 노트북 4배 느리게 해도 차 한 대 약 0.3초, 레이스 중에 몰리지 않음)
+function warmAll(pr){for(const job of WARM_ORDER)warmJob(pr,job);pr.warmI=WARM_ORDER.length;}
+// 레이스 화면(출발 신호·레이스 중): 지난 조각 뒤 흐른 시간의 일정 비율만 씀 → 프레임이 느려도 한 프레임에 몰리지 않음
+//   출발 신호 동안 50%(최대 30 ms), 레이스 중 30%(최대 12 ms)
+function warmLater(pr){
+  if(!WARM||typeof window==='undefined')return;
+  warmQ.push(pr);if(warmOn)return;warmOn=true;
+  const ric=window.requestIdleCallback?f=>window.requestIdleCallback(f,{timeout:60}):f=>setTimeout(()=>f({timeRemaining:()=>4,didTimeout:true}),30);
+  warmEnd=performance.now();
+  const step=d=>{
+    const t0=performance.now(),ph=globalThis.game?.race?.phase,gap=Math.min(250,t0-warmEnd);
+    const idle=d&&d.timeRemaining?d.timeRemaining():0;
+    const budget=!globalThis.game?.race?40:ph!=='racing'?Math.max(6,Math.min(30,.5*gap)):Math.max(3,Math.min(12,.3*gap));
+    const limit=Math.max(budget,Math.min(idle-1,ph==='racing'?12:30));
+    while(warmQ.length){
+      if(warmRR>=warmQ.length)warmRR=0;
+      const pr=warmQ[warmRR];let i=pr.warmI||0;
+      while(i<WARM_ORDER.length&&(WARM_ORDER[i]==='reserve'?pr.reserve:pr.frames.has(WARM_ORDER[i])))i++;
+      if(i>=WARM_ORDER.length){warmQ.splice(warmRR,1);continue;}
+      warmJob(pr,WARM_ORDER[i]);
+      pr.warmI=i+1;warmRR++;
+      if(performance.now()-t0>limit)break;
+    }
+    warmEnd=performance.now();
+    if(globalThis.__hbLog)globalThis.__hbLog.push(['warm',t0,warmEnd-t0]);
+    if(warmQ.length)ric(step);else warmOn=false;
+  };
+  ric(step);
 }
 // 처음 보일 때 이미 펼쳐져 있는 부품은 주변 물체를 밀어낼 여유를 먼저 만든다.
 function insideNormal(v,h){
@@ -108,10 +154,12 @@ function insideNormal(v,h){
 }
 function reserveProfile(pr){
   if(pr.reserve)return;
+  const hb0=globalThis.__hbLog?performance.now():0;
   const frames=[0,1,8,16,24,32,40,48,56,64].map(i=>pr.frame(i));
   const groups=frames[0].groups.map((g,i)=>({wheel:g.wheel,front:g.front,pivot:g.pivot,points:hull3(frames.flatMap(f=>f.groups[i]?.points||[]))}));
   pr.reserve={groups,...bounds(groups.flatMap(g=>g.points))};
   pr.clearTime=Math.max(.1,...pr.reserve.points.map(v=>v.distanceTo(insideNormal(v,pr.normal))/2));
+  if(hb0)globalThis.__hbLog.push([warmNow?'wreserve':'reserve',hb0,performance.now()-hb0]);
 }
 function needsClearance(c,pr){
   reserveProfile(pr);
@@ -165,7 +213,9 @@ export function hitboxFor(source={}){
   const pr=profileFor(source);
   if(!source.pos)return source.normalBounds||pr.normal;
   const s=advanceState(source,pr),steer=source.steerVisual||0;
-  if(s.box&&s.steer===steer&&s.boxMode===source.mode&&s.boxP===s.p&&s.boxPre===s.pre&&s.boxLean===s.lean&&s.boxPitch===s.pitch&&s.boxDrift===s.drift&&s.boxReserved===s.reserved)return s.box;
+  // 느린 노트북 (2026-11-14): 기울기·조향이 아주 조금(차 끝에서 1 cm 안쪽) 바뀐 것은 예전 외곽을 그대로 씀.
+  //   예전엔 스프링으로 매 스텝 조금씩 바뀌어 차 8대 × 1초 120번 전부 다시 계산 → CPU 18%. &hbtol=0 = 예전(정확히 같을 때만)
+  if(s.box&&s.boxMode===source.mode&&s.boxP===s.p&&s.boxPre===s.pre&&s.boxReserved===s.reserved&&Math.abs(s.steer-steer)<=HB_STEER&&Math.abs(s.boxLean-s.lean)<=HB_TOL&&Math.abs(s.boxPitch-s.pitch)<=HB_TOL&&Math.abs(s.boxDrift-s.drift)<=HB_TOL)return s.box;
   s.steer=steer;s.boxMode=source.mode;s.boxP=s.p;s.boxPre=s.pre;s.boxLean=s.lean;s.boxPitch=s.pitch;s.boxDrift=s.drift;s.boxReserved=s.reserved;
   // 가까운 두 자세를 감싼다. 역변신도 같은 곡선, 전개 때 잠시 넘치는 움직임도 실측.
   const groundMode=source.mode!=='boat'&&source.mode!=='fly';
