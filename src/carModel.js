@@ -36,6 +36,8 @@
 //     빠르게 날면(16~60m/s) 날개 끝에서 비행운이 길게 뻗음. 기울기와 기수 각도는 물리가 정한 방향(car.up/fwd)을 그대로 따름
 //   배 모드가 아닌데 물에 빠지면(car.sink 0~1) 차가 기수를 숙이며 물속으로 가라앉음
 import * as THREE from 'three';
+import { createParts3d } from './carParts3d.js';
+import { partLook } from './parts.js';
 import { buildWheel } from './carBody_wheels.js';
 import { hullIndices, hullPoints, hullOff } from './hullCache.js';
 import { wheelWells } from './carBody_clearance.js';
@@ -353,7 +355,7 @@ function knobGeometry(r, wd) {
   return mergeGeos(parts);
 }
 
-export function createCarModel(lookOrColor = '#e8463a') {
+export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   const normalized = normalizeLook(lookOrColor);
   normalized.accelId = accelIdentity(normalized);
   const look = normalized.costume ? applyCostume(normalized, normalized.costume) : normalized;
@@ -724,7 +726,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     root.add(steer);
     const spin = new THREE.Group();
     steer.add(spin);
-    buildWheel(add, spin, steer, M, look, r, wd, side);
+    const wall = buildWheel(add, spin, steer, M, look, r, wd, side);
     // 오프로드 타이어: 둘레에 울퉁불퉁한 돌기
     if (look.tire === 'knobby') add(knobGeometry(r, wd), rubber, 0, 0, 0, spin);
     // 평소 서스펜션 (검은 막대)
@@ -735,7 +737,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     susp.scale.set(side * (Math.abs(x) - inner), 1, 1);
     steer.traverse(o => { if (o.isMesh) hitboxMeshes.push(o); });
     hitboxMeshes.push(susp);
-    wheels.push({ steer, spin, front, susp, side, ax: Math.abs(x), r, z, inner });
+    wheels.push({ steer, spin, front, susp, side, ax: Math.abs(x), r, z, inner, wall });
   }
 
   const accelRims = wheels.map((w,i) => {
@@ -1018,8 +1020,9 @@ export function createCarModel(lookOrColor = '#e8463a') {
     const off = hullOff(), first = !cpInit;
     if (first) { cpInit = true; root.traverse(n => { if (!n.isMesh) return; const inst=new THREE.Matrix4(), an=anchorOf(n); for (let k=0;k<(n.isInstancedMesh?n.count:1);k++){ if(n.isInstancedMesh)n.getMatrixAt(k,inst); relTo(n,an,n.isInstancedMesh?inst:null,mat); cpRef.set(n.id*4096+k,{g:n.geometry.attributes.position,ver:n.geometry.attributes.position.version,e:Float64Array.from(mat.elements),pts:null}); } }); }
     root.traverse(mesh => {
-      if (!mesh.isMesh || mesh.userData.fpInterior) return;
-      for (let n=mesh;n&&n!==root;n=n.parent) if (!n.visible || n.userData.fpInterior) return;
+      if (!mesh.isMesh || mesh.userData.fpInterior || mesh.userData.partVisual) return;
+      // stockcalls: 순정 타이어 장식 띠는 묶음 안에 들어가 늘 충돌 외곽에 포함 (partlook 전과 같음) → 부품 타이어가 띠를 숨겨도 외곽은 그대로
+      for (let n=mesh;n&&n!==root;n=n.parent) if ((!n.visible && !(n===mesh && mesh.userData.stockTireWall)) || n.userData.fpInterior || n.userData.partVisual) return;
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       if (!materials.some(m => m.visible && m.opacity > .5 && !m.userData.reviewEffect && !m.isShaderMaterial && m.blending !== THREE.AdditiveBlending)) return;
       const wheel = wheelOf(mesh), key = wheel || body, an = wheel ? wheel.steer : mesh.parent;
@@ -1083,9 +1086,13 @@ export function createCarModel(lookOrColor = '#e8463a') {
   const normalBox = new THREE.Box3().setFromPoints(collisionPoints().flatMap(g=>g.points));
   const normalBounds = Object.freeze({front:normalBox.max.z,back:-normalBox.min.z,half:Math.max(Math.abs(normalBox.min.x),Math.abs(normalBox.max.x)),bottom:normalBox.min.y,height:normalBox.max.y-normalBox.min.y});
 
+  const partKit=createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs});
+  let partExplicit=Object.hasOwn(options,'parts'),partBuild;
+  function setParts(hints){partExplicit=true;partKit.setParts(hints);}
+  if(partExplicit)partKit.setParts(options.parts);
   let disposed = false;
   return {
-    root,
+    root, setParts, partMounts:partKit.mounts,
     collisionPoints, measureHitbox,
     collisionInfo: {duration:accelKit.duration,lean:A.lean,pitch:A.pitch ?? A.lean*.7},
     normalBounds, // 일반 모드 기본 외형 크기(+z 앞, root 원점 기준), 애니메이션과 무관
@@ -1097,6 +1104,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
     dispose() {
       if (disposed) return;
       disposed = true;
+      partKit.dispose();
       accelKit.dispose();
       if (root.parent) root.parent.remove(root);
       const geos = new Set(), mats = new Set();
@@ -1114,6 +1122,8 @@ export function createCarModel(lookOrColor = '#e8463a') {
     },
     /** 물리 상태(Car)를 보고 모양을 맞춥니다. dt=1이면 즉시 맞춤 */
     sync(car, dt, time) {
+      // Player partsInfo only; bots and ghosts remain stock.
+      if(!partExplicit && partBuild!==car.cfg?.partsInfo?.build){partBuild=car.cfg?.partsInfo?.build;partKit.setParts(partBuild?partLook(partBuild):{});}
       const instant = dt >= 1;
       const mode = car.mode || 'normal';
       const sink = car.sink || 0;
@@ -1241,6 +1251,7 @@ export function createCarModel(lookOrColor = '#e8463a') {
       // 선외기: 물 위에선 물속으로 내리고(살짝 트림), 땅이나 공중에선 들어 올림
       costumeFx?.update(time, boatP);
       poseBoat(boatP, boatOn, THREE.MathUtils.lerp(1.25, 0.08, waterK));
+      partKit.pose(motors);
       // 변신하는 동안 차체가 살짝 들렸다가 "철컥" 내려앉음 (흔들림 없이 한 번)
       if (mode === 'accel' || accelP > 0) clunkT = 1; // 전용 스쿼트/통통 리듬을 사용
       if (clunkT < 1) {
