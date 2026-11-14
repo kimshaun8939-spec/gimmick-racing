@@ -813,9 +813,40 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const laneRate=cornerSoon&&speed>35?(bold?2:1.6):2.6;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
     let lane=st.lane;
+    // 실제 사람과 옆면이 닿은 직후, 충분히 긴 직선에서만 나란히 달리는 차를 앞차로 보지 않는다.
+    // 코너/좁아짐/점프와 조향 한계 제동은 그대로 둔다. 옆 자리를 오래 고정하지 않는다.
+    // 라인 허용 폭에는 이미 차 중심 여유가 들어 있다. 현재 실제 움직임과 차 폭으로 짧은 앞 구간만 확인한다.
+    const contactRoom = () => {
+      const p = new THREE.Vector3();
+      for (const sec of [0, .125, .25]) {
+        p.copy(car.pos).addScaledVector(car.vel, sec);
+        const near = track.nearest(p), sample = near.sample;
+        if (!sample || Math.abs(p.y - sample.pos.y) > 2) return false;
+        const tan = sample.tan, tl = Math.hypot(tan.x, tan.z) || 1, fl = Math.hypot(car.fwd.x, car.fwd.z) || 1;
+        const along = Math.abs((car.fwd.x * tan.x + car.fwd.z * tan.z) / (fl * tl));
+        const across = Math.abs((car.fwd.x * tan.z - car.fwd.z * tan.x) / (fl * tl));
+        const reach = ownBox.half * along + Math.max(ownBox.front, ownBox.back) * across;
+        const edge = (sample.hw ?? (track.width || 16) / 2) + (track.kerbAt?.(near.index, near.lateral < 0 ? -1 : 1) || 0) - .5;
+        if (Math.abs(near.lateral) + reach > edge) return false;
+      }
+      return true;
+    };
+    const briefSideContact = o => {
+      const age = car.simT - (car._sideContactAt ?? -Infinity);
+      if (!o.human || o.pos !== car._sideContactOther || age < 0 || age > .22 ||
+          cornerSoon || brakeSoon || risky || mergeHazard || speed < 12 ||
+          straightM < 35 + v * 2.5 || Math.abs(actualLane) > 2.5 || !contactRoom()) return false;
+      // 여러 차가 얽히면 기존 추종 제동을 유지한다.
+      if (peers.some(p => p !== o && (!p.pos || car.pos.distanceToSquared(p.pos) < (35 + v * 1.2) ** 2))) return false;
+      const f = o.fwd, fl = f && Math.hypot(f.x, f.z), ownFl = Math.hypot(car.fwd.x, car.fwd.z);
+      return fl > 0 && ownFl > 0 && (f.x * car.fwd.x + f.z * car.fwd.z) / (fl * ownFl) > .995 &&
+        Math.abs(actualGap(o)) < rearSpace(o) - .35 &&
+        Math.abs(o.lat - myLat) > sideSpace(o) * .92;
+    };
+
     for(const o of peers){
       const dLat=o.lat-myLat,gap=actualGap(o),closing=Math.max(0,speed-o.speed),width=sideSpace(o);
-      if(gap>0&&gap<100&&Math.abs(dLat)<width+.08){
+      if(!briefSideContact(o)&&gap>0&&gap<100&&Math.abs(dLat)<width+.08){
         const target=!!move&&o===leader;
         const desired=clamp(L.offset[i0]+st.laneTarget,L.lo[i0]+.2,L.hi[i0]-.2);
         const toSide=target&&move.sepV>.25?Math.max(0,width+.12-Math.abs(dLat))/move.sepV:Infinity;
@@ -876,6 +907,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       steerCmd = (yawDes + .45*(yawDes-st.actualYaw) - .8*(car.slip||0)) / Math.max(0.05, perSteer);
       // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
+
     } else if (car.grounded && car.mode === 'boat') {
       // 실제 방향타 회전량으로 조향. v²/24는 고속 배에서 과조향·부표 벽 충돌을 냈음.
       const a = W(i0 + Math.round(v * 0.12 / ds));
@@ -1022,6 +1054,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     /** 복귀(리스폰) 뒤: 줄·실수 초기화 */
     reset(grid = false) {
       st.lane = st.laneTarget = 0;
+      delete car._sideContactAt;
+      delete car._sideContactOther;
+
       st.overtake=null;st.overtakeCool=0;
       st.laneHold=st.heldT=st.passT=st.blockedT=0;
       if(grid)st.overtakeStarts=st.overtakeSwitches=st.overtakeWins=0;

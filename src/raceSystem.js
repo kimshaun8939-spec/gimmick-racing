@@ -440,6 +440,14 @@ export async function createRaceSystem(o) {
         }
       }
     }
+    // 옆면으로 실제 닿은 사람만 봇 운전에 알린다. 밀림/마찰/속도 교환은 바꾸지 않는다.
+    if (!bStatic && (a === car || b === car)) {
+      const bot = a === car ? b : a;
+      if (Math.abs(_n.x * bot.fwd.x + _n.z * bot.fwd.z) < .25 && car.fwd.dot(bot.fwd) > .995) {
+        bot._sideContactAt = bot.simT;
+        bot._sideContactOther = car.pos;
+      }
+    }
     if (a === car || b === car) {
       stats.pDv = (stats.pDv || 0) + (a === car ? a.speed - sa0 : b.speed - sb0);
       if (!bStatic) stats.bDv = (stats.bDv || 0) + (a === car ? b.speed - sb0 : a.speed - sa0);
