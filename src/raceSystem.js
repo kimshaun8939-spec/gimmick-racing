@@ -33,7 +33,8 @@ export async function createRaceSystem(o) {
   // 씨앗: 온라인이면 방 코드로 (모든 사람에게 같은 봇 이름·차·성격), 아니면 무작위
   //   (테스트용 &rseed=N: 혼자 봇 레이스에서도 같은 봇 이름·차·성격 = 전/후 비교, close-race)
   if (o.seed == null && QS.get('rseed')) o = { ...o, seed: 'r' + QS.get('rseed') };
-  const seed = o.seed != null ? [...String(o.seed)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0 : (Math.random() * 1e9) | 0;
+  const RAW = QS.get('rawseed'); // 장면 재현용 (sceneSave.js가 저장한 씨앗 숫자 그대로, .debug/scene_play.js)
+  const seed = RAW != null && /^\d+$/.test(RAW) ? Number(RAW) >>> 0 : o.seed != null ? [...String(o.seed)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) | 0, 7) >>> 0 : (Math.random() * 1e9) | 0;
   const rand = rng(seed);
   const markLen = (laps + 2) * M + 2;
   // 슬립스트림·견인 값 (data/car.json draft·tow, 플레이어 차 cfg 기준). 주소 &slip=old = 예전 슬립스트림(비교용), &tow=0 = 견인 끔
@@ -1065,6 +1066,7 @@ export async function createRaceSystem(o) {
       humanSlots = humans || 0;
     },
     level: levelName,
+    seed, // 장면 저장(F8)·재현용
     /** 견인을 의미 있게 받았는지 (가장 센 견인 기준 tow.assistSec초 넘게) → main.js가 기록에 '도움 켬' */
     towAssisted: () => (me.towUsed || 0) >= (TC.assistSec ?? 3),
     /** 테스트용: 슬립스트림·견인 상태 */

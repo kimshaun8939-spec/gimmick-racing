@@ -30,6 +30,7 @@ import { createSectors } from './sectors.js';
 import { fastTrack } from './fastTrack.js';
 import { champRace, recordRace, champStandings, champUrl } from './championship.js';
 import { createReplay } from './replay.js';
+import { createSceneSave } from './sceneSave.js';
 import { createCamViews } from './camViews.js'; // 시점 바꾸기 (V 키): 기본·가까이·멀리·보닛·운전석 (2026-11-12)
 import { createMirror } from './mirror.js'; // 백미러: 뒤에 차가 붙으면 화면 위에 작은 거울 (2026-11-12)
 import { createCornerReport } from './cornerReport.js';
@@ -413,6 +414,8 @@ const race = {
   nextCp: 0,
   lastT: 0,
 };
+// 장면 저장 (F8, 2026-11-14): 직전 20초 모든 차·내 조작·봇 판단을 JSON으로 내려받음 → 개발자가 .debug/scene_play.js로 분석
+const sceneSave = createSceneSave({ car, raceSys, race, hud, meta: { map: mapName, car: carId, carName, mode: MODE, item: ITEM, online: !!ONLINE } });
 
 const metaRun = createMetaTracker({ phase: () => race.phase, level: () => raceSys.level, excluded: () => !!(FREE || params.get('academy') || params.get('tutorial')) });
 
@@ -1279,6 +1282,7 @@ function frame(now, manual = false) {
   // M 키(다음 맵으로)는 없앰 (사용자 요청 2026-11-13). 맵은 홈·Esc 메뉴에서 바꿈
   // (왼쪽 아래 조작법 안내·H 키는 없앰: 사용자 요청 2026-11-09)
   if (input.wasPressed('KeyR') && race.phase === 'racing') car.respawn();
+  if (input.wasPressed('F8')) sceneSave.save(); // 장면 저장
   if (input.wasPressed('KeyT')) {
     car.manual = !car.manual;
     settings.set('gearbox', car.manual ? 'manual' : 'auto'); // 설정에도 기억
@@ -1341,6 +1345,7 @@ function frame(now, manual = false) {
       if (s === playerRender) cam.prevSpeed = car.forwardSpeed;
     }
   }
+  sceneSave.input(controls);
   acc += dt * tsc;
   while (acc >= FIXED_DT) {
     for (const s of poses) copyPose(s.previous, s.current);
@@ -1363,6 +1368,7 @@ function frame(now, manual = false) {
   }
   handleEvents();
   replay.sample(race.clock, race.phase); // 리플레이 기록 (1/15초마다)
+  sceneSave.sample(); // 장면 저장(F8)용 직전 20초
 
   const renderAlpha = THREE.MathUtils.clamp(acc / FIXED_DT, 0, 1);
   for (const s of poses) renderPose(s, renderAlpha);
@@ -1498,7 +1504,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
-  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, cornerRep, mirror, camViews,
+  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, sceneSave, cornerRep, mirror, camViews,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작
