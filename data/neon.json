@@ -46,6 +46,44 @@
    "deg": 5
   }
  ],
+ "glitchRoad": {
+  "_설명": "글리치 차원 깜빡이는 길 (neon2). zones: t0~t1 구간의 side쪽(+1 오른쪽) 옆 pe m부터 벽까지가 레이스 시계로 ((clock + phase) mod period) < on 일 때만 있음. 사라지기 warn초 전부터 빨갛게 깜빡임. 빠지면(도로보다 fall.below m 아래로 fall.delay초) 복귀. 레이싱 라인은 조각 clear m 앞까지만 (ramp m에 걸쳐). &neon2=0 이면 예전",
+  "warn": 0.55,
+  "appear": 0.35,
+  "clear": 1.8,
+  "ramp": 60,
+  "zones": [
+   {
+    "id": "S1",
+    "t0": 0.701,
+    "t1": 0.7248,
+    "side": 1,
+    "pe": 4,
+    "period": 2.6,
+    "on": 1.7,
+    "phase": 0
+   },
+   {
+    "id": "S2",
+    "t0": 0.7345,
+    "t1": 0.7514,
+    "side": -1,
+    "pe": 4.6,
+    "period": 2.6,
+    "on": 1.7,
+    "phase": 1.36
+   }
+  ]
+ },
+ "tubeBelt": {
+  "_설명": "자석 튜브 급행 벨트 (neon2 시험, 기본 꺼짐 on:false · 주소 &belt=1): 차 위 방향과 도로 위 방향의 cos가 maxUp보다 작을 때(기운 벽·천장)만 차를 진행 방향으로 carry m/s 실어 나름 (컨베이어, 차 속도는 그대로). 봇은 바닥 레이싱 라인이라 안 씀",
+  "on": false,
+  "carry": 12,
+  "maxUp": 0.7,
+  "fadeIn": 25,
+  "endGap": 35,
+  "fade": 12
+ },
  "features": [
   {
    "type": "ramp",

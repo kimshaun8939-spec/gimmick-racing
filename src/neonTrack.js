@@ -212,6 +212,28 @@ export function buildNeonTrack(data, scene) {
   const inRangeT = (t, t0, t1) => (t0 <= t1 ? t >= t0 && t <= t1 : t >= t0 || t <= t1);
   const mS = (m) => Math.max(1, Math.round((m / length) * SAMPLES));
 
+  // ---------------------------------------------------------------- neon2 (2026-11-15): 깜빡이는 길 + 천장 급행 벨트. &neon2=0 이면 예전 그대로
+  const NEON2 = (() => {
+    try {
+      return new URLSearchParams(location.search).get('neon2') !== '0';
+    } catch {
+      return true;
+    }
+  })();
+  const GR = NEON2 && data.glitchRoad && data.glitchRoad.zones && data.glitchRoad.zones.length ? data.glitchRoad : null;
+  // 튜브 급행 벨트: 시험해 보니 곧은 튜브에서는 벽을 타는 손해가 더 커서 기본 꺼짐 (data.tubeBelt.on, 주소 &belt=1 이면 켬)
+  const BELT = (() => {
+    if (!NEON2 || !data.tubeBelt) return null;
+    let q = null;
+    try {
+      q = new URLSearchParams(location.search).get('belt');
+    } catch {}
+    return q === '1' || (data.tubeBelt.on && q !== '0') ? data.tubeBelt : null;
+  })();
+  /** 깜빡이는 길 구간 표: zoneOf[i] = 그 샘플의 구간 번호 + 1 (0 = 없음) */
+  const flickZones = [];
+  const zoneOf = new Uint8Array(SAMPLES + 1);
+
   // 글리치 차원 구간 (space = true: gpCorners가 네온 표시판을 씀)
   const dim = data.dimension || null;
   const inGlitchT = (t) => !!dim && inRangeT(((t % 1) + 1) % 1, dim.t0, dim.t1);
@@ -221,6 +243,14 @@ export function buildNeonTrack(data, scene) {
   const tube = data.tube || null;
   const tubeR = tube ? tube.radius || 5 : 0, tubeH = tube ? tube.height || 12 : 0;
   const TUBE_W2 = HW + CURB; // 튜브 벽이 시작하는 옆 거리 (연석 바깥 끝)
+  if (GR)
+    GR.zones.forEach((z, n) => {
+      const [a, b] = rangeI(z.t0, z.t1);
+      flickZones.push({ ...z, n, a, b });
+      for (let i = a; i <= b; i++) zoneOf[wrapI(i)] = n + 1;
+    });
+  zoneOf[SAMPLES] = zoneOf[0];
+  const zoneAt = (i) => (zoneOf[wrapI(i)] ? flickZones[zoneOf[wrapI(i)] - 1] : null);
   const tubeK = new Float32Array(SAMPLES + 1); // 0 = 튜브 없음, 0~1 = 벽 높이 비율 (taper), 1 = 닫힌 튜브 구간
   const tubeCore = new Uint8Array(SAMPLES + 1);
   if (tube) {
@@ -381,7 +411,50 @@ export function buildNeonTrack(data, scene) {
     }
     if (pass === 0) apexes0 = prelimApexes();
   }
-  const racingLine = computeRacingLine(lineSamples, lineLimit, length, { bank: lineSamples.map((s) => s.bank || 0) });
+  // neon2: 깜빡이는 길 쪽은 조각 앞 clear m까지만 → 라인(=봇·속도 계획·라인 표시)은 늘 있는 길로만. 앞뒤 ramp m에 걸쳐 서서히 좁아짐
+  const flickCap = [new Float32Array(SAMPLES).fill(Infinity), new Float32Array(SAMPLES).fill(Infinity)];
+  if (GR) {
+    // 구간 앞 ramp m부터 뒤 8 m까지 같은 한계 (라인이 구간 바로 앞에서 갑자기 꺾이지 않게 미리 늘 있는 쪽으로; 그 앞뒤는 K1999가 부드럽게 이음)
+    const pre = mS(GR.ramp ?? 25), post = mS(8);
+    for (const z of flickZones)
+      for (let i = z.a - pre; i <= z.b + post; i++) {
+        const q = wrapI(i), arr = flickCap[sideI(z.side)];
+        arr[q] = Math.min(arr[q], z.pe - (GR.clear ?? 1.8));
+      }
+  }
+  const lineLimitF = (i, side) => Math.min(lineLimit(i, side), flickCap[sideI(side)][wrapI(i)]);
+  const racingLine = computeRacingLine(lineSamples, GR ? lineLimitF : lineLimit, length, { bank: lineSamples.map((s) => s.bank || 0) });
+  // neon2: 깜빡이는 길 앞·안의 '늘 있는 길' 라인은 좁은 차선 안쪽 끝을 따라감 → 계획 속도대로 달리면 고속 조향 한계 때문에 1~3 m 밀려 조각 위로 나갔음
+  //   (라인 자동 운전·마스터 봇). 그 구간만 코너 속도를 slowK배로 낮춰 계획 (라인 색·봇 목표 속도가 같이 낮아짐). 앞뒤 가속·감속 한계로 다시 이음
+  if (GR && GR.slowK && GR.slowK < 1) {
+    const orig = racingLine.profile.bind(racingLine);
+    const pre = mS((GR.ramp ?? 25) + 20), post = mS(10);
+    racingLine.profile = (car) => {
+      const p = orig(car);
+      const v = p.speed, seg = racingLine.seg, n = v.length;
+      let any = false;
+      for (const z of flickZones)
+        for (let i = z.a - pre; i <= z.b + post; i++) {
+          const q = wrapI(i) % n;
+          v[q] *= GR.slowK;
+          any = true;
+        }
+      if (!any) return p;
+      // 감속 한계(뒤로)·가속 한계(앞으로)로 앞뒤를 다시 이음 (두 바퀴)
+      for (let lap = 0; lap < 2; lap++) {
+        for (let k = n - 1; k >= 0; k--) {
+          const nx = (k + 1) % n;
+          v[k] = Math.min(v[k], Math.sqrt(v[nx] * v[nx] + 2 * car.aBrake(v[nx]) * seg[k]));
+        }
+        for (let k = 0; k < n; k++) {
+          const pv = (k - 1 + n) % n;
+          v[k] = Math.min(v[k], Math.sqrt(v[pv] * v[pv] + 2 * car.aAcc(v[pv]) * seg[pv]));
+        }
+      }
+      for (let k = 0; k < n; k++) p.brake[k] = p.brake[k] || 0;
+      return p;
+    };
+  }
   const lineY = (i, d = 0) => roadYAt(samples[i], racingLine.offset[i] + d);
 
   // ---------------------------------------------------------------- 도로, 연석, 갓길
@@ -441,14 +514,38 @@ export function buildNeonTrack(data, scene) {
     return out;
   });
   const railLatOf = (s, side = 1) => railLat[side < 0 ? 0 : 1][s.i % SAMPLES];
+  /** [a, b] 구간을 깜빡이는 길 구간 경계에서 나눔 (경계 샘플은 양쪽이 같이 씀 → 잘린 모서리가 또렷) → [{ a, b, z }] */
+  function cutRuns(a, b) {
+    if (!GR) return [{ a, b, z: null }];
+    const out = [];
+    let c = a, cz = zoneAt(a);
+    for (let i = a + 1; i <= b; i++) {
+      const z = zoneAt(i);
+      if (z !== cz) {
+        // 구간 안으로 들어갈 때: 경계 = 구간 첫 샘플, 나올 때: 경계 = 구간 마지막 샘플
+        const e = z ? i : i - 1;
+        if (e > c) out.push({ a: c, b: e, z: cz });
+        c = e;
+        cz = z;
+      }
+    }
+    if (b > c) out.push({ a: c, b, z: cz });
+    return out;
+  }
+  const flickPieces = []; // 깜빡이는 조각 자리 (물리용 판·보이는 판을 만듦)
   for (const [flag, rm, cm, om] of [[(i) => !isG(i), roadMat, curbMat, runoffMat], [isG, glitchRoadMat, curbGlitchMat, runoffGlitchMat]]) {
-    for (const [a, b] of runsOf(flag)) {
-      const L = spanList(a, b);
-      strip(L, [[-HW, 0], [HW, 0]], rm, { vScale: 18, surface: 'ground' });
-      strip(L, (s) => [[-HW - kerbAt(s.i, -1), 0.02], [-HW, 0.02]], cm, { vScale: 4, surface: 'ground' });
-      strip(L, (s) => [[HW, 0.02], [HW + kerbAt(s.i, 1), 0.02]], cm, { vScale: 4, surface: 'ground' });
-      strip(L, (s) => [[-railLatOf(s, -1), 0.01], [-HW - kerbAt(s.i, -1), 0.01]], om, { vScale: 6, surface: 'ground' });
-      strip(L, (s) => [[HW + kerbAt(s.i, 1), 0.01], [railLatOf(s, 1), 0.01]], om, { vScale: 6, surface: 'ground' });
+    for (const [a0, b0] of runsOf(flag)) {
+      for (const { a, b, z } of cutRuns(a0, b0)) {
+        const L = spanList(a, b);
+        const zs = z ? z.side : 0, pe = z ? z.pe : 0;
+        // 깜빡이는 쪽: 도로는 pe까지만, 그쪽 연석·갓길은 없음 (그 자리는 neonHazards.js가 그리는 조각)
+        strip(L, zs > 0 ? [[-HW, 0], [pe, 0]] : zs < 0 ? [[-pe, 0], [HW, 0]] : [[-HW, 0], [HW, 0]], rm, { vScale: 18, surface: 'ground' });
+        if (zs >= 0) strip(L, (s) => [[-HW - kerbAt(s.i, -1), 0.02], [-HW, 0.02]], cm, { vScale: 4, surface: 'ground' });
+        if (zs <= 0) strip(L, (s) => [[HW, 0.02], [HW + kerbAt(s.i, 1), 0.02]], cm, { vScale: 4, surface: 'ground' });
+        if (zs >= 0) strip(L, (s) => [[-railLatOf(s, -1), 0.01], [-HW - kerbAt(s.i, -1), 0.01]], om, { vScale: 6, surface: 'ground' });
+        if (zs <= 0) strip(L, (s) => [[HW + kerbAt(s.i, 1), 0.01], [railLatOf(s, 1), 0.01]], om, { vScale: 6, surface: 'ground' });
+        if (z) flickPieces.push({ z, a, b, L });
+      }
     }
   }
   // 도로 판 옆면·밑면 (고가도로는 두께가 보임, 땅 높이 구간은 땅에 묻힘)
@@ -457,12 +554,17 @@ export function buildNeonTrack(data, scene) {
   const underGlowMat = new THREE.MeshBasicMaterial({ color: '#38e8ff', transparent: true, opacity: 0.85, side: THREE.DoubleSide, toneMapped: false });
   const underGlowMat2 = new THREE.MeshBasicMaterial({ color: '#ff3bd4', transparent: true, opacity: 0.85, side: THREE.DoubleSide, toneMapped: false });
   for (const [flag, sm] of [[(i) => !isG(i), slabMat], [isG, slabGlitchMat]]) {
-    for (const [a, b] of runsOf(flag)) {
-      const L = spanList(a, b);
-      strip(L, (s) => [[-railLatOf(s, -1) - 0.3, 0.2], [-railLatOf(s, -1) - 0.3, -1.6], [railLatOf(s, 1) + 0.3, -1.6], [railLatOf(s, 1) + 0.3, 0.2]], sm, { vScale: 8, uScale: 4, shadow: true });
-      // 판 옆면 아래쪽 네온 띠 (왼쪽 하늘색, 오른쪽 분홍)
-      strip(L, (s) => [[-railLatOf(s, -1) - 0.34, -1.25], [-railLatOf(s, -1) - 0.34, -0.95]], underGlowMat);
-      strip(L, (s) => [[railLatOf(s, 1) + 0.34, -0.95], [railLatOf(s, 1) + 0.34, -1.25]], underGlowMat2);
+    for (const [a0, b0] of runsOf(flag)) {
+      for (const { a, b, z } of cutRuns(a0, b0)) {
+        const L = spanList(a, b);
+        const zs = z ? z.side : 0, pe = z ? z.pe : 0;
+        const lw = (s) => (zs < 0 ? -pe : -railLatOf(s, -1) - 0.3), rw = (s) => (zs > 0 ? pe : railLatOf(s, 1) + 0.3);
+        const lt = zs < 0 ? -0.03 : 0.2, rt = zs > 0 ? -0.03 : 0.2;
+        strip(L, (s) => [[lw(s), lt], [lw(s), -1.6], [rw(s), -1.6], [rw(s), rt]], sm, { vScale: 8, uScale: 4, shadow: true });
+        // 판 옆면 아래쪽 네온 띠 (왼쪽 하늘색, 오른쪽 분홍)
+        if (zs >= 0) strip(L, (s) => [[-railLatOf(s, -1) - 0.34, -1.25], [-railLatOf(s, -1) - 0.34, -0.95]], underGlowMat);
+        if (zs <= 0) strip(L, (s) => [[railLatOf(s, 1) + 0.34, -0.95], [railLatOf(s, 1) + 0.34, -1.25]], underGlowMat2);
+      }
     }
   }
 
@@ -548,6 +650,32 @@ export function buildNeonTrack(data, scene) {
       for (const [c0, c1] of runsIn(L, (s) => highWall[s.i % SAMPLES] > 0.01)) strip(L.slice(c0, c1 + 1), prof(1.0, 9.5), energyMat, { vScale: 10, world: 'glitch' });
       railRuns.push({ side, a, b });
     }
+  }
+
+  // ---------------------------------------------------------------- neon2: 깜빡이는 조각 (물리용 판). 땅 메시 목록(groundMeshes)에는 안 넣음
+  //   → castRay(아래)가 '지금 있는' 구간의 판만 따로 검사. 보이는 판·경고 빛은 neonHazards.js
+  const flickPhys = [];
+  if (GR) {
+    const physMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    for (const pc of flickPieces) {
+      const z = pc.z, sd = z.side;
+      // 조각: pe부터 벽까지 평평 (도로 높이 0, 경사 그대로)
+      const prof = (s) => (sd > 0 ? [[z.pe, 0], [railLatOf(s, 1), 0]] : [[-railLatOf(s, -1), 0], [-z.pe, 0]]);
+      for (const m of strip(pc.L, prof, physMat, { world: 'hidden' })) {
+        m.visible = false;
+        m.userData.surface = 'ground';
+        m.updateMatrixWorld();
+        m.geometry.computeBoundingSphere();
+        flickPhys.push({ z, mesh: m });
+      }
+    }
+  }
+  /** 구간 z의 상태 (레이스 시계 clock): on = 판이 있음, warn = 곧 사라짐(빨갛게), appear = 곧 생김, u = 주기 안 시각, left = 지금 상태가 남은 초 */
+  const flickClock = { t: 0 };
+  function flickState(z, clock = flickClock.t) {
+    const P = z.period, u = (((clock + z.phase) % P) + P) % P;
+    const on = u < z.on;
+    return { on, u, warn: on && u > z.on - (GR.warn ?? 0.55), appear: !on && u > P - (GR.appear ?? 0.35), left: on ? z.on - u : P - u };
   }
 
   // ---------------------------------------------------------------- 자석 튜브 (벽·천장 주행)
@@ -759,6 +887,37 @@ export function buildNeonTrack(data, scene) {
     }
     return null;
   }
+  // neon2: 지금 있는 깜빡이는 조각도 땅으로 (판마다 경계 구 검사 → 멀면 바로 넘어감)
+  const flickRay = new THREE.Raycaster();
+  const _fo = new THREE.Vector3();
+  const _po = new THREE.Vector3();
+  function withFlick(origin, dir, far, base) {
+    if (!flickPhys.length) return base;
+    // 차를 코스에 놓는 레이(높이 30에서 60 m)는 castRay가 고른 지점 6 m 위에서 쏘게 바꿈 → 같은 출발점으로 재야 거리 비교가 맞음
+    if (origin.y === 30 && far === 60 && dir.y === -1 && lastSampled && Math.hypot(origin.x - lastSampled.pos.x, origin.z - lastSampled.pos.z) < 25) {
+      origin = _po.set(origin.x, lastSampled.pos.y + 6, origin.z);
+      far = 40;
+    }
+    let best = base, bestD = base ? base.distance : far;
+    for (const f of flickPhys) {
+      const bs = f.mesh.geometry.boundingSphere;
+      // 레이 선분과 경계 구가 먼지 빠르게
+      _fo.copy(bs.center).sub(origin);
+      const along = THREE.MathUtils.clamp(_fo.dot(dir), 0, bestD);
+      if (_fo.addScaledVector(dir, -along).lengthSq() > bs.radius * bs.radius) continue;
+      if (!flickState(f.z).on) continue;
+      flickRay.set(origin, dir);
+      flickRay.near = 0;
+      flickRay.far = bestD;
+      const hit = flickRay.intersectObject(f.mesh, false)[0];
+      if (!hit || hit.distance < 1e-4 || hit.distance >= bestD) continue;
+      const n = hit.face.normal.clone();
+      if (n.dot(dir) > 0) n.negate();
+      best = { point: hit.point, normal: n, surface: 'ground', distance: hit.distance, flick: f.z.id };
+      bestD = hit.distance;
+    }
+    return best;
+  }
   const boostPadAt = () => null; // 부스트 패드 없음 (E 부스터만)
   function isOnRoad(pos, near = nearest(pos)) {
     return near.dist < HW + kerbAt(near.index, near.lateral < 0 ? -1 : 1);
@@ -808,8 +967,17 @@ export function buildNeonTrack(data, scene) {
   const dimension = dim ? { ...dim, inSpaceT: inGlitchT, inGlitchT, portalA: sampleAt(dim.t0), portalB: sampleAt(dim.t1) } : null;
   const buildMs = Math.round(performance.now() - buildT0);
 
-  return {
-    data, width: W, length, samples, sampleAt: sampleAtTracked, nearest, nearestRaw, castRay, boostPadAt, animate, outline,
+  // neon2: 봇(bots.js saturBrake)이 보는 가장자리 종류. 깜빡이는 쪽 = 낭떠러지, 나머지는 벽
+  const EDGE = { open: 0, cliff: 1, wall: 2, rail: 3, lava: 4 };
+  const edgeAt = (i, side) => {
+    const z = zoneAt(i);
+    return z && z.side === side ? EDGE.cliff : EDGE.rail;
+  };
+  const flicker = GR
+    ? { cfg: GR, zones: flickZones, zoneAt, zoneOf, state: flickState, clock: flickClock, pieces: flickPieces, phys: flickPhys, lineLimitBase: lineLimit, lineLimit: lineLimitF }
+    : null;
+  const api = {
+    data, width: W, length, samples, sampleAt: sampleAtTracked, nearest, nearestRaw, boostPadAt, animate, outline,
     shortcut: null, shortcutDist: () => Infinity, onShortcut: () => false, isOnRoad, edgeInfo, racingLine, lineY, kerbWidth: CURB, kerbAt, group, groundMeshes,
     arena: false, pad: null, inPad: () => false, spawn: null,
     sea: null, inSea: () => false, waterRanges: [], isWaterT: () => false, buoys: [],
@@ -820,5 +988,28 @@ export function buildNeonTrack(data, scene) {
     // 갓길로 나갈 때 튀는 조각 색(초록 잔디 대신 젖은 아스팔트 + 네온 조각), 에이펙스 불빛 기둥 색(주황 대신 네온 하늘색)
     offroadColors: ['#2b2836', '#3b3648', '#1d1b26', '#ff2f8e'], apexColor: '#2ff3ff',
     gravityAt, ramps, highWall, tube: tubeInfo, tubeK, tubeCore, groundCenter: center, groundSize, bbox: bb,
+    neon2: NEON2, flicker, tubeBelt: BELT && tubeInfo ? { ...BELT, tube: tubeInfo } : null,
   };
+  if (flicker) Object.assign(api, { EDGE, edgeAt });
+  if (!flicker) {
+    api.castRay = castRay;
+    return api;
+  }
+  // castRay: 봇·플레이어용 빠른 레이(fastTrack.js)는 Object.create(api) 위에 castRay를 새로 넣음 (seaTrack.js와 같은 방법)
+  //   → 받는 쪽(setter)에서 그 함수 뒤에 '지금 있는 깜빡이는 조각' 검사를 붙여 바꿔 끼움. 원래 트랙 레이도 같은 검사
+  const castRayF = (o, d, f) => withFlick(o, d, f, castRay(o, d, f));
+  Object.defineProperty(api, 'castRay', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      return (this !== api && this.__flickRay) || castRayF;
+    },
+    set(fn) {
+      if (this === api) return;
+      const self = this;
+      const ray = (o, d, f) => withFlick(o, d, f, fn.call(self, o, d, f));
+      Object.defineProperty(this, '__flickRay', { value: ray, writable: true, configurable: true });
+    },
+  });
+  return api;
 }

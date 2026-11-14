@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { seededRandom, canvasTexture } from './neonTrack.js';
 import { NEON, hologramMaterial, glowTexture } from './neonAssets.js';
+import { createNeonHazards } from './neonHazards.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _v = new THREE.Vector3();
 
@@ -74,6 +75,20 @@ export function buildNeonProps(track, scene) {
         } else {
           // 빛 기둥 줄 (4개)
           for (let q = -1.5; q <= 1.5; q++) add('post', s, lat, q * 1.6);
+        }
+      }
+    }
+  }
+  // neon2: 깜빡이는 조각 위(사라지면 허공)에 놓인 소품은 뺌 (구간 앞뒤 12 m, 그쪽 갓길만). 나머지 자리는 예전과 같음
+  if (track.flicker) {
+    const F = track.flicker, pad = mS(12);
+    for (let n = items.length - 1; n >= 0; n--) {
+      const it = items[n], near = track.nearest(it.home);
+      for (const z of F.zones) {
+        const k = (((near.index - z.a) % N) + N) % N;
+        if (k <= z.b - z.a + pad || N - k <= pad) {
+          if (near.lateral * z.side > z.pe - 1) items.splice(n, 1);
+          break;
         }
       }
     }
@@ -694,6 +709,8 @@ export function buildNeonProps(track, scene) {
   }
 
   resetItems();
+  // neon2 (2026-11-15): 깜빡이는 길 + 천장 급행 벨트 (neonHazards.js). &neon2=0 이면 null
+  const hazards = createNeonHazards(track, scene);
   let worldG = null;
   return {
     group: root,
@@ -703,12 +720,16 @@ export function buildNeonProps(track, scene) {
     update(dt, car) {
       updateItems(dt);
       guideAll(dt, car);
+      if (hazards) hazards.update(dt, car);
     },
     tubeGuide, // 테스트용
+    hazards,
     reset() {
       resetItems();
+      if (hazards) hazards.reset();
     },
     animate(t) {
+      if (hazards) hazards.animate(t);
       const g = !!track.inGlitch;
       if (g !== worldG) {
         worldG = g;
