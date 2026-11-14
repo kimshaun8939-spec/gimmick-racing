@@ -131,6 +131,24 @@ try {
 }
 const carId = carCfg.carId || carParam || 'f1';
 const carName = carCfg.carName || carId;
+// 부품 조립 표시 (부품 조립 1차 ⑤): 기록·고스트·온라인 순위표에 같이 남김. 봇·아카데미·튜토리얼·&parts=0 = 'stock'
+const BUILD_SIG = (carCfg.partsInfo && carCfg.partsInfo.sig) || 'stock';
+const partsMod = await import('./parts.js').catch(() => null); // 결과 화면 조립 이름용 (carRoster가 이미 불러온 모듈)
+const buildText = (sig) => {
+  const s = sig || 'stock';
+  let short = '순정', summary = '순정';
+  if (s !== 'stock') {
+    try {
+      short = partsMod ? partsMod.buildSummary(s, { short: true }) : s;
+      summary = partsMod ? partsMod.buildSummary(s) : s;
+    } catch {
+      short = summary = s;
+    }
+  }
+  // 화면 칩 글자: 부품 2개까지는 전체 이름('숏 기어'), 더 많으면 짧은 이름
+  const label = s === 'stock' || s.split('.').length > 2 ? short : summary;
+  return { sig: s, stock: s === 'stock', short, summary, label };
+};
 ld('ldCar', `🏎️ ${carName}`);
 if (carParam) setLast({ map: mapName, car: carId });
 // 부스터를 꺼 두면(car.json booster.enabled false) 화면 아래 부스터 버튼도 숨김
@@ -345,7 +363,7 @@ if (ITEM && !FREE) {
 performance.mark('load:race');
 const carList = rosterMod ? await rosterMod.listCars().catch(() => []) : []; // 다른 차 고스트·기록 이름용
 const carNameOf = (id) => (carList.find((c) => c.id === id) || {}).name || id;
-const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList, mode: recordMode() });
+const ghost = FREE ? null : createGhost({ scene, track, carCfg, look: carCfg.look, mapName, carId, laps: trackData.laps, spawnT: 0.992, cars: carList, mode: recordMode(), build: BUILD_SIG });
 // 온라인 순위표에서 고른 다른 사람 고스트: ?ghost=<사람 id>&ghostCar=<차>&ghostName=<이름> (같은 맵)
 const FRIEND_GHOST = ghost && params.get('ghost') && online.enabled ? { id: params.get('ghost'), car: params.get('ghostCar') || carId, name: params.get('ghostName') || '친구' } : null;
 let friendGhostReady = Promise.resolve();
@@ -358,7 +376,10 @@ if (FRIEND_GHOST) {
   } catch {}
   friendGhostReady = Promise.all([pendingGhost ? Promise.resolve(pendingGhost) : online.ghost(mapName, FRIEND_GHOST.car, FRIEND_GHOST.id), import('./carRoster.js').then((m) => m.loadCarConfig(FRIEND_GHOST.car))])
     .then(([json, cfg]) => {
-      if (json && ghost.useFriend(json, cfg.look, FRIEND_GHOST.name)) hud.toast(`👻 ${FRIEND_GHOST.name} 고스트와 달려요`);
+      if (json && ghost.useFriend(json, cfg.look, FRIEND_GHOST.name)) {
+        const fb = buildText(ghost.friendBuild);
+        hud.toast(`👻 ${FRIEND_GHOST.name} 고스트와 달려요` + (fb.stock ? '' : ` · 🔧 ${fb.short}`));
+      }
       else hud.toast('이 고스트는 현재 코스와 맞지 않아요. 홈 → 내 기록에서 다른 👻를 골라 주세요');
     })
     .catch((err) => {
@@ -545,7 +566,7 @@ function updateLaps() {
     let lapRecord = false;
     if (canSaveRecords()) {
       const prev = records.get(mapName, carId);
-      if (records.saveLap(mapName, carId, lapTime, race.assist, recordMode())) {
+      if (records.saveLap(mapName, carId, lapTime, race.assist, recordMode(), BUILD_SIG)) {
         race.newLapRecord = true;
         lapRecord = !!(prev && prev.lap);
       }
@@ -1092,9 +1113,9 @@ function refRecord() {
   const mapBest = records.bestRaceOfMap(mapName);
   if (settings.values.ghost === 'car') {
     const own = records.get(mapName, carId);
-    if (own && own.race) return { race: own.race, car: carId };
+    if (own && own.race) return { race: own.race, car: carId, build: own.raceBuild || 'stock' };
   }
-  return mapBest ? { race: mapBest.race, car: mapBest.car } : null;
+  return mapBest ? { race: mapBest.race, car: mapBest.car, build: mapBest.build || 'stock' } : null;
 }
 let myRecordMode = null;
 function myRecord() {
@@ -1130,7 +1151,7 @@ function showFinish() {
   // 최고 기록 비교 기준 = 설정 ghost (맵 최고 / 이 차 최고). 이 차 기록은 늘 따로 저장
   const ref = refRecord();
   const prevRace = ref && ref.race;
-  const carRecord = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist, recordMode()) : false;
+  const carRecord = canSaveRecords() ? records.saveRace(mapName, carId, total, race.lapTimes.length, race.assist, recordMode(), BUILD_SIG) : false;
   const newRace = carRecord && (!prevRace || total < prevRace);
   const prevNote = ref ? recordNote(ref) : '';
   myRecordCache = null;
@@ -1177,6 +1198,7 @@ function showFinish() {
   }
   hud.showResults(race.lapTimes, race.best, {
     map: mapTitle, car: carName, newLap: race.newLapRecord, newRace, prevRace, prevNote, carRecord: carRecord && !newRace, hasNext: !!champ && !champ.final,
+    build: buildText(BUILD_SIG), prevBuild: ref ? buildText(ref.build) : null,
     position, standings, sectorLaps: showSec ? sectors.laps : null, theoretical: showSec && race.lapTimes.length > 1 ? sectors.theoretical() : null,
     champ, assist: !!race.assist, noRestart: !!champ, meta: metaRun.summary(),
     replay: replay.has(), corners: !FREE && cornerRep.count ? cornerRep.summary(raceSys.active() ? raceSys.botCornerBest : null) : null, nextLabel: champ ? (champ.final ? '🏠 홈으로 (시즌 끝)' : `다음 경기 › ${champ.next}`) : undefined,
@@ -1198,12 +1220,17 @@ function showFinish() {
     hud.setOnline('🌐 온라인 순위표에 올리는 중…');
     const bestLap = Math.min(...race.lapTimes);
     online
-      .submit({ map: mapName, car: carId, total, laps: race.lapTimes, bestLap, assist: !!race.assist, ghost: ghost ? ghost.lastRunJson : null })
+      .submit({ map: mapName, car: carId, total, laps: race.lapTimes, bestLap, assist: !!race.assist, ghost: ghost ? ghost.lastRunJson : null, build: BUILD_SIG })
       .then((r) => {
         if (!r) return hud.setOnline('');
         if (r.needLogin || r.needNick) return hud.setOnline('🌐 홈 오른쪽 위 👤에서 이름과 비밀번호 4자리를 정하면 온라인 순위표에 올라가요');
         const where = `<b>${r.rank}위</b> / ${r.players}명`;
-        hud.setOnline(r.saved ? `🌐 온라인 순위표에 올렸어요 · 이 맵 ${where}` : `🌐 온라인 내 최고 ${fmtTime(r.best)} · 이 맵 ${where}`);
+        // 조립 기록이면 짧게 표시 (서버가 조립을 아는 경우만), 순정 기록이 따로 갱신되면 순정 순위
+        const tag = BUILD_SIG !== 'stock' && r.buildSaved !== false ? ' · 🔧 조립 기록' : '';
+        const stockWhere = r.stock_rank ? ` · 순정만 <b>${r.stock_rank}위</b> / ${r.stock_players}명` : '';
+        if (r.saved) hud.setOnline(`🌐 온라인 순위표에 올렸어요 · 이 맵 ${where}${tag}${BUILD_SIG === 'stock' ? stockWhere : ''}`);
+        else if (r.stock_saved) hud.setOnline(`🌐 순정 기록을 올렸어요${stockWhere} · 내 최고 ${fmtTime(r.best)} (이 맵 ${where})`);
+        else hud.setOnline(`🌐 온라인 내 최고 ${fmtTime(r.best)} · 이 맵 ${where}`);
       })
       .catch((err) => {
         console.warn('온라인 순위표', err);

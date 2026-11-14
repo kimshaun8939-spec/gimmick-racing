@@ -27,6 +27,27 @@ const MAX_SAVED = 12; // 저장해 두는 고스트 수 (오래된 것부터 지
 const MODES = ['normal', 'accel', 'boat', 'fly'];
 const BOT_PACE = 0.9; // "기본 봇" 고스트 빠르기 (라인 계획 속도의 비율)
 
+// 부품 조립 (2026-11-15, 부품 조립 1차 ⑤): 고스트 JSON에 build(조립 표시, 예 'g1.t2' / 'stock')를 같이 저장
+//   예전 고스트(build 없음)·기본 봇 = 'stock'. 고스트 차는 그 조립 정보를 가짐 (ghost.build / friendBuild)
+//   고스트 모습에 부품 모양을 입히는 건 ④ 부품 모양 작업: setGhostPartLook((look, sig) => 새 look)으로 연결
+//   (연결 전에는 순정 모습 그대로). 차를 고를 때마다가 아니라 고스트 모델을 새로 만들 때만 부름
+const STOCK_SIG = 'stock';
+const cleanSig = (b) => (typeof b === 'string' && /^[a-z][0-9]{1,2}(\.[a-z][0-9]{1,2}){0,9}$/.test(b) ? b : STOCK_SIG);
+let partLookHook = null;
+/** 고스트 모습에 조립을 입히는 함수 연결: fn(look, sig) → createCarModel에 넘길 look (null이면 끔) */
+export function setGhostPartLook(fn) {
+  partLookHook = typeof fn === 'function' ? fn : null;
+}
+function lookWithBuild(look, sig) {
+  if (!partLookHook) return look;
+  try {
+    return partLookHook(look, cleanSig(sig)) || look;
+  } catch (err) {
+    console.warn('고스트 부품 모양', err);
+    return look;
+  }
+}
+
 // --- 압축 (Int16 배열 ↔ base64) ---
 function toB64(i16) {
   const u8 = new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength);
@@ -121,12 +142,12 @@ export function createGhost(o) {
 
   // --- 모델 (반투명) --- 친구 고스트는 그 친구 차 모양 + 주황빛 (makeModel로 다시 만듦)
   let model = null, ghostMats = [];
-  function makeModel(look, glow = '#3d9bff') {
+  function makeModel(look, glow = '#3d9bff', sig = STOCK_SIG) {
     if (model) {
       scene.remove(model.root);
       if (model.dispose) model.dispose();
     }
-    model = createCarModel(look || '#9fd8ff');
+    model = createCarModel(lookWithBuild(look || '#9fd8ff', sig));
   const matMap = new Map();
   model.root.traverse((obj) => {
     if (!obj.isMesh) return;
@@ -157,7 +178,7 @@ export function createGhost(o) {
   fade = 1;
   }
   let fade = 1;
-  let modelCar = o.carId; // 지금 고스트 모델이 어느 차 모양인지
+  let modelCar = o.carId + '|' + STOCK_SIG; // 지금 고스트 모델이 어느 차 + 조립 모양인지
   makeModel(o.look);
   const view = fakeCar();
 
@@ -194,7 +215,7 @@ export function createGhost(o) {
     if (j.v !== 2 || j.len !== lenKey || j.laps !== LAPS || !matchingStart(j, start, track)) return null;
     const tr = decode(fromB64(j.data));
     const marks = Float32Array.from(j.marks.map((ms) => (ms < 0 ? NaN : ms / 1000)));
-    return { total: j.total, start: ghostStart(j, track), segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race' };
+    return { total: j.total, start: ghostStart(j, track), segs: [{ tr, off: 0 }], marks, react: j.react ?? reactionOf(tr), relative: 'race', build: cleanSig(j.build) };
   }
   function loadRun() {
     try {
@@ -217,7 +238,7 @@ export function createGhost(o) {
       for (let k = 0; k <= M; k++) if (isFinite(g.marks[k])) marks[l * M + k] = off + g.marks[k];
       off += g.lap;
     }
-    return { total: off, segs, marks, react: bestStart.react, relative: 'race', stitched: true };
+    return { total: off, segs, marks, react: bestStart.react, relative: 'race', stitched: true, build: STOCK_SIG };
   }
   let run = null, other = null;
   const carList = o.cars || [];
@@ -360,6 +381,15 @@ export function createGhost(o) {
     get best() {
       return best;
     },
+    /** 지금 보여 주는 고스트의 조립 표시 ('stock' | 'g1.t2'…, 고스트가 없으면 null) */
+    get build() {
+      const g = kind === 'off' ? null : active();
+      return g ? g.build || STOCK_SIG : null;
+    },
+    /** 친구 고스트의 조립 ('이 조립 따라 하기'용, 친구 고스트가 없으면 null) */
+    get friendBuild() {
+      return friend ? friend.build || STOCK_SIG : null;
+    },
     M,
     setKind(k) {
       if (friend && k !== 'off') k = 'friend'; // 친구 고스트를 골라 들어왔으면 설정보다 먼저
@@ -390,7 +420,7 @@ export function createGhost(o) {
       }
       if (!friend) return false;
       friend.name = name || '친구';
-      makeModel(look, '#ff9a3d');
+      makeModel(look, '#ff9a3d', friend.build);
       modelCar = 'friend';
       kind = 'friend';
       return true;
@@ -443,11 +473,12 @@ export function createGhost(o) {
       const enc = encode(rec);
       const tr = decode(enc); // 저장되는 것과 똑같이 (압축 정밀도)
       const react = reactionOf(tr);
-      const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, start: { ...start }, mode: o.mode || 'solo', data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
+      const build = cleanSig(o.build);
+      const json = JSON.stringify({ v: 2, len: lenKey, laps: LAPS, total: +total.toFixed(3), date: Date.now(), react, start: { ...start }, mode: o.mode || 'solo', build, data: toB64(enc), marks: Array.from(recMarks, (t) => (isFinite(t) ? Math.round(t * 1000) : -1)) });
       lastRunJson = json;
       // 예전 바퀴별 고스트를 이어 붙인 것은 진짜 완주 기록이 생기면 바로 바꿈
       if (run && !run.stitched && run.total <= total) return false;
-      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race', car: o.carId };
+      run = { total, segs: [{ tr, off: 0 }], marks: recMarks.slice(), react, relative: 'race', car: o.carId, build };
       saveStored(KEY_RUN(o.mapName, o.carId), json);
       // 예전 바퀴별 고스트는 이제 필요 없음 (저장 공간 아끼기)
       for (const k of [KEY(o.mapName, o.carId), KEY_START(o.mapName, o.carId)]) {
@@ -477,12 +508,13 @@ export function createGhost(o) {
         if (model) model.root.visible = false;
         return;
       }
-      // 다른 차 고스트면 그 차 모양으로 (친구 고스트는 useFriend가 이미 바꿈)
+      // 다른 차 고스트면 그 차 모양으로, 조립이 다르면 그 조립 모양으로 (친구 고스트는 useFriend가 이미 바꿈)
       if (kind !== 'friend') {
         const want = g.car && g.car !== o.carId && carInfo(g.car) ? g.car : o.carId;
-        if (want !== modelCar) {
-          makeModel(want === o.carId ? o.look : carInfo(want).look);
-          modelCar = want;
+        const wantKey = want + '|' + (g.build || STOCK_SIG);
+        if (wantKey !== modelCar) {
+          makeModel(want === o.carId ? o.look : carInfo(want).look, undefined, g.build || STOCK_SIG);
+          modelCar = wantKey;
           model.root.visible = false;
         }
       }
@@ -504,6 +536,6 @@ export function createGhost(o) {
     get model() {
       return model;
     },
-    _debug: () => ({ rec: rec.n, recNext, RM, run: run && { total: run.total, segs: run.segs.length, n: run.segs.reduce((a, x) => a + x.tr.n, 0), react: run.react, stitched: !!run.stitched }, bot: bot && { n: bot.tr.n, total: bot.total } }),
+    _debug: () => ({ rec: rec.n, recNext, RM, modelCar, run: run && { total: run.total, segs: run.segs.length, n: run.segs.reduce((a, x) => a + x.tr.n, 0), react: run.react, stitched: !!run.stitched, build: run.build }, other: other && { car: other.car, total: other.total, build: other.build }, friend: friend && { build: friend.build }, bot: bot && { n: bot.tr.n, total: bot.total } }),
   };
 }

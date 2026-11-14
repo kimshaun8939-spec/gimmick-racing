@@ -595,7 +595,10 @@ export function createHud(track) {
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
       if (canCompare && info.newRace) badges.push('<span class="badge record-chip">🏆 새 최고 기록!</span>');
-      const pn = info.prevNote ? ` · ${esc(info.prevNote)}` : ''; // 다른 차로 낸 기록이면 그 차 이름
+      // 부품 조립 (부품 조립 1차 ⑤): 같은 맵 기록이면 조립과 상관없이 비교, 비교 기록의 조립이 이번과 다르면 그 조립(또는 '순정')을 같이 적음
+      const bld = info.build && !info.build.stock ? info.build : null;
+      const prevB = info.prevBuild && info.build && info.prevBuild.sig !== info.build.sig ? ` · ${info.prevBuild.stock ? '순정' : '🔧 ' + esc(info.prevBuild.label || info.prevBuild.short)}` : '';
+      const pn = (info.prevNote ? ` · ${esc(info.prevNote)}` : '') + prevB; // 다른 차로 낸 기록이면 그 차 이름
       if (canCompare && info.newRace && info.prevRace) badges.push(`<span class="badge gray">이전 ${fmtTime(info.prevRace)}${pn} → <strong class="record-delta">${diffTxt}</strong></span>`);
       if (canCompare && !info.newRace && info.prevRace) badges.push(`<span class="badge gray">최고 기록 ${fmtTime(info.prevRace)}${pn} (${diffTxt})</span>`);
       if (canCompare && info.carRecord) badges.push('<span class="badge">🏎️ 이 차 최고 기록!</span>');
@@ -628,7 +631,7 @@ export function createHud(track) {
       const champBlock = ch ? '<details class="res-detail res-champ"><summary>🏆 시즌 ' + (champMe?.pos || '—') + '위 · ' + (champMe?.points || 0) + '점' + (ch.final ? ' · 최종' : ' · ' + ch.no + '/' + ch.total + '경기') + '</summary>' + champHtml(ch) + '</details>' : '';
       el.results.innerHTML = `<div class="res res-dashboard${standHtml || ch ? ' wide has-rivals' : ''}${ch && ch.final ? ' final' : ''}${info.newRace ? ' new-record' : info.newLap ? ' new-lap' : ''}">
         <div class="res-head">
-        <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''} · ${modeName}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
+        <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''} · ${modeName}${bld ? ` <span class="res-build" title="부품 조립: ${esc(bld.summary).replace(/"/g, '&quot;')}" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;margin-left:4px;padding:0 8px;border-radius:999px;font-size:.86em;line-height:1.6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)">🔧 ${esc(bld.label || bld.short)}</span>` : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
         <div class="res-clock"><small>완주 시간</small><div class="total">${fmtTime(total)}</div></div>
         <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>

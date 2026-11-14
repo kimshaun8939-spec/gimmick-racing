@@ -1,5 +1,7 @@
 // 내 기록 (브라우저에 저장): 맵 + 차마다 최고 랩, 최고 완주 기록
-//   localStorage 'gimmick.records' = { 맵id: { 차id: { lap, race, laps, date } } }
+//   localStorage 'gimmick.records' = { 맵id: { 차id: { lap, race, laps, date, lapBuild, raceBuild } } }
+//   부품 조립 (2026-11-15, 부품 조립 1차 ⑤): lapBuild·raceBuild = 그 기록을 낼 때의 조립 표시 (parts.js buildSig, 예 'g1.t2' / 'stock')
+//     최고 기록은 조립과 상관없이 하나 (맵+차마다). 예전 기록(칸 없음) = 'stock'으로 읽음 — 지우거나 바꾸지 않음
 import { gridStart } from './ghostStart.js';
 const KEY = 'gimmick.records';
 
@@ -17,11 +19,18 @@ function writeAll(all) {
 }
 
 // 제외된 옛 값은 원본에 남겨 두고, 비교·화면에는 유효한 기록만 전달.
+export const STOCK_BUILD = 'stock';
+const cleanBuild = (b) => (typeof b === 'string' && /^[a-z][0-9]{1,2}(\.[a-z][0-9]{1,2}){0,9}$/.test(b) ? b : STOCK_BUILD);
 function comparable(v) {
   if (!v) return null;
   const result = { ...v };
   if (v.raceRivals) delete result.race;
   if (v.lapRivals) delete result.lap;
+  // 조립 표시: 예전 기록은 칸이 없음 = 순정
+  if (result.race) result.raceBuild = cleanBuild(v.raceBuild);
+  else delete result.raceBuild;
+  if (result.lap) result.lapBuild = cleanBuild(v.lapBuild);
+  else delete result.lapBuild;
   return result;
 }
 export const records = {
@@ -62,42 +71,44 @@ export const records = {
     const r = readAll()[map];
     return comparable(r && r[car]);
   },
-  /** 이 맵에서 가장 빠른 랩 (어느 차든) → { lap, car } */
+  /** 이 맵에서 가장 빠른 랩 (어느 차든) → { lap, car, build } */
   bestOfMap(map) {
     const r = readAll()[map] || {};
     let best = null;
-    for (const [car, v] of Object.entries(r)) if (!v.lapRivals && v.lap && (!best || v.lap < best.lap)) best = { lap: v.lap, car };
+    for (const [car, v] of Object.entries(r)) if (!v.lapRivals && v.lap && (!best || v.lap < best.lap)) best = { lap: v.lap, car, build: cleanBuild(v.lapBuild) };
     return best;
   },
-  /** 이 맵에서 가장 빠른 완주 기록 (어느 차든, 여러 바퀴면 합) → { race, car } */
+  /** 이 맵에서 가장 빠른 완주 기록 (어느 차든, 여러 바퀴면 합) → { race, car, build } */
   bestRaceOfMap(map) {
     const r = readAll()[map] || {};
     let best = null;
-    for (const [car, v] of Object.entries(r)) if (!v.raceRivals && v.race && (!best || v.race < best.race)) best = { race: v.race, car };
+    for (const [car, v] of Object.entries(r)) if (!v.raceRivals && v.race && (!best || v.race < best.race)) best = { race: v.race, car, build: cleanBuild(v.raceBuild) };
     return best;
   },
-  /** 한 바퀴 기록 저장. 새 최고 기록이면 true */
-  saveLap(map, car, lap, assist = false, mode = 'solo') {
+  /** 한 바퀴 기록 저장. 새 최고 기록이면 true (build = 조립 표시, 안 주면 'stock') */
+  saveLap(map, car, lap, assist = false, mode = 'solo', build = STOCK_BUILD) {
     const all = readAll();
     const m = (all[map] = all[map] || {});
     const v = (m[car] = m[car] || {});
     if (!v.lapRivals && v.lap && v.lap <= lap) return false;
     v.lap = +lap.toFixed(3);
     v.lapMode = mode;
+    v.lapBuild = cleanBuild(build);
     delete v.lapRivals;
     v.lapAssist = !!assist; // 운전 도움을 켜고 낸 기록이면 true ('도움 켬' 표시용)
     v.date = Date.now();
     writeAll(all);
     return true;
   },
-  /** 완주 기록 저장. 새 최고 기록이면 true */
-  saveRace(map, car, total, laps, assist = false, mode = 'solo') {
+  /** 완주 기록 저장. 새 최고 기록이면 true (build = 조립 표시, 안 주면 'stock') */
+  saveRace(map, car, total, laps, assist = false, mode = 'solo', build = STOCK_BUILD) {
     const all = readAll();
     const m = (all[map] = all[map] || {});
     const v = (m[car] = m[car] || {});
     if (!v.raceRivals && v.race && v.race <= total) return false;
     v.race = +total.toFixed(3);
     v.raceMode = mode;
+    v.raceBuild = cleanBuild(build);
     delete v.raceRivals;
     delete v.raceExcludedReason;
     v.laps = laps;

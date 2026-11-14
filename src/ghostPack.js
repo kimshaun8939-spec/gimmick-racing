@@ -2,7 +2,7 @@
 //
 //   예전(v 2) = ghost.js가 만든 JSON 그대로: data = Int16 12칸(위치 cm·방향·속도·모드) × 샘플 수를 base64로, marks = 진행 지점 ms 배열
 //              → 3분 레이스 하나에 약 110 KB
-//   지금(v 3) = { v: 3, len, laps, total, date, react, start, mode, n, c: 'gz' | 'raw', z }
+//   지금(v 3) = { v: 3, len, laps, total, date, react, start, mode, build?, n, c: 'gz' | 'raw', z }
 //              z = 같은 값들을 열(column)마다 '앞 샘플과의 차이'로 바꿔 가변 길이 정수(varint)로 적고 gzip(CompressionStream) → base64
 //              위치(1 cm)·모드·진행 지점은 v 2와 똑같고, 방향은 1/4000(오차 최대 약 0.03°)·속도는 0.1 m/s로 줄임
 //              위치·방향은 2차 차분(차이의 차이)이라 매끈하게 달리는 동안 거의 0 → gzip이 아주 잘 줄임
@@ -195,7 +195,8 @@ function decodeBody(u8) {
   return { a, marks };
 }
 
-const META = ['len', 'laps', 'total', 'date', 'react', 'start', 'mode'];
+// build = 부품 조립 표시 (2026-11-15, 부품 조립 1차 ⑤, 예 'g1.t2' / 'stock'). 예전 고스트엔 없음 = 순정. 예전 게임이 풀면 그냥 무시됨
+const META = ['len', 'laps', 'total', 'date', 'react', 'start', 'mode', 'build'];
 
 /**
  * v2 고스트(JSON 문자열 또는 객체) → v3 JSON 문자열. v2가 아니면 그대로 문자열로 돌려줌.

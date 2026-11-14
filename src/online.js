@@ -13,6 +13,32 @@
 import { ONLINE_URL, ONLINE_KEY } from './onlineConfig.js';
 import { packVerified, unpackGhost } from './ghostPack.js';
 
+// 부품 조립 (2026-11-15, 부품 조립 1차 ⑤, 서버 SQL .debug/supabase_v5_parts.sql):
+//   - 올릴 때 조립 표시 문자열(build sig, 예 'g1.t2' / 'stock')을 같이 보냄 (gr_submit p_build)
+//   - 순위표 줄마다 build (예전 기록·SQL 전 서버 = 'stock'), '순정만' 보기 = board(map, car, limit, { stockOnly: true })
+//   - 서버에 아직 SQL이 없으면: 예전 gr_submit(9개 인자)로 build 없이 올리고, 예전 조회로 읽음 (모두 'stock'으로 보임, 오류 없음)
+//   - copyBuildFrom(carId, sig) = '이 조립 따라 하기' (내가 가진 부품만, 없는 부품은 순정 칸)
+export const STOCK_SIG = 'stock';
+const SIG_RE = /^[a-z][0-9]{1,2}(\.[a-z][0-9]{1,2}){0,9}$/;
+/** 서버·고스트에서 받은 조립 표시를 정리 (모르는 모양·빈 값 = 'stock') */
+export function cleanSig(sig) {
+  const t = typeof sig === 'string' ? sig.trim() : '';
+  return t && t !== STOCK_SIG && SIG_RE.test(t) ? t : STOCK_SIG;
+}
+let buildRpcMissing = false; // gr_submit에 p_build가 없는 서버 (SQL v5 전) → 이 페이지에서는 다시 안 보냄
+const buildBoardMissing = new Set(); // build 칸·순정 보기가 없는 표
+function missingBuildSchema(err) {
+  const message = [err.message, err.details, err.hint].filter(Boolean).join(' ');
+  return /build|stock_|ghost_ok|leaderboard_stock|records_stock/i.test(message) &&
+    (/^(42703|42P01|PGRST100|PGRST204|PGRST205)$/.test(err.code || '') ||
+      /does not exist|could not find|schema cache|unknown (column|table)|failed to parse/i.test(message));
+}
+function missingSubmitBuild(err) {
+  const message = [err.message, err.details, err.hint].filter(Boolean).join(' ');
+  return /^(PGRST202|PGRST203|42883)$/.test(err.code || '') ||
+    (/gr_submit|p_build/i.test(message) && /does not exist|could not find|schema cache|unknown function/i.test(message));
+}
+
 // 무료 한도 아끼기 (2026-11-14):
 //   - 고스트는 올리기 전에 줄임 (ghostPack.js v 3, 약 110 KB → 12~15 KB). 받을 때 v 3이면 풀고, 예전 v 2는 그대로 읽음
 //     주소에 &ghostzip=0 이면 예전처럼 줄이지 않고 올림
@@ -313,12 +339,26 @@ export const online = {
       }
     }
     let r;
+    const build = cleanSig(run.build);
     try {
-      r = await rpc('gr_submit', {
+      const body = {
         p_id: me.id, p_secret: me.secret, p_map: run.map, p_car: run.car,
         p_total: +run.total.toFixed(3), p_laps: run.laps.map((x) => +x.toFixed(3)),
         p_best_lap: run.bestLap ? +run.bestLap.toFixed(3) : null, p_assist: !!run.assist, p_ghost: ghostTxt,
-      });
+      };
+      if (!buildRpcMissing) {
+        try {
+          r = await rpc('gr_submit', { ...body, p_build: build });
+        } catch (err) {
+          if (!missingSubmitBuild(err)) throw err;
+          buildRpcMissing = true; // SQL v5 전 서버 → 예전 방식으로
+        }
+      }
+      if (r === undefined) {
+        r = await rpc('gr_submit', body);
+        if (r && typeof r === 'object') r = { ...r, buildSaved: false }; // 서버가 조립 표시를 모름 (순정으로 보임)
+      }
+      if (r && typeof r === 'object' && r.buildSaved === undefined) r = { ...r, buildSaved: true, build: cleanSig(r.build ?? build) };
     } catch (err) {
       // 다른 기기에서 이 계정이 합쳐져 없어졌으면: 이 기기는 다시 이름+비밀번호로
       if (/unknown player/.test(err.message || '')) {
@@ -331,11 +371,17 @@ export const online = {
     }
     return r;
   },
-  /** 순위표: 맵 전체(사람마다 가장 빠른 기록 하나) 또는 car를 주면 그 차만. 빠른 순서 */
-  async board(map, car = null, limit = 50) {
+  /**
+   * 순위표: 맵 전체(사람마다 가장 빠른 기록 하나) 또는 car를 주면 그 차만. 빠른 순서
+   *   opts.stockOnly = '순정만' (부품을 안 끼운 기록만, 사람·차마다 가장 빠른 순정 기록)
+   *   줄 = { player_id, nickname, car, total, best_lap, assist, license, build('stock' | 'g1.t2'…), stock, ghostOk }
+   *   ghostOk = 서버 고스트가 이 줄 기록의 것 ('순정만'에서 그 사람의 가장 빠른 기록이 조립 기록이면 false → 👻 숨김)
+   */
+  async board(map, car = null, limit = 50, opts = {}) {
     if (!this.enabled) return [];
+    const stockOnly = !!(opts && opts.stockOnly);
     // 기억해 둔 순위표 (같은 맵·차, 더 긴 목록을 받아 둔 것도 앞부분만 잘라 씀)
-    const key = (fake() ? 'fake|' : '') + map + '|' + (car || '');
+    const key = (fake() ? 'fake|' : '') + map + '|' + (car || '') + (stockOnly ? '|stock' : '');
     const kL = key + '|' + limit;
     for (const L of [limit, 50, 100]) {
       if (L < limit) continue;
@@ -347,7 +393,7 @@ export const online = {
       if (L < limit || !boardFlight.has(key + '|' + L)) continue;
       return (await boardFlight.get(key + '|' + L)).slice(0, limit);
     }
-    const p = this._board(map, car, limit).then((rows) => {
+    const p = this._board(map, car, limit, stockOnly).then((rows) => {
       cacheWrite(kL, rows);
       return rows;
     });
@@ -358,11 +404,32 @@ export const online = {
       if (boardFlight.get(kL) === p) boardFlight.delete(kL);
     }
   },
+  /** board(map, { car, limit, stockOnly }) 모양으로도 부를 수 있게 (홈 순위표용) */
+  leaderboard(map, opts = {}) {
+    return this.board(map, opts.car || null, opts.limit || 50, { stockOnly: !!opts.stockOnly });
+  },
   /** 순위표를 서버에서 받기 (기억 안 함). 고스트·바퀴별 기록은 안 받음 (화면에 쓰는 칸만) */
-  async _board(map, car, limit) {
+  async _board(map, car, limit, stockOnly = false) {
     const fields = 'player_id,nickname,car,total,best_lap,assist';
     const filters = '&map=eq.' + encodeURIComponent(map) +
       (car ? '&car=eq.' + encodeURIComponent(car) : '') + '&order=total.asc&limit=' + limit;
+    const fix = (row) => {
+      const build = cleanSig(row.build);
+      const { ghost_ok, ...rest } = row;
+      return { ...rest, license: validLicense(row.license), build, stock: build === STOCK_SIG, ghostOk: ghost_ok === undefined || ghost_ok === null ? true : !!ghost_ok };
+    };
+    // SQL v5 서버: build 칸 + 순정 보기 (records_stock / leaderboard_stock)
+    const table5 = stockOnly ? (car ? 'records_stock' : 'leaderboard_stock') : car ? 'records_with_license' : 'leaderboard';
+    if (!buildBoardMissing.has(table5) && !licenseBoardMissing.has(table5)) {
+      try {
+        const rows = await select(table5, 'select=' + fields + ',license,build' + (stockOnly ? ',ghost_ok' : '') + filters);
+        return (rows || []).map(fix);
+      } catch (err) {
+        if (!missingBuildSchema(err) && !missingLicenseSchema(err)) throw err;
+        buildBoardMissing.add(table5);
+      }
+    }
+    // SQL v5 전 서버: 조립 표시가 없음 = 모든 기록이 순정 → '순정만'도 같은 목록
     const table = car ? 'records_with_license' : 'leaderboard';
     let rows;
     if (!licenseBoardMissing.has(table)) {
@@ -375,7 +442,42 @@ export const online = {
     }
     // SQL 적용 전 서버: 원래 조회로 되돌리고 배지는 null로 맞춤.
     if (rows === undefined) rows = await select(car ? 'records' : 'leaderboard', 'select=' + fields + filters);
-    return (rows || []).map((row) => ({ ...row, license: validLicense(row.license) }));
+    return (rows || []).map((row) => fix({ ...row, build: STOCK_SIG }));
+  },
+  /** 서버가 조립 표시(SQL v5)를 모른다고 확인됐으면 false, 아니면 true (화면에서 '순정만' 안내를 다르게 할 때) */
+  get buildAware() {
+    return !(buildRpcMissing || buildBoardMissing.size);
+  },
+  cleanSig,
+  /** 조립 표시 → { sig, stock, chips, summary, short } (칩·요약은 parts.js에서, 못 읽으면 칩 없이) */
+  async buildInfo(sig) {
+    const s = cleanSig(sig);
+    if (s === STOCK_SIG) return { sig: s, stock: true, chips: [], summary: '순정', short: '순정' };
+    try {
+      const P = await import('./parts.js');
+      return { sig: s, stock: false, chips: P.buildChips(s), summary: P.buildSummary(s), short: P.buildSummary(s, { short: true }) };
+    } catch {
+      return { sig: s, stock: false, chips: [], summary: s, short: s };
+    }
+  },
+  /**
+   * '이 조립 따라 하기': 순위표·친구 고스트의 조립을 내 차(carId)에 끼움 — 내가 가진 부품만, 없는 부품은 순정 칸
+   * → { ok, sig(끼운 결과), wanted(원래 조립), same(원래와 똑같이 됨), missing: [{ slot, partId, name, short }], message? }
+   */
+  async copyBuildFrom(carId, sig) {
+    const wanted = cleanSig(sig);
+    let P;
+    try {
+      P = await import('./parts.js');
+    } catch (err) {
+      return { ok: false, sig: STOCK_SIG, wanted, same: false, missing: [], message: '부품 정보를 못 읽었어요' };
+    }
+    const want = P.parseSig(wanted);
+    const fit = P.fitBuild(want);
+    const missing = P.buildChips(want).filter((c) => fit[c.slot] !== c.partId).map((c) => ({ slot: c.slot, partId: c.partId, name: c.name, short: c.short }));
+    const r = P.setBuild(carId, fit);
+    if (!r || !r.ok) return { ok: false, sig: STOCK_SIG, wanted, same: false, missing, message: (r && r.message) || '저장하지 못했어요' };
+    return { ok: true, sig: r.sig, wanted, same: r.sig === wanted, missing };
   },
   /** 다른 사람(또는 나)의 고스트 (예전 v 2 JSON 문자열 또는 v 3을 푼 v 2 객체, 없으면 null). 👻 같이 달리기를 누를 때만 받음 */
   async ghost(map, car, playerId) {
