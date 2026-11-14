@@ -106,6 +106,7 @@ export function createSceneSave(o) {
       sc: c._sideContactAt != null ? r3((c.simT || 0) - c._sideContactAt) : null,
       cut: st.sc ? 1 : 0, fly: st.fly ? 1 : 0, calm: st.calm ? 1 : 0,
       fin: b.finished ? 1 : 0, rs: b.respawns | 0,
+      why: st.dbg ? st.dbg.why : null, tg: st.dbg && isFinite(st.dbg.tgt) ? r3(st.dbg.tgt) : null, fo: st.dbg && isFinite(st.dbg.follow) ? r3(st.dbg.follow) : null, sat: st.dbg ? r3(st.dbg.satur) : 0, // 봇이 왜 속도를 줄였나 (plan 계획·lane 옆 차선 커브·satur 핸들 한계·top 최고 속도·follow 앞차)
     };
   }
 

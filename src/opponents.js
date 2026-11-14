@@ -119,27 +119,45 @@ function nameTag(color) {
       const key = text + '|' + sub;
       if (key === last) return;
       last = key;
+      // 2026-11-14 사용자 요청 '이름표가 너무 큼 → 양 끝 반원·작게·반투명': 글자 길이에 맞춘 알약 모양, 배경 반투명, 왼쪽 색은 점
       const g = c.getContext('2d');
       g.clearRect(0, 0, 256, 64);
-      g.fillStyle = 'rgba(7,12,23,0.92)';
-      g.beginPath();
-      g.roundRect(4, 8, 248, 48, 12);
-      g.fill();
-      g.fillStyle = color;
-      g.fillRect(4, 8, 10, 48);
-      g.font = '800 28px "Malgun Gothic", system-ui, sans-serif';
-      g.fillStyle = '#ffd23a';
+      const H = 48, y0 = 8, r = H / 2, pad = 14, dot = 12;
       g.textBaseline = 'middle';
-      g.fillText(sub, 24, 33);
-      const w = g.measureText(sub).width;
-      g.fillStyle = '#ffffff';
-      g.font = '700 28px "Malgun Gothic", system-ui, sans-serif';
-      const maxName = 220 - w - (sub ? 10 : 0);
+      g.font = '800 31px "Malgun Gothic", system-ui, sans-serif';
+      const w = sub ? g.measureText(sub).width : 0;
+      g.font = '700 31px "Malgun Gothic", system-ui, sans-serif';
+      const maxName = 256 - pad * 2 - dot - 8 - w - (sub ? 8 : 0);
       let name = Array.from(String(text)), label = name.join('');
       while (g.measureText(label).width > maxName && name.length) {
         name.pop(); label = name.join('') + '…';
       }
-      g.fillText(label, 24 + w + (sub ? 10 : 0), 33);
+      const nw = g.measureText(label).width;
+      const bw = Math.min(252, pad * 2 + dot + 8 + w + (sub ? 8 : 0) + nw), x0 = (256 - bw) / 2;
+      g.fillStyle = 'rgba(7,12,23,0.55)';
+      g.beginPath();
+      g.roundRect(x0, y0, bw, H, r);
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.14)';
+      g.lineWidth = 2;
+      g.stroke();
+      g.fillStyle = color;
+      g.beginPath();
+      g.arc(x0 + pad + dot / 2, y0 + r, dot / 2, 0, Math.PI * 2);
+      g.fill();
+      g.shadowColor = 'rgba(0,0,0,0.6)';
+      g.shadowBlur = 4;
+      let tx = x0 + pad + dot + 8;
+      if (sub) {
+        g.font = '800 31px "Malgun Gothic", system-ui, sans-serif';
+        g.fillStyle = '#ffd23a';
+        g.fillText(sub, tx, y0 + r + 1);
+        tx += w + 8;
+      }
+      g.font = '700 31px "Malgun Gothic", system-ui, sans-serif';
+      g.fillStyle = '#ffffff';
+      g.fillText(label, tx, y0 + r + 1);
+      g.shadowBlur = 0;
       tex.needsUpdate = true;
     },
   };
@@ -259,7 +277,7 @@ export function createOpponents(scene) {
     camera.updateMatrixWorld();
     const tags = [];
     // 화면 높이·시야각에 따라 이름표가 5~9px로 작아지지 않게 실제 픽셀로 맞춤.
-    const tagW = innerHeight <= 500 ? 112 : 128, tagH = tagW / 4;
+    const tagW = innerHeight <= 500 ? 104 : 116, tagH = tagW / 4; // 2026-11-14 작게 (예전 112/128, 박스는 이름 길이에 맞춤)
     const tagUnit = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.max(1, innerHeight);
     for (const e of entries) {
       if (e.remote) steerRemote(e, dt);
@@ -306,7 +324,7 @@ export function createOpponents(scene) {
         tags.push({ sprite: e.tag.sprite, d, x0: x - tagW / 2 - 3, x1: x + tagW / 2 + 3, y0: y - tagH / 2 - 3, y1: y + tagH / 2 + 3 });
         const [text, sub] = labelFn ? labelFn(e) : [e.name, ''];
         e.tag.set(text, sub);
-        e.tag.sprite.material.opacity = Math.min(1, (TAG_DIST - d) / 60);
+        e.tag.sprite.material.opacity = 0.88 * Math.min(1, (TAG_DIST - d) / 60);
       }
     }
     // 가까운 차를 우선. 겹치는 이름표만 숨기고 차에서 떨어진 자리로 옮기지는 않음.
