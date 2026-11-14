@@ -30,7 +30,8 @@ try {
         if (!visited) try { for (let i = 0; i < localStorage.length; i++) if ((localStorage.key(i) || '').startsWith('gimmick.')) { visited = true; break; } } catch {}
         if (ver.v && visited && ver.v !== old) {
           let done = 0;
-          const files = ver.files || [];
+          // src/vendor/는 폴더 이름에 버전이 붙은 안 바뀌는 파일(three·PeerJS·글꼴) → 새 버전마다 다시 받지 않음
+          const files = (ver.files || []).filter(f => !String(f).replace(/^\.\//, '').startsWith('src/vendor/'));
           say('새 버전 준비 중 · 0 / ' + files.length + '개');
           progress?.classList.add('progress');
           const loaded = await Promise.all(files.map(async f => {

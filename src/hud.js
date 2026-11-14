@@ -589,7 +589,7 @@ export function createHud(track) {
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
       const canCompare = !route.has('room') && route.get('mode') !== 'item' && !(info.standings?.length > 1);
-      const modeName = route.has('room') ? (route.get('mode') === 'item' ? '온라인 아이템전' : '온라인 레이스') : info.champ ? '챔피언십' : route.get('mode') === 'item' ? '아이템전' : route.get('mode') === 'time' ? '타임 어택' : info.standings?.length > 1 ? '봇 레이스' : '혼자 달리기';
+      const modeName = route.has('room') ? (route.get('mode') === 'item' ? '온라인 파워업 레이스' : '온라인 레이스') : info.champ ? '챔피언십' : route.get('mode') === 'item' ? '파워업 레이스' : route.get('mode') === 'time' ? '타임 어택' : info.standings?.length > 1 ? '봇 레이스' : '혼자 달리기';
       // 최고 기록 = 완주 시간 (여러 바퀴면 모든 바퀴 합)으로 판단 (사용자 요청 2026-11-10)
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;

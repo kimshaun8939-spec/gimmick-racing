@@ -380,7 +380,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
       ${row(K('drift'), '드리프트', '꺾으면서 누르기')}
-      ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '아이템전에서 가진 아이템 쓰기 (드리프트로 게이지를 채우면 부스터)') : ''}
+      ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '파워업 레이스에서 가진 아이템 쓰기 (드리프트로 게이지를 채우면 부스터)') : ''}
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}

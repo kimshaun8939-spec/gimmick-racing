@@ -16,7 +16,7 @@ export const ACTIONS = [
   { group: '운전', id: 'left', label: '왼쪽으로', desc: '비행 중엔 왼쪽으로 기울여 선회', def: ['KeyA', 'ArrowLeft'] },
   { group: '운전', id: 'right', label: '오른쪽으로', desc: '비행 중엔 오른쪽으로 기울여 선회', def: ['KeyD', 'ArrowRight'] },
   { group: '운전', id: 'drift', label: '드리프트', desc: '꺾으면서 누르기 (땅에서)', def: ['ShiftLeft', 'Space'], ctx: 'ground' },
-  { group: '운전', id: 'booster', label: '아이템 사용', desc: '아이템전에서 가진 아이템 쓰기', def: ['KeyE', null] },
+  { group: '운전', id: 'booster', label: '아이템 사용', desc: '파워업 레이스에서 가진 아이템 쓰기', def: ['KeyE', null] },
   { group: '비행', id: 'climb', label: '이륙 · 상승', desc: '활주로에서 약 94 km/h를 넘으면 이륙', def: ['Space', null], ctx: 'fly' },
   { group: '비행', id: 'dive', label: '하강', desc: '기수를 아래로', def: ['ShiftLeft', null], ctx: 'fly' },
   { group: '변속', id: 'gearbox', label: '자동 ↔ 수동 변속', desc: '', def: ['KeyT', null] },

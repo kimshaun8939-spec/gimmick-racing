@@ -8,7 +8,8 @@
 //   - 연결 통로 2개: 'ctl'(꼭 도착해야 하는 메시지: 입장·출발·결과·채팅), 'st'(1초에 20번 보내는 차 위치: 잃어버려도 됨)
 //   - 엄격한 공유기(NAT) 때문에 바로 연결이 안 되면 PeerJS 기본 설정에 들어 있는 무료 중계(TURN) 서버를 씀
 //   - 인터넷 없이 같은 브라우저 탭끼리 시험할 때: 주소에 &net=local → BroadcastChannel로 흉내 냄
-export const PEERJS_URL = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/+esm'; // 버전 고정
+// 게임 안에 넣은 PeerJS (npm peerjs 1.5.4 dist/peerjs.min.js, 2026-11-14: 인터넷 CDN 대신). 이 파일(net.js) 기준 상대 경로
+export const PEERJS_URL = new URL('./vendor/peerjs-1.5.4/peerjs.min.js', import.meta.url).href; // 버전 고정
 export const NET_VERSION = 1; // 메시지 형식이 바뀌면 올림 (다른 버전끼리는 같은 방에 못 들어감)
 const PREFIX = 'gimmickracing-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 O/0, I/1 은 뺌
@@ -94,11 +95,21 @@ let libPromise = null;
 export function loadPeerLib() {
   if (useLocal()) return Promise.resolve({ Peer: LocalPeer, local: true });
   if (!libPromise) {
-    libPromise = import(PEERJS_URL)
-      .then((m) => ({ Peer: m.Peer || m.default, local: false }))
+    // peerjs.min.js는 모듈이 아니라 일반 스크립트(window.peerjs.Peer)라 <script>로 한 번만 붙임
+    libPromise = new Promise((resolve, reject) => {
+      const have = () => (window.peerjs && window.peerjs.Peer) || window.Peer;
+      if (have()) return resolve(have());
+      const sc = document.createElement('script');
+      sc.src = PEERJS_URL;
+      sc.async = true;
+      sc.onload = () => (have() ? resolve(have()) : reject(new Error('PeerJS 없음')));
+      sc.onerror = () => { sc.remove(); reject(new Error('파일을 못 읽음')); };
+      document.head.appendChild(sc);
+    })
+      .then((Peer) => ({ Peer, local: false }))
       .catch((e) => {
         libPromise = null;
-        throw new Error('멀티플레이 모듈(PeerJS)을 불러오지 못했어요. 인터넷 연결을 확인해 주세요. (' + (e && e.message) + ')');
+        throw new Error('멀티플레이 모듈(PeerJS)을 불러오지 못했어요. 게임을 새로 고쳐 보세요. (' + (e && e.message) + ')');
       });
   }
   return libPromise;

@@ -369,7 +369,7 @@ export function startTutorial(game) {
       go: '시작하기',
     });
     add({
-      id: 'start', ic: '🚦', chip: '출발', title: 'F1식 출발 신호',
+      id: 'start', ic: '🚦', chip: '출발', title: '레이싱 출발 신호',
       card: () => `${SVG.lights}<p>빨간불이 하나씩 켜지고, 5개가 다 켜진 뒤 <b>한꺼번에 꺼지는 순간</b> ${K('throttle')}를 밟아요.</p>
         <p>불이 꺼지기 전에 밟고 있으면 <b>부정 출발</b> → 시동이 꺼져서 늦게 출발해요. 꺼지고 0.3초 안에 밟으면 <b>완벽한 출발</b>!</p>
         <p class="tut-tip">💡 손을 키에서 떼고 기다리다가, 불이 <b>모두 사라지면</b> 꾹!</p>`,

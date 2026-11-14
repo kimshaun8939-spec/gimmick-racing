@@ -125,6 +125,8 @@ function headers() {
   return h;
 }
 async function call(path, opts = {}) {
+  // 인터넷이 없다고 브라우저가 이미 알면 요청을 안 보냄 (콘솔에 '연결 실패'가 안 쌓이게, 2026-11-14). 부르는 쪽은 예전처럼 오류로 받아 조용히 넘어감
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw Object.assign(new Error('인터넷 연결 없음'), { offline: true });
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(), TIMEOUT);
   try {

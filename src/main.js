@@ -35,6 +35,7 @@ import { createCamViews } from './camViews.js'; // 시점 바꾸기 (V 키): 기
 import { createMirror } from './mirror.js'; // 백미러: 뒤에 차가 붙으면 화면 위에 작은 거울 (2026-11-12)
 import { createCornerReport } from './cornerReport.js';
 import { online } from './online.js';
+import { liveGaps } from './standingsGap.js'; // 순위표 간격 순서 고침 (2026-11-14)
 import { createItems } from './items.js'; // 아이템전 (?mode=item)
 import { createMetaTracker } from './meta.js';
 import './profile.js'; // 완주 이벤트(gimmick:raceDone)를 듣고 경험치 표시
@@ -507,7 +508,7 @@ function applyIntro(dt) {
   const card = (e < 0.5 ? a.card : b.card) || null;
   hud.intro({
     title: mapTitle,
-    sub: CHAMP ? `🏆 챔피언십 ${CHAMP.index + 1}/${CHAMP.total} 경기 · 봇 ${LEVEL_NAME[raceSys.level] || ''}` : `${ITEM ? '🎁 아이템전' : '봇 레이스'} · ${raceSys.bots.length + 1}대 · ${LEVEL_NAME[raceSys.level] || ''} · ${trackData.laps}바퀴`,
+    sub: CHAMP ? `🏆 챔피언십 ${CHAMP.index + 1}/${CHAMP.total} 경기 · 봇 ${LEVEL_NAME[raceSys.level] || ''}` : `${ITEM ? '🎁 파워업 레이스' : '봇 레이스'} · ${raceSys.bots.length + 1}대 · ${LEVEL_NAME[raceSys.level] || ''} · ${trackData.laps}바퀴`,
     card,
     hint: '아무 키나 누르면 건너뛰기',
   });
@@ -874,11 +875,14 @@ function setModuleMute(m) {
   speedFx.setMuted(m);
   if (items) items.setMuted(m);
 }
-/** 자동 품질은 해상도 다음으로 그림 호출도 줄임. 차/물리/봇 수는 유지. */
-const autoRes = { scale: 1, min: 0.55, tier: 0, workMs: 0, startAt: 0, acc: 0, frames: 0, slowT: 0, goodT: 0, smallShadow: false, log: [] };
+/** 자동 품질은 해상도 다음으로 그림 호출도 줄임. 차/물리/봇 수는 유지.
+ *  2026-11-14 (p0): 예전엔 로딩·출발 때 잠깐 느린 1초만으로 해상도를 내리고, 다시 올리려면 거의 완벽한 60이 8초 이어져야 해서
+ *  보통 PC도 0.6배(흐림)에 갇혔음. 지금: 느린 프레임 몇 개는 빼고 재고(trimmed), 2초 이어서 느릴 때만,
+ *  그리고 CPU(물리·봇·그림 호출)가 막는 경우엔 해상도를 안 내림(내려도 안 빨라짐) → 그림 호출 단계(tier)만. 저장 형식 v2(예전 저장값은 무시). */
+const autoRes = { scale: 1, min: 0.55, tier: 0, workMs: 0, startAt: 0, acc: 0, frames: 0, slowT: 0, goodT: 0, cpuT: 0, resBlock: 0, probe: null, smallShadow: false, log: [], win: [], work: [], lastCost: 0, last: null };
 try {
   const saved = JSON.parse(localStorage.getItem('gimmick.autoRes') || 'null');
-  if (saved && Number.isFinite(saved.scale) && saved.scale > 0) {
+  if (saved && saved.v === 2 && Number.isFinite(saved.scale) && saved.scale > 0) {
     autoRes.scale = Math.min(1, Math.max(autoRes.min, saved.scale * 1.1));
     autoRes.tier = Math.max(0, Math.min(2, saved.tier | 0));
     autoRes.smallShadow = autoRes.tier > 0 || (!!saved.smallShadow && autoRes.scale <= autoRes.min + 0.05);
@@ -886,7 +890,7 @@ try {
 } catch {}
 const saveAutoRes = () => {
   try {
-    localStorage.setItem('gimmick.autoRes', JSON.stringify({ scale: +autoRes.scale.toFixed(3), tier: autoRes.tier, smallShadow: autoRes.smallShadow }));
+    localStorage.setItem('gimmick.autoRes', JSON.stringify({ v: 2, scale: +autoRes.scale.toFixed(3), tier: autoRes.tier, smallShadow: autoRes.smallShadow }));
   } catch {}
 };
 function applyQuality(q) {
@@ -908,53 +912,87 @@ function applyQuality(q) {
     }
   }
 }
-/** 1초씩 판단. 30 제한도 존중하고, 회복은 여유가 8초 이어질 때만 (품질 왕복 방지). */
+/** 1초씩 판단. 30 제한도 존중. 느린 프레임 5%(로딩 멈칫·GC)는 빼고 평균을 냄. */
 function autoResTick(dt) {
   if (settings.values.quality !== 'auto' || dt <= 0 || document.hidden) return;
   if (!autoRes.startAt) autoRes.startAt = performance.now();
   if (performance.now() - autoRes.startAt < 3000) return;
+  if (dt > 0.25) return; // 멈춘 뒤(메뉴·탭 전환·로딩) 첫 프레임은 판단에서 뺌
   autoRes.acc += dt;
-  autoRes.frames++;
+  autoRes.win.push(dt);
+  autoRes.work.push(autoRes.lastCost);
   if (autoRes.acc < 1) return;
-  const fps = autoRes.frames / autoRes.acc;
+  const iv = autoRes.win.slice().sort((x, y) => x - y);
+  const keep = iv.slice(0, Math.max(1, Math.ceil(iv.length * 0.95)));
+  const fps = keep.length / keep.reduce((x, y) => x + y, 0);
+  const workAvg = autoRes.work.reduce((x, y) => x + y, 0) / Math.max(1, autoRes.work.length); // ms: 우리 코드(물리·봇·그림 호출 보내기)가 쓴 시간
   autoRes.acc = 0;
-  autoRes.frames = 0;
+  autoRes.win.length = 0;
+  autoRes.work.length = 0;
   const target = Math.min(settings.values.fpsCap || 60, 60);
-  const want = target * 0.9;
+  const frameMs = 1000 / fps;
+  // CPU가 막음 = 한 프레임 시간 대부분을 JS가 씀 → 해상도를 내려도 거의 안 빨라짐 (그래픽카드는 놀고 있음)
+  const cpuBound = workAvg > frameMs * 0.7;
+  autoRes.last = { fps: +fps.toFixed(1), workMs: +workAvg.toFixed(1), cpuBound };
   let next = autoRes.scale, changed = false;
-  if (fps < want) {
+  if (autoRes.resBlock > 0) autoRes.resBlock--;
+  // 해상도를 내린 뒤 2초 재 봄: 6% 넘게 안 빨라졌으면 해상도 탓이 아님 → 되돌리고 30초 동안 해상도는 안 내림
+  if (autoRes.probe && ++autoRes.probe.n >= 2) {
+    if (fps < autoRes.probe.fps * 1.06) {
+      next = autoRes.probe.scale;
+      autoRes.resBlock = 30;
+      autoRes.slowT = 0;
+    }
+    autoRes.probe = null;
+  } else if (autoRes.probe) {
+    autoRes.last.probing = true;
+  }
+  if (autoRes.last.probing) {
+    // 재 보는 중엔 다른 판단을 미룸
+  } else if (fps < target * 0.88) {
     autoRes.goodT = 0;
     autoRes.slowT++;
-    next = Math.max(autoRes.min, autoRes.scale * Math.max(0.75, Math.min(0.95, Math.sqrt(fps / want))));
-    // 해상도만 내려도 CPU의 그림 호출은 남음. 많이 느리면 바로, 최저에서도 느리면 차례로 줄임.
-    if (autoRes.slowT >= 2 && autoRes.tier < 2 && (fps < target * 0.65 || autoRes.scale <= autoRes.min + 0.01)) {
-      autoRes.tier++;
-      autoRes.smallShadow = true;
-      autoRes.slowT = 0;
-      changed = true;
+    if (autoRes.slowT >= 2) {
+      if (!cpuBound && !autoRes.resBlock && autoRes.scale > autoRes.min + 0.01) {
+        // 그래픽카드가 못 따라옴 → 해상도를 내림
+        next = Math.max(autoRes.min, autoRes.scale * Math.max(0.75, Math.min(0.95, Math.sqrt(fps / (target * 0.9)))));
+        autoRes.probe = { fps, scale: autoRes.scale, n: 0 };
+        autoRes.cpuT = 0;
+      } else if (autoRes.tier < 2 && fps < target * 0.8) {
+        // CPU가 막거나 해상도가 이미 최저 → 그림 호출·그림자를 한 단계 줄임 (CPU 일이 줄어듦)
+        autoRes.tier++;
+        autoRes.smallShadow = true;
+        autoRes.slowT = 0;
+        changed = true;
+      }
     }
   } else {
     autoRes.slowT = 0;
-    if (fps >= target * 0.97) autoRes.goodT++;
+    if (fps >= target * 0.92) autoRes.goodT++;
     else autoRes.goodT = 0;
-    if (autoRes.goodT >= 8) {
-      // 60 제한에서 60이라는 사실만으로 남는 성능을 알 수 없으므로, 먼저 해상도만 천천히 회복.
+    if (autoRes.goodT >= 3) {
       if (autoRes.scale < 1) next = Math.min(1, autoRes.scale * 1.1);
-      else if (autoRes.tier > 0 && autoRes.workMs > 0 && autoRes.workMs < 500 / target) {
+      else if (autoRes.tier > 0 && workAvg > 0 && workAvg < 500 / target) {
         autoRes.tier--;
         autoRes.smallShadow = autoRes.tier > 0;
         changed = true;
-      } else if (autoRes.smallShadow && autoRes.workMs > 0 && autoRes.workMs < 500 / target) {
-        // 예전 버전의 작은 그림자 캐시(tier 필드 없음)도 충분히 회복하면 원래 크기로.
+      } else if (autoRes.smallShadow && workAvg > 0 && workAvg < 500 / target) {
         autoRes.smallShadow = false;
         changed = true;
       }
       autoRes.goodT = 0;
     }
   }
+  // 해상도를 내렸는데 지금은 CPU가 막고 있음 = 낮은 해상도가 도움이 안 됨 → 3초 이어지면 다시 올림
+  if (cpuBound && autoRes.scale < 1 && next >= autoRes.scale) {
+    if (++autoRes.cpuT >= 3) {
+      next = Math.min(1, autoRes.scale * 1.15);
+      autoRes.cpuT = 0;
+    }
+  } else if (!cpuBound) autoRes.cpuT = 0;
   if (changed || Math.abs(next - autoRes.scale) > 1e-3) {
     autoRes.scale = next;
-    autoRes.log.push([Math.round(elapsed), Math.round(fps), +next.toFixed(2), autoRes.tier]);
+    autoRes.log.push([Math.round(elapsed), Math.round(fps), +next.toFixed(2), autoRes.tier, +workAvg.toFixed(1)]);
     if (autoRes.log.length > 40) autoRes.log.shift();
     applyQuality('auto');
     saveAutoRes();
@@ -1427,7 +1465,7 @@ function frame(now, manual = false) {
   race.hudT = (race.hudT || 0) + dt;
   if (race.hudT > 0.2) {
     race.hudT = 0;
-    hud.race(raceSys.active() && !FREE ? raceSys.hudInfo(race.clock) : null);
+    hud.race(raceSys.active() && !FREE ? liveGaps(raceSys.hudInfo(race.clock), raceSys.standings(), race.clock, trackData.laps) : null); // 간격은 '지금' 기준으로 (standingsGap.js)
     if (race.phase === 'finished' && raceSys.active() && hud.resultsOpen) {
       race.resultsT = (race.resultsT || 0) + 0.2;
       if (race.resultsT > 0.6) {
@@ -1493,6 +1531,7 @@ function frame(now, manual = false) {
   input.endFrame();
   if (!manual) {
     const cost = performance.now() - workStart;
+    autoRes.lastCost = cost;
     autoRes.workMs = autoRes.workMs ? autoRes.workMs * 0.9 + cost * 0.1 : cost;
     requestAnimationFrame(frame);
   }

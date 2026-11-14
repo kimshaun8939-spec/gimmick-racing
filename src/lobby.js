@@ -397,7 +397,7 @@ export async function openLobby(opts = {}) {
         try {
           localStorage.setItem('gimmick.lobbyMode', mode);
         } catch {}
-        sys(mode === 'item' ? '레이스 방식: 🎁 아이템전' : '레이스 방식: 🏁 스피드전');
+        sys(mode === 'item' ? '레이스 방식: 🎁 파워업 레이스' : '레이스 방식: 🏁 클래식 레이스');
         push();
       },
       kick(p) {
@@ -600,13 +600,13 @@ export async function openLobby(opts = {}) {
     $('#lbMapTitle').innerHTML = `맵 <span class="sub">${esc(mm.title)}${laps}${s.isHost ? '' : ' · 방장이 골라요'}</span>`;
     // 레이스 방식: 방장이 고르고 참가자는 보기만
     const rmode = s.mode ? s.mode() : 'race';
-    const MODES = [['race', '🏁 스피드전'], ['item', '🎁 아이템전']];
+    const MODES = [['race', '🏁 클래식 레이스'], ['item', '🎁 파워업 레이스']];
     const modeBox = $('#lbMode');
     if (modeBox)
       modeBox.innerHTML = `<span>🎮 레이스 방식</span>${
         s.isHost
           ? `<div class="gm-seg">${MODES.map(([m, t]) => `<button data-act="mode" data-m="${m}" class="${m === rmode ? 'on' : ''}">${t}</button>`).join('')}</div>`
-          : `<b>${rmode === 'item' ? '🎁 아이템전' : '🏁 스피드전'}</b>`
+          : `<b>${rmode === 'item' ? '🎁 파워업 레이스' : '🏁 클래식 레이스'}</b>`
       }`;
     $('#lbModeHelp').textContent = rmode === 'item'
       ? '🎁 상자를 지나 아이템을 얻고, 화면 위 아이템 칸을 눌러 사용해요. 드리프트 게이지를 채워도 부스터를 얻어요.'
