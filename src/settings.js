@@ -196,9 +196,9 @@ export function createSettingsPanel(opts = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'gm-setwrap';
   wrap.innerHTML = `<div class="gm-set-tabs" role="tablist">
-      <button class="gm-tab on" data-tab="general" data-nav role="tab">⚙️ 일반 설정</button>
-      <button class="gm-tab" data-tab="keys" data-nav role="tab">⌨️ 조작키 배치<span class="badge" hidden>!</span></button>
-      <button class="gm-tab" data-tab="pad" data-nav role="tab">🎮 게임패드<span class="dot" hidden></span></button>
+      <button class="gm-tab on" data-tab="general" data-nav role="tab">일반 설정</button>
+      <button class="gm-tab" data-tab="keys" data-nav role="tab">조작키 배치<span class="badge" hidden>!</span></button>
+      <button class="gm-tab" data-tab="pad" data-nav role="tab">게임패드<span class="dot" hidden></span></button>
     </div>`;
   const root = document.createElement('div');
   root.className = 'gm-settings';
@@ -367,7 +367,7 @@ export function createControlsPage(opts = {}) {
   const row = (keys, what, sub = '') => `<div class="gm-ctl-row"><div class="gm-keys">${keys}</div><div><b>${what}</b>${sub ? `<small>${sub}</small>` : ''}</div></div>`;
   function render() {
     const touchSec = touchWanted()
-      ? `<section class="gm-touchctl"><h3>📱 터치 (휴대폰)</h3>
+      ? `<section class="gm-touchctl"><h3>터치 (휴대폰)</h3>
       ${row('<kbd>◀ ●▶</kbd>', '조향', '화면 왼쪽 아무 데나 손가락을 대고 옆으로 끈 만큼 꺾여요 (설정에서 ◀ ▶ 버튼·기울이기로 바꿀 수 있어요)')}
       ${row('<kbd>▲</kbd><kbd>▼</kbd>', '가속 · 브레이크', '오른쪽 아래 큰 버튼 · 작은 버튼')}
       ${row('<kbd>💨</kbd>', '드리프트', '비행기일 땐 ⬆ 상승 · ⬇ 하강 버튼이 생겨요')}
@@ -403,7 +403,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('racingLine'), '레이싱 라인 켜기/끄기', '초록 = 밟기 · 노랑 = 떼기 · 빨강 = 브레이크')}
       ${row(K('sound'), '소리 끄기/켜기')}
     </section>
-    <section class="gm-padctl${pad.connected() ? ' on' : ''}"><h3>🎮 게임패드 ${pad.connected() ? '<span class="ok">연결됨</span>' : '<small>(연결하고 버튼을 누르면 바로 써요)</small>'}</h3>
+    <section class="gm-padctl${pad.connected() ? ' on' : ''}"><h3>게임패드 ${pad.connected() ? '<span class="ok">연결됨</span>' : '<small>(연결하고 버튼을 누르면 바로 써요)</small>'}</h3>
       ${row('<kbd class="pad">L 스틱</kbd>', '조향', '기울인 만큼 꺾여요 (설정 → 게임패드에서 데드존·커브)')}
       ${row(pad.html('throttle') + pad.html('brake'), '가속 · 브레이크', '트리거를 밟은 만큼')}
       ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}

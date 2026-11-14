@@ -36,7 +36,7 @@ const STAT_NAMES = [['speed', '최고 속도'], ['accel', '가속'], ['handling'
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 /** 차 특기 (cars.json stats의 숨은 값) → 정보 칸 아래 작은 딱지 */
-const PERKS = [['offroad', 3, '🌿 잔디에 강해요'], ['boat', 3, '🚤 배가 빨라요'], ['fly', 3, '✈️ 비행을 잘해요'], ['drift', 4, '🌀 드리프트 쉬워요']];
+const PERKS = [['offroad', 3, '잔디에 강해요'], ['boat', 3, '배가 빨라요'], ['fly', 3, '비행을 잘해요'], ['drift', 4, '드리프트 쉬워요']];
 /** 'LE MANS PROTO · 접지력' → ['LE MANS PROTO', '접지력'] */
 const splitTag = (tag) => {
   const [en, ...ko] = String(tag || '').split('·');
@@ -192,17 +192,17 @@ export async function runHome() {
   try { completedFirst = !!localStorage.getItem('gimmick.firstComplete'); completedTutorial = localStorage.getItem(TUT_KEY) === 'done'; } catch {}
   views.main.innerHTML = `
     <div class="h-main hx">
-      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b><small>땅 · 물 · 하늘 · 우주까지 변신하며 달리는 트랜스폼 레이서</small></div>
+      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b></div>
       <button class="gm-btn primary h-start hx-hero" data-act="start" data-nav>
         <span class="hx-thumb"><img alt="" draggable="false" hidden><span class="ph">🏎️</span></span>
-        <span class="hx-htxt"><span class="hx-kicker">READY TO RACE</span><span class="big">레이스 시작</span><span class="sel"></span>
+        <span class="hx-htxt"><span class="big">레이스 시작</span><span class="sel"></span>
           <span class="hx-chips"><i data-c="map"></i><i data-c="car"></i><i data-c="mode"></i></span></span>
         <span class="go">▶</span>
       </button>
       <!-- 차·맵·방식 고르기 타일은 없앰 (사용자 요청 2026-11-11): 레이스 시작 → 방식 → 차 → 맵 순서로 차례대로 -->
       <div class="hx-steps"><span><b>1</b> 방식</span><i>›</i><span><b>2</b> 차</span><i>›</i><span><b>3</b> 맵</span><i>›</i><span><b>▶</b> 출발</span></div>
       <button class="gm-btn hx-learn" ${completedFirst && completedTutorial ? 'data-go="academy"' : 'data-act="tutorial"'} data-nav><span>${completedFirst && completedTutorial ? '🎓' : '🚦'}</span><span><b>${completedFirst ? (completedTutorial ? '다음 도전 · 아카데미' : '다음 연습 · 튜토리얼') : '처음이라면 · 튜토리얼'}</b><small>${completedFirst ? (completedTutorial ? '짧은 코너 연습으로 메달과 코인을 모아요' : '브레이크·코너를 익히고 다른 맵에 도전해요') : '출발·브레이크·자동 변신을 차근차근'}</small></span><span>›</span></button>
-      <div class="hx-sec"><span>더 보기</span></div>
+      
       <div class="h-menu hx-grid hx-4">
         <button class="gm-btn h-item hx-tile" data-go="meta" data-nav style="--tc:#ffd366"><span class="ic">✦</span><span class="t"><b>업적과 목표</b><small>87개 도전 · 나만의 드라이버 여정</small></span></button>
         <button class="gm-btn h-item hx-tile" data-act="metaShop" data-nav style="--tc:#84e6c4"><span class="ic">⬡</span><span class="t"><b>피트 샵</b><small>달려서 모은 코인으로 내 스타일</small></span></button>
@@ -225,7 +225,7 @@ export async function runHome() {
   views.car.innerHTML = `
     <div class="h-car">
       <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div>
-        <div class="cx-tools"><label class="cx-find"><span>🔍</span><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
+        <div class="cx-tools"><label class="cx-find"><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
           <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
           <button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
         <div class="list"></div></div>
@@ -244,7 +244,7 @@ export async function runHome() {
           <h2></h2>
         </div>
         <div class="ct-tabs" role="tablist" aria-label="차 정보" title="키보드 [ ] · 패드 LT / RT 로도 바꿀 수 있어요">
-          ${CAR_TAB_DEFS.map((t) => `<button type="button" role="tab" class="ct-tab ct-${t.id}" data-ct="${t.id}" id="ctTab-${t.id}" aria-controls="ctPane-${t.id}" data-nav><i>${t.icon}</i><span>${t.label}</span><b class="ct-badge"></b></button>`).join('')}
+          ${CAR_TAB_DEFS.map((t) => `<button type="button" role="tab" class="ct-tab ct-${t.id}" data-ct="${t.id}" id="ctTab-${t.id}" aria-controls="ctPane-${t.id}" data-nav><span>${t.label}</span><b class="ct-badge"></b></button>`).join('')}
         </div>
         <div class="ct-body">
           <section class="ct-pane" data-pane="info" id="ctPane-info" role="tabpanel" aria-labelledby="ctTab-info">
@@ -253,8 +253,8 @@ export async function runHome() {
             <div class="h-perks"></div>
             <div class="ct-classnote"></div>
             <div class="ct-jump">
-              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="stats" data-nav><i>📊</i><span><b>성능 보기</b><small class="ct-jstats"></small></span><em>›</em></button>
-              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="custom" data-nav><i>🎨</i><span><b>꾸미기</b><small class="ct-jcustom"></small></span><em>›</em></button>
+              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="stats" data-nav><span><b>성능 보기</b><small class="ct-jstats"></small></span><em>›</em></button>
+              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="custom" data-nav><span><b>꾸미기</b><small class="ct-jcustom"></small></span><em>›</em></button>
             </div>
             <div class="gx-nextline"></div>
           </section>
@@ -267,7 +267,7 @@ export async function runHome() {
           </section>
           <section class="ct-pane" data-pane="custom" id="ctPane-custom" role="tabpanel" aria-labelledby="ctTab-custom" hidden>
             <div class="ct-locknote" hidden></div>
-            <div class="gx-paint"><div class="gx-ptitle">🎨 색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
+            <div class="gx-paint"><div class="gx-ptitle">색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
             <div class="mt-costume-box"></div>
           </section>
         </div>
@@ -689,7 +689,7 @@ export async function runHome() {
       <div class="head"><div><h2>맵 고르기</h2><div class="who"></div></div>
         <div class="bar"><button class="gm-btn" data-go="car" data-nav>‹ 차 바꾸기 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-act="start" data-nav>출발! <kbd>Enter</kbd></button></div></div>
       <div class="mp-layout">
-        <div class="h-panel mp-list"><div class="mp-ltitle">코스 · ${maps.length}개<span class="mp-lhint">↑↓←→ 고르기 · Enter 출발</span></div><div class="h-mapgrid"></div></div>
+        <div class="h-panel mp-list"><div class="mp-ltitle">코스 · ${maps.length}개</div><div class="h-mapgrid"></div></div>
         <div class="h-panel mp-info"></div>
       </div>
     </div>`;
@@ -965,12 +965,12 @@ export async function runHome() {
       const md = academy.medalOf(l.id);
       return `<button class="gm-btn ax-card m${md}" data-act="acLesson" data-id="${l.id}" data-nav>
         <span class="ax-art">${academyArt(l.art)}</span>
-        <span class="ax-tx"><b><i>${l.icon}</i>${esc(l.name)}</b><small>${esc(l.short)}</small><em>🗺️ ${esc(mapName(l.map))}${l.extra && l.extra.bots ? ' · 🚗 연습 상대' : ''} · 약 ${l.mins}분</em></span>
+        <span class="ax-tx"><b>${esc(l.name)}</b><small>${esc(l.short)}</small><em>${esc(mapName(l.map))}${l.extra && l.extra.bots ? ' · 연습 상대' : ''} · 약 ${l.mins}분</em></span>
         <span class="ax-medal" title="${MEDAL_NAMES[md]}">${md ? MEDALS[md] : '<i>▶</i>'}</span></button>`;
     };
     const groups = GROUPS.map((g) => {
       const ls = LESSONS.filter((l) => l.group === g.id);
-      return ls.length ? `<section class="ax-group"><h3><span>${g.icon}</span>${esc(g.name)}</h3><div class="ax-grid">${ls.map(lessonCard).join('')}</div></section>` : '';
+      return ls.length ? `<section class="ax-group"><h3>${esc(g.name)}</h3><div class="ax-grid">${ls.map(lessonCard).join('')}</div></section>` : '';
     }).join('');
     const licCard = (lv, i) => {
       const have = academy.hasLicense(lv.id);
@@ -994,12 +994,12 @@ export async function runHome() {
       <div class="ax">
         <div class="ax-head">
           <button class="gm-btn small ax-back" data-go="main" data-nav>‹ 홈으로</button>
-          <div class="ax-title"><span class="ic">🎓</span><div><b>드라이빙 아카데미</b><small>먼저 레슨으로 연습해요 · 시험을 통과하면 라이선스 배지를 받아요</small></div></div>
+          <div class="ax-title"><div><b>드라이빙 아카데미</b><small>먼저 레슨으로 연습해요 · 시험을 통과하면 라이선스 배지를 받아요</small></div></div>
           <div class="ax-sum"><span>🥇 <b>${sum.gold}</b></span><span>🥈 <b>${sum.silver}</b></span><span>🥉 <b>${sum.bronze}</b></span><span class="n">레슨 ${sum.done}/${sum.total}</span>${top ? `<span class="lic">${licenseChip(top, 24)}</span>` : ''}</div>
         </div>
         <div class="ax-body">
           <div class="ax-lessons h-panel">${groups}</div>
-          <div class="ax-side h-panel"><h3 class="ax-sh">🪪 라이선스 시험 <small>선택 도전 · C → B → A → S 순서 · 배지·색·XP 보상</small></h3>${LICENSES.map(licCard).join('')}</div>
+          <div class="ax-side h-panel"><h3 class="ax-sh">라이선스 시험 <small>선택 도전 · C → B → A → S 순서 · 배지·색·XP 보상</small></h3>${LICENSES.map(licCard).join('')}</div>
         </div>
         <div class="ax-foot"><span class="ax-car">🏎️ ${esc(carOf(carId).name)} · 이 차로 연습해요 · 차는 '레이스 시작'에서 바꿔요</span></div>
       </div>`;
@@ -1175,7 +1175,7 @@ export async function runHome() {
         <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-nav>다음: 차 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
-          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><span class="ic">${m.icon}</span><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.desc)}</small><span class="chk">✓</span></button>
+          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.desc)}</small><span class="chk">✓</span></button>
           <div class="opts"></div></div>`,
       ).join('')}</div>
       <div class="h-modetip"></div>

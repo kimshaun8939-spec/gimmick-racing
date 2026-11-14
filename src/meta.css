@@ -91,3 +91,12 @@ body:has(#pauseMenu.on) .mt-notice { display:none; }
 @media(max-width:719px) { .mt-next-card { flex-wrap:wrap; } .mt-next-card>div { flex-basis:100%; } }
 
 .mt-page .mt-note,.mt-ach p { font-size:12px!important; }
+
+
+/* uiclean · 같은 제목을 반복하는 영문 장식과 도장 테두리 정리. */
+#home .mt-seal { display:none; }
+#home .mt-wallet > small { display:none; }
+#home .mt-page :is(.mt-note,.mt-ach p,.mt-product p,.mt-shop-intro p) { font-size:12px!important; }
+#home .mt-page :is(.mt-rank,.mt-rewards>span,.mt-section-title>span) { font-size:12px; }
+#home .mt-rewards>span { border:0; background:transparent; padding:2px 0; margin-right:6px; }
+#home .mt-shop-intro { padding-left:0; padding-right:0; }

@@ -2666,3 +2666,38 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
  #home .h-modes .bar { width:auto; box-sizing:border-box; }
  #home .h-modes .bar .gm-btn { min-width:0; padding-left:8px; padding-right:8px; white-space:normal; }
 }
+
+
+/* uiclean · 장식보다 선택과 내용을 먼저. 기능·상태·포커스 표시는 유지. */
+#home .h-streaks, #home .h-carmark b,
+#home .hx-tile > .ic, #home .hx-learn > span:first-child,
+#home .mt-wallet-btn > small { display:none; }
+#home .gm-btn.hx-hero::before, #home .gm-btn.hx-hero::after,
+#home .gm-btn.hx-tile::before,
+#home :is(.h-maps,.h-modes,.h-page) h2::before,
+#home .ol-list li.podium::after, #home .r1 .ol-medal::before { content:none; }
+#home .ol-medal, #home .ol-medal .crown { animation:none; }
+#home .ol-medal .crown { display:none; }
+#home .gm-btn.hx-tile { gap:0; grid-template-columns:minmax(0,1fr); }
+#home .hx-tile .t { min-width:0; }
+#home .gm-btn.h-modecard { grid-template-columns:minmax(0,1fr); }
+#home .h-modecard > b { grid-column:1; grid-row:1; padding-right:28px; }
+#home .h-modecard > small { grid-column:1; grid-row:2; }
+#home .hx-learn { gap:12px; }
+#home .hx-learn > span:nth-child(2) { flex:1; }
+#home .hx-chips i { border:0; background:transparent; padding:0; border-radius:0; }
+#home .hx-chips { column-gap:12px; row-gap:4px; }
+#home .h-carinfo .perks > span { background:transparent; border:0; padding-left:0; }
+#pauseMenu .pm-head small:empty { display:none; }
+#pauseMenu .pm-list .gm-btn:not([data-act="resume"]):not([data-act="restart"]) { min-height:48px; font-size:var(--fs-sm); }
+#pauseMenu .pm-list .gm-btn[data-act="resume"] { justify-content:space-between; }
+#pauseMenu .pm-info .r + .r { border-top:0; }
+@media(max-height:520px) {
+ #pauseMenu .pm-list .gm-btn:not([data-act="resume"]):not([data-act="restart"]) { min-height:40px; }
+}
+@media(max-width:719px) and (min-height:521px) {
+ #home .mp-layout { grid-template-rows:minmax(0,1.3fr) minmax(0,1fr); gap:10px; }
+ #home .mp-info { max-height:none; }
+ #home .mp-info > * { flex-shrink:0; }
+ #home .mp-info .mp-desc { display:block; }
+}

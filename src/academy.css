@@ -364,3 +364,8 @@
 #tutorial .ac-score-rule small{display:block;margin-top:4px;color:#c4cee2;font-size:12px;font-weight:500}
 
 #tutorial.acad .ac-medal-limits{display:block;margin-top:6px;color:#ffe5a0;font-size:12px;line-height:1.5;font-weight:800;white-space:nowrap}
+
+
+/* uiclean · 목록 이름 옆 반복 아이콘을 줄이고 학습 그림·메달은 유지. */
+#home .ax-card.m3 .ax-medal { animation:none; filter:none; }
+#home .ax-group h3 { letter-spacing:0; }

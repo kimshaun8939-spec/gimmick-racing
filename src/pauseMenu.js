@@ -18,19 +18,19 @@ export function createPauseMenu(o) {
   root.innerHTML = `
     <div class="pm-wrap">
       <div class="pm-side">
-        <div class="pm-head"><div class="ic">⏸</div><div><h2>일시정지</h2><small>계속하기를 누르면 이어서 달려요</small></div></div>
+        <div class="pm-head"><div><h2>일시정지</h2><small></small></div></div>
         <div class="h-panel pm-info"></div>
         <div class="pm-list">
-          <button class="gm-btn primary" data-act="resume" data-nav><span class="ic">▶</span>계속하기<kbd>Esc</kbd></button>
-          <button class="gm-btn" data-act="restart" data-nav><span class="ic">↺</span>다시 시작</button>
-          <div class="sep"></div>
-          <button class="gm-btn" data-act="settings" data-nav><span class="ic">⚙️</span>설정</button>
-          <button class="gm-btn" data-act="keys" data-nav><span class="ic">⌨️</span>조작키 바꾸기</button>
-          <button class="gm-btn" data-act="controls" data-nav><span class="ic">🎮</span>조작법</button>
-          <div class="sep"></div>
-          <button class="gm-btn" data-act="car" data-nav><span class="ic">🏎️</span>차 바꾸기</button>
-          <button class="gm-btn" data-act="map" data-nav><span class="ic">🗺️</span>맵 바꾸기</button>
-          <button class="gm-btn danger" data-act="home" data-nav><span class="ic">🏠</span>홈으로</button>
+          <button class="gm-btn primary" data-act="resume" data-nav>계속하기<kbd>Esc</kbd></button>
+          <button class="gm-btn" data-act="restart" data-nav>다시 시작</button>
+          
+          <button class="gm-btn" data-act="settings" data-nav>설정</button>
+          <button class="gm-btn" data-act="keys" data-nav>조작키 바꾸기</button>
+          <button class="gm-btn" data-act="controls" data-nav>조작법</button>
+          
+          <button class="gm-btn" data-act="car" data-nav>차 바꾸기</button>
+          <button class="gm-btn" data-act="map" data-nav>맵 바꾸기</button>
+          <button class="gm-btn danger" data-act="home" data-nav>홈으로</button>
         </div>
       </div>
       <div class="h-panel pm-page">
@@ -53,7 +53,7 @@ export function createPauseMenu(o) {
     const resumeKey = root.querySelector('[data-act="resume"] kbd');
     if (resumeKey) resumeKey.outerHTML = pad.usingPad() ? padKbd(1) : '<kbd>Esc</kbd>';
     root.querySelector('.pm-head h2').textContent = i.online ? '온라인 메뉴' : '일시정지';
-    root.querySelector('.pm-head small').textContent = i.online ? '온라인 경기는 계속돼요. 내 차는 가속을 멈춰요' : '계속하기를 누르면 이어서 달려요';
+    root.querySelector('.pm-head small').textContent = i.online ? '온라인 경기는 계속돼요. 내 차는 가속을 멈춰요' : '';
     root.querySelector('[data-act="restart"]').style.display = i.online ? 'none' : '';
     root.querySelector('.pm-info').innerHTML = [
       ['맵', i.map],
@@ -86,7 +86,7 @@ export function createPauseMenu(o) {
       const i = o.getInfo();
       pageTitle.textContent = '';
       const laps = (i.lapTimes || []).map((t, k) => `<span>LAP ${k + 1} · ${fmtTime(t)}</span>`).join('');
-      pageBody.innerHTML = `<div class="pm-welcome"><div><div class="big">${i.online ? '온라인 경기 중' : '잠시 쉬는 중'}</div>
+      pageBody.innerHTML = `<div class="pm-welcome"><div>
         <div>${i.online ? '온라인에서는 메뉴를 열어도 레이스가 계속돼요. 계속하기로 돌아가세요' : i.phase === 'countdown' ? '출발 신호가 멈춰 있어요. 계속하기를 누르면 이어서 켜져요' : i.phase === 'finished' ? '완주했어요! 다시 시작하거나 다른 맵을 골라 보세요' : '레이스가 멈춰 있어요'}</div>
         ${laps ? `<div class="laps">${laps}</div>` : ''}</div></div>`;
     }

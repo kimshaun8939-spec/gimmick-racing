@@ -508,3 +508,9 @@ body.touch-on .ct-keys { display: none; }
   #home .ct-tabs:has(> .ct-tab:nth-of-type(4)) .ct-tab { min-height: 38px; }
   #home .ct-statbox .ns-heading b small { display: none; }
 }
+
+
+/* uiclean · 탭은 글자로, 잠금·코스튬 수·비교 정보는 그대로. */
+#home .ct-tab { gap:6px; }
+#home .ct-jumpbtn { gap:8px; }
+#home .ct-jumpbtn > span { flex:1; min-width:0; }
