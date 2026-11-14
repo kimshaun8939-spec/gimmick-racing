@@ -72,7 +72,7 @@ export function facadeTextures(kind, seed = 1) {
 
 // ---------------------------------------------------------------- 네온 간판 그림판
 // 가로 간판: 위쪽 절반에 4열 × 8행 (칸 512 × 128), 세로 간판: 아래쪽 절반에 16열 × 2행 (칸 128 × 512)
-const H_TEXT = ['NEON', '라멘 RAMEN', 'HOTEL', '24H', 'CYBER', 'GAME ZONE', 'PIZZA', 'KARAOKE', '기믹 레이싱', 'NOODLE', 'SUSHI 寿司', 'BAR', 'CAFE', 'ARCADE', 'TAXI', 'CLUB', '편의점', 'PC방', '노래방', 'OPEN', 'NIGHT', 'DRIVE', 'TURBO', 'MOTEL', '치킨', 'DATA', 'BOOST', '떡볶이', 'ROBOT', 'SYNTH', '電脳', 'VR'];
+const H_TEXT = ['NEON', '라멘 RAMEN', 'HOTEL', '24H', 'CYBER', 'GAME ZONE', 'PIZZA', 'KARAOKE', '트랜스폼 레이서', 'NOODLE', 'SUSHI 寿司', 'BAR', 'CAFE', 'ARCADE', 'TAXI', 'CLUB', '편의점', 'PC방', '노래방', 'OPEN', 'NIGHT', 'DRIVE', 'TURBO', 'MOTEL', '치킨', 'DATA', 'BOOST', '떡볶이', 'ROBOT', 'SYNTH', '電脳', 'VR'];
 const V_TEXT = ['라멘', '호텔', '서울', '네온', '게임', '노래방', '東京', '電脳', '酒場', '카페', '극장', '사우나', '24시', '치킨', '피씨', '만화'];
 export const SIGN_CELLS = { h: H_TEXT.length, v: V_TEXT.length };
 export function signAtlas() {
@@ -240,7 +240,7 @@ export function hologramMaterial(color = '#38e8ff', { opacity = 0.75, lines = 2.
 // ---------------------------------------------------------------- 큰 전광판 (광고가 몇 초마다 지지직 바뀜)
 const ADS = [
   ['NEON CITY', 'GRAND PRIX', '#ff2f8e', '#2ff3ff'],
-  ['기믹 레이싱', 'GIMMICK RACING', '#ffe23a', '#ff2f8e'],
+  ['트랜스폼 레이서', 'TRANSFORM RACER', '#ffe23a', '#ff2f8e'],
   ['TURBO COLA', '⚡ 네온 에너지 ⚡', '#7dff6a', '#2ff3ff'],
   ['GLITCH ZONE', '차원 포털 앞 300m', '#b06cff', '#ff5cf0'],
   ['RAMEN 24H', '라멘 · 떡볶이 · 치킨', '#ff8a2a', '#ffe23a'],
@@ -281,6 +281,10 @@ export function adTexture() {
     g.shadowColor = c2;
     g.fillStyle = c2;
     g.font = `800 38px system-ui, "Malgun Gothic", sans-serif`;
+    if (b === 'TRANSFORM RACER') {
+      let subFs = 38;
+      while (g.measureText(b).width > 440 && subFs > 24) g.font = `800 ${--subFs}px system-ui, "Malgun Gothic", sans-serif`;
+    }
     g.fillText(b, 256, y + 186);
     g.shadowBlur = 0;
   });

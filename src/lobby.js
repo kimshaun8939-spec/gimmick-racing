@@ -759,7 +759,7 @@ export async function openLobby(opts = {}) {
     return r;
   }
   function shareLink() {
-    navigator.share({ title: '기믹 레이싱 같이 하자!', text: `방 코드 ${session.code}`, url: inviteUrl(session.code) }).catch(() => {});
+    navigator.share({ title: '트랜스폼 레이서 같이 하자!', text: `방 코드 ${session.code}`, url: inviteUrl(session.code) }).catch(() => {});
   }
   function toastIn(t) {
     const s = $('#lbStatus');

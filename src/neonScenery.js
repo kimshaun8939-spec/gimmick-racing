@@ -668,14 +668,14 @@ export function buildNeonScenery(track, scene) {
       });
     }
     // 2) 고가도로 옆 떠 있는 홀로그램 광고판 (글자 그림 + 홀로그램 재질)
-    const holoTexts = [['NEON CITY', '#2ff3ff'], ['기믹 레이싱', '#ff2f8e'], ['MAGNET TUBE ▶', '#b06cff'], ['LOW-G 주의', '#7dff6a'], ['DRIVE FAST', '#ffe23a']];
+    const holoTexts = [['NEON CITY', '#2ff3ff'], ['트랜스폼 레이서', '#ff2f8e'], ['MAGNET TUBE ▶', '#b06cff'], ['LOW-G 주의', '#7dff6a'], ['DRIVE FAST', '#ffe23a']];
     const htex = holoTexts.map(([txt, col]) =>
       canvasTexture(512, 160, (g2, w, h) => {
         g2.clearRect(0, 0, w, h);
         g2.strokeStyle = col;
         g2.lineWidth = 6;
         g2.strokeRect(6, 6, w - 12, h - 12);
-        g2.font = '900 76px system-ui, "Malgun Gothic", sans-serif';
+        g2.font = `${txt === '트랜스폼 레이서' ? '900 60px' : '900 76px'} system-ui, "Malgun Gothic", sans-serif`;
         g2.textAlign = 'center';
         g2.textBaseline = 'middle';
         g2.fillStyle = '#ffffff';

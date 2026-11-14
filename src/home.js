@@ -136,7 +136,7 @@ export async function runHome() {
   home.innerHTML = `
     <div class="h-glow"></div><div class="h-floor"></div><div class="h-streaks"></div>
     <div class="h-top">
-      <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">기믹 <em>레이싱</em></div><div class="sub">GIMMICK RACING</div></div></div>
+      <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">트랜스폼 <em>레이서</em></div><div class="sub">TRANSFORM RACER</div></div></div>
       <div class="h-icons">
         <button class="mt-wallet-btn" data-act="metaShop" data-nav title="피트 코인과 피트 샵" aria-label="피트 코인과 피트 샵"><i>⬡</i><span class="mt-wallet-count"></span><small>PIT COIN</small></button>
         <button class="gm-btn hx-driver h-name" data-act="name" data-nav title="이름 바꾸기 (레이스·순위표에 보여요)">
@@ -160,7 +160,7 @@ export async function runHome() {
     <div class="h-view" data-view="season"></div>
     <div class="h-view" data-view="academy"></div>
     <div class="h-view" data-view="meta"></div>
-    <div class="h-foot"><span>${VERSION} · 기믹 레이싱</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="ct-foothint"><kbd>[</kbd><kbd>]</kbd> 정보 탭</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
+    <div class="h-foot"><span>${VERSION} · 트랜스폼 레이서</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="ct-foothint"><kbd>[</kbd><kbd>]</kbd> 정보 탭</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
     <div class="h-launch"><div class="ld" id="hLaunch"></div></div>
     <div class="h-toast" id="hToast"></div>`;
   document.body.appendChild(home);
@@ -192,7 +192,7 @@ export async function runHome() {
   try { completedFirst = !!localStorage.getItem('gimmick.firstComplete'); completedTutorial = localStorage.getItem(TUT_KEY) === 'done'; } catch {}
   views.main.innerHTML = `
     <div class="h-main hx">
-      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b><small>땅 · 물 · 하늘 · 우주까지 달리는 기믹 레이싱</small></div>
+      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b><small>땅 · 물 · 하늘 · 우주까지 변신하며 달리는 트랜스폼 레이서</small></div>
       <button class="gm-btn primary h-start hx-hero" data-act="start" data-nav>
         <span class="hx-thumb"><img alt="" draggable="false" hidden><span class="ph">🏎️</span></span>
         <span class="hx-htxt"><span class="hx-kicker">READY TO RACE</span><span class="big">레이스 시작</span><span class="sel"></span>
@@ -1442,7 +1442,7 @@ export async function runHome() {
     launching = true;
     uiSound('select');
     const m = mapOf(mapId), c = carOf(carId), rm = RACE_MODES.find((x) => x.id === mode);
-    $('#hLaunch').innerHTML = `<div class="logo">기믹 레이싱</div><div class="map">${esc(m.title)}</div><div class="car">${esc(c.name)}</div><div class="mode">${rm ? `${rm.icon} ${esc(rm.name)}` : ''}</div>`;
+    $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">${esc(m.title)}</div><div class="car">${esc(c.name)}</div><div class="mode">${rm ? `${rm.icon} ${esc(rm.name)}` : ''}</div>`;
     $('.h-launch').classList.add('on');
     const extra = mode === 'race' || mode === 'time' || mode === 'item' ? { mode } : {};
     setTimeout(() => (location.href = raceUrl(mapId, carId, extra)), 380);
@@ -1452,7 +1452,7 @@ export async function runHome() {
     if (launching || !url) return;
     launching = true;
     uiSound('select');
-    $('#hLaunch').innerHTML = `<div class="logo">기믹 레이싱</div><div class="map">${esc(title)}</div><div class="car">${esc(sub)}</div>`;
+    $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">${esc(title)}</div><div class="car">${esc(sub)}</div>`;
     $('.h-launch').classList.add('on');
     setTimeout(() => (location.href = url), 380);
   }
@@ -1469,7 +1469,7 @@ export async function runHome() {
     try {
       localStorage.setItem(TUT_KEY, localStorage.getItem(TUT_KEY) || 'asked');
     } catch {}
-    $('#hLaunch').innerHTML = `<div class="logo">기믹 레이싱</div><div class="map">🎓 튜토리얼</div><div class="car">구름섬 그랑프리 · ${esc(carOf(carId).name)}</div>`;
+    $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">🎓 튜토리얼</div><div class="car">구름섬 그랑프리 · ${esc(carOf(carId).name)}</div>`;
     $('.h-launch').classList.add('on');
     setTimeout(() => (location.href = tutorialUrl(carId, { quick: 1, intro: 0, bots: 0 })), 380);
   }
@@ -2134,7 +2134,7 @@ function welcomeDialog({ first = false } = {}) {
     wrap.className = 'gm-confirm gm-welcome';
     const cur = getNick();
     wrap.innerHTML = `<div class="box" role="dialog" aria-modal="true">
-      ${first ? '<div class="wl-flag">🏁</div><h3>기믹 레이싱에 온 걸 환영해요!</h3><p>먼저 레이스에서 보일 <b>이름</b>을 정해 주세요. 멀티플레이와 결과표에 나와요.</p>' : '<h3>👤 내 이름</h3><p>멀티플레이 대기실과 레이스 결과표에 보이는 이름이에요.</p>'}
+      ${first ? '<div class="wl-flag">🏁</div><h3>트랜스폼 레이서에 온 걸 환영해요!</h3><p>먼저 레이스에서 보일 <b>이름</b>을 정해 주세요. 멀티플레이와 결과표에 나와요.</p>' : '<h3>👤 내 이름</h3><p>멀티플레이 대기실과 레이스 결과표에 보이는 이름이에요.</p>'}
       <div class="wl-name"><input type="text" maxlength="12" spellcheck="false" autocomplete="off" aria-label="이름"><button class="gm-btn small" data-r="dice" title="아무 이름이나">🎲</button></div>
       <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
       ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="${online.isMine(cur) ? '이 이름은 이미 내 것 · 비워 둬도 돼요' : '••••'}"></label>
@@ -2256,7 +2256,7 @@ function firstDriveDialog(onMode) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'nf';
-    wrap.innerHTML = '<section class="nf-copy" role="dialog" aria-modal="true" aria-labelledby="nfTitle"><div class="nf-brand">🏁 GIMMICK RACING <span>WELCOME, DRIVER</span></div><div class="nf-step nf-intro"><span class="nf-kicker">상상 밖의 레이스가 시작돼요</span><h1 id="nfTitle">달리고, 변신하고,<br><em>날아올라!</em></h1><p>한 대의 차로 땅 · 물 · 하늘까지.<br>운전만 하세요. 변신은 차가 알아서 해요.</p><div class="nf-route"><span>🚗 도로</span><i>→</i><span>🚤 바다</span><i>→</i><span>✈️ 하늘</span></div><h2>튜토리얼부터 해 볼까요?</h2><button class="gm-btn primary nf-choice" data-nf="tutorial"><b>운전 감각 익히기 <small>추천</small></b><span>약 3~5분 · 출발, 브레이크, 변신 맛보기</span><i>→</i></button><button class="gm-btn nf-choice" data-nf="race"><b>바로 첫 레이스</b><span>넓은 빙하 코스 · 쉬운 봇 3대와 출발</span><i>→</i></button><button class="nf-text" data-nf="home">홈부터 둘러보기</button></div><div class="nf-step nf-setup" hidden><span class="nf-kicker">출발 준비 · 마지막 한 단계</span><h2>어떻게 달릴까요?</h2><div class="nf-setup-fields"><label class="nf-label">레이스에서 쓸 이름<input maxlength="12" autocomplete="off" spellcheck="false" aria-label="레이스에서 쓸 이름"></label><small class="nf-note">지금은 별명만! 계정은 나중에 홈의 이름 버튼에서 만들 수 있어요.</small><label class="nf-label nf-keyboard-label">편한 조작키 배치<select aria-label="조작키 배치"></select></label><div class="nf-keys"></div><p class="nf-note nf-touch">휴대폰은 화면 버튼, 게임패드는 연결 후 버튼을 누르면 돼요.</p><div class="nf-ready"><b>처음엔 이것만 기억하세요</b><span>🟢 가속 → 🔴 브레이크 → 🟢 다시 가속</span><span>핸들은 짧게 톡톡 · 길을 벗어나면 복귀</span></div></div><div class="nf-actions"><button class="gm-btn" data-nf="back">‹ 이전</button><button class="gm-btn primary" data-nf="go">출발하기 →</button></div></div><div class="nf-progress"><b class="on">1 게임 소개</b><i></i><b>2 출발 준비</b></div></section><div class="nf-showcase" aria-hidden="true"><div class="nf-orbit"></div><span class="nf-form">🚗 도로에서는 자동차</span><small>한 대의 차, 네 가지 모습</small></div>';
+    wrap.innerHTML = '<section class="nf-copy" role="dialog" aria-modal="true" aria-labelledby="nfTitle"><div class="nf-brand">🏁 TRANSFORM RACER <span>WELCOME, DRIVER</span></div><div class="nf-step nf-intro"><span class="nf-kicker">상상 밖의 레이스가 시작돼요</span><h1 id="nfTitle">달리고, 변신하고,<br><em>날아올라!</em></h1><p>한 대의 차로 땅 · 물 · 하늘까지.<br>운전만 하세요. 변신은 차가 알아서 해요.</p><div class="nf-route"><span>🚗 도로</span><i>→</i><span>🚤 바다</span><i>→</i><span>✈️ 하늘</span></div><h2>튜토리얼부터 해 볼까요?</h2><button class="gm-btn primary nf-choice" data-nf="tutorial"><b>운전 감각 익히기 <small>추천</small></b><span>약 3~5분 · 출발, 브레이크, 변신 맛보기</span><i>→</i></button><button class="gm-btn nf-choice" data-nf="race"><b>바로 첫 레이스</b><span>넓은 빙하 코스 · 쉬운 봇 3대와 출발</span><i>→</i></button><button class="nf-text" data-nf="home">홈부터 둘러보기</button></div><div class="nf-step nf-setup" hidden><span class="nf-kicker">출발 준비 · 마지막 한 단계</span><h2>어떻게 달릴까요?</h2><div class="nf-setup-fields"><label class="nf-label">레이스에서 쓸 이름<input maxlength="12" autocomplete="off" spellcheck="false" aria-label="레이스에서 쓸 이름"></label><small class="nf-note">지금은 별명만! 계정은 나중에 홈의 이름 버튼에서 만들 수 있어요.</small><label class="nf-label nf-keyboard-label">편한 조작키 배치<select aria-label="조작키 배치"></select></label><div class="nf-keys"></div><p class="nf-note nf-touch">휴대폰은 화면 버튼, 게임패드는 연결 후 버튼을 누르면 돼요.</p><div class="nf-ready"><b>처음엔 이것만 기억하세요</b><span>🟢 가속 → 🔴 브레이크 → 🟢 다시 가속</span><span>핸들은 짧게 톡톡 · 길을 벗어나면 복귀</span></div></div><div class="nf-actions"><button class="gm-btn" data-nf="back">‹ 이전</button><button class="gm-btn primary" data-nf="go">출발하기 →</button></div></div><div class="nf-progress"><b class="on">1 게임 소개</b><i></i><b>2 출발 준비</b></div></section><div class="nf-showcase" aria-hidden="true"><div class="nf-orbit"></div><span class="nf-form">🚗 도로에서는 자동차</span><small>한 대의 차, 네 가지 모습</small></div>';
     const touchMode = touchWanted();
     wrap.classList.toggle('nf-on-touch', touchMode);
     if (touchMode) {

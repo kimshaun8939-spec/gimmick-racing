@@ -458,7 +458,7 @@ export function buildNeonProps(track, scene) {
     g.fillText(small, w / 2, 210);
     scrTex.needsUpdate = true;
   }
-  drawScreen('NEON CITY GP', '기믹 레이싱 · 야간 그랑프리', '#2ff3ff', '#ff5cf0');
+  drawScreen('NEON CITY GP', '트랜스폼 레이서 · 야간 그랑프리', '#2ff3ff', '#ff5cf0');
   // 돌아가는 홀로그램 트로피 (전광판 위)
   const trophyPts = [[0, 0], [1.6, 0], [1.6, 0.5], [0.7, 0.8], [0.45, 2.2], [1.8, 3.2], [2.4, 5.2], [0.2, 5.2]].map(([x, y]) => new THREE.Vector2(x, y));
   const trophyMat = hologramMaterial('#ffe23a', { opacity: 0.9, lines: 3 });

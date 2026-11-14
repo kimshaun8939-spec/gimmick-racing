@@ -3,7 +3,7 @@ const status = document.getElementById('ldStatus');
 const progress = document.getElementById('ldProgress');
 const title = document.getElementById('ldMap');
 const home = !new URLSearchParams(location.search).get('map');
-if (title) title.textContent = home ? '기믹 레이싱에 오신 걸 환영해요' : '첫 레이스를 준비해요';
+if (title) title.textContent = home ? '트랜스폼 레이서에 오신 걸 환영해요' : '첫 레이스를 준비해요';
 let downloading = true, count = 0, lastProgressAt = 0;
 const say = text => { if (status) status.textContent = text; };
 say('기본 파일을 받고 있어요 · 처음에는 조금 더 걸려요');
