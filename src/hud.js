@@ -56,15 +56,15 @@ function cornerHtml(c) {
   const refName = c.refKind === 'bot' ? '가장 빠른 봇' : c.refKind === 'me' ? '내 예전 최고' : '';
   const top = c.top.length
     ? c.top.slice(0, 2).map((r) => `<div class="ct"><b>T${esc(r.num)}</b>${r.delta != null && r.delta > 0 ? `<span class="lost">${sgn(r.delta)}초</span>` : ''}<span class="tip">${esc(r.tip.text)}</span></div>`).join('')
-    : '<div class="ct ok">모든 코너 깔끔해요! 👍</div>';
+      : '<div class="ct ok">모든 코너 깔끔해요!</div>';
   const chips = c.rows
     .map((r) => {
       const cls = r.delta == null ? '' : r.delta > 0.05 ? ' slow' : r.delta < -0.02 ? ' fast' : '';
       return `<span class="cc${cls}" title="${esc(r.tip.text)}">T${esc(r.num)}${r.delta != null ? ` ${sgn(r.delta)}` : ''}</span>`;
     })
     .join('');
-  return `<div class="cana"><div class="hd">🔍 코너 분석${refName ? ` <small>기준: ${refName}${c.lost > 0.05 ? ` · 합계 ${c.lost.toFixed(2)}초 느림` : ''}</small>` : ''}</div>
-    <div class="ctop">${top}</div><details class="res-detail"><summary>코너별 기록 자세히</summary><div class="cchips">${chips}</div></details></div>`;
+  return `<section class="cana res-corners" id="resultCorners" aria-labelledby="resultCornersTitle" hidden><div class="corner-head"><div class="hd" id="resultCornersTitle">코너 분석${refName ? ` <small>기준: ${refName}${c.lost > 0.05 ? ` · 합계 ${c.lost.toFixed(2)}초 느림` : ''}</small>` : ''}</div><button class="gm-btn sub corner-close" data-res="corners-close">닫기</button></div>
+    <div class="ctop">${top}</div><details class="res-detail"><summary>코너별 기록 자세히</summary><div class="cchips">${chips}</div></details></section>`;
 }
 
 function podiumHtml(rows, cls = '') {
@@ -577,12 +577,13 @@ export function createHud(track) {
      * info = { map, car, newLap, newRace, prevRace, hasNext, onAction(name) }  (name: restart | next (챔피언십) | replay | home | car)
      */
     showResults(lapTimes, best, info = {}) {
+      el.results._resultKeys?.abort();
       if (rookieHint) rookieHint.hidden = true;
       let firstNext = '';
       if (rookie && !firstComplete) {
         firstComplete = true;
         try { localStorage.setItem('gimmick.firstComplete', '1'); localStorage.setItem('gimmick.firstRun', 'done'); } catch {}
-        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요!</b><p>다음 도전은 아래 <strong>차·맵 바꾸기</strong>에서 골라요. 물 위를 달리는 바닷가 코스도 있어요.</p></div>';
+        firstNext = '<div class="nr-next"><b>첫 완주, 해냈어요!</b></div>';
       }
       const nextBtn = (o) => '<button class="gm-btn primary next" data-res="next">' + escH(o.nextLabel || '다음 경기') + '</button>';
       const total = lapTimes.reduce((a, b) => a + b, 0);
@@ -634,20 +635,22 @@ export function createHud(track) {
         </div>
         <div class="res-scroll">
         <div class="res-grid">
-          <section class="res-panel res-records"><h3>주행 기록 <small>${lapTimes.length} LAP</small></h3>${lapHtml}${firstNext || cornerHtml(info.corners)}</section>
+          <section class="res-panel res-records"><h3>주행 기록 <small>${lapTimes.length} LAP</small></h3>${lapHtml}${firstNext}</section>
           ${info.meta ? '<section class="res-panel res-rewards"><h3>경험치 · 보상</h3>' + metaResultsHtml(info.meta) + '</section>' : ''}
           ${standHtml || ch ? '<section class="res-panel res-rank"><h3>레이스 결과' + (info.position ? '<small>' + info.position + '위 / ' + (info.standings?.length || '') + '</small>' : '') + '</h3>' + (podRows ? podiumHtml(podRows, ch?.final ? 'season' : '') : '') + standHtml + champBlock + '</section>' : ''}
+          ${cornerHtml(info.corners)}
         </div>
         </div>
         <div class="btns">
           <div class="ra-main">
-            ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart"><span class="ic">↻</span>다시 하기 <kbd>Enter</kbd></button>'}
+            ${info.noRestart ? '' : '<button class="gm-btn primary" data-res="restart">다시 하기 <kbd>Enter</kbd></button>'}
             ${ch && (info.hasNext || ch.final) ? nextBtn(info) : ''}
           </div>
           <div class="ra-sub">
             ${info.replay ? '<button class="gm-btn sub" data-res="replay"><span class="ic">▶</span>리플레이</button>' : ''}
-            <button class="gm-btn sub" data-res="car"><span class="ic">🚗</span>차·맵 바꾸기</button>
-            <button class="gm-btn sub" data-res="home"><span class="ic">🏠</span>홈으로</button>
+            ${info.corners?.rows?.length ? '<button class="gm-btn sub corner-toggle" data-res="corners" aria-controls="resultCorners" aria-expanded="false">코너 분석</button>' : ''}
+            <button class="gm-btn sub" data-res="car">차·맵 바꾸기</button>
+            <button class="gm-btn sub" data-res="home">홈으로</button>
           </div>
         </div></div>`;
       if (gamepad.connected()) {
@@ -655,9 +658,44 @@ export function createHud(track) {
         if (restartKey) restartKey.outerHTML = padKbd(0);
         el.results.querySelector('[data-res="home"]')?.insertAdjacentHTML('beforeend', padKbd(1));
       }
+      const cornerPanel = el.results.querySelector('.res-corners');
+      const cornerToggle = el.results.querySelector('[data-res="corners"]');
+      const setCorners = (open) => {
+        if (!cornerPanel) return;
+        cornerPanel.hidden = !open;
+        cornerToggle.setAttribute('aria-expanded', String(open));
+        if (open) {
+          cornerPanel.scrollIntoView({ block: 'nearest' });
+          cornerPanel.querySelector('button').focus({ preventScroll: true });
+        } else cornerToggle.focus({ preventScroll: true });
+      };
+      const resultKeys = el.results._resultKeys = new AbortController();
+      window.addEventListener('keydown', (ev) => {
+        if (!el.results.classList.contains('on') || document.body.classList.contains('replaying') || document.querySelector('#pauseMenu.on, .gm-confirm, #lobby')) return;
+        const key = ev.code || ev.key;
+        if (key === 'Escape' && cornerPanel && !cornerPanel.hidden) {
+          ev.preventDefault(); ev.stopImmediatePropagation(); setCorners(false);
+          return;
+        }
+        // 온라인에서 뒤에 추가한 로비·순위 버튼도 같은 이동 흐름에 포함.
+        const buttons = [...el.results.querySelectorAll('button')].filter(b => b.offsetParent !== null);
+        const active = document.activeElement;
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key) && (!active?.closest('details') || active.tagName === 'BUTTON')) {
+          ev.preventDefault(); ev.stopImmediatePropagation();
+          const i = buttons.indexOf(active), back = key === 'ArrowLeft' || key === 'ArrowUp';
+          buttons[Math.max(0, Math.min(buttons.length - 1, i < 0 ? 0 : i + (back ? -1 : 1)))]?.focus();
+        } else if (key === 'Enter' && active?.matches('#results button:not([data-res="restart"])')) {
+          ev.preventDefault(); ev.stopImmediatePropagation();
+          if (!ev.repeat) active.click();
+        }
+      }, { capture: true, signal: resultKeys.signal });
       el.results.querySelectorAll('[data-res]').forEach((b) =>
         b.addEventListener('click', (ev) => {
           ev.preventDefault();
+          if (b.dataset.res === 'corners' || b.dataset.res === 'corners-close') {
+            setCorners(b.dataset.res === 'corners' && cornerPanel.hidden);
+            return;
+          }
           b.blur();
           info.onAction && info.onAction(b.dataset.res);
         }),
@@ -703,6 +741,7 @@ export function createHud(track) {
       if (pd && rows.length > 2) pd.outerHTML = podiumHtml(rows.slice(0, 3));
     },
     hideResults() {
+      el.results._resultKeys?.abort();
       stopRecordSound();
       el.results.classList.remove('on');
       el.results.innerHTML = '';

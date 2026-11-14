@@ -134,6 +134,23 @@ body.touch-on #slipDock { right: auto; left: 50%; transform: translateX(-50%) sc
 }
 
 /* launchqa6: 터치에서도 효과 이름·숫자를 축소하지 않고 읽어요. */
+/* resultclean: 분석은 요청할 때만 펼쳐 보고, 결과 버튼은 짧은 글자로. */
+#results .res-dashboard .res-corners[hidden] { display:none; }
+#results .res-dashboard .res-corners { grid-column:1 / -1; margin:0; padding:16px; border:1px solid #ffffff20; border-radius:12px; background:#ffffff04; text-align:left; }
+#results .res-corners .corner-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+#results .res-dashboard .res-corners .hd { font-size:14px; }
+#results .res-dashboard .res-corners .hd small { font-size:12px; }
+#results .res-dashboard .corner-close { flex:0 0 auto; min-height:44px; padding:8px 14px; font-size:12px; }
+#results .res-dashboard .ra-sub { flex-wrap:wrap; }
+#results .res-dashboard .ra-sub .gm-btn { min-height:44px; }
+#results .res-dashboard .corner-toggle[aria-expanded="true"] { border-color:#9ab9dc; background:#9ab9dc18; }
+#results .res-dashboard button:focus-visible { outline:2px solid #b9d9ff; outline-offset:3px; }
+@media(max-width:600px) {
+ #results .res-dashboard .ra-sub { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+ #results .res-dashboard .ra-sub .gm-btn { padding:8px 10px; font-size:12px; }
+ #results .res-dashboard .res-corners { padding:12px; }
+}
+
 #slipDock :is(#draftBox, #towBox, #drsBox) { font-size: 12px; background-color: rgba(7,16,28,.92); }
 body.touch-on #slipDock { transform: translateX(-50%); }
 body.touch-on #slipDock #draftBox { width: 198px; }
