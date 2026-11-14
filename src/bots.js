@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { lineCarModel } from './car.js';
 import { hitboxFor, obbOverlap } from './carHitbox.js';
 import { createShortcutDriver } from './botShortcut.js'; // 그랑프리 판자 지름길 (2026-11-14)
+import { learnedLineFor } from './learnedLine.js'; // [learned hook 1] 학습 라인 (2026-11-14, &learned=0 = 예전)
 
 export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사라', '토르', '하나', '제트', '노바'];
 
@@ -360,7 +361,9 @@ const CORNERPASS = new URLSearchParams((typeof location !== 'undefined' && locat
 const CP_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('cpoff') || '').split(/[,.]/));
 const SAT_LIFT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('satlift') !== '0';
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
-  const L = track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
+  const LL = opts.line !== undefined ? opts.line : learnedLineFor(track, car.cfg, level); // [learned hook 2] 학습 라인이 있으면 그 라인·속도 계획
+  if (LL) prof = profileFor(LL, car.cfg);
+  const L = LL || track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
   const rand = rng(seed * 7919 + 13);
   const windZones = track.data?.winds || [];
   const forceZones = [...windZones, ...(track.data?.belts || [])];
