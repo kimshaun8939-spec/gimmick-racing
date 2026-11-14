@@ -329,6 +329,8 @@ function aeroPlan(line, cfg, base, car, cache, master = false, circuit = false) 
  * @param level BOT_LEVELS 중 하나
  * @param seed  성격 씨앗
  */
+// 추월하다 막힌 봇이 다시 시도 (2026-11-14, 장면 1분41초: 추월 줄이 내 차와 겹친 채 3초 동안 8 m 뒤에 붙어 있었음). &stuck=0 = 예전
+const STUCK_RETRY = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('stuck') !== '0';
 const SAT_LIFT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('satlift') !== '0';
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const L = track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
@@ -765,11 +767,27 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const crowded=o=>ctx.others.some(p=>keyOf(p)!==keyOf(o)&&(!p.pos||car.pos.distanceToSquared(p.pos)<(35+v*3)**2));
     let turnSide=0,straightM=30+v*3;
     for(let q=0;q<straightM/ds;q+=3){const j=W(i0+q);if(Math.abs(L.curvature[j])>1/150){turnSide=-Math.sign(L.curvature[j]);straightM=q*ds;break;}}
-    const options=(leader,side=0,wide=false)=>{
+    // 그 추월 줄로 가면 앞차보다 느려지는가 (2026-11-14 장면 2분24초: 빠른 S자에서 바깥 줄을 골라 243→173 km/h로 스스로 늦춤, 앞차는 240 그대로)
+    //   다음 2초 거리 동안 그 줄의 커브 한계 속도가 '앞차 속도와 그 자리 라인 계획 속도 중 낮은 쪽'의 95%보다 낮으면 그 줄은 안 씀. &stuck=0 = 예전
+    const slowMemo=new Map(); // 이번 스텝 안에서 같은 줄은 한 번만 계산 (렉 방지)
+    const laneTooSlow=(off,leader)=>{
+      if(!STUCK_RETRY||Math.abs(off)<.5||car.mode==='boat'||car.surface==='magnet')return false;
+      const mk=Math.round(off*20)+':'+Math.round(leader.speed*2);if(slowMemo.has(mk))return slowMemo.get(mk);
+      const r=laneSlowCalc(off,leader);slowMemo.set(mk,r);return r;
+    };
+    const laneSlowCalc=(off,leader)=>{
+      const lat0=cm.aLat(Math.max(speed,leader.speed));
+      for(let q=0;q<(20+v*2)/ds;q+=3){const j=W(i0+q);if(S[j].roll||S[j].gap)continue;
+        const sc=pathCurvature(j,off),c=Math.abs(sc);if(c<=.001)continue;
+        const bankLat=9.81*Math.sin(S[j].bank||0)*Math.sign(sc)*(cm.bankGrip||0);
+        if(Math.sqrt(Math.max(lat0*.5,lat0+bankLat)/c)<Math.min(leader.speed,prof.speed[j])*.95-.5)return true;} // 코너 앞이면 앞차도 그만큼 줄이니 라인 계획 속도와 비교
+      return false;
+    };
+    const options=(leader,side=0,wide=false,secs=wide?2.5:1.1)=>{
       const spread=Math.max(3.1,sideSpace(leader)+(bold?.5:.75));
       const low=L.lo[i0]+Math.max(1,ownBox.half)-L.offset[i0],high=L.hi[i0]-Math.max(1,ownBox.half)-L.offset[i0];
       const choices=[0,-spread,spread,leader.lane-spread,leader.lane+spread,clamp(st.lane,low,high)];
-      return choices.filter((off,i)=>(wide||Math.abs(off)<=6.4)&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off,wide?2.5:1.1,wide)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15));
+      return choices.filter((off,i)=>(wide||Math.abs(off)<=6.4)&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off,secs,wide)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15)&&!laneTooSlow(off,leader));
     };
     const safeWindow=()=>{for(let q=0;q<(25+v*2.5)/ds;q+=3){const j=W(i0+q);if(narrowAt(j)||jumpZone?.[j]||S[j].roll||S[j].gap||track.isWaterT?.(j/N))return false;}return true;};
     const mergeHazard=!safeWindow();
@@ -803,7 +821,17 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
             const laneTime=Math.max(0,sideSpace(leader)+.2-Math.abs(leader.lat-myLat))/2.6+.35;
             const pullAt=rearSpace(leader)+Math.max(bold?3.5:5,closing*laneTime+v*.04);
             if(gap<pullAt&&fits(move.off)) {move.phase='pass';move.kind=brakeSoon&&move.side===turnSide?'dive':cornerSoon?'outside':'slingshot';}
-          }else if(!fits(move.off,1.1,!!move.wideRetry)&&gap>rearSpace(leader)+1)endMove();
+          }else if((!fits(move.off,move.shortFit?.6:1.1,!!move.wideRetry)||laneTooSlow(move.off,leader))&&gap>rearSpace(leader)+1)endMove();
+          // 추월 줄이 앞차와 여전히 겹쳐 뒤에 붙어 있으면 (앞차가 줄을 바꿨거나 굽은 길이라 선택지가 없었음)
+          //   0.8초 뒤 같은 쪽을 더 넓게 → 안 되면 반대쪽으로, 짧은 앞(0.6초)만 보고 도로 안에서. 한 추월에 2번까지
+          if(move&&move.phase==='pass'){
+            const blocked=gap>0&&gap<rearSpace(leader)+10&&Math.abs(leader.lat-myLat)<sideSpace(leader)+.05;
+            move.blockT=blocked?(move.blockT||0)+dt:0;
+            if(STUCK_RETRY&&blocked&&move.blockT>.8&&(move.retries||0)<2&&bold&&gap>rearSpace(leader)+.45+closing*.6&&!brakeSoon&&!crowded(leader)){
+              const off=options(leader,move.side,true,.6)[0]??options(leader,-move.side,true,.6)[0];
+              if(off!=null){move.off=off;move.side=Math.sign(off-leader.lane);move.wideRetry=true;move.shortFit=true;move.switched=true;move.kind='retry';move.retries=(move.retries||0)+1;move.blockT=0;move.noGain=0;move.evadeOff=null;st.overtakeSwitches=(st.overtakeSwitches||0)+1;}
+            }
+          }
         }
       }
     }
