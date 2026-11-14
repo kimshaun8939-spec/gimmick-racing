@@ -27,16 +27,22 @@ export const LESSONS = [
   { id: 'chain', icon: '🔗', name: '연속 코너 잇기', short: '두 코너를 한 번에 생각하기', group: 'corner', map: 'gp', art: 'chicane', mins: 3 },
   { id: 'kerb', icon: '🟥', name: '연석 쓰기', short: '빨강·흰 연석까지 길을 넓게', group: 'corner', map: 'gp', art: 'kerbs', mins: 2 },
   { id: 'slip', icon: '💨', name: '슬립스트림', short: '앞차 뒤에 바짝 붙어 빨라진 뒤 추월', group: 'race', map: 'gp', art: 'slipstream', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 0 } },
-  { id: 'drs', icon: '🟩', name: 'DRS', short: '앞차와 1초 안이면 뒷날개가 열려요', group: 'race', map: 'gp', art: 'drs', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0 } },
   { id: 'drift', icon: '🌀', name: '드리프트', short: '헤어핀에서 꼬리를 미끄러뜨려 돌기', group: 'special', map: 'gp', art: 'drift', mins: 2 },
   { id: 'fly', icon: '✈️', name: '비행 루트', short: '활주로 → 고리 4개 → 착륙장', group: 'special', map: 'gp', art: 'fly', mins: 2 },
   { id: 'boat', icon: '🚤', name: '배 카빙', short: '물 위에서 드리프트 키로 날카롭게 돌기', group: 'special', map: 'sea', art: 'boat', mins: 2 },
+];
+/**
+ * 숨긴 레슨 (목록·메달 개수·업적 '모든 레슨'에 안 셈): DRS는 2026-11-15에 게임에서 꺼 둠 (사용자 요청)
+ *   레슨 코드(academyLessons.js RUN.drs)는 남김 → 주소 ?academy=drs로만 열림 (drs: 1 = 이 판만 DRS 켬)
+ */
+export const HIDDEN_LESSONS = [
+  { id: 'drs', icon: '🟩', name: 'DRS', short: '앞차와 1초 안이면 뒷날개가 열려요', group: 'race', map: 'gp', art: 'drs', mins: 2, hidden: true, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 1 } },
 ];
 /** 시험에만 나오는 과제 (레슨 카드는 없음) */
 export const EXAM_TASKS = {
   lap: { id: 'lap', icon: '⏱️', name: '깔끔한 한 바퀴', short: '빙하 하이웨이 한 바퀴 · 복귀 없이 목표 시간 안', map: 'glacier', art: 'lateApex' },
 };
-export const lessonMeta = (id) => LESSONS.find((l) => l.id === id) || EXAM_TASKS[id] || null;
+export const lessonMeta = (id) => LESSONS.find((l) => l.id === id) || EXAM_TASKS[id] || HIDDEN_LESSONS.find((l) => l.id === id) || null;
 
 /**
  * 라이선스 시험: 과제 3개, 과제마다 기회 2번 (좋은 쪽), 모든 과제가 need 메달 이상이면 합격

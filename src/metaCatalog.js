@@ -19,7 +19,7 @@ series('drift','gimmick','옆으로도 질주','driftDistance',[200,2000,15000],
 series('sea','gimmick','파도 위의 레이서','boatDistance',[300,3000,20000],'m','🚤','파도 지배자');
 series('flight','gimmick','하늘도 서킷','flyDistance',[200,2000,12000],'m','✈️','스카이 캡틴');
 series('form','gimmick','변신은 나의 힘','transforms',[5,50,250],'회','🔧','메타모포시스');
-series('drs','gimmick','날개를 열어요','drsSeconds',[5,60,300],'초','🟩','오픈 윙');
+// DRS를 끄면서 뺌 (2026-11-15): series('drs','gimmick','날개를 열어요','drsSeconds',[5,60,300],'초','🟩','오픈 윙');
 series('draft','gimmick','바람의 길','draftSeconds',[10,120,600],'초','💨','윈드 체이서');
 series('jump','gimmick','지면을 떠나','jumpSeconds',[3,30,180],'초','🪽','에어 타임');
 series('lesson','academy','배움의 레이싱','lessons',[1,6,LESSONS.length],'개','📖','드라이빙 스콜라');

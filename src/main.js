@@ -32,7 +32,7 @@ import { champRace, recordRace, champStandings, champUrl } from './championship.
 import { createReplay } from './replay.js';
 import { createSceneSave } from './sceneSave.js';
 import { createCamViews } from './camViews.js'; // 시점 바꾸기 (V 키): 기본·가까이·멀리·보닛·운전석 (2026-11-12)
-import { createMirror } from './mirror.js'; // 백미러: 뒤에 차가 붙으면 화면 위에 작은 거울 (2026-11-12)
+// 백미러(mirror.js)는 없앰 (사용자 요청 2026-11-15 "뒤에 있는 차가 어디로 오는지 다 보이잖아") → 불러오지 않음. 예전 연결 .debug/main.before-nomirror.js
 import { createCornerReport } from './cornerReport.js';
 import { online } from './online.js';
 import { liveGaps } from './standingsGap.js'; // 순위표 간격 순서 고침 (2026-11-14)
@@ -97,7 +97,6 @@ const LOAD_TIPS = [
   '바다에 닿으면 자동으로 배로 변신해요',
   `${keybinds.label('racingLine')} 키로 레이싱 라인을 켜고 끌 수 있어요 (초록 밟기 · 빨강 브레이크)`,
   `길을 벗어나면 ${keybinds.label('respawn')} 키로 도로에 돌아와요`,
-  'DRS: 도로의 감지선에서 앞차와 1초 안이면 다음 직선에서 뒷날개가 열려 더 빨라져요',
   '앞차 바로 뒤에 붙으면 슬립스트림! 여러 대가 줄지어 있으면 더 세요',
 ];
 const ld = (id, text) => {
@@ -388,8 +387,6 @@ if (FRIEND_GHOST) {
     });
 }
 const finishCbs = []; // raceCtl.onFinish
-// 백미러 (mirror.js): 게임 화면을 그린 바로 뒤에 mirror.frame으로 작은 칸에 뒤쪽을 한 번 더 그림
-const mirror = createMirror({ renderer, scene, car, model, raceSys, opponents, track });
 // 리플레이 (완주 뒤 결과 화면 "▶ 리플레이"): 모든 차를 1초에 15번 기록 → 다시 볼 때는 물리를 멈추고 replay.frame만
 const replay = createReplay({
   scene, camera, track, car, model, opponents,
@@ -1555,8 +1552,7 @@ function frame(now, manual = false) {
 
   if (batcher) batcher.update();
   renderer.render(scene, camera);
-  mirror.frame(dt, { phase: race.phase, intro: intro.on, override: !!co, renderCar });
-  for (const s of poses) s.snap = false; // 백미러 (보일 때만 그림)
+  for (const s of poses) s.snap = false; // 표시 자세 순간이동 표시는 한 프레임만
   input.endFrame();
   if (!manual) {
     const cost = performance.now() - workStart;
@@ -1572,7 +1568,7 @@ window.game = {
   car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
-  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, sceneSave, cornerRep, mirror, camViews,
+  mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, sceneSave, cornerRep, camViews,
   /**
    * 레이스 진행 조절 (온라인 레이스용, net 담당)
    *   holdStart(true) = 출발 신호를 멈춰 둠(모두 준비될 때까지), startCountdown({ wait }) = 처음부터 빨간불 시작

@@ -17,7 +17,7 @@ export const SETTING_DEFS = [
   { group: '소리', key: 'fxVol', label: '효과음', desc: '변신·바람·연석·메뉴 소리', type: 'slider', def: 1 },
   { group: '소리', key: 'muted', label: '소리 끄기', desc: () => `게임 중 ${keybinds.main('sound')} 키와 같아요`, type: 'toggle', def: false },
 
-  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 해상도·그림자·백미러 갱신을 차례로 줄여요. 낮음 = 낮은 해상도, 햇빛 그림자 끔, 백미러는 덜 자주 그림. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
+  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 해상도·그림자를 차례로 줄여요. 낮음 = 낮은 해상도, 햇빛 그림자 끔. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
     options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
   { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 배터리·발열이 줄어요', type: 'choice',
     options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 60 }, // 2026-11-12 기본 0 → 60 (사용자 요청: 발열)
@@ -69,7 +69,9 @@ export const SETTING_DEFS = [
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
   { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷 · 마스터 = 어려움보다 훨씬 빠름, 아주 잘해야 이김', type: 'choice',
     options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '마스터']], def: 'normal' },
-  { group: '레이스', key: 'drs', label: 'DRS', desc: '직선의 DRS 구간 앞 감지선에서 앞차와 1초 안이면, 그 직선에서 뒷날개가 열려 더 빨라져요 (봇도 똑같이, 브레이크를 밟으면 닫힘)', type: 'toggle', def: true },
+  // DRS: 꺼 둠 (사용자 요청 2026-11-15 "DRS도 굳이 필요한지 모르겠어"). 화면에 안 보이고, 예전에 저장된 값은 무시 (load()에서 끔).
+  //   코드(src/drs.js)·car.json drs는 남아 있음 → 시험할 때만 주소에 &drs=1. 되살리려면 hidden을 빼고 def: true, load()의 강제 끄기를 지울 것
+  { group: '레이스', key: 'drs', label: 'DRS (실험)', desc: '', type: 'toggle', hidden: true, def: false },
   { group: '레이스', key: 'tow', label: '견인', desc: '바로 앞차와 1초 넘게 벌어지면 자동으로 가속을 도와줘요 (멀수록 셈, 봇도 똑같이, 상대가 있는 레이스). 오래 받으면 결과에 "🛟 도움 켬"', type: 'toggle', def: true },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
   // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
@@ -78,8 +80,7 @@ export const SETTING_DEFS = [
 
   { group: '표시', key: 'unit', label: '속도 단위', desc: 'km/h = 시속 킬로미터 · mph = 시속 마일', type: 'choice', options: [['kmh', 'km/h'], ['mph', 'mph']], def: 'kmh' },
   { group: '표시', key: 'minimap', label: '미니맵', desc: '오른쪽 위 작은 지도', type: 'toggle', def: true },
-  { group: '표시', key: 'mirror', label: '백미러', desc: '자동 = 다른 차가 바로 뒤에 붙으면 화면 위에 작은 백미러가 내려와요 · 항상 = 상대가 있는 레이스에서 늘 보임', type: 'choice',
-    options: [['auto', '자동'], ['on', '항상'], ['off', '끔']], def: 'auto' },
+  // 백미러 설정은 없앰 (2026-11-15, 백미러 자체를 없앰). 예전에 저장된 mirror 값은 load()에서 지움
   { group: '표시', key: 'showFps', label: 'FPS 보기', desc: '1초에 몇 장 그리는지', type: 'toggle', def: false },
 ];
 
@@ -102,6 +103,13 @@ function load() {
       }
     }
   } catch {}
+  // 없앤 설정 (2026-11-15): 백미러(mirror)는 지우고, DRS는 예전에 켜 둔 값이 있어도 끔 (예전 기본값이 켬이라 일부러 켠 건지 알 수 없음)
+  delete s.mirror;
+  try {
+    s.drs = new URLSearchParams(location.search).get('drs') === '1'; // 시험용 &drs=1만 켬
+  } catch {
+    s.drs = false;
+  }
   // 예전부터 쓰던 레이싱 라인 저장값(L 키)을 따름
   try {
     const rl = localStorage.getItem('racingLine');
@@ -116,7 +124,7 @@ function createStore() {
   // 첫 레이스 링크 전용: main.js가 설정에서 읽는 봇 수에도 적용. 다른 레이스에는 영향 없음.
   const firstParams = new URLSearchParams(location.search);
   const firstRace = firstParams.get('rookie') === '1' && firstParams.get('mode') === 'race';
-  if (firstRace) Object.assign(values, { bots: 3, botLevel: 'easy', racingLine: true, gearbox: 'auto', steerRamp: 'smooth', brakeAssist: 'light', steerAssist: 'light', tcs: true, ghost: 'off', sectors: false, mirror: 'off' });
+  if (firstRace) Object.assign(values, { bots: 3, botLevel: 'easy', racingLine: true, gearbox: 'auto', steerRamp: 'smooth', brakeAssist: 'light', steerAssist: 'light', tcs: true, ghost: 'off', sectors: false });
   const listeners = new Set();
   const save = () => {
     try {
@@ -384,7 +392,6 @@ export function createControlsPage(opts = {}) {
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}
-      ${row('<kbd class="gm-drs">DRS</kbd>', 'DRS (따라잡기)', '도로의 DRS DETECTION 선에서 앞차와 1초 안이면 → 다음 DRS ZONE 직선에서 뒷날개가 저절로 열려 빨라져요. 브레이크를 밟으면 닫힘')}
       ${row('💨', '슬립스트림', '앞차 바로 뒤에 붙으면 공기 저항이 줄어 바로 빨라져요 (최고 속도도 올라감). 옆으로 빠져도 효과가 잠깐 이어져 추월을 도와줘요. 여러 대가 줄지어 있으면 더 세요')}
       ${row('🧲', '견인', '바로 앞차와 1초 넘게 벌어지면 자동으로 가속을 도와줘요 (멀수록 셈, 봇도 똑같이). 핸들은 직접 조작해요')}
       ${row(K('respawn'), '도로로 복귀', '길을 벗어났거나 뒤집혔을 때')}

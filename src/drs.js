@@ -7,6 +7,7 @@
 //   출발 뒤 startDelay초 동안은 감지 안 함 (1바퀴 맵도 그 뒤 첫 감지선부터 바로 씀)
 //   보이는 것: 뒷날개 윗판이 열림 (carModel.js car.drs), HUD 칩, 도로 위 'DRS ZONE' 글자·감지선
 //   켜고 끄기: 설정 'DRS' (settings.values.drs), 주소 &drs=0
+//   2026-11-15부터 기본 꺼짐 (사용자 요청): settings.js가 설정 화면에서 숨기고 늘 끔, 시험할 때만 주소 &drs=1 → 꺼져 있으면 구간 표시·HUD 칩·날개 열림 모두 없음 (봇도 car.drs 0)
 //
 //   구간 찾기: 레이싱 라인에서 '브레이크 없음 + 휘는 반지름 curvR m 넘음'이 이어지는 곳 → 앞 startAfter m·뒤 endBefore m 자르고
 //     minLen m 넘는 것 중 긴 순서로 maxZones개 (maxLen m보다 길면 브레이크 지점 쪽 maxLen m만). 루프·자석 도로·튜브·점프·점프대·파도·물·저중력/고중력·끊긴 도로·좁은 길(반폭 6.5 m 아래)은 빼고 자름
@@ -267,7 +268,7 @@ export function createDrs(o) {
   //   DRS를 안 쓰는 판(&drs=0·설정 끔·상대 없음)은 안 만듦. 온라인은 상대가 나중에 들어오니 주소에 room이 있으면 같이 미리 만듦. 못 만들면 예전처럼 첫 스텝에.
   try {
     const qs = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
-    if (zones.length && (o.isOn() || (qs && qs.get('room') && qs.get('drs') !== '0'))) ensureMarks();
+    if (zones.length && (o.isOn() || (qs && qs.get('room') && qs.get('drs') === '1'))) ensureMarks();
   } catch (err) {
     console.warn('DRS 표시 미리 만들기 실패', err);
   }
