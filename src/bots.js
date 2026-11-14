@@ -348,6 +348,16 @@ const NOFOLLOW_Q = new URLSearchParams((typeof location !== 'undefined' && locat
 const NOFOLLOW = NOFOLLOW_Q !== '0', NOFOLLOW_ALL = NOFOLLOW_Q === '2';
 const nfFor = o => NOFOLLOW && !!o && (NOFOLLOW_ALL || !!o.human);
 const NF_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('nfoff') || '').split(',')); // (시험) 부분별 끄기: close,evade,wide
+// 코너 안 추월 (2026-11-14 cornerpass, 사용자 "코너 안에서도 추월", "내가 한 번 앞서면 뒤 봇들이 못 지나감"). 앞차가 사람이고 주변에 다른 차가 없을 때(nfOK와 같은 조건)만:
+//   time  추월 줄이 '너무 느린가'를 속도 대신 시간으로 판단 (안쪽 줄은 길이 짧아 조금 느려도 같은 시간: 예전엔 안쪽 줄을 늘 버려서 코너 진입 추월이 없었음)
+//   hug   사람 옆에 나란히 붙어 코너를 돌 때 라인에서 일정 거리(예전)가 아니라 사람 차에서 차 한 대 폭만큼 떨어진 줄 → 출구에서 라인이 바깥으로 갈 때 안쪽으로 갇혀 액셀을 떼던 것
+//   merge 코너 안에서도 옆에 차가 없고 바깥쪽으로 돌아오는 거면 라인으로 돌아옴 (예전엔 코너가 끝날 때까지 비킨 줄 그대로 = 좁은 안쪽 줄)
+//   clamp 비킨 줄이 길 끝에 눌린 곳의 곡률 계산 꺾임 없애기 (laneCurvature, 추월 줄 고르기·코너 속도 계산 모두)
+//   (시험했다 뺀 것: 앞쪽 코너 속도에 '그때 있을 줄'을 쓰기 = 닿음·길 밖이 늘었음)
+//   tow   추월 준비 중엔 앞차 줄 뒤에 붙음 (슬립스트림), 예전엔 라인 기준 자리라 앞차가 줄을 바꾸면 슬립스트림이 끊김
+//   기본은 꺼짐(예전 그대로): 7봇 레이스 시험에서 닿음·길 밖 시간이 늘어 안전 기준을 못 넘음. &cornerpass=1 = 켜기, &cpoff=time,hug,merge,clamp,tow = 부분별 끄기 (시험)
+const CORNERPASS = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('cornerpass') === '1';
+const CP_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('cpoff') || '').split(/[,.]/));
 const SAT_LIFT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('satlift') !== '0';
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const L = track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
@@ -600,8 +610,23 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     return [s.pos.x + s.right.x * off, s.pos.z + s.right.z * off];
   }
 
-  function pathCurvature(j, lane) {
-    const h = Math.max(1, Math.round(6 / ds));
+  // clamp (cornerpass): 비킨 줄이 길 끝에 눌려 잘리는 곳(라인이 끝에 붙는 에이펙스·출구)은 6 m 간격 계산에 꺾임이 생겨 곡률이 크게 나옴
+  //   → 잘린 세 점이 모두 라인에서 1 m 안이면 라인과 같은 자리(라인 곡률), 하나라도 잘렸으면 앞뒤 15 m 간격으로 매끈하게 (차도 그렇게 돎)
+  function laneCurvature(j, lane) {
+    if (CORNERPASS && !CP_OFF.has('clamp')) {
+      const h = Math.max(1, Math.round(6 / ds));
+      let cut = false, onLine = true;
+      for (const k of [W(j - h), j, W(j + h)]) {
+        const o = L.offset[k] + lane, c = clamp(o, L.lo[k] + 0.2, L.hi[k] - 0.2);
+        if (c !== o) cut = true;
+        if (Math.abs(c - L.offset[k]) > 1) onLine = false;
+      }
+      if (cut) return onLine ? pathCurvature(j, 0) : pathCurvature(j, lane, 15);
+    }
+    return pathCurvature(j, lane);
+  }
+  function pathCurvature(j, lane, span = 6) {
+    const h = Math.max(1, Math.round(span / ds));
     const [ax, az] = target(W(j-h), lane), [bx, bz] = target(j, lane), [cx, cz] = target(W(j+h), lane);
     const ux=bx-ax, uz=bz-az, vx=cx-bx, vz=cz-bz;
     return Math.atan2(uz*vx-ux*vz, ux*vx+uz*vz) / Math.max(1, (Math.hypot(ux,uz)+Math.hypot(vx,vz))/2);
@@ -754,6 +779,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // NOFOLLOW는 사람 앞차 말고 내 옆~앞 45 m에 다른 차가 없을 때만 (내 뒤 차는 상관없음: 장면 sea 2분17초도 뒤에 봇 2대). 앞·옆에 다른 차가 있으면 무리 속 = 예전 그대로
     //   (7봇 빙하 마스터에서 무리 속까지 쓰면 사람과 강한 닿음 2.5→5.3). &nfoff=alone = 무리 속에서도
     const nfOK=o=>nfFor(o)&&(NF_OFF.has('alone')||!peers.some(p=>p!==o&&p.dm>-4&&p.dm<45));
+    const cpFor=(o,part)=>CORNERPASS&&!CP_OFF.has(part)&&!!o&&!!o.human&&!o.fin&&!peers.some(p=>p!==o&&p.dm>-4&&p.dm<45);
     const crosses = off => beside.some(o => (off-o.lane)*(actualLane-o.lane)<0 || Math.abs(off-o.lane)<sideSpace(o)+.12);
     // 이미 얻은 옆 자리는 지킨다. 상대 쪽으로 계속 조향해 밀어내지는 않는다.
     const yieldTo = o => {
@@ -794,15 +820,18 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const slowMemo=new Map(); // 이번 스텝 안에서 같은 줄은 한 번만 계산 (렉 방지)
     const laneTooSlow=(off,leader)=>{
       if(!STUCK_RETRY||Math.abs(off)<.5||car.mode==='boat'||car.surface==='magnet')return false;
-      const mk=Math.round(off*20)+':'+Math.round(leader.speed*2);if(slowMemo.has(mk))return slowMemo.get(mk);
+      const mk=Math.round(off*20)+':'+Math.round(leader.speed*2)+(cpFor(leader,'time')?'t':'');if(slowMemo.has(mk))return slowMemo.get(mk);
       const r=laneSlowCalc(off,leader);slowMemo.set(mk,r);return r;
     };
     const laneSlowCalc=(off,leader)=>{
-      const lat0=cm.aLat(Math.max(speed,leader.speed));
+      const lat0=cm.aLat(Math.max(speed,leader.speed)),timeEq=cpFor(leader,'time');
       for(let q=0;q<(20+v*2)/ds;q+=3){const j=W(i0+q);if(S[j].roll||S[j].gap)continue;
-        const sc=pathCurvature(j,off),c=Math.abs(sc);if(c<=.001)continue;
+        const sc=laneCurvature(j,off),c=Math.abs(sc);if(!(c>.001))continue;
         const bankLat=9.81*Math.sin(S[j].bank||0)*Math.sign(sc)*(cm.bankGrip||0);
-        if(Math.sqrt(Math.max(lat0*.5,lat0+bankLat)/c)<Math.min(leader.speed,prof.speed[j])*.95-.5)return true;} // 코너 앞이면 앞차도 그만큼 줄이니 라인 계획 속도와 비교
+        let cap=Math.sqrt(Math.max(lat0*.5,lat0+bankLat)/c);
+        // 시간 기준: 같은 코너를 도는 줄의 길이는 곡률에 반비례 → 안쪽(곡률 큼)은 느려도 덜 달림. 라인 곡률이 뚜렷할 때만, 0.8~1.25배 안에서
+        if(timeEq){const cl=Math.abs(pathCurvature(j,0));if(cl>.004)cap*=clamp(c/cl,.8,1.25);}
+        if(cap<Math.min(leader.speed,prof.speed[j])*.95-.5)return true;} // 코너 앞이면 앞차도 그만큼 줄이니 라인 계획 속도와 비교
       return false;
     };
     const options=(leader,side=0,wide=false,secs=wide?2.5:1.1)=>{
@@ -911,6 +940,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     };
 
     let want=st.laneTarget;
+    // merge: 코너 안에서는 바깥쪽으로 라인에 돌아올 때만 (안쪽으로 조이면 핸들이 모자라 크게 감속)
+    const mergeOut=CORNERPASS&&!CP_OFF.has('merge')&&!beside.length&&car.grounded&&!risky&&Math.abs(st.lane)>.3&&Math.sign(-st.lane)===Math.sign(L.curvature[i0])&&Math.abs(L.curvature[i0])>1/2000;
     const launchColumns=ctx.since<6&&!narrowSoon&&!brakeSoon&&!cornerSoon;
     if(launchColumns)want=clamp(st.gridLat-L.offset[i0],L.lo[i0]+.35-L.offset[i0],L.hi[i0]-.35-L.offset[i0]);
     else if(narrowSoon||mergeHazard)want=0;
@@ -942,10 +973,11 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         move.dm=leader.dm+(leader.speed-speed)*dt;move.lane=leader.lane;
         const separation=Math.abs(leader.lat-myLat),rate=clamp((separation-move.sep)/Math.max(.001,dt),-8,8);
         move.sepV+=(rate-move.sepV)*Math.min(1,dt*8);move.sep=separation;
-        want=move.phase==='approach'?move.base+move.side*.35:move.off;
+        // tow: 사람 뒤 준비 중엔 그 차 줄 뒤(슬립스트림)에 붙음, 직선(코너·제동 구간 아님)·길 안에서만
+        want=move.phase==='approach'?(cpFor(leader,'tow')&&!cornerSoon&&!brakeSoon&&fits(leader.lane+move.side*.35)?leader.lane:move.base)+move.side*.35:move.off;
         st.laneHold=1.2;busy=true;attack={dM:leader.dm,o:leader};
         if(move.phase==='pass'&&brakeSoon&&turnSide===move.side&&actualGap(leader)>0&&actualGap(leader)<25&&separation>sideSpace(leader)+.05)lateBrake=intent;
-      }else if(st.laneHold<=0&&!crosses(0)&&!cornerSoon)want=0;
+      }else if(st.laneHold<=0&&!crosses(0)&&(!cornerSoon||mergeOut))want=0;
       if(!move&&!fits(want)){want=0;st.laneHold=0;}
     }
     // 레이싱 라인의 이동을 뺀 옆 접근. 다른 차가 없는 두 대의 접전에서만 재시도를 준비한다.
@@ -992,6 +1024,12 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         }
         if(open||retreat.clearT>=.5)st.sideRetreat=null;
       }
+    }
+    // hug: 사람 옆에 나란히 있을 때(추월 줄이 아님) 가고 싶은 줄 = 라인에 가장 가까우면서 그 차에서 차 폭+0.55 m 떨어진 줄
+    if(!launchColumns&&!move&&!narrowSoon&&!mergeHazard&&car.grounded&&beside.length===1&&cpFor(beside[0],'hug')){
+      const o=beside[0],sd=Math.sign(actualLane-o.lane)||1,sep=sideSpace(o)+.55;
+      const cand=sd*(0-o.lane)>=sep?0:o.lane+sd*sep;
+      if(fits(cand,.6)&&(cand-o.lane)*sd>0)want=cand;
     }
     if(!launchColumns&&Math.abs(want-actualLane)>.15&&crosses(want)) {
       // 자기 줄로 되돌아오는 작은 보정은 버티고, 옆 차를 가로지르는 합류만 보류.
@@ -1175,7 +1213,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
 
       const vqLine = vq;
       if (Math.abs(lane) > 0.5 && car.mode !== 'boat' && car.surface !== 'magnet' && !S[iq].roll && !S[iq].gap) {
-        const signedCurve = pathCurvature(iq, lane), curve = Math.abs(signedCurve);
+        const signedCurve = laneCurvature(iq, lane), curve = Math.abs(signedCurve);
         const bankLat = 9.81 * Math.sin(S[iq].bank || 0) * Math.sign(signedCurve) * (cm.bankGrip || 0);
         const lat = cm.aLat(vq);
         if (curve > 0.001) {
