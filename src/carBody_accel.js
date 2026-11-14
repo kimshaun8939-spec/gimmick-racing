@@ -1,4 +1,5 @@
 // flame2: 낮은 기구 유지. 범퍼에 붙는 속 빈 금속 노즐과 그 안쪽에 결합된 공유 불꽃/전기 아크.
+// flame3: 불꽃은 납작한 판 대신 셰이더로 그리는 입체 부피(노즐마다 상자 하나, 차당 그리기 1번).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const clamp=x=>Math.max(0,Math.min(1,x));
@@ -31,108 +32,158 @@ export function accelProfile(look={}) {
 }
 
 
-// flame: 한 재질/차당 한 호출. 불꽃, 입구 번짐, 불티, 열 아지랑이는 모두 작은 인스턴스 쿼드.
+// flame3: 한 재질/차당 한 호출. 노즐마다 '보이지 않는 상자' 하나를 그리고, 셰이더가 그 안의 불꽃
+// 부피(흰·노란 심 → 주황 → 빨간 혀, 마하 다이아몬드, 끝의 옅은 열기)를 시선 방향으로 적분한다.
+// 납작한 면이 없어서 뒤·옆·위 어느 각도에서도 둥근 입체로 보인다. 작은 불티 3개만 카메라를 보는 점.
 // 모든 차가 이 재질을 공유하고 onBeforeRender에서 그 차의 uniform만 갱신한다.
 let sharedFire=null,fireUsers=0,fireSerial=0;
+const FIRE_STEPS=20, FIRE_R=1.7, FIRE_Z=1.32, FIRE_SPARKS=3;
 function acquireFire(){
  if(!sharedFire){
   sharedFire=new THREE.ShaderMaterial({
-   name:'accel-combustion-plasma',transparent:true,depthWrite:false,side:THREE.DoubleSide,
-   blending:THREE.CustomBlending,blendSrc:THREE.SrcAlphaFactor,blendDst:THREE.OneMinusSrcAlphaFactor,toneMapped:false,
+   name:'accel-volume-flame',transparent:true,depthWrite:false,side:THREE.DoubleSide,
+   // 빛을 내며 뒤를 가리는 불꽃(미리 곱한 알파). 밝은 하늘에서도 분홍으로 씻기지 않는다.
+   blending:THREE.CustomBlending,blendSrc:THREE.OneFactor,blendDst:THREE.OneMinusSrcAlphaFactor,
+   blendSrcAlpha:THREE.OneFactor,blendDstAlpha:THREE.OneMinusSrcAlphaFactor,toneMapped:false,
+   defines:{STEPS:FIRE_STEPS,RMAX:FIRE_R.toFixed(3),ZMAX:FIRE_Z.toFixed(3)},
    uniforms:{uTime:{value:0},uPower:{value:0},uSpeed:{value:0},uOn:{value:0},uPop:{value:0},uElectric:{value:0},uAccent:{value:new THREE.Color()}},
    vertexShader:`
-    attribute vec4 fireData; attribute float fireHeight;
+    attribute vec4 fireData; // 씨앗, 기본 길이, 입구 폭, 입구 높이
+    attribute float fireInset; // 시작점에서 관 입구까지(m)
+    attribute vec2 firePart; // 0 = 불꽃 상자, 1 = 불티 / 번호
     uniform float uTime,uPower,uSpeed,uOn,uPop,uElectric;
-    varying vec2 vUv; varying vec4 vFire;
+    varying vec3 vLocal,vCam;
+    varying vec4 vDim; // 반폭, 반높이, 길이, 입구까지 Z
+    varying vec4 vMisc; // 종류, 씨앗, 나이, 세로 여유
+    varying vec2 vUv;
     void main(){
-     float kind=fireData.x, seed=fireData.y;
+     float seed=fireData.x,kind=firePart.x;
      float beat=1.0+.07*sin(uTime*37.0+seed*23.0)+.045*sin(uTime*61.0+seed*41.0);
-     float len=fireData.z*(.20+1.16*uPower+.20*uSpeed)*beat*(1.0+.22*uPop);
-     float pulse=(.78+.22*uPower)*(1.0+.04*sin(uTime*43.0+seed*29.0));
-     vec4 origin=modelViewMatrix*instanceMatrix*vec4(0.,0.,0.,1.);
-     vec3 axis=(modelViewMatrix*instanceMatrix*vec4(0.,0.,-1.,0.)).xyz;
-     vec3 dir=normalize(axis);
-     vec3 side=cross(dir,normalize(-origin.xyz));
-     side=length(side)>.001?normalize(side):vec3(1.,0.,0.);
-     vec3 bx=(modelViewMatrix*instanceMatrix*vec4(1.,0.,0.,0.)).xyz;
-     vec3 by=(modelViewMatrix*instanceMatrix*vec4(0.,1.,0.,0.)).xyz;
-     // 납작한 슬롯은 보는 각도에 맞는 타원 단면. 넓은 폭을 세로 불기둥으로 돌리지 않는다.
-     float wide=length(vec2(dot(side,bx)*fireData.w,dot(side,by)*fireHeight));
-     vec3 p=origin.xyz;
-     float age=fract(uTime*(.85+.3*seed)+seed*17.0);
+     float L=fireData.y*(.20+1.16*uPower+.20*uSpeed)*beat*(1.0+.22*uPop);
+     float hw=fireData.z*.5,hh=fireData.w*.5;
+     mat4 mv=modelViewMatrix*instanceMatrix;
+     vec3 o=(mv*vec4(0.,0.,0.,1.)).xyz;
+     vec3 bx=(mv*vec4(1.,0.,0.,0.)).xyz,by=(mv*vec4(0.,1.,0.,0.)).xyz,bz=(mv*vec4(0.,0.,-1.,0.)).xyz;
+     float ry=max(1.,.44*hw/hh); // 납작한 슬롯 불꽃도 뒤로 갈수록 둥글어질 자리
+     vDim=vec4(hw,hh,L,fireInset/L);
+     vMisc=vec4(kind,seed,0.,ry);vUv=position.xy;
+     vec3 p;
      if(kind<.5){
-      float flare=1.0+1.0*sin(uv.y*3.14159);
-      p+=axis*(uv.y*len)+side*(position.x*wide*flare*mix(1.,pulse,smoothstep(.02,.20,uv.y)));
-     }else if(kind<1.5){
-      // 입구 광륜은 카메라를 바라보는 작은 스프라이트, 차체 뒤 낮은 위치 고정.
-      p+=(bx*position.x*fireData.w+by*position.y*fireHeight)*(1.18+.45*uPop);
+      vec3 n=vec3(position.x*RMAX,position.y*RMAX*ry,position.z*ZMAX);
+      p=o+bx*(n.x*hw)+by*(n.y*hh)+bz*(n.z*L);
+      mat3 B=mat3(bx*hw,by*hh,bz*L);
+      vCam=inverse(B)*(-o);vLocal=n;
      }else{
-      float travel=kind<2.5?age:fract(age+.37);
-      p+=axis*(len*(.18+1.12*travel));
-      p+=side*(sin(seed*74.0+travel*7.0)*wide*(.16+.30*travel));
-      p.y+=(kind<2.5?.08:.13)*sin(seed*19.0+travel*5.0)*travel;
-      float size=kind<2.5?.016+.018*seed:.055+.06*travel;
-      p.xy+=position.xy*size*(kind<2.5?1.:1.7);
+      // 불티: 불꽃을 따라 흘러가는 아주 작은 빛 점(항상 카메라를 봄).
+      float s=fract(seed*7.13+firePart.y*.379);
+      float age=fract(uTime*(1.05+.5*s)+s*17.0);
+      vMisc.z=age;vMisc.y=s;
+      vec3 dir=normalize(bz),side=cross(dir,normalize(-o));
+      side=length(side)>.001?normalize(side):vec3(1.,0.,0.);
+      p=o+bz*(L*(.10+1.25*age));
+      p+=side*(sin(s*74.0+age*7.0)*hw*(.35+1.1*age));
+      p.y+=(.05+.10*s)*sin(s*19.0+age*5.0)*age;
+      p.xy+=position.xy*(.018+.02*s)*(1.0-.5*age);
+      vLocal=vec3(0.);vCam=vec3(0.);
      }
-     vUv=vec2(uv.x*2.-1.,uv.y);vFire=vec4(kind,seed,age,uOn);
      gl_Position=projectionMatrix*vec4(p,1.);
     }`,
    fragmentShader:`
     precision highp float;
-    uniform float uTime,uPower,uSpeed,uPop,uElectric;
+    uniform float uTime,uPower,uSpeed,uOn,uPop,uElectric;
     uniform vec3 uAccent;
-    varying vec2 vUv; varying vec4 vFire;
+    varying vec3 vLocal,vCam;
+    varying vec4 vDim,vMisc;
+    varying vec2 vUv;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);}
+    vec3 ramp(float k,float elec){
+     vec3 a=mix(vec3(.80,.035,.004),vec3(.02,.09,.70),elec);
+     vec3 b=mix(vec3(1.,.28,.018),vec3(.06,.36,1.),elec);
+     vec3 c=mix(vec3(1.,.70,.20),vec3(.42,.84,1.),elec);
+     vec3 d=mix(vec3(1.75,1.58,1.25),vec3(1.25,1.45,1.7),elec);
+     return k<.33?mix(a,b,k/.33):k<.66?mix(b,c,(k-.33)/.33):mix(c,d,min(1.,(k-.66)/.34));
+    }
     void main(){
-     float x=vUv.x,y=vUv.y,seed=vFire.y,t=uTime;
-     vec3 col;float alpha;
-     if(vFire.x<.5){
-      float n=noise(vec2(x*3.+seed*31.,y*9.-t*13.));
-      float fine=noise(vec2(x*9.-t*2.,y*23.-t*27.+seed*13.));
-      // 소용돌이치는 불꽃 혀. 끝이 뾰족해지며 투명하게 사라진다.
-      float sway=sin(y*10.-t*24.+seed*17.)*.09*y;
-      float r=abs(x+sway);
-      float envelope=pow(max(0.,1.-y),.68)*(.72+.20*sin(y*3.14));
-      envelope*=.64+.45*n+.18*fine;
-      envelope=mix(.99,envelope,smoothstep(.015,.13,y));
-      float edge=1.-smoothstep(envelope-.13,envelope+.03,r);
-      float tongue=noise(vec2(x*5.+seed*9.,t*11.));
-      edge*=1.-smoothstep(.64+.24*tongue,1.,y);
-      float core=(1.-smoothstep(.05,.42,r))* (1.-smoothstep(.12,.57,y));
-      col=mix(vec3(.95,.012,.001),vec3(1.,.31,.008),1.-smoothstep(.15,.80,y));
-      col=mix(col,vec3(1.,.83,.27),core*.80);
-      col=mix(col,vec3(1.8,1.65,1.34),core*core*.92);
-      col*=.80+.30*n+.12*fine;
-      // 3개의 희미한 마하 다이아몬드. 별도 메시/호출 없음.
-      float d=0.;for(int i=0;i<3;i++){
-       float c=.22+float(i)*.22+.012*sin(t*12.+seed);
-       float diamond=abs(y-c)/.065+r/(.32-float(i)*.055);
-       d+=pow(max(0.,1.-diamond),2.);
-      }
-      col+=mix(vec3(.45,.40,.20),uAccent*.30,.18)*d*.65;
-      if(uElectric>.5){
-       float arc=exp(-abs(x-.19*sin(y*29.-t*37.+seed*13.)) * 54.);
-       col=mix(vec3(.025,.19,1.),vec3(.64,.93,1.),core)+arc*vec3(.6,.85,1.);
-       col+=uAccent*d*.12;
-      }
-      alpha=edge*(.86+.12*n)*(1.-smoothstep(.70,1.,y));
-      alpha*=.66+.30*uPower;
-     }else if(vFire.x<1.5){
-      float r=length(vec2(x,(y-.5)*2.));
-      float hot=exp(-r*r*12.),halo=exp(-r*r*4.0);
-      col=mix(vec3(1.,.16,.015),vec3(1.,.94,.64),hot);
-      if(uElectric>.5)col=mix(vec3(.02,.25,1.),vec3(.78,.98,1.),hot);
-      col+=uAccent*pow(max(0.,1.-abs(r-.7)*5.),2.)*.10;
-      alpha=(hot*.38+halo*.11)*(1.+uPop*.65);
-     }else{
-      float r=length(vec2(x,(y-.5)*2.));
-      float life=sin(vFire.z*3.14159);
-      col=uElectric>.5?vec3(.22,.63,1.):vec3(1.,.24,.025);
-      alpha=max(0.,1.-r)*life*(vFire.x<2.5?.58:.035)*(.25+.75*uPower);
-      if(vFire.x>2.5)col=mix(col,vec3(.5,.58,.66),.65);
+     float t=uTime,seed=vMisc.y,elec=uElectric;
+     if(vMisc.x>.5){
+      float r=length(vUv)*2.;
+      float life=sin(vMisc.z*3.14159);
+      float a=max(0.,1.-r);a*=a*life*(.35+.65*uPower)*uOn;
+      vec3 c=elec>.5?vec3(.45,.8,1.4):vec3(1.5,.62,.14);
+      if(a<.004)discard;
+      gl_FragColor=vec4(c*a,a);return;
      }
-     alpha*=vFire.w;if(alpha<.003)discard;
+     float hw=vDim.x,hh=vDim.y,L=vDim.z,zm=vDim.w,ry=vMisc.w;
+     vec3 ro=vCam,rd=vLocal-vCam+vec3(1e-6,1.3e-6,.7e-6);
+     vec3 bmin=vec3(-RMAX,-RMAX*ry,0.),bmax=vec3(RMAX,RMAX*ry,ZMAX);
+     vec3 inv=1./rd,ta=(bmin-ro)*inv,tb=(bmax-ro)*inv;
+     vec3 tmn=min(ta,tb),tmx=max(ta,tb);
+     float tn=max(max(tmn.x,tmn.y),tmn.z),tf=min(min(tmx.x,tmx.y),tmx.z);
+     // 앞면 하나에서만 계산(상자 안에 카메라가 있으면 뒷면에서). 감긴 방향에 기대지 않는다.
+     bool entry=abs(1.-tn)<abs(1.-tf);
+     if(tn>0.?!entry:entry)discard;
+     float t0=max(tn,0.),t1=tf;
+     // 불꽃이 들어 있는 타원 기둥으로 구간을 좁혀 같은 걸음 수로 더 촘촘히
+     float wy=max(hh,.40*hw);
+     {vec2 k=vec2(1.,hh/wy)/1.6;vec2 oo=ro.xy*k,dd=rd.xy*k;float A=dot(dd,dd),Bq=dot(oo,dd),C=dot(oo,oo)-1.,D=Bq*Bq-A*C;
+      if(D<=0.||A<1e-9){if(C>0.)discard;}else{float sq=sqrt(D);t0=max(t0,(-Bq-sq)/A);t1=min(t1,(-Bq+sq)/A);}}
+     if(t1<=t0)discard;
+     vec3 P0=ro+rd*t0,seg=rd*(t1-t0);
+     float metric=length(seg*vec3(hw,hh,L))/float(STEPS);
+     float jit=hash(gl_FragCoord.xy*.731+seed*13.);
+     float bulgeMax=mix(1.12,1.34,uPower)*(1.+.30*uPop);
+     vec3 col=vec3(0.);float Tr=1.;
+     for(int i=0;i<STEPS;i++){
+      vec3 P=P0+seg*((float(i)+jit)/float(STEPS));
+      float Z=P.z;
+      float out_=smoothstep(zm-.01,zm+.06,Z); // 관 밖으로 나온 정도
+      float zz=max(0.,Z-zm)/(1.-zm);
+      float n1=noise(vec2(zz*5.5-t*12.+seed*7.,(P.x+P.y)*1.6+seed*3.));
+      float n2=noise(vec2(zz*9.-t*19.+seed*13.,(P.x-P.y)*2.3));
+      float bulge=mix(1.,bulgeMax,smoothstep(0.,.32,zz));
+      float taper=pow(max(0.,1.-zz),.70);
+      float R=bulge*taper*mix(1.,.72+.46*n1+.18*n2,smoothstep(.03,.35,zz))+.16*uPop*(1.-smoothstep(0.,.25,zz));
+      float a=hw*R,b=mix(hh,wy,smoothstep(.05,.75,zz))*R;
+      float q=length(vec2(P.x*hw/max(a,.002),P.y*hh/max(b,.002)));
+      // 바깥 빨간 혀
+      float tip=smoothstep(1.+.28*(n1-.5),.66,zz);
+      float dO=smoothstep(1.,.62,q)*tip*mix(.30,1.,smoothstep(.10,.80,q));
+      // 흰·노란 뜨거운 심: 입구에서 굵고 뒤로 갈수록 가늘게
+      float cr=(.46+.12*uPower)*(1.-smoothstep(0.,.60,zz))+.001;
+      float core=smoothstep(1.15,.25,q/cr)*(1.-smoothstep(.38,.62,zz));
+      // 마하 다이아몬드 3개(희미하게)
+      float dm=0.;
+      for(int k=0;k<3;k++){
+       float c=.17+float(k)*.17+.01*sin(t*12.+seed);
+       float w=max(0.,1.-(abs(zz-c)/.08+q/(.50-float(k)*.07)));
+       dm+=w*w*(.8-.2*float(k));
+      }
+      // 관 안쪽은 금속 뒤라 거의 감춤(정면 뒤에서만 조금 빛남)
+      float inside=mix(.12,1.,out_);
+      float tex=.55+.5*n2;
+      float sig=(dO*tex*5.+core*26.+dm*10.)*inside,sigA=(dO*tex*3.+core*9.+dm*3.)*inside;
+      // 끝의 옅은 열기: 넓고 흐린 따뜻한 빛
+      float qh=length(vec2(P.x/1.35,P.y*hh/(wy*1.35)));
+      float haze=smoothstep(1.,0.,qh)*smoothstep(.62,.92,zz)*(1.-smoothstep(1.05,ZMAX,Z))*(.6+.6*n2);
+      float heat=clamp(core*1.05+dO*(.52-.42*zz)+dm*.55+.06*n2,0.,1.);
+      vec3 e=ramp(heat,elec)*(1.+.6*core+.5*dm)+uAccent*dm*.10;
+      if(elec>.5){
+       // 파란 전기 아크 두 가닥: 축을 따라 꼬이며 흔들림
+       vec2 u=vec2(P.x*hw/max(a,.002),P.y*hh/max(b,.002));
+       vec2 o1=.42*vec2(sin(zz*21.-t*37.+seed*13.),cos(zz*17.+t*29.+seed*5.));
+       vec2 o2=.38*vec2(cos(zz*25.+t*33.+seed*3.),sin(zz*19.-t*41.+seed*9.));
+       float arc=(exp(-dot(u-o1,u-o1)*55.)+exp(-dot(u-o2,u-o2)*55.))*smoothstep(.95,.2,zz)*out_;
+       e=mix(e,vec3(1.,1.25,1.6),min(1.,arc));sig+=arc*14.;sigA+=arc*5.;
+      }
+      e*=(.62+.48*uPower)*(1.+.8*uPop);
+      float aF=1.-exp(-sig*metric),aA=1.-exp(-sigA*metric),aH=1.-exp(-haze*.14*metric);
+      vec3 hc=mix(vec3(.85,.30,.08),vec3(.15,.35,.9),elec);
+      col+=Tr*(e*aF+hc*aH);
+      Tr*=(1.-aA)*(1.-aH*.3);
+     }
+     float alpha=(1.-Tr)*uOn;col*=uOn;
+     if(alpha<.003&&max(col.r,max(col.g,col.b))<.003)discard;
      gl_FragColor=vec4(col,alpha);
     }`
   });
@@ -140,20 +191,35 @@ function acquireFire(){
  }
  fireUsers++;return sharedFire;
 }
+// 노즐 하나 = 인스턴스 하나: 불꽃 상자(입구 쪽 뚜껑 없는 5면, 10삼각형) + 불티 쿼드 3개.
+function fireGeometry(){
+ const pos=[],part=[],idx=[];
+ for(const z of [0,1])for(const y of [-1,1])for(const x of [-1,1]){pos.push(x,y,z);part.push(0,0);}
+ const v=(x,y,z)=>((z>0?4:0)+(y>0?2:0)+(x>0?1:0));
+ const quad=(a,b,c,d)=>idx.push(a,b,c,a,c,d);
+ quad(v(1,-1,0),v(1,1,0),v(1,1,1),v(1,-1,1));quad(v(-1,-1,0),v(-1,-1,1),v(-1,1,1),v(-1,1,0));
+ quad(v(-1,1,0),v(-1,1,1),v(1,1,1),v(1,1,0));quad(v(-1,-1,0),v(1,-1,0),v(1,-1,1),v(-1,-1,1));
+ quad(v(-1,-1,1),v(1,-1,1),v(1,1,1),v(-1,1,1));
+ for(let k=0;k<FIRE_SPARKS;k++){const b=pos.length/3;for(const [x,y]of [[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]]){pos.push(x,y,0);part.push(1,k);}quad(b,b+1,b+2,b+3);}
+ const geo=new THREE.BufferGeometry();
+ geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+ geo.setAttribute('firePart',new THREE.Float32BufferAttribute(part,2));
+ geo.setIndex(idx);
+ return geo;
+}
 function buildFire(body,emitters,id,colour){
- const material=acquireFire(),perPort=7,phaseOffset=(fireSerial++*.61803398875)%1;
- const geo=new THREE.PlaneGeometry(1,1);
- const data=new Float32Array(emitters.length*perPort*4),heights=new Float32Array(emitters.length*perPort);
- for(let j=0;j<emitters.length;j++)for(let k=0;k<perPort;k++){
-  const e=emitters[j],i=(j*perPort+k)*4;
-  heights[j*perPort+k]=e.height;
-  data.set([k===0?0:k===1?1:k<5?2:3,(j*.371+k*.173+Object.keys(SPECS).indexOf(id)*.113+phaseOffset)%1,e.len,e.width],i);
+ const material=acquireFire(),phaseOffset=(fireSerial++*.61803398875)%1;
+ const geo=fireGeometry();
+ const data=new Float32Array(emitters.length*4),inset=new Float32Array(emitters.length);
+ for(let j=0;j<emitters.length;j++){
+  const e=emitters[j];inset[j]=e.inset??.07;
+  data.set([(j*.371+Object.keys(SPECS).indexOf(id)*.113+phaseOffset)%1,e.len,e.width,e.height],j*4);
  }
  geo.setAttribute('fireData',new THREE.InstancedBufferAttribute(data,4));
- geo.setAttribute('fireHeight',new THREE.InstancedBufferAttribute(heights,1));
- const mesh=new THREE.InstancedMesh(geo,material,emitters.length*perPort);
+ geo.setAttribute('fireInset',new THREE.InstancedBufferAttribute(inset,1));
+ const mesh=new THREE.InstancedMesh(geo,material,emitters.length);
  mesh.name='accel-fire-'+id;mesh.frustumCulled=false;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
- mesh.userData.accelMoving=true;body.add(mesh);
+ mesh.userData.accelMoving=true;mesh.userData.perNozzle=1;body.add(mesh);
  const state={time:0,power:.7,speed:0,on:0,pop:0,electric:id==='volt'||id==='nova'?1:0};
  mesh.onBeforeRender=()=>{
   const u=material.uniforms;u.uTime.value=state.time;u.uPower.value=state.power;u.uSpeed.value=state.speed;
@@ -179,7 +245,7 @@ function buildFire(body,emitters,id,colour){
     // 병합으로 관 그룹이 잠시 빠져도 같은 body 기준 좌표를 유지한다(중첩된 4연 배기 포함).
     if(attached){m.multiplyMatrices(inv,e.node.matrixWorld);e.local??=new THREE.Matrix4();e.local.copy(m);}else m.copy(e.local);
     shift.makeTranslation(0,0,e.z);m.multiply(shift);
-    for(let k=0;k<perPort;k++)mesh.setMatrixAt(j*perPort+k,m);
+    mesh.setMatrixAt(j,m);
    }
    mesh.instanceMatrix.needsUpdate=true;
   },
@@ -256,7 +322,7 @@ export function buildAccelKit({body,spoiler,A,M,look,add,light,shell}) {
        box(w*.06,h*.12,.025,hotWall,s*w*.32,0,-d*.47,g);
      }
    }
-   return {node:g,z:-d*.37,width:w*.81,height:h*.81,len:id==='rocket'?1.55:id==='kart'?.66:id==='buggy'?.86:id==='nova'?1.22:.93};
+   return {node:g,z:-d*.37,inset:d*.13,width:w*.81,height:h*.81,len:id==='rocket'?1.55:id==='kart'?.66:id==='buggy'?.86:id==='nova'?1.22:.93};
  };
  const exhaust=(name,x,y,z,r,parent=kit)=>{
    const g=group(name,x,y,z,parent);
