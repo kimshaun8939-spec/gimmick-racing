@@ -239,7 +239,9 @@ export function fastTrack(track) {
       n.crossVectors(e1, e2);
     }
     n.normalize();
-    if (n.x * dx + n.y * dy + n.z * dz > 0) n.negate();
+    // 루프 곡면 안쪽에서 출발한 모서리 레이가 자기 도로의 뒷면을 맞기도 한다.
+    // 그 법선을 뒤집으면 도로가 반대쪽 벽이 되어 연속 감속하므로 원래 노면 방향을 보존한다.
+    if (!(track.roll?.loop && ownerMesh[owner[bestTri]].userData.surface === 'magnet') && n.x * dx + n.y * dy + n.z * dz > 0) n.negate();
     return { point, normal: n, surface: ownerMesh[owner[bestTri]].userData.surface, distance: bestT };
   }
 

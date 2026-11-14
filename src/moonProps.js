@@ -121,7 +121,7 @@ export function buildMoonProps(track, scene) {
   const back = new THREE.Vector3();
 
   // ---------------------------------------------------------------- 상태
-  let lastKey = 'plain', stuckT = 0, shownG = 1, inLoop = false;
+  let lastKey = 'plain', stuckT = new WeakMap(), shownG = 1, inLoop = false;
   const zoneKey = (car) => {
     const s = car.trackInfo && car.trackInfo.sample;
     if (!s) return 'plain';
@@ -193,9 +193,18 @@ export function buildMoonProps(track, scene) {
     const a = Math.atan2((c.fwd.z * vx - c.fwd.x * vz) / (vl * fl), (c.fwd.x * vx + c.fwd.z * vz) / (vl * fl));
     c.fwd.applyAxisAngle(UPW, a * (1 - Math.exp(-5 * dt)));
   }
+  // 사람·봇 모두 같은 조건: 루프에서 6 m/s 미만으로 1.2초 머무르면 복귀.
+  function loopRecovery(c, dt) {
+    if (c.trackInfo?.sample?.roll && Math.abs(c.speed) < 6) {
+      const time = (stuckT.get(c) || 0) + dt;
+      if (time > 1.2) { stuckT.delete(c); c.respawn(); }
+      else stuckT.set(c, time);
+    } else stuckT.delete(c);
+  }
   function assist(c, dt) {
     loopGuide(c, dt);
     airAlign(c, dt);
+    loopRecovery(c, dt);
   }
   function guideAll(dt, car) {
     if (car) assist(car, dt);
@@ -265,16 +274,6 @@ export function buildMoonProps(track, scene) {
       else inLoop = false;
       lastKey = key;
     }
-    // 루프 안에서 거의 멈춤 → 자동 복귀
-    const s = car.trackInfo && car.trackInfo.sample;
-    if (s && s.roll && Math.abs(car.speed) < 6) {
-      stuckT += dt;
-      if (stuckT > 1.2) {
-        stuckT = 0;
-        car.respawn();
-      }
-    } else stuckT = 0;
-
     // 먼지 움직임: 달 중력(1.62 m/s²) × 그 자리 구역 배수 (알갱이마다 다르면 비싸서, 플레이어 둘레 구역 값으로)
     const grav = 1.62 * Math.max(0.3, g) * 2.2;
     for (let i = 0; i < DUST_N; i++) {
@@ -322,7 +321,7 @@ export function buildMoonProps(track, scene) {
     for (let i = 0; i < DUST_N; i++) (dLife[i] = 0), (dPos[i * 3 + 1] = -9999);
     lastKey = 'plain';
     inLoop = false;
-    stuckT = 0;
+    stuckT = new WeakMap();
     toastT = 0;
     toast.style.opacity = '0';
   }

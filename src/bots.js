@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { lineCarModel } from './car.js';
 import { hitboxFor } from './carHitbox.js';
+import { createShortcutDriver } from './botShortcut.js'; // 그랑프리 판자 지름길 (2026-11-14)
 
 export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사라', '토르', '하나', '제트', '노바'];
 
@@ -90,6 +91,7 @@ try {
 } catch {}
 //   draft = 띠보다 draftAt초(기본 1) 넘게 뒤처진 봇에게 (1.5초에 걸쳐 커짐) 주는 보이지 않는 슬립스트림 최대 (raceSystem cuDraft, 예전 어려움 upDraft와 같은 것; 속도 계획 표가 없는 맵(화산)에서도 실제로 빨라지게)
 BOT_LEVELS.easy.close = { ahead: 0.6, behind: 0.8, up: 0.12, down: 0.15, kUp: 0.06, kDown: 0.08 };
+BOT_LEVELS.easy.plank = false; // 쉬움 봇은 그랑프리 판자 지름길을 안 탐 (botShortcut.js, 2026-11-14)
 BOT_LEVELS.normal.close = { ahead: 1.0, behind: 0.6, up: 0.08, down: 0.06, kUp: 0.08, kDown: 0.05, draft: 0.4, draftAt: 0.5 };
 BOT_LEVELS.hard.close = { ahead: 1.5, behind: 0.8, up: 0.05, down: 0.03, kUp: 0.05, kDown: 0.03, draft: 0.7, draftAt: 0.4 };
 BOT_LEVELS.master.close = { ahead: 2.5, behind: 1.5, up: 0.03, down: 0.02, kUp: 0.02, kDown: 0.015 };
@@ -545,7 +547,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     return c;
   }
 
+  const scDrive = createShortcutDriver({ car, track, cm, level, pace, thrK, st, prof, vTop, queueSpeed: (ctx, v) => queueSpeed(ctx, v),
+    onRelease: (i) => { const ti = car.trackInfo; if (ti) st.lane = st.laneTarget = clamp(ti.lateral - L.offset[i % N], -12, 12); st.laneHold = 0; } });
   /** 라인 지점 j에서 옆으로 lane만큼 비킨 목표 점 */
+  const magnetDir = new THREE.Vector3(), magnetCross = new THREE.Vector3();
   function target(j, lane) {
     const s = S[j];
     const off = clamp(L.offset[j] + lane, L.lo[j] + 0.2, L.hi[j] - 0.2);
@@ -597,6 +602,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (st.fly !== 'approach') st.dbg = { fly: st.fly, flyI: st.flyI };
       return masterShift(c,dt);
     }
+    // 판자 지름길 (그랑프리 마지막): 사람과 같은 길로 (botShortcut.js)
+    const scc = scDrive && !st.fly ? scDrive(ctx, c, i0, speed) : null;
+    if (scc) return masterShift(scc, dt);
 
     // --- 같은 단계 봇끼리 비슷하게 (PACK) ---
     if (packOn && PACK.keep.on) {
@@ -908,6 +916,21 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
 
+    } else if (car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && track.roll?.loop && (car.surface === 'magnet' || ti.sample?.magnet || ti.sample?.roll)) {
+      // 루프·자석 도로는 현재 도로의 3D 접선을 차 바닥 면에 투영한다.
+      // 수평 앞점은 수직/천장 구간에서 뒤쪽 점이 되어 핸들을 끝까지 꺾고 속도를 잃었음.
+      const s = ti.sample || S[i0], cfg = car.cfg;
+      const dir = magnetDir.copy(s.tan3 || s.tan);
+      const side = s.rightB || s.right;
+      const want = clamp(L.offset[i0] + lane, L.lo[i0] + .2, L.hi[i0] - .2);
+      dir.addScaledVector(side, clamp((want - myLat) * .09, -.35, .35));
+      dir.addScaledVector(car.up, -dir.dot(car.up));
+      const angle = dir.lengthSq() > 1e-6 ? -Math.atan2(magnetCross.crossVectors(car.fwd, dir).dot(car.up), car.fwd.dot(dir)) : 0;
+      const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
+      const latCap = cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0));
+      const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v));
+      steerCmd = (3 * angle - .8 * (car.slip || 0)) / Math.max(.05, perSteer);
+      st.satur = 0;
     } else if (car.grounded && car.mode === 'boat') {
       // 실제 방향타 회전량으로 조향. v²/24는 고속 배에서 과조향·부표 벽 충돌을 냈음.
       const a = W(i0 + Math.round(v * 0.12 / ds));
@@ -1061,6 +1084,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.laneHold=st.heldT=st.passT=st.blockedT=0;
       if(grid)st.overtakeStarts=st.overtakeSwitches=st.overtakeWins=0;
       st.fly = null;
+      st.sc = null; st.scTry = 0; // 판자 지름길 (botShortcut.js)
       st.flyI = 0;
       st.shiftLock = 0;
       st.mistake = null;
