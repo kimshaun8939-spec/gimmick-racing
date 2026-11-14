@@ -299,3 +299,212 @@
 .cp-scrollhint { display:block; }
 @media (max-width:720px) { .h-carlist .list > .cp-tile { flex:0 0 136px; scroll-snap-align:start; } }
 @media (max-height:450px) and (min-width:651px) { .cp-scrollhint { display:none; } .cp-tablehint { font-size:8px; } }
+
+/* =====================================================================
+   cartabs (2026-11-15, 사용자 요청 "설명 칸이 길어서 커스텀이 있는지 모름")
+   정보 칸 = 이름(고정) + [📝 소개 | 📊 성능 | 🎨 커스텀] 탭 + 버튼(고정). 탭 내용만 필요하면 스크롤.
+   home.js setCarTab · localStorage gimmick.carTab · 키 [ ] / 패드 LT·RT / 탭 위 ←→
+   ===================================================================== */
+#home .h-carinfo.ct { display: flex; flex-direction: column; gap: 12px; overflow: hidden; padding: 18px 20px 0; scroll-padding-bottom: 0; }
+#home .h-carinfo.ct > * { grid-column: auto; grid-row: auto; }
+.ct-head { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#home .ct-head .ihead { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#home .ct-head .h-classchip { flex-wrap: nowrap; flex-shrink: 0; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: color-mix(in srgb, var(--cc, #ffcf3f) 12%, #0e1628); border: 1px solid color-mix(in srgb, var(--cc, #ffcf3f) 45%, transparent); }
+#home .ct-head .h-classchip > .nc-badge { width: 22px; height: 22px; border-radius: 999px; font-size: 13px; }
+#home .ct-head .h-classchip > b { font-size: 12px; line-height: 1; letter-spacing: 0.04em; white-space: nowrap; }
+#home .ct-head .h-classchip > span { display: none !important; }
+#home .ct-head .tg { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; letter-spacing: 0.2em; }
+#home .ct-head .num { margin-left: auto; font-size: 28px; }
+#home .ct-head h2 { margin: 2px 0 0; font-size: 36px; line-height: 1.08; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 탭 줄 */
+.ct-tabs { flex-shrink: 0; display: flex; align-items: stretch; gap: 3px; padding: 4px; border-radius: 13px; background: rgba(3, 7, 16, 0.55); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.09)); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35); }
+.ct-tab { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 38px; padding: 0 6px; border: 0; border-radius: 9px; background: transparent; color: #a9b6cb; font: 800 13px "Pretendard", "Malgun Gothic", sans-serif; white-space: nowrap; cursor: pointer; transition: background 0.18s, color 0.18s, box-shadow 0.18s; }
+.ct-tab.ct-custom { flex-grow: 1.35; }
+.ct-tab i { font-style: normal; font-size: 14px; filter: grayscale(0.5); transition: filter 0.18s; }
+.ct-tab span { overflow: hidden; text-overflow: ellipsis; }
+.ct-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+.ct-tab.on { color: #0f1320; background: linear-gradient(180deg, color-mix(in srgb, var(--cc, #ffcf3f) 72%, #fff), var(--cc, #ffcf3f)); box-shadow: 0 4px 14px color-mix(in srgb, var(--cc, #ffcf3f) 30%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+.ct-tab.on i { filter: none; }
+.ct-tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ct-badge { flex-shrink: 0; padding: 2px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 900; line-height: 1.3; color: #ffd866; background: rgba(255, 207, 63, 0.14); border: 1px solid rgba(255, 207, 63, 0.5); }
+.ct-badge:empty { display: none; }
+.ct-tab:not(.on) .ct-badge { animation: ctBadge 2.8s ease-in-out infinite; }
+@keyframes ctBadge { 0%, 70%, 100% { box-shadow: 0 0 0 0 rgba(255, 207, 63, 0); } 82% { box-shadow: 0 0 0 4px rgba(255, 207, 63, 0.18); } }
+.ct-tab.on .ct-badge { color: var(--cc, #ffcf3f); background: #0f1320; border-color: transparent; }
+.ct-keys { flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 3px 0 5px; opacity: 0.7; }
+#home .ct-keys kbd { min-width: 20px; height: 21px; padding: 0 5px; border-radius: 5px; border-bottom-width: 2px; font-size: 11px; }
+body.touch-on .ct-keys { display: none; }
+@media (pointer: coarse) { .ct-keys { display: none; } }
+
+/* 탭 내용 */
+.ct-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 -10px; padding: 2px 10px 14px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+.ct-pane { display: flex; flex-direction: column; gap: 12px; animation: ctIn 0.22s ease-out; }
+.ct-pane[hidden] { display: none; }
+@keyframes ctIn { from { opacity: 0; transform: translateY(6px); } }
+#home .ct-pane .desc { font-size: 14px; line-height: 1.7; color: #d3dbea; word-break: keep-all; }
+#home .ct-pane .gx-locknote, #home .ct-pane .gx-paint, #home .ct-pane .gx-nextline { margin: 0; }
+.ct-classnote { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.09)); }
+.ct-classnote[hidden] { display: none; }
+#home .ct-classnote .nc-badge { width: 28px; height: 30px; font-size: 18px; }
+.ct-classnote span { min-width: 0; font-size: 12px; line-height: 1.5; color: #aebbd0; word-break: keep-all; }
+.ct-classnote span b { display: block; margin-bottom: 1px; color: var(--cc, #ffcf3f); font-size: 12px; }
+.ct-jump { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#home .gm-btn.ct-jumpbtn { display: flex; align-items: center; justify-content: flex-start; gap: 9px; min-height: 58px; padding: 9px 10px 9px 12px; border-radius: 12px; text-align: left; white-space: normal; }
+.ct-jumpbtn i { flex-shrink: 0; font-style: normal; font-size: 20px; }
+.ct-jumpbtn span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ct-jumpbtn b { font-size: 13px; line-height: 1.2; }
+#home .ct-jumpbtn small { font-size: 11px; line-height: 1.35; color: var(--gm-dim, #95a2bb); font-weight: 600; word-break: keep-all; }
+.ct-jumpbtn em { flex-shrink: 0; font-style: normal; font-size: 18px; opacity: 0.55; }
+#home .gm-btn.ct-jumpbtn[data-ctgo="custom"] { border-color: rgba(255, 207, 63, 0.42); background: linear-gradient(135deg, rgba(255, 207, 63, 0.16), rgba(255, 207, 63, 0.02) 70%), var(--sf-2, rgba(28, 38, 68, 0.72)); }
+#home .gm-btn.ct-jumpbtn[data-ctgo="custom"] small { color: #ffd866; }
+
+/* 성능: 숫자는 이 불투명 상자 하나에만 */
+.ct-statbox { padding: 12px 14px 4px; border-radius: 14px; background: linear-gradient(180deg, #121c33, #0a1222); border: 1px solid color-mix(in srgb, var(--cc, #ffcf3f) 30%, #26324a); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+#home .ct-statbox .ns-heading { margin: 0 0 8px; padding-bottom: 9px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+#home .ct-statbox .h-stats { margin: 0; padding: 0; gap: 7px; border: 0; border-radius: 0; background: none; }
+#home .ct-statbox .ns-stat { min-height: 30px; }
+#home .ct-statbox .ns-method { margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+#home .ct-statbox .ns-method summary { padding: 7px 0; }
+
+/* 커스텀 */
+.ct-locknote { padding: 9px 12px; border-radius: 12px; background: rgba(255, 207, 63, 0.08); border: 1px solid rgba(255, 207, 63, 0.35); }
+.ct-locknote[hidden] { display: none; }
+.ct-locknote b { display: block; font-size: 13px; color: #ffcf3f; }
+.ct-locknote span { display: block; margin-top: 2px; font-size: 12px; color: #aebbd0; line-height: 1.45; }
+#home .ct-pane .gx-paint { padding: 12px 12px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.09)); }
+#home .ct-pane .mt-costume-box { margin: 0; padding: 12px; border: 1px solid var(--gm-line, rgba(255, 255, 255, 0.09)); border-radius: 12px; background: rgba(255, 255, 255, 0.035); }
+
+/* 버튼 줄: 늘 아래에 (탭 내용과 겹치지 않게 흐름 안에) */
+#home .h-carinfo.ct > .btns { position: relative; inset: auto; z-index: 2; flex-shrink: 0; margin: 0 -20px; padding: 12px 20px 16px; border: 0; border-top: 1px solid var(--sf-line, rgba(255, 255, 255, 0.1)); border-radius: 0 0 17px 17px; background: rgba(8, 13, 26, 0.9); }
+
+/* PC: 정보 칸 높이를 고정해서 탭을 바꿔도 칸이 출렁이지 않게 */
+@media (min-width: 901px) and (min-height: 521px) {
+  #home .h-carinfo.ct { align-self: end; height: min(100%, 740px); max-height: 100%; }
+}
+@media (min-width: 901px) and (max-height: 860px) {
+  #home .ct-head h2 { font-size: 32px; }
+}
+/* 태블릿 세로: 아래 줄 정보 칸 */
+@media (max-width: 900px) and (min-width: 721px) and (min-height: 521px) {
+  #home .h-carinfo.ct { height: min(46vh, 430px); }
+}
+
+#home .h-foot .ct-foothint { display: none; }
+#home:has(> .h-view[data-view="car"].on) .h-foot .ct-foothint:not([hidden]) { display: inline; }
+
+/* cartabs: 성능 상자 줄 간격을 줄여 PC 한 화면에 */
+#home .ct-statbox .h-stats { gap: 4px; }
+#home .ct-statbox .ns-stat { min-height: 30px; gap: 8px; grid-template-columns: minmax(92px, 1.2fr) minmax(30px, 1fr) 36px; }
+#home .ct-statbox .ns-stat .ns-label small { margin-top: 2px; }
+#home .ct-statbox .ns-stat .v { font-size: 22px; text-align: right; }
+#home .ct-statbox .ns-heading { margin-bottom: 6px; padding-bottom: 7px; }
+#home .ct-statbox .ns-method { margin-top: 6px; }
+#home .ct-statbox .ns-method summary { padding: 6px 0; }
+
+/* cartabs: 커스텀 = 색 2줄 + 코스튬 가로 띠 + 짧은 설명 줄 */
+#home .ct-pane .gx-paint { padding: 10px 12px 8px; }
+#home .ct-pane .gx-ptitle { display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px; color: #c9d4e6; }
+#home .ct-pane .gx-ptitle small { margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ffd866; }
+#home .ct-pane .gx-swatches { gap: 6px 7px; }
+@media (pointer: fine) { #home .ct-pane .gx-sw { width: 27px; height: 27px; } }
+#home .ct-pane .gx-swatches:has(.lock) { padding-bottom: 12px; row-gap: 16px; }
+#home .ct-pane .mt-costume-box { padding: 10px 12px; }
+#home .ct-pane .mt-costume-note { display: none; }
+#home .ct-pane .mt-costumes { display: flex; gap: 7px; overflow-x: auto; overflow-y: hidden; margin: 8px -4px 0; padding: 2px 4px 6px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+#home .ct-pane .mt-costume { flex: 0 0 104px; scroll-snap-align: start; padding-bottom: 6px; }
+#home .ct-pane .mt-costume-pic { height: 52px; }
+#home .ct-pane .mt-costume > b { padding: 5px 7px 1px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#home .ct-pane .mt-costume > small { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#home .ct-pane .mt-costume-detail { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; padding: 8px 0 0; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+#home .ct-pane .mt-costume-detail > b { grid-column: 1; font-size: 13px; }
+#home .ct-pane .mt-costume-detail p { grid-column: 1; margin: 2px 0 0 !important; font-size: 11px !important; line-height: 1.45 !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#home .ct-pane .mt-costume-detail > div { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; gap: 4px; }
+#home .ct-pane .mt-costume-detail > div small { text-align: right; font-size: 10.5px; }
+#home .ct-pane .mt-costume-detail .gm-btn { min-height: 34px; padding: 7px 11px; font-size: 12px; }
+#home .ct-pane .mt-costume-detail .mt-preview-reset { grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
+#home .ct-pane .mt-costume-head b::after { content: " · 성능은 그대로"; font-weight: 600; font-size: 10.5px; color: #8fa3bf; }
+
+/* ---------- 휴대폰 세로: 목록 · 3D 차 · 정보가 한 화면에 (탭 내용만 짧게 스크롤) ---------- */
+@media (max-width: 720px) and (min-height: 521px) {
+  #home .h-view[data-view="car"] { bottom: 8px; overflow: hidden; padding-bottom: 0; }
+  #home:has(> .h-view[data-view="car"].on) .h-foot { display: none; }
+  #home .h-car { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  #home .h-carlist, #home .h-carstage { align-self: stretch; }
+  #home .h-carlist { flex: 0 0 auto; padding: 8px; gap: 6px; overflow: visible; }
+  #home .h-carlist .h-classtabs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 3px; }
+  #home .h-carlist .h-ctab { display: flex; justify-content: center; align-items: center; gap: 4px; min-height: 44px; padding: 3px; }
+  #home .h-carlist .h-ctab .nc-badge { width: 22px; height: 24px; font-size: 15px; }
+  #home .h-carlist .h-ctab[data-ctab="all"] .nc-badge { font-size: 9px; }
+  #home .h-carlist .h-ctab .nc-copy b { font-size: 12px; }
+  #home .h-carlist .nm-classhelp { display: none; }
+  #home .h-carlist .list > .cp-tile { flex: 0 0 112px; }
+  #home .h-carlist .h-carcard { width: 112px; }
+  #home .h-carlist .h-carcard .nm { padding: 5px 8px 6px; }
+  #home .h-carlist .h-carcard .nm b { font-size: 12.5px; }
+  #home .h-carlist .h-carcard .nm small { font-size: 12px; }
+  #home .h-carstage { flex: 1 1 120px; min-height: 112px; padding-bottom: 0; }
+  #home .h-carstage .h-drag { display: none; }
+  #home .h-carstage .h-arrow { top: 6px; }
+  #home .h-carinfo.ct { align-self: stretch; width: auto; flex: 0 1 330px; height: auto; min-height: 250px; max-height: 330px; padding: 10px 14px 0; gap: 8px; }
+  #home .ct-head .ihead { display: none; }
+  #home .ct-head h2 { font-size: 24px; margin: 0; }
+  #home .ct-head .num { font-size: 20px; }
+  #home .ct-tab { min-height: 44px; }
+  #home .ct-body { padding-bottom: 10px; }
+  #home .ct-pane .desc { font-size: 13px; line-height: 1.6; }
+  #home .h-carinfo.ct > .btns { margin: 0 -14px; padding: 8px 14px 10px; }
+}
+
+/* ---------- 휴대폰 가로·낮은 화면: 탭은 왼쪽 세로 줄, 오른쪽이 내용 ---------- */
+@media (max-height: 520px) and (min-width: 600px) {
+  #home .h-carinfo.ct { display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 6px 8px; align-self: stretch; height: 100%; max-height: 100%; padding: 8px 10px 0; }
+  #home .h-carinfo.ct > .ct-head { grid-column: 1 / -1; grid-row: 1; }
+  #home .h-carinfo.ct > .ct-tabs { grid-column: 1; grid-row: 2 / span 2; align-self: start; flex-direction: column; gap: 4px; padding: 3px; }
+  #home .h-carinfo.ct > .ct-body { grid-column: 2; grid-row: 2; margin: 0 -6px 0 0; padding: 0 6px 8px 0; }
+  #home .h-carinfo.ct > .btns { grid-column: 2; grid-row: 3; margin: 0 -10px 0 0; padding: 6px 10px 8px 0; gap: 6px; border-top: 0; background: none; }
+  #home .h-carinfo.ct > .btns [data-go="mode"] { display: none; } /* 뒤로 = 위 단계 표시 · Esc (좁아서 다음 버튼만) */
+  #home .ct-head .ihead { display: none; }
+  #home .ct-head h2 { font-size: 20px; margin: 0; }
+  #home .ct-tab { position: relative; flex: 0 0 auto; flex-direction: column; gap: 0; min-height: 44px; width: 38px; padding: 2px 0; font-size: 10px; }
+  #home .ct-tab i { font-size: 15px; }
+  #home .ct-tab .ct-badge { position: absolute; top: -3px; right: -6px; padding: 0 3px; font-size: 9px; }
+  #home .ct-pane { gap: 8px; }
+  #home .ct-pane .desc { font-size: 12px; line-height: 1.55; }
+  #home .ct-classnote, #home .ct-pane .gx-nextline { display: none; }
+  #home .ct-jump { grid-template-columns: 1fr; gap: 6px; }
+  #home .gm-btn.ct-jumpbtn { min-height: 44px; padding: 6px 8px; }
+  #home .ct-statbox { padding: 8px 9px 2px; }
+  #home .ct-statbox .ns-stat { grid-template-columns: minmax(64px, 1fr) minmax(24px, 0.8fr) 28px; gap: 6px; min-height: 26px; }
+  #home .ct-statbox .ns-stat .ns-label small { display: none; }
+  #home .ct-statbox .ns-stat .v { font-size: 17px; }
+  #home .ct-pane .gx-ptitle { display: flex; }
+  #home .ct-pane .mt-costume { flex-basis: 92px; }
+  #home .ct-pane .mt-costume-pic { height: 44px; }
+  #home .ct-pane .mt-costume-detail { grid-template-columns: 1fr; }
+  #home .ct-pane .mt-costume-detail > div { grid-column: 1; grid-row: auto; flex-direction: row; align-items: center; margin-top: 4px; }
+}
+@media (prefers-reduced-motion: reduce) { .ct-pane, .ct-tab:not(.on) .ct-badge { animation: none; } }
+
+/* cartabs: PC 1280×800에서도 성능·커스텀이 스크롤 없이 들어가게 여백을 조금씩 */
+@media (min-width: 721px) and (min-height: 521px) {
+  #home .h-carinfo.ct { padding-top: 16px; gap: 10px; }
+  #home .ct-body { padding-bottom: 4px; }
+  #home .h-carinfo.ct > .btns { padding: 10px 20px 13px; }
+  #home .ct-statbox .ns-stat { min-height: 28px; }
+}
+@media (min-width: 721px) and (max-height: 860px) and (min-height: 521px) {
+  #home .ct-head { gap: 2px; }
+  #home .ct-head h2 { font-size: 30px; }
+}
+
+/* cartabs: 탭이 4개가 되어도(예: 🔧 조립) 한 줄에 — 칸이 좁으면 아이콘을 빼고 글자만, 가로 화면 세로 줄은 낮게 */
+.ct-tabs { container-type: inline-size; }
+@container (max-width: 340px) {
+  .ct-tabs:has(> .ct-tab:nth-of-type(4)) .ct-tab { gap: 3px; padding: 0 4px; font-size: 12.5px; }
+  .ct-tabs:has(> .ct-tab:nth-of-type(4)) .ct-tab i { display: none; }
+}
+@media (max-height: 520px) and (min-width: 600px) {
+  #home .ct-tabs:has(> .ct-tab:nth-of-type(4)) .ct-tab { min-height: 38px; }
+  #home .ct-statbox .ns-heading b small { display: none; }
+}

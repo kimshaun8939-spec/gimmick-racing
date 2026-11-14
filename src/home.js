@@ -23,7 +23,7 @@ import { academyArt, licenseBadge } from './academyArt.js';
 import { PRESETS, keybinds } from './keybinds.js';
 import { statScore } from './carRoster.js';
 import { createCarCompare } from './carCompare.js';
-import { applyCostume } from './carCostumes.js';
+import { applyCostume, listCostumes } from './carCostumes.js';
 import { meta, bootMeta } from './meta.js';
 import { createMetaPage, createCostumePicker } from './metaUI.js';
 import { paintPrice } from './metaCatalog.js';
@@ -160,7 +160,7 @@ export async function runHome() {
     <div class="h-view" data-view="season"></div>
     <div class="h-view" data-view="academy"></div>
     <div class="h-view" data-view="meta"></div>
-    <div class="h-foot"><span>${VERSION} · 기믹 레이싱</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
+    <div class="h-foot"><span>${VERSION} · 기믹 레이싱</span><span class="gm-hint"><span><kbd>↑↓←→</kbd> 고르기</span><span><kbd>Enter</kbd> 확인</span><span><kbd>Esc</kbd> 뒤로</span><span class="ct-foothint"><kbd>[</kbd><kbd>]</kbd> 정보 탭</span><span class="padhint" hidden>🎮 <kbd class="pad pf pf0">A</kbd> 확인 <kbd class="pad pf pf1">B</kbd> 뒤로</span></span></div>
     <div class="h-launch"><div class="ld" id="hLaunch"></div></div>
     <div class="h-toast" id="hToast"></div>`;
   document.body.appendChild(home);
@@ -215,6 +215,13 @@ export async function runHome() {
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
 
   // ------------------------------------------------------------------ 차 고르기
+  // 정보 칸 탭 (cartabs 2026-11-15). 부품 조립이 생기면 여기에 { id: 'parts', icon: '🔧', label: '조립' }을
+  // 'custom' 앞에 넣고 아래 .ct-body에 같은 id의 <section class="ct-pane" data-pane="parts">를 두면 됨 (탭 4개도 한 줄)
+  const CAR_TAB_DEFS = [
+    { id: 'info', icon: '📝', label: '소개' },
+    { id: 'stats', icon: '📊', label: '성능' },
+    { id: 'custom', icon: '🎨', label: '커스텀' },
+  ];
   views.car.innerHTML = `
     <div class="h-car">
       <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div>
@@ -230,23 +237,82 @@ export async function runHome() {
         </div>
         <button class="gm-btn h-arrow" data-act="nextCar" aria-label="다음 차">›</button>
       </div>
-      <div class="h-panel h-carinfo">
-        <div class="ihead"><div class="h-classchip"></div><span class="num"></span></div>
-        <div class="tg"></div><h2></h2><p class="desc"></p>
-        <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button" data-nav>⚖ 비교하기</button></div>
-        <small class="ns-estimate">평지 예상 성능 · 모든 차를 같은 기준으로 비교</small><div class="h-stats"></div>
-        <details class="ns-method"><summary>점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h 옆 한계와 다운포스, 드리프트는 유지 각도·회전·미끄러짐, 오프로드는 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
-        <div class="h-perks"></div>
-        <div class="gx-locknote" hidden></div>
-        <div class="gx-paint"><div class="gx-ptitle">🎨 색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
-        <div class="mt-costume-box"></div>
-        <div class="gx-nextline"></div>
+      <div class="h-panel h-carinfo ct">
+        <!-- 정보 칸 탭 (사용자 요청 2026-11-15 "설명 칸이 길어서 커스텀이 있는지 모름"): 위 = 이름, 가운데 = 소개 · 성능 · 커스텀 탭, 아래 = 버튼 -->
+        <div class="ct-head">
+          <div class="ihead"><div class="h-classchip"></div><div class="tg"></div><span class="num"></span></div>
+          <h2></h2>
+        </div>
+        <div class="ct-tabs" role="tablist" aria-label="차 정보" title="키보드 [ ] · 패드 LT / RT 로도 바꿀 수 있어요">
+          ${CAR_TAB_DEFS.map((t) => `<button type="button" role="tab" class="ct-tab ct-${t.id}" data-ct="${t.id}" id="ctTab-${t.id}" aria-controls="ctPane-${t.id}" data-nav><i>${t.icon}</i><span>${t.label}</span><b class="ct-badge"></b></button>`).join('')}
+        </div>
+        <div class="ct-body">
+          <section class="ct-pane" data-pane="info" id="ctPane-info" role="tabpanel" aria-labelledby="ctTab-info">
+            <div class="gx-locknote" hidden></div>
+            <p class="desc"></p>
+            <div class="h-perks"></div>
+            <div class="ct-classnote"></div>
+            <div class="ct-jump">
+              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="stats" data-nav><i>📊</i><span><b>성능 보기</b><small class="ct-jstats"></small></span><em>›</em></button>
+              <button type="button" class="gm-btn ct-jumpbtn" data-ctgo="custom" data-nav><i>🎨</i><span><b>꾸미기</b><small class="ct-jcustom"></small></span><em>›</em></button>
+            </div>
+            <div class="gx-nextline"></div>
+          </section>
+          <section class="ct-pane" data-pane="stats" id="ctPane-stats" role="tabpanel" aria-labelledby="ctTab-stats" hidden>
+            <div class="ct-statbox">
+              <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button" data-nav>⚖ 비교하기</button></div>
+              <div class="h-stats"></div>
+              <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h 옆 한계와 다운포스, 드리프트는 유지 각도·회전·미끄러짐, 오프로드는 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
+            </div>
+          </section>
+          <section class="ct-pane" data-pane="custom" id="ctPane-custom" role="tabpanel" aria-labelledby="ctTab-custom" hidden>
+            <div class="ct-locknote" hidden></div>
+            <div class="gx-paint"><div class="gx-ptitle">🎨 색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
+            <div class="mt-costume-box"></div>
+          </section>
+        </div>
         <div class="btns"><button class="gm-btn" data-go="mode" data-nav>‹ 레이스 방식</button><button class="gm-btn primary" data-act="pickCar" data-nav>다음: 맵 고르기 ›</button></div>
       </div>
     </div>`;
   const costumePicker = createCostumePicker(views.car.querySelector('.mt-costume-box'), {
     onPreview(look) { const mode = views.car.querySelector('#hForms button.on')?.dataset.mode; preview.setCar({ ...carOf(carId), look }); if (mode) preview.setMode(mode); },
     onEquipped(look) { const c = carOf(carId); c.look = look; preview.setCar(c); loadCarThumbs([c], { onThumb: putThumb }); heroThumb(); }, toast,
+  });
+  // 정보 칸 탭: 소개 / 성능 / 커스텀 (마지막에 본 탭 기억 'gimmick.carTab'; 키보드 [ ] · 패드 LT/RT · 탭 위에서 ←→)
+  const CAR_TABS = CAR_TAB_DEFS.map((t) => t.id);
+  let carTab = 'info';
+  try {
+    const t = localStorage.getItem('gimmick.carTab');
+    if (CAR_TABS.includes(t)) carTab = t;
+  } catch {}
+  const carInfoEl = views.car.querySelector('.h-carinfo');
+  function setCarTab(id, { focus = false, sound = false, save = true } = {}) {
+    if (!CAR_TABS.includes(id)) id = 'info';
+    const changed = id !== carTab;
+    carTab = id;
+    carInfoEl.dataset.tab = id;
+    carInfoEl.querySelectorAll('.ct-tab').forEach((b) => {
+      const on = b.dataset.ct === id;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    carInfoEl.querySelectorAll('.ct-pane').forEach((p) => (p.hidden = p.dataset.pane !== id));
+    const body = carInfoEl.querySelector('.ct-body');
+    if (changed) body.scrollTop = 0;
+    if (id !== 'custom' && changed) { costumePicker.restore(); costumePicker.refresh(); } // 코스튬 미리 보기 중에 다른 탭으로 가면 입은 모습으로
+    if (save) try { localStorage.setItem('gimmick.carTab', id); } catch {}
+    if (sound && changed) uiSound('toggle');
+    if (focus) carInfoEl.querySelector(`.ct-tab[data-ct="${id}"]`)?.focus({ preventScroll: true });
+  }
+  function stepCarTab(dir, focus = false) {
+    const i = CAR_TABS.indexOf(carTab);
+    setCarTab(CAR_TABS[(i + dir + CAR_TABS.length) % CAR_TABS.length], { focus, sound: true });
+  }
+  carInfoEl.addEventListener('click', (e) => {
+    const t = e.target.closest('.ct-tab, [data-ctgo]');
+    if (!t) return;
+    setCarTab(t.dataset.ct || t.dataset.ctgo, { sound: true, focus: !!t.dataset.ctgo });
   });
   const metaPage = createMetaPage(views.meta);
   const carList = views.car.querySelector('.list');
@@ -523,6 +589,12 @@ export async function runHome() {
     const perkEl = info.querySelector('.h-perks');
     perkEl.innerHTML = perks.map(([, , t]) => `<span>${t}</span>`).join('');
     perkEl.hidden = !perks.length;
+    // 소개 탭: 등급 설명 + 성능·꾸미기 바로 가기 (숫자는 성능 탭 상자에만)
+    const cnote = info.querySelector('.ct-classnote');
+    cnote.hidden = !(k && k.desc);
+    if (k && k.desc) cnote.innerHTML = `<strong class="nc-badge" style="--cc:${esc(cc)}">${esc(k.id)}</strong><span><b>${esc(k.name)}</b>${esc(k.desc)}</span>`;
+    const best = STAT_NAMES.map(([key, label]) => [statScore(c.stats, key), label]).sort((a, b) => b[0] - a[0]).slice(0, 2).map((x) => x[1]);
+    info.querySelector('.ct-jstats').textContent = best.length ? `강점 ${best.join(' · ')}` : '8가지 성능 점수';
     carMark.textContent = splitTag(c.tag)[0] || c.name;
     carMarkBox.classList.remove('in');
     void carMarkBox.offsetWidth; // 글자가 바뀔 때마다 다시 스르륵
@@ -556,10 +628,19 @@ export async function runHome() {
       box.querySelector('.gx-swatches').innerHTML = unlocks.PAINTS.map((p) => {
         const ok = unlocks.isPaintUnlocked(p.id);
         const body = p.body || c.look0.body || '#e8463a', acc = p.accent || c.look0.accent || '#f3f4f6';
-        return `<button type="button" class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : p.license ? ` · 드라이빙 아카데미 ${esc(unlocks.paintLockText(p.id))}로 열려요` : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>${p.license ? '🎓' : '🔒'}</i><small>${p.license ? esc(p.license) : `Lv.${p.level}`}</small>`}</button>`;
+        return `<button type="button" data-nav class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : p.license ? ` · 드라이빙 아카데미 ${esc(unlocks.paintLockText(p.id))}로 열려요` : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>${p.license ? '🎓' : '🔒'}</i><small>${p.license ? esc(p.license) : `Lv.${p.level}`}</small>`}</button>`;
       }).join('');
     }
     costumePicker.show(c);
+    // 커스텀 탭: 처음부터 무엇이 있는지 보이게 (탭 딱지 + 소개 탭 바로 가기 글)
+    const nCos = listCostumes(c.id).length;
+    const nPaint = unlocks.PAINTS.length;
+    info.querySelector('.ct-tab.ct-custom .ct-badge').textContent = nCos ? `✦${nCos}` : `${nPaint}색`;
+    info.querySelector('.ct-tab.ct-custom').title = `커스텀 · 코스튬 ${nCos}개 · 색 ${nPaint}가지`;
+    info.querySelector('.ct-jcustom').textContent = nCos ? `코스튬 ${nCos}개 · 색 ${nPaint}가지` : `색 ${nPaint}가지`;
+    const cl = info.querySelector('.ct-locknote');
+    cl.hidden = open;
+    if (!open) cl.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열리는 차</b><span>코스튬은 지금도 눌러서 미리 볼 수 있어요 · 색은 차가 열리면 바꿀 수 있어요</span>`;
     const nx = unlocks.nextUnlock(myLevel);
     const line = info.querySelector('.gx-nextline');
     line.hidden = !nx || !open; // 잠긴 차는 위 안내가 대신 말해 줌
@@ -1421,13 +1502,10 @@ export async function runHome() {
     if (b.dataset.go) {
       show(b.dataset.go);
       // 샵의 코스튬 구경은 성능표 아래를 다시 찾지 않아도 바로 보여 줌.
-      if (b.dataset.go === 'car' && b.dataset.carSection === 'costume') requestAnimationFrame(() => {
-        const box = views.car.querySelector('.mt-costume-box');
-        const info = views.car.querySelector('.h-carinfo');
-        const scroller = getComputedStyle(info).overflowY === 'auto' ? info : views.car;
-        scroller.scrollTop += box.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12;
-        box.querySelector('.mt-costume.on, .mt-costume')?.focus({ preventScroll: true });
-      });
+      if (b.dataset.go === 'car' && b.dataset.carSection === 'costume') {
+        setCarTab('custom');
+        requestAnimationFrame(() => views.car.querySelector('.mt-costume-box .mt-costume.on, .mt-costume-box .mt-costume')?.focus({ preventScroll: true }));
+      }
       return;
     }
     const act = b.dataset.act;
@@ -1581,8 +1659,25 @@ export async function runHome() {
       stepClass(k === 'KeyQ' || k === 'PageUp' ? -1 : 1);
       return;
     }
+    // 차 고르기: [ ] (패드 LT / RT) = 정보 칸 탭 (소개 · 성능 · 커스텀)
+    if (view === 'car' && (k === 'BracketLeft' || k === 'BracketRight')) {
+      e.preventDefault();
+      const inTabs = act && act.closest && act.closest('.ct-tabs');
+      stepCarTab(k === 'BracketLeft' ? -1 : 1, !!inTabs);
+      return;
+    }
     if (dir) {
       e.preventDefault();
+      // 차 정보 탭 위: ←→ = 탭 바꾸기
+      if (view === 'car' && (dir === 'left' || dir === 'right') && act && act.classList && act.classList.contains('ct-tab')) {
+        stepCarTab(dir === 'left' ? -1 : 1, true);
+        return;
+      }
+      // 차 정보 칸 안(색·코스튬·바로 가기): ←→ = 칸 안에서 옆 버튼으로 (차는 그대로)
+      if (view === 'car' && (dir === 'left' || dir === 'right') && act && act.closest && act.closest('.ct-body')) {
+        if (spatialMove(carInfoEl.querySelector('.ct-body'), dir)) uiSound('move');
+        return;
+      }
       // 설정 줄: ←→ = 값 바꾸기
       if ((dir === 'left' || dir === 'right') && act && act.dataset && act.dataset.adjust) {
         setPanel.adjust(act.dataset.adjust, dir === 'left' ? -1 : 1);
@@ -1623,6 +1718,7 @@ export async function runHome() {
   });
 
   // 처음 화면
+  setCarTab(carTab, { save: false });
   setClassTab('all');
   selectCar(carId);
   selectMap(mapId);
@@ -1704,7 +1800,7 @@ export async function runHome() {
     const on = pad.connected();
     const h = $('.h-foot .padhint');
     h.hidden = !on;
-    if (on) h.innerHTML = `🎮 스틱/방향 버튼 고르기 · ${padKbd(0)} 확인 ${padKbd(1)} 뒤로 ${padKbd(4)}${padKbd(5)} 탭`;
+    if (on) h.innerHTML = `🎮 스틱/방향 버튼 고르기 · ${padKbd(0)} 확인 ${padKbd(1)} 뒤로 ${padKbd(4)}${padKbd(5)} 탭<span class="ct-foothint"> · ${padKbd(6)}${padKbd(7)} 정보 탭</span>`;
     home.querySelectorAll('.h-foot .gm-hint > span:not(.padhint)').forEach(el => { el.hidden = on; el.style.display = on ? 'none' : ''; });
     home.querySelectorAll('[data-view="map"] .bar kbd, [data-view="mode"] .bar kbd, .h-qe kbd').forEach(el => {
       const key = el.dataset.keyboardHint || el.textContent;

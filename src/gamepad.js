@@ -210,6 +210,8 @@ export function pollPad() {
       else if (i === 1 || i === MENU_BTN) sendKey('Escape');
       else if (i === 4) sendKey('PageUp');
       else if (i === 5) sendKey('PageDown');
+      else if (i === 6) sendKey('BracketLeft'); // LT / RT = 차 고르기 정보 탭 (cartabs 2026-11-15)
+      else if (i === 7) sendKey('BracketRight');
     }
     return;
   }
