@@ -1,4 +1,4 @@
-// 챔피언십 (시즌): 같은 봇들과 1~9경기(맵·순서는 홈에서 고름)를 달려 F1식 점수로 우승자를 정함
+// 챔피언십 (시즌): 같은 봇들과 5경기(맵 순서는 고를 수 있음)를 달려 F1식 점수로 우승자를 정함
 //
 //   홈 화면(ui)이 부르는 것
 //     getChamp()        진행 중인 시즌 상태 (없거나 끝났으면 null)
@@ -58,9 +58,7 @@ export function lastChamp() {
  */
 export function startChamp(o = {}) {
   const set = readSettings();
-  // 새 시즌만 정리: 예전 v1 저장은 그대로 읽어 이어 할 수 있어요.
-  const selected = Array.isArray(o.maps) ? [...new Set(o.maps.filter((id) => CHAMP_MAPS.includes(id)))].slice(0, 9) : [];
-  const maps = selected.length ? selected : [...CHAMP_MAPS];
+  const maps = (Array.isArray(o.maps) && o.maps.length ? o.maps : CHAMP_MAPS).slice(0, CHAMP_MAPS.length);
   const carId = o.carId || CLASS_CAR[o.classId] || 'f1';
   const bots = Math.max(1, Math.min(7, (o.bots ?? set.bots ?? 5) | 0 || 5));
   const s = {

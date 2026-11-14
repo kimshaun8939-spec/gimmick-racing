@@ -11,6 +11,58 @@
 //   - 서버 = Supabase (설정 .debug/supabase_setup.sql, 주소·열쇠 src/onlineConfig.js). 비어 있으면 enabled = false
 //   테스트: window.__onlineFake = (fn, body) => 결과 로 서버 대신 가짜 응답을 쓸 수 있음
 import { ONLINE_URL, ONLINE_KEY } from './onlineConfig.js';
+import { packVerified, unpackGhost } from './ghostPack.js';
+
+// 무료 한도 아끼기 (2026-11-14):
+//   - 고스트는 올리기 전에 줄임 (ghostPack.js v 3, 약 110 KB → 12~15 KB). 받을 때 v 3이면 풀고, 예전 v 2는 그대로 읽음
+//     주소에 &ghostzip=0 이면 예전처럼 줄이지 않고 올림
+//   - 순위표 응답은 90초 동안 기억 (메모리 + sessionStorage 'gimmick.olCache') → 메뉴를 오가도 다시 안 받음
+//     내 기록을 올리거나 로그인·이름 바꾸기를 하면 지움 (새 순위가 바로 보이게). &olcache=0 이면 기억 안 함
+const qflag = (k) => {
+  try {
+    return new URLSearchParams(location.search).get(k);
+  } catch {
+    return null;
+  }
+};
+const BOARD_TTL = 90e3;
+const CACHE_KEY = 'gimmick.olCache';
+const boardMem = new Map(); // key → { at, rows }
+const boardFlight = new Map(); // key → Promise (같은 순위표를 동시에 두 번 받지 않게)
+const cacheOff = () => qflag('olcache') === '0';
+function cacheRead(key) {
+  if (cacheOff()) return null;
+  const now = Date.now();
+  let e = boardMem.get(key);
+  if (!e) {
+    try {
+      const all = JSON.parse(sessionStorage.getItem(CACHE_KEY) || '{}');
+      e = all[key];
+      if (e) boardMem.set(key, e);
+    } catch {}
+  }
+  return e && now - e.at < BOARD_TTL && now >= e.at ? e.rows : null;
+}
+function cacheWrite(key, rows) {
+  if (cacheOff()) return;
+  const e = { at: Date.now(), rows };
+  boardMem.set(key, e);
+  try {
+    const all = JSON.parse(sessionStorage.getItem(CACHE_KEY) || '{}');
+    all[key] = e;
+    for (const k of Object.keys(all)) if (e.at - all[k].at > BOARD_TTL) delete all[k];
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(all));
+  } catch {}
+}
+/** 순위표 기억 지우기 (내 기록을 올린 뒤 등) */
+export function clearBoardCache() {
+  boardMem.clear();
+  boardFlight.clear();
+  try {
+    sessionStorage.removeItem(CACHE_KEY);
+    sessionStorage.removeItem('gimmick.olStatusAt');
+  } catch {}
+}
 
 const ID_KEY = 'gimmick.online';
 const DEVICE_KEY = 'gimmick.device'; // 이 브라우저 id (경험치를 기기마다 따로 올림)
@@ -107,6 +159,7 @@ async function ensure() {
         if (await rpc('gr_rename', { p_id: me.id, p_secret: me.secret, p_nick: n })) {
           me = { ...me, nick: n };
           writeId(me);
+          clearBoardCache();
         }
       } catch {}
     }
@@ -145,6 +198,7 @@ export async function setLicense(level) {
 
 export const online = {
   setLicense,
+  clearBoardCache,
   get enabled() {
     return !!fake() || !!(ONLINE_URL && ONLINE_KEY);
   },
@@ -179,6 +233,7 @@ export const online = {
       throw Object.assign(new Error(msg), { reason });
     }
     writeId({ id: r.id, secret, nick: r.nick, claimed: true });
+    clearBoardCache(); // 합친 기록·이름이 순위표에 바로 보이게
     try {
       localStorage.setItem(NICK_KEY, r.nick);
     } catch {}
@@ -213,13 +268,23 @@ export const online = {
     if (!m || !this.enabled) return true;
     if (m.nick === nick) return true;
     const ok = await rpc('gr_rename', { p_id: m.id, p_secret: m.secret, p_nick: nick });
-    if (ok) writeId({ ...m, nick });
+    if (ok) {
+      writeId({ ...m, nick });
+      clearBoardCache();
+    }
     return !!ok;
   },
   /** 서버에서 내 계정 상태 다시 확인 (다른 기기에서 합쳐져 없어졌으면 지움) → me() */
   async refresh() {
     const m = readId();
     if (!m || !this.enabled) return this.me();
+    // 기록 화면을 열 때마다 묻지 않게: 같은 계정은 90초에 한 번만 (&olcache=0 이면 매번)
+    const SK = 'gimmick.olStatusAt';
+    try {
+      const last = JSON.parse(sessionStorage.getItem(SK) || 'null');
+      if (!cacheOff() && last && last.id === m.id && Date.now() - last.at < BOARD_TTL && Date.now() >= last.at) return this.me();
+      sessionStorage.setItem(SK, JSON.stringify({ id: m.id, at: Date.now() }));
+    } catch {}
     try {
       const r = await rpc('gr_status', { p_id: m.id, p_secret: m.secret });
       if (!r) writeId(null);
@@ -235,12 +300,22 @@ export const online = {
     if (!this.enabled) return null;
     const me = await ensure();
     if (!me) return { needLogin: true, needNick: true };
+    // 고스트 줄이기 (v 3). 실패하면 예전 모양 그대로 올림
+    let ghostTxt = run.ghost || null;
+    if (ghostTxt && qflag('ghostzip') !== '0') {
+      try {
+        ghostTxt = await packVerified(ghostTxt);
+      } catch (err) {
+        console.warn('고스트 줄이기 실패 · 그대로 올려요', err);
+        ghostTxt = run.ghost;
+      }
+    }
     let r;
     try {
       r = await rpc('gr_submit', {
         p_id: me.id, p_secret: me.secret, p_map: run.map, p_car: run.car,
         p_total: +run.total.toFixed(3), p_laps: run.laps.map((x) => +x.toFixed(3)),
-        p_best_lap: run.bestLap ? +run.bestLap.toFixed(3) : null, p_assist: !!run.assist, p_ghost: run.ghost || null,
+        p_best_lap: run.bestLap ? +run.bestLap.toFixed(3) : null, p_assist: !!run.assist, p_ghost: ghostTxt,
       });
     } catch (err) {
       // 다른 기기에서 이 계정이 합쳐져 없어졌으면: 이 기기는 다시 이름+비밀번호로
@@ -249,13 +324,41 @@ export const online = {
         return { needLogin: true };
       }
       throw err;
+    } finally {
+      clearBoardCache(); // 새 순위가 홈에서 바로 보이게
     }
     return r;
   },
   /** 순위표: 맵 전체(사람마다 가장 빠른 기록 하나) 또는 car를 주면 그 차만. 빠른 순서 */
   async board(map, car = null, limit = 50) {
     if (!this.enabled) return [];
-    const fields = 'player_id,nickname,car,total,laps,best_lap,assist,updated_at';
+    // 기억해 둔 순위표 (같은 맵·차, 더 긴 목록을 받아 둔 것도 앞부분만 잘라 씀)
+    const key = (fake() ? 'fake|' : '') + map + '|' + (car || '');
+    const kL = key + '|' + limit;
+    for (const L of [limit, 50, 100]) {
+      if (L < limit) continue;
+      const rows = cacheRead(key + '|' + L);
+      if (rows) return rows.slice(0, limit);
+    }
+    // 같은 순위표(또는 더 긴 목록)를 이미 받는 중이면 그것을 기다림 (홈이 1~3등과 50등을 동시에 부를 때)
+    for (const L of [limit, 50, 100]) {
+      if (L < limit || !boardFlight.has(key + '|' + L)) continue;
+      return (await boardFlight.get(key + '|' + L)).slice(0, limit);
+    }
+    const p = this._board(map, car, limit).then((rows) => {
+      cacheWrite(kL, rows);
+      return rows;
+    });
+    boardFlight.set(kL, p);
+    try {
+      return await p;
+    } finally {
+      if (boardFlight.get(kL) === p) boardFlight.delete(kL);
+    }
+  },
+  /** 순위표를 서버에서 받기 (기억 안 함). 고스트·바퀴별 기록은 안 받음 (화면에 쓰는 칸만) */
+  async _board(map, car, limit) {
+    const fields = 'player_id,nickname,car,total,best_lap,assist';
     const filters = '&map=eq.' + encodeURIComponent(map) +
       (car ? '&car=eq.' + encodeURIComponent(car) : '') + '&order=total.asc&limit=' + limit;
     const table = car ? 'records_with_license' : 'leaderboard';
@@ -272,11 +375,15 @@ export const online = {
     if (rows === undefined) rows = await select(car ? 'records' : 'leaderboard', 'select=' + fields + filters);
     return (rows || []).map((row) => ({ ...row, license: validLicense(row.license) }));
   },
-  /** 다른 사람(또는 나)의 고스트 JSON 문자열 (없으면 null) */
+  /** 다른 사람(또는 나)의 고스트 (예전 v 2 JSON 문자열 또는 v 3을 푼 v 2 객체, 없으면 null). 👻 같이 달리기를 누를 때만 받음 */
   async ghost(map, car, playerId) {
     if (!this.enabled) return null;
-    const rows = await select('ghosts', `select=data,total&map=eq.${encodeURIComponent(map)}&car=eq.${encodeURIComponent(car)}&player_id=eq.${encodeURIComponent(playerId)}&limit=1`);
-    return rows && rows[0] ? rows[0].data : null;
+    const rows = await select('ghosts', `select=data&map=eq.${encodeURIComponent(map)}&car=eq.${encodeURIComponent(car)}&player_id=eq.${encodeURIComponent(playerId)}&limit=1`);
+    if (!rows || !rows[0] || !rows[0].data) return null;
+    // v 3(줄인 고스트)은 풀어서 ghost.js가 읽는 v 2 객체로, 예전 v 2 문자열은 그대로
+    const raw = rows[0].data;
+    if (typeof raw !== 'string' || !/"v"\s*:\s*3[,}]/.test(raw.slice(0, 40))) return raw;
+    return unpackGhost(raw);
   },
   /** 내 코드 (다른 기기에서 이어 하기). 아직 등록 전이면 null */
   myCode() {
@@ -290,6 +397,7 @@ export const online = {
     const nick = await rpc('gr_whoami', { p_id: m[1], p_secret: m[2] });
     if (!nick) throw new Error('맞는 코드가 아니에요');
     writeId({ id: m[1], secret: m[2], nick, claimed: false });
+    clearBoardCache();
     this.refresh();
     try {
       localStorage.setItem(NICK_KEY, nick);
