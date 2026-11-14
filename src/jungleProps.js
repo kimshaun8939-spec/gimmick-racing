@@ -2,11 +2,14 @@
 //   main.js가 props.update(dt, car) (물리 스텝마다), props.reset(), props.animate(time)을 부름
 import * as THREE from 'three';
 import { seededRandom } from './jungleUtil.js';
+import { createJungleHazards } from './jungleHazards.js';
 
 export function buildJungleProps(track, scene) {
   const group = new THREE.Group();
   group.userData.world = 'cloud'; // 지하 세계에서는 숨김 (jungleWorld.js)
   scene.add(group);
+  // 2026-11-15 jungle2: 지하 세계 용암 위험 (난간 없는 용암 길 + 시계로 잠기는 용암 둑길). 지하 세계에서만 보임
+  const lavaHz = createJungleHazards(track, scene);
   const rnd = seededRandom(77);
   const R = (a, b) => a + rnd() * (b - a);
 
@@ -94,8 +97,10 @@ export function buildJungleProps(track, scene) {
 
   return {
     group,
+    lavaHz,
     update(dt, car) {
       lastCar = car;
+      if (lavaHz) lavaHz.update(dt, car);
       // 차가 가까이 지나가면 떠 있는 돌이 살짝 위로 밀려남
       if (!car) return;
       for (const r of rocks) {
@@ -105,8 +110,10 @@ export function buildJungleProps(track, scene) {
     },
     reset() {
       for (const r of rocks) r.lift = 0;
+      if (lavaHz) lavaHz.reset();
     },
     animate(time) {
+      if (lavaHz) lavaHz.animate(time);
       for (const r of rocks) {
         r.lift *= 0.985;
         r.m.position.y = r.base + Math.sin(time * r.sp + r.ph) * 0.8 + r.lift;

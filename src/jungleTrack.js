@@ -8,11 +8,13 @@
 //   - 낭떠러지 쪽에는 가드레일(보이지 않는 충돌 벽 + 난간)이 자동으로 생김
 // buildTrack()과 같은 모양의 객체를 돌려줘서 차, HUD, main.js, gpCorners.js가 그대로 씁니다.
 import * as THREE from 'three';
-import { canvasTexture, roadTexture, curbTexture, checkerTexture, plankTexture, stoneTexture, makeNoise, underTrackMaterials } from './jungleUtil.js';
+import { canvasTexture, roadTexture, curbTexture, checkerTexture, plankTexture, stoneTexture, makeNoise, underTrackMaterials, causewayTexture } from './jungleUtil.js';
 import { computeRacingLine, edgeFraction } from './racingLine.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
+// 가장자리 종류 (화산 volcanoTrack.js와 같은 번호): bots.js가 낭떠러지(cliff) 쪽에서는 액셀만 떼지 않고 브레이크를 밟음
+export const EDGE = { open: 0, cliff: 1, wall: 2, rail: 3, lava: 4 };
 const SAMPLE_STEP = 1.87; // 중심선 샘플 간격 (m). 샘플 수는 코스 길이에 맞춰 정함 (예전 3 km 코스 = 1600개)
 const CELL = 5; // 지형 격자 한 칸 (m)
 const CHUNK = 24; // 지형 메시 한 덩어리 = 24×24칸 (그리기 횟수와 충돌 계산 속도의 균형)
@@ -248,12 +250,75 @@ export function buildJungleTrack(data, scene) {
   const sideI = (side) => (side < 0 ? 0 : 1);
   const kerbAt = (i, side) => kerbW[sideI(side)][wrapI(i)];
   const lineSamples = samples.slice(0, SAMPLES);
+
+  // ---------------------------------------------------------------- 우주 위험 구간 (2026-11-15 space2, data.spaceHazards · 생성기 .debug/space_gen.js)
+  //   openEdge: 난간 없는 쪽 (연석 밖은 허공 → 떨어지면 gpSpaceHazards.js가 복귀). 우주 샘플에서만. &space2=0 이면 예전처럼 난간
+  //   pullA: 블랙홀 중력 옆 가속 (m/s², + = 도로 오른쪽 = dimension.blackHole 의 도로 옆 성분), 앞뒤 ramp m에 걸쳐 서서히
+  //   lineMarg: 레이싱 라인이 난간 없는 가장자리에서 더 떨어지는 거리 (m). 블랙홀이 당기는 쪽은 pullMargin, 15 m에 걸쳐 부드럽게
+  const QS = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+  // 정글 jungle2: data.lavaEdges = 지하 세계 난간 없는 용암 가장자리 (형식은 gp spaceHazards와 같음). &jlava=0 이면 예전 난간
+  const HZ = dim && data.lavaEdges && !(QS && QS.get('jlava') === '0') ? data.lavaEdges : null;
+  const openEdge = [new Uint8Array(SAMPLES), new Uint8Array(SAMPLES)]; // [왼쪽, 오른쪽]
+  const joinEdge = [new Uint8Array(SAMPLES), new Uint8Array(SAMPLES)]; // 정글: 용암 둑길이 붙는 곳
+  const isJoin = (i, side) => joinEdge[sideI(side)][wrapI(i)] === 1;
+  const pullA = new Float32Array(SAMPLES);
+  const openRuns = [], pullRuns = [];
+  const isOpen = (i, side) => openEdge[sideI(side)][wrapI(i)] === 1;
+  const lineMarg = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
+  if (HZ) {
+    for (const [t0, t1, sd] of HZ.open || []) {
+      const [a, b] = rangeI(t0, t1);
+      for (let i = a; i <= b; i++) {
+        const q = wrapI(i);
+        if (!samples[q].space) continue;
+        if (sd <= 0) openEdge[0][q] = 1;
+        if (sd >= 0) openEdge[1][q] = 1;
+      }
+      openRuns.push({ a, b, side: sd || 0 });
+    }
+    // 둑길이 붙는 쪽 (난간·빛 커튼 없이 둑길 면으로 이어짐)
+    for (const [t0, t1, sd] of HZ.join || []) {
+      const [a, b] = rangeI(t0, t1);
+      for (let i = a; i <= b; i++) {
+        const q = wrapI(i);
+        if (sd <= 0) joinEdge[0][q] = 1;
+        if (sd >= 0) joinEdge[1][q] = 1;
+      }
+    }
+    const bhv = new THREE.Vector3(...(dim.blackHole || [0, 0, -1])).setY(0).normalize();
+    const rampN = Math.max(2, Math.round(((HZ.ramp ?? 45) / length) * SAMPLES));
+    for (const z of HZ.pull || []) {
+      const [a, b] = rangeI(z.t0, z.t1);
+      let sum = 0;
+      for (let i = a; i <= b; i++) {
+        const s = S(i);
+        if (!s.space) continue;
+        const comp = bhv.x * s.right.x + bhv.z * s.right.z;
+        pullA[wrapI(i)] = (z.accel || 0) * comp * smooth(0, rampN, i - a) * smooth(0, rampN, b - i);
+        sum += comp;
+      }
+      pullRuns.push({ a, b, sign: Math.sign(sum) || 1, name: z.name || '' });
+    }
+    const raw = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
+    for (let i = 0; i < SAMPLES; i++)
+      for (const side of [-1, 1]) {
+        if (!isOpen(i, side)) continue;
+        raw[sideI(side)][i] = pullA[i] && Math.sign(pullA[i]) === side ? HZ.pullMargin ?? 2 : HZ.lineMargin ?? 0.6;
+      }
+    const R = Math.max(2, Math.round((15 / length) * SAMPLES));
+    for (let n = 0; n < 2; n++)
+      for (let i = 0; i < SAMPLES; i++) {
+        let m = 0;
+        for (let k = -R; k <= R; k++) m = Math.max(m, raw[n][wrapI(i + k)] * (1 - Math.abs(k) / (R + 1)));
+        lineMarg[n][i] = m;
+      }
+  }
   // lineUse 0 → 1: 코너 근처에서만 라인이 흰 선 안쪽에서 연석 위까지 나갈 수 있음
   //   땅에서는 넓힌 연석(2.8 m) 위까지, 다리 위에서는 원래 연석(1.6 m) 위까지
   const lineUse = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
   const lineLimit = (i, side) => {
     const u = lineUse[sideI(side)][wrapI(i)];
-    return HW - LINE_PLAIN + u * Math.max(0, kerbAt(i, side) - LINE_MARGIN + LINE_PLAIN);
+    return HW - LINE_PLAIN + u * Math.max(0, kerbAt(i, side) - LINE_MARGIN + LINE_PLAIN) - lineMarg[sideI(side)][wrapI(i)];
   };
   let racingLine = null;
   const onShortcutSide = (i, side) => {
@@ -271,6 +336,7 @@ export function buildJungleTrack(data, scene) {
     for (let i = i0; i <= i1; i++) {
       const q = wrapI(i);
       if (onShortcutSide(q, side)) continue;
+      if (isOpen(q, side)) continue; // space2: 난간 없는 우주 가장자리는 연석을 안 밟음 (화산 낭떠러지처럼)
       // 2026-11-09 코너 다듬기: 활주로·착륙장이 붙는 쪽(noRail)은 라인이 연석 위로 나가지 않음
       // (활주로 입구 왼쪽 코너에서 라인이 연석 끝까지 붙어 조금만 밀려도 활주로 턱·소품에 부딪혔음)
       if ((data.noRail || []).some(([t0, t1, sd]) => sd === side && inRangeT(samples[q].t, t0, t1))) continue;
@@ -333,13 +399,27 @@ export function buildJungleTrack(data, scene) {
     const cm = sp ? SPM.curb : curbBridgeMat, dm = sp ? SPM.deck : br.kind === 'rope' ? plankMat : deckMat;
     strip(L, [[-HW - CURB, 0.02], [-HW, 0.02]], cm, { vScale: 4, surface: 'ground' });
     strip(L, [[HW, 0.02], [HW + CURB, 0.02]], cm, { vScale: 4, surface: 'ground' });
-    strip(L, [[-DECK, 0.01], [-HW - CURB, 0.01]], dm, { vScale: 6, surface: 'ground' });
-    strip(L, [[HW + CURB, 0.01], [DECK, 0.01]], dm, { vScale: 6, surface: 'ground' });
+    // space2: 난간 없는 우주 가장자리에는 갓길 상판이 없음 (연석 바로 밖이 허공)
+    const hasDeck = (side) => (s) => !(sp && isOpen(s.i, side));
+    for (const [c, d] of runsIn(L, hasDeck(-1))) strip(L.slice(c, d + 1), [[-DECK, 0.01], [-HW - CURB, 0.01]], dm, { vScale: 6, surface: 'ground' });
+    for (const [c, d] of runsIn(L, hasDeck(1))) strip(L.slice(c, d + 1), [[HW + CURB, 0.01], [DECK, 0.01]], dm, { vScale: 6, surface: 'ground' });
     const th = br.kind === 'viaduct' ? 2.4 : br.kind === 'trestle' || br.kind === 'rope' ? 1.2 : 1.6;
-    strip(L, [[-DECK - 0.3, 0.25], [-DECK - 0.3, -th], [DECK + 0.3, -th], [DECK + 0.3, 0.25]], deckSideMats[br.kind], { vScale: 8, uScale: 4, shadow: !sp });
+    const sLat = (s, side) => (sp && isOpen(s.i, side) ? HW + CURB + 0.02 : DECK + 0.3);
+    const sTop = (s, side) => (sp && isOpen(s.i, side) ? 0 : 0.25);
+    strip(L, (s) => [[-sLat(s, -1), sTop(s, -1)], [-sLat(s, -1), -th], [sLat(s, 1), -th], [sLat(s, 1), sTop(s, 1)]], deckSideMats[br.kind], { vScale: 8, uScale: 4, shadow: !sp });
     // 우주 유리 다리 밑의 빛 띠
     if (sp) strip(L, [[DECK * 0.7, -th - 0.05], [-DECK * 0.7, -th - 0.05]], SPM.under, { vScale: 10 });
   }
+
+  // space2: 난간 없는 가장자리 = 빛나는 가장자리 선 + 아래로 늘어지는 빛 커튼 (허공이 어디서 시작하는지 잘 보이게)
+  if (HZ)
+    for (const side of [-1, 1])
+      for (const [a, b] of runsOf((i) => isOpen(i, side) && !isJoin(i, side))) {
+        const L = spanList(a, b), e = HW + CURB;
+        // 연석 위 덮개 (u 0 = 바깥 끝 = 굵은 빛 선) + 가장자리 밑 빛 커튼 14 m
+        strip(L, [[side * (e + 0.05), 0.045], [side * (e - CURB), 0.045]], SPM.edge, { vScale: 6, chunk: 600 });
+        strip(L, [[side * (e + 0.06), 0.03], [side * (e + 0.06), -(HZ.lavaDrop ?? 1.2) - 0.1]], SPM.curtain, { vScale: 40, chunk: 600 }); // chunk: 구간 하나 = 메시 하나 (그리기 호출 줄이기)
+      }
 
   // ---------------------------------------------------------------- 섬 지형
   // 땅 샘플 해시 (가까운 도로 찾기용)
@@ -636,6 +716,68 @@ export function buildJungleTrack(data, scene) {
     altPaths.push(plank);
     flatZones.push({ samples: L, half: sc.width / 2, raise: true }); // raise: 옆 땅을 판자 높이까지 올림 (턱 없애기)
   }
+  // 용암 둑길 (2026-11-15 jungle2, data.lavaCut · 생성기 .debug/jungle_gen.py): 용암 호수 U자 안쪽을 가로지르는 낮은 지름길.
+  //   w 0 = 본 도로 면과 같은 높이·기울기(뱅크까지 맞춤 → 턱 없음), 1 = low 높이. 용암 높이·복귀는 src/jungleHazards.js
+  //   altPaths에 넣음 → 둑길 위에서는 잔디 감속 없음, 바퀴 수 판정·봇 '코스 밖' 판정이 잠시 멈춤 (판자 지름길과 같음)
+  let lavaCut = null;
+  if (HZ && data.lavaCut && data.lavaCut.path && data.lavaCut.path.length > 4) {
+    const lc = data.lavaCut;
+    const under = samples.slice(0, SAMPLES).filter((s) => s.space);
+    const nearUnder = (x, z) => {
+      let bd = Infinity, bs = null;
+      for (const s of under) {
+        const d = (s.pos.x - x) ** 2 + (s.pos.z - z) ** 2;
+        if (d < bd) (bd = d), (bs = s);
+      }
+      return bs;
+    };
+    const L = lc.path.map(([x, z, w]) => ({ pos: new THREE.Vector3(x, 0, z), w, space: true, land: false }));
+    let dist = 0;
+    L.forEach((q, k) => {
+      const a = L[Math.max(0, k - 1)].pos, b = L[Math.min(L.length - 1, k + 1)].pos;
+      q.tan = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+      q.right = new THREE.Vector3().crossVectors(q.tan, UP).normalize();
+      if (k) dist += Math.hypot(q.pos.x - L[k - 1].pos.x, q.pos.z - L[k - 1].pos.z);
+      q.dist = dist;
+      const ns = nearUnder(q.pos.x, q.pos.z);
+      const lat = (q.pos.x - ns.pos.x) * ns.right.x + (q.pos.z - ns.pos.z) * ns.right.z;
+      q.near = ns;
+      q.mainLat = lat;
+      q.pos.y = THREE.MathUtils.lerp(roadYAt(ns, lat), lc.low, q.w);
+      q.bank = ns.bank * Math.sign(q.right.x * ns.right.x + q.right.z * ns.right.z || 1) * (1 - q.w);
+    });
+    L.forEach((q, k) => {
+      const a = L[Math.max(0, k - 1)].pos, b = L[Math.min(L.length - 1, k + 1)].pos;
+      q.tan3 = b.clone().sub(a).normalize();
+      q.rightB = q.right.clone().multiplyScalar(Math.cos(q.bank)).addScaledVector(UP, Math.sin(q.bank));
+      q.up = new THREE.Vector3().crossVectors(q.rightB, q.tan3).normalize();
+      q.i = k;
+    });
+    const H = lc.half;
+    const cutMat = new THREE.MeshStandardMaterial({ map: causewayTexture(), emissive: '#ffffff', emissiveMap: causewayTexture(true), emissiveIntensity: 0.55, roughness: 0.8 });
+    cutMat.polygonOffset = true; // 본 도로와 겹치는 갈림길에서 둑길 무늬가 위에 보이게
+    cutMat.polygonOffsetFactor = -1;
+    cutMat.polygonOffsetUnits = -2;
+    // 윗면: 본 도로와 겹치는 부분은 그리지 않음 (같은 높이·기울기라 차는 본 도로를 밟음, 겹쳐 그리면 길이 둘로 갈려 보였음).
+    //   단면을 오른쪽(용암 쪽) → 왼쪽 순서로 놓아 u 0 = 바깥 경고 띠. 순서가 뒤집혀 아래를 보는 면이라 양면 재질
+    cutMat.side = THREE.DoubleSide;
+    //   (둑길은 늘 본 도로 오른쪽에서 같은 방향으로 붙음: 본 도로 옆 위치 = mainLat + 둑길 옆 위치)
+    const leftCut = (q) => THREE.MathUtils.clamp(HW + CURB - 0.05 - Math.abs(q.mainLat), -H, H - 0.02);
+    strip(L, (q) => [[H, 0.02], [q.w > 0.02 ? -H : Math.max(-H, leftCut(q)), 0.02]], cutMat, { vScale: 10, uScale: 2 * H, surface: 'ground' });
+    // 옆면 (현무암, 4 m 아래까지): 본 도로와 붙은 곳은 안 보이니 낮은 곳만
+    const sideMat = new THREE.MeshStandardMaterial({ color: '#2a1d18', emissive: '#ff4a10', emissiveIntensity: 0.1, roughness: 0.95, side: THREE.DoubleSide });
+    const low = L.filter((q) => q.w > 0.02);
+    if (low.length > 2) {
+      strip(low, [[-H - 0.5, -4], [-H, 0.01]], sideMat, { vScale: 8, uScale: 4 });
+      strip(low, [[H, 0.01], [H + 0.5, -4]], sideMat, { vScale: 8, uScale: 4 });
+    }
+    const alt = { samples: L.filter((q) => Math.abs(q.mainLat) > HW + CURB + 0.5), half: H, cut: true };
+    altPaths.push(alt);
+    lavaCut = {
+      samples: L, half: H, low: lc.low, cfg: lc, alt, length: dist,
+      tBranch: L[0].near.t, tMerge: L[L.length - 1].near.t,
+    };
+  }
 
   // ---------------------------------------------------------------- 지형 메시 (격자 + 마칭 스퀘어: 섬 가장자리가 매끈하게)
   const bb = new THREE.Box2(new THREE.Vector2(Infinity, Infinity), new THREE.Vector2(-Infinity, -Infinity));
@@ -874,6 +1016,7 @@ export function buildJungleTrack(data, scene) {
     for (let i = 0; i < SAMPLES; i++) {
       const s = samples[i];
       if (noRail.some(([t0, t1, sd]) => sd === side && inRangeT(s.t, t0, t1))) continue;
+      if (isOpen(i, side)) continue; // space2: 난간 없는 우주 가장자리
       if (s.bridge) need[i] = 1;
       else {
         let edge = false;
@@ -909,6 +1052,7 @@ export function buildJungleTrack(data, scene) {
     }
     fill(0, 14);
     fill(1, 8);
+    for (let i = 0; i < SAMPLES; i++) if (isOpen(i, side)) need[i] = 0;
     return need;
   });
   // 레일 위치 (중심선에서 m): 다리 위 = 상판 끝, 땅 = 연석 바깥. 다리 가까운 땅은 두 위치를 부드럽게 이음
@@ -1109,13 +1253,17 @@ export function buildJungleTrack(data, scene) {
   function edgeInfo(pos, near = nearest(pos)) {
     if (onAltPath(pos)) return { kerb: 0, off: 0, runoff: false };
     const k = kerbAt(near.index, near.lateral < 0 ? -1 : 1);
-    return { ...edgeFraction(near.dist, HW, HW + k), runoff: !!near.sample.bridge || (!!near.sample.apron && near.dist < HW + k + APRON) };
+    return { ...edgeFraction(near.dist, HW, HW + k), runoff: (!!near.sample.bridge && !isOpen(near.index, near.lateral < 0 ? -1 : 1)) || (!!near.sample.apron && near.dist < HW + k + APRON) };
   }
   /** (x, z)가 돌 포장 갓길 위인지 (풍경이 풀·바위를 안 놓게) */
   function apronAt(x, z) {
     const near = nearest(new THREE.Vector3(x, 0, z));
     return !!near.sample.apron && near.dist < HW + kerbAt(near.index, near.lateral < 0 ? -1 : 1) + APRON + 1.5;
   }
+  /** 가장자리 종류 (bots.js: 낭떠러지·용암이면 조심). 정글 jungle2: 난간 없는 지하 세계 = lava */
+  const edgeAt = (i, side) => (isOpen(i, side) ? EDGE.lava : railSide[sideI(side)][wrapI(i)] ? EDGE.rail : EDGE.open); // 정글: 난간 없는 쪽 = 용암
+  /** 우주 도로에서 밟을 수 있는 끝 (중심선에서 m): 난간 없는 쪽 = 연석 끝, 다리 = 상판 끝 */
+  const spaceEdgeLat = (i, side) => (isOpen(i, side) ? HW + CURB : samples[wrapI(i)].bridge ? DECK : HW + kerbAt(i, side));
 
   const outline = samples.filter((_, i) => i % 6 === 0 && i < SAMPLES).map((s) => [s.pos.x, s.pos.z]);
   // 미니맵 조각: 정글 구간(흰 선) / 지하 세계 구간(주황 점선). hud가 지원하면 outline 대신 이걸로 그림
@@ -1126,6 +1274,7 @@ export function buildJungleTrack(data, scene) {
 
   function animate(time) {
     SPM.road.emissiveIntensity = 0.75 + 0.25 * Math.sin(time * 2.1); // 용암 틈이 숨 쉬듯 빛남
+    if (SPM.edge && SPM.edge.map) SPM.edge.map.offset.y = -time * 0.9; // 우주 가장자리 선이 앞으로 흐름
   }
 
   // placeAt이 어느 지점을 골랐는지 기억 (castRay 참고)
@@ -1156,5 +1305,7 @@ export function buildJungleTrack(data, scene) {
     grandprix: true, jungle: true, gravityAt, gravZones, apronAt, minimapParts, marks: data.marks || {}, surf, roadYAt, heightAt, fieldAt, islands, loops, bridgeRuns, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
     runway, apron, plank, rings, skyPath, inSkyCorridor, onAltPath, altPaths, indexAt, S, spanList, noise,
     dimension, setWorld, get inSpace() { return curWorld; }, buildMs, sampleCount: SAMPLES,
+    // space2 우주 위험 (gpSpaceHazards.js)
+    EDGE, edgeAt, spaceEdgeLat, isOpen, isJoin, openEdge, pullA, openRuns, pullRuns, spaceHazards: null, lavaEdges: HZ ? { cfg: HZ } : null, lavaCut,
   };
 }

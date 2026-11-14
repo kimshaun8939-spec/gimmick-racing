@@ -224,6 +224,19 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
     }
     return false;
   }
+  // 2026-11-15 jungle2: 용암 둑길·호수(track.lavaCut) 근처에는 첨탑·간헐천 받침·떠 있는 바위를 놓지 않음
+  const cutPts = track.lavaCut ? track.lavaCut.samples.filter((_, k) => k % 3 === 0).map((q) => q.pos) : [];
+  const basinPoly = track.lavaCut ? track.lavaCut.cfg.basin : null;
+  function inBasin(x, z) {
+    if (!basinPoly) return false;
+    let c = false;
+    for (let i = 0, j = basinPoly.length - 1; i < basinPoly.length; j = i++) {
+      const [xi, zi] = basinPoly[i], [xj, zj] = basinPoly[j];
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+    }
+    return c;
+  }
+  const nearCut = (x, z, r) => inBasin(x, z) || cutPts.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < r * r);
   const box = new THREE.Box3();
   for (const s of list) box.expandByPoint(s.pos);
   const center = box.getCenter(new THREE.Vector3());
@@ -479,7 +492,7 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
   }
   const fountains = [];
   for (const c of turnCenters) {
-    if (nearRoadXZ(c.x, c.z, HW + 14)) continue;
+    if (nearRoadXZ(c.x, c.z, HW + 14) || cutPts.some((p) => (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < 24 * 24)) continue;
     spire(c.x, c.z, R(70, 95), R(9, 13));
     fountains.push(c);
   }
@@ -488,7 +501,7 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
     const s = atDist(R(TUN, len - TUN));
     const side = rnd() < 0.5 ? -1 : 1;
     const p = track.surf(s, side * R(DECK + 25, DECK + 140), 0, new THREE.Vector3());
-    if (nearRoadXZ(p.x, p.z, DECK + 18)) continue;
+    if (nearRoadXZ(p.x, p.z, DECK + 18) || nearCut(p.x, p.z, 34)) continue;
     spire(p.x, p.z, R(25, 70), R(4, 9));
   }
   // 떠 있는 현무암 덩어리 (빛나는 금 + 천천히 둥실)
@@ -500,7 +513,7 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
       const s = atDist(R(TUN, len - TUN));
       const side = rnd() < 0.5 ? -1 : 1;
       const p = track.surf(s, side * R(DECK + 14, DECK + 120), R(10, 60), new THREE.Vector3());
-      if (nearRoad(p.x, p.y, p.z, 26)) continue;
+      if (nearRoad(p.x, p.y, p.z, 26) || nearCut(p.x, p.z, 20)) continue;
       items.push({ p, s: R(2, 7), ph: R(0, 6), rot: new THREE.Euler(R(0, 6), R(0, 6), R(0, 6)) });
     }
     const im = new THREE.InstancedMesh(geo, mat, items.length);
@@ -581,6 +594,7 @@ export function buildUnderworld(track, scene, { jungleObjects = [], jungleEnv = 
       const s = atDist(m);
       const side = k % 2 ? 1 : -1;
       const base = track.surf(s, side * (DECK + 8), 0, new THREE.Vector3());
+      if (nearCut(base.x, base.z, 12)) continue; // 용암 둑길·호수 자리
       base.y = LAVA_Y;
       // 받침 바위
       const rock = new THREE.Mesh(new THREE.CylinderGeometry(3, 5, s.pos.y - LAVA_Y + 1, 7), obsMat);

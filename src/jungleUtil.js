@@ -236,6 +236,81 @@ export function underTrackMaterials() {
     rail: new THREE.MeshStandardMaterial({ color: '#3a302c', emissive: '#ff9a3a', emissiveIntensity: 0.25, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide }),
     rail2: new THREE.MeshStandardMaterial({ color: '#ffb070', emissive: '#ff5a10', emissiveIntensity: 1.5, roughness: 0.4, side: THREE.DoubleSide }),
     post: new THREE.MeshStandardMaterial({ color: '#2a2220', emissive: '#ff5a10', emissiveIntensity: 0.25, roughness: 0.6, metalness: 0.4 }),
+    // 2026-11-15 jungle2: 난간 없는 용암 가장자리 (jungleTrack.js openEdge). u 0 = 바깥 끝(용암 쪽) = 굵은 흰·노랑 선, 안쪽 = 주황·검정 사선
+    edge: new THREE.MeshBasicMaterial({ map: lavaEdgeTexture(), color: '#ffffff', transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, fog: false }),
+    curtain: new THREE.MeshBasicMaterial({ map: canvasTexture(128, 8, (g, w, h) => {
+      const grd = g.createLinearGradient(0, 0, w, 0);
+      grd.addColorStop(0, 'rgba(255,255,255,0.9)');
+      grd.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+      grd.addColorStop(1, 'rgba(255,255,255,0.15)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, w, h);
+    }), color: '#ff7a20', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }),
   };
   return _under;
+}
+
+/** 난간 없는 용암 가장자리 덮개 (연석 위): 바깥 끝 굵은 노랑·흰 선 + 주황·검정 사선 */
+function lavaEdgeTexture() {
+  return canvasTexture(64, 64, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for (let k = -2; k < 4; k++) {
+      g.fillStyle = k % 2 ? 'rgba(255,90,10,0.6)' : 'rgba(255,190,40,0.45)';
+      g.beginPath();
+      g.moveTo(w * 0.22, k * 32);
+      g.lineTo(w, k * 32 + 26);
+      g.lineTo(w, k * 32 + 42);
+      g.lineTo(w * 0.22, k * 32 + 16);
+      g.fill();
+    }
+    g.fillStyle = 'rgba(255,170,40,0.95)';
+    g.fillRect(0, 0, w * 0.22, h);
+    g.fillStyle = 'rgba(255,250,215,1)';
+    g.fillRect(0, 0, w * 0.12, h * 0.62);
+  });
+}
+
+const _cause = {};
+/** 용암 둑길 바닥 (식은 현무암 판석 + 판 사이 빛나는 틈 + 양쪽 노랑·검정 경고 띠). glow = 빛 지도 */
+export function causewayTexture(glow = false) {
+  const key = glow ? 'g' : 'm';
+  if (_cause[key]) return _cause[key];
+  const rnd = seededRandom(1115);
+  _cause[key] = canvasTexture(256, 256, (g, w, h) => {
+    g.fillStyle = glow ? '#000' : '#3b302b';
+    g.fillRect(0, 0, w, h);
+    // 판석 (가로 4줄 × 세로 3줄, 줄마다 어긋남)
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 5; c++) {
+        const x0 = 26 + c * 42 + (r % 2 ? 21 : 0) - 21, y0 = r * 86;
+        if (!glow) {
+          const v = 52 + rnd() * 26;
+          g.fillStyle = `rgb(${v + 10},${v},${v - 6})`;
+          g.fillRect(x0 + 2, y0 + 2, 38, 82);
+          for (let i = 0; i < 60; i++) {
+            const q = 40 + rnd() * 40;
+            g.fillStyle = `rgba(${q},${q - 4},${q - 8},0.5)`;
+            g.fillRect(x0 + 2 + rnd() * 36, y0 + 2 + rnd() * 80, 2, 2);
+          }
+        }
+        g.strokeStyle = glow ? 'rgba(255,110,25,0.75)' : 'rgba(255,100,20,0.6)';
+        g.lineWidth = 2.2;
+        g.strokeRect(x0 + 1, y0 + 1, 40, 84);
+      }
+    // 양쪽 경고 띠 (u 0~0.09, 0.91~1)
+    for (const x of [0, w * 0.91]) {
+      g.fillStyle = glow ? '#000' : '#111';
+      g.fillRect(x, 0, w * 0.09, h);
+      for (let k = -1; k < 6; k++) {
+        g.fillStyle = glow ? 'rgba(255,200,40,0.55)' : '#f2b81f';
+        g.beginPath();
+        g.moveTo(x, k * 48);
+        g.lineTo(x + w * 0.09, k * 48 + 20);
+        g.lineTo(x + w * 0.09, k * 48 + 40);
+        g.lineTo(x, k * 48 + 20);
+        g.fill();
+      }
+    }
+  });
+  return _cause[key];
 }
