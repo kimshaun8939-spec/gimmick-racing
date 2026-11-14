@@ -315,9 +315,10 @@ export function buildSeaLife(track, group, animators, rand) {
     for (let i = 0; i < N; i++) pos[i * 3 + 1] = -999;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: '#e8f8ff', map: glow, size: 1.1, transparent: true, opacity: 0.95, depthWrite: false });
+    const mat = new THREE.PointsMaterial({ color: '#e8f8ff', map: glow, size: 0.6, transparent: true, opacity: 0.9, depthWrite: false }); // (boat3) 1.1 → 0.6: 파도가 높아져 큰 착수가 잦아지니 카메라 앞이 하얗게 덮였음
     const pts = new THREE.Points(g, mat);
     pts.frustumCulled = false;
+    pts.name = 'seaSplash';
     group.add(pts);
     const ring = [];
     for (let k = 0; k < SLOTS; k++) {
@@ -335,7 +336,7 @@ export function buildSeaLife(track, group, animators, rand) {
         const k = (k0 + i) * 3;
         const a = Math.random() * Math.PI * 2, s = (big ? 5 : 3) * Math.random();
         vel[k] = Math.cos(a) * s + v.x * 0.35;
-        vel[k + 1] = (big ? 6 : 4) + Math.random() * (big ? 6 : 3);
+        vel[k + 1] = (big ? 4 : 3) + Math.random() * (big ? 3.5 : 2.5);
         vel[k + 2] = Math.sin(a) * s + v.z * 0.35;
         pos[k] = p.x + Math.cos(a) * 1.2;
         pos[k + 1] = 0.2;

@@ -260,6 +260,11 @@ export class Car {
     this.pitch = this.bank = this.stallFall = this.forceSink = 0;
     this.forceLanding = false;
     this.surgeT = this.surgeK = this.boatCarve = 0; // 배: 물살 가속 남은 시간·세기, 카빙 정도 (0~1)
+    // 배 개편 (boat3 2026-11-15): 물살 레인 세기·남은 시간, 카빙 탈출(버틴 시간·시작 속도·돌려받을 속도), 마지막 착수·카빙 탈출 기록
+    this.flowK = this.flowT = 0;
+    this.carveHold = this.carveV0 = this.carveLost = this.carveRelease = this.carveRefund = this.carveSnap = 0;
+    this.lastLanding = this.lastCarveExit = null;
+    this.swellK = null;
   }
 
   /**
@@ -270,6 +275,16 @@ export class Car {
     if (!(sec > 0)) return;
     this.surgeK = this.surgeT > 0 ? Math.max(this.surgeK, k) : k;
     this.surgeT = Math.max(this.surgeT || 0, sec);
+  }
+
+  /**
+   * 물살 레인 (boat3 2026-11-15): seaGates.js가 매 물리 스텝 '이 배가 물살 안에 있다'고 알려 줌 (k = 레인 세기, 0이면 없음)
+   *   물이 배를 밀어 줌 = 최고 속도·추진력이 올라감 (modes.boat.current × currentGain). 0.1초 안에 다시 안 부르면 꺼짐
+   */
+  boatFlow(k) {
+    if (!(k > 0)) return;
+    this.flowK = k;
+    this.flowT = 0.1;
   }
 
   /** 월드 좌표 (x, z)에 yaw 방향(라디안, 0 = +z)으로 차를 놓습니다. (테스트 맵의 자유 공간용) */
@@ -1052,12 +1067,13 @@ export class Car {
       const along = direction.dot(this.fwd), across = direction.dot(side);
       const reach = Math.max(box.front * along, -box.back * along) + box.half * Math.abs(across);
       let wall = this.track.castRay(origin, direction, dist + reach);
-      if (wall && wall.normal.dot(this.up) >= 0.5) wall = null;
+      const boatW = this.mode === 'boat' && this.surface === 'water'; // (boat3) 배에게 물(파도 옆면)은 벽이 아님
+      if (wall && (wall.normal.dot(this.up) >= 0.5 || (boatW && wall.surface === 'water'))) wall = null;
       // 얇은 기둥·벽 끝이 앞날개 옆을 통과하지 않도록 네 귀퉁이도 이동 거리만큼 검사.
       for (let i = 0; i < 4; i++) {
         _wallCorner.copy(origin).addScaledVector(this.fwd, i < 2 ? box.front : -box.back).addScaledVector(side, i % 2 ? box.half : -box.half);
         const cornerHit = this.track.castRay(_wallCorner, direction, dist + 0.02);
-        if (cornerHit && cornerHit.normal.dot(this.up) < 0.5 && (!wall || cornerHit.distance < wall.distance)) wall = cornerHit;
+        if (cornerHit && cornerHit.normal.dot(this.up) < 0.5 && !(boatW && cornerHit.surface === 'water') && (!wall || cornerHit.distance < wall.distance)) wall = cornerHit;
       }
       if (wall && wall.normal.dot(this.up) < 0.5) {
         // 너무 가파른 면 = 벽. 들어가는 속도만 없애고 벽을 따라 미끄러짐
@@ -1083,10 +1099,17 @@ export class Car {
     if (!hit) {
       // 바닥 끝(점프대 끝, 벽 끝)을 벗어남 → 공중으로
       this.pos.copy(newPos);
+      const wasWater = this.surface === 'water';
       this.leaveGround(this.moveDir.multiplyScalar(this.speed));
+      if (wasWater && this.mode === 'boat') this.swellLaunch();
       return;
     }
     const h = (hit.point.x - newPos.x) * this.up.x + (hit.point.y - newPos.y) * this.up.y + (hit.point.z - newPos.z) * this.up.z;
+    if (h > cfg.stepHeight && this.mode === 'boat' && hit.surface === 'water' && this.track.swellAt) {
+      // (boat3) 파도 옆면(물)이 앞에 높게 있음: 물이라 부딪혀 튕기지 않고 그 높이 그대로 지나감 (파도가 커지며 옆면이 가팔라짐)
+      this.pos.copy(newPos);
+      return;
+    }
     if (h > cfg.stepHeight) {
       // 너무 높은 턱 → 못 올라감
       this.speed *= -0.3;
@@ -1125,7 +1148,7 @@ export class Car {
       this.autoBoatFrom = null;
     }
     if (this.mode !== 'boat') this.autoBoatFrom = null; // 직접 다른 모드를 고르면 자동 복귀 취소
-    if (this.surface !== 'water') this.surgeT = this.boatCarve = 0; // 물살 가속·카빙은 물 위에서만
+    if (this.surface !== 'water') this.surgeT = this.boatCarve = this.flowK = this.flowT = this.carveHold = this.carveRefund = 0; // 물살 가속·카빙은 물 위에서만
     // 활주로(그랑프리 비행 루트)에 들어서면 자동으로 비행 모드, 내려앉아 활주로 밖이면 원래 모드로
     if (this.track.runway && cfg.modes.fly.autoSwitch) {
       const zone = (this.rwZoneLast = this.runwayZone());
@@ -1358,6 +1381,54 @@ export class Car {
     return this._lineProfile.speed[i];
   }
 
+  /**
+   * 배가 물(파도) 위에서 공중으로 뜬 순간 (boat3 2026-11-15): 파도 경사면이면 뛰어오르는 힘 × modes.boat.swell.launch
+   *   그때 파도 높이(0 = 골 ~ 1 = 꼭대기)를 swellK에 적어 둠 (시험·연출용)
+   */
+  swellLaunch() {
+    const SW = this.cfg.modes.boat.swell;
+    this.swellK = null;
+    if (!SW || !this.track.swellAt) return;
+    const sw = this.track.swellAt(this.pos.x, this.pos.z, 2);
+    if (!sw) return;
+    const wv = sw.wave;
+    this.swellK = +((wv.k - wv.hMin) / Math.max(1e-3, wv.hMax - wv.hMin)).toFixed(2);
+    if (this.vel.y > 0) this.vel.y *= SW.launch ?? 1;
+  }
+
+  /** 착수 직전: 내려오는 각도(수평 대비, rad)·뱃머리와 실제 진행 방향의 비뚤어짐(rad)·내려오는 속도 */
+  splashInfo() {
+    const vh = Math.hypot(this.vel.x, this.vel.z), vd = Math.max(0, -this.vel.y);
+    const fh = Math.hypot(this.fwd.x, this.fwd.z) || 1;
+    const yaw = vh > 1 ? Math.acos(THREE.MathUtils.clamp((this.fwd.x * this.vel.x + this.fwd.z * this.vel.z) / (fh * vh), -1, 1)) : 0;
+    return { gamma: Math.atan2(vd, Math.max(1, vh)), yaw, vd, air: this.airTime };
+  }
+
+  /**
+   * 배 착수 (boat3): 반듯하게(얕은 각도·뱃머리가 진행 방향) 내려앉으면 '깔끔한 착수' = 내려오던 힘 일부(keep)를 앞으로 + 짧은 물살 가속(공중 시간 비례).
+   *   너무 가파르거나 비뚤게 내려앉으면 '뱃머리 박기' = 속도 손해(noseLoss × 심한 정도). 그 사이는 그냥 착수
+   */
+  splashDown(sp) {
+    const SW = this.cfg.modes.boat.swell;
+    if (!SW) return;
+    const v0 = this.speed;
+    let kind = 'ok';
+    const nose = Math.max((sp.gamma - (SW.cleanAngle ?? 0.24)) / Math.max(1e-3, (SW.noseAngle ?? 0.36) - (SW.cleanAngle ?? 0.24)), (sp.yaw - (SW.cleanYaw ?? 0.14)) / Math.max(1e-3, (SW.noseYaw ?? 0.4) - (SW.cleanYaw ?? 0.14)));
+    if (nose <= 0) {
+      kind = 'clean';
+      if (this.speed > 0) this.speed += sp.vd * (SW.keep ?? 0);
+      const sec = (SW.surgeTime ?? 0.9) * Math.min(1, sp.air / (SW.surgeAir ?? 0.8));
+      if (sec > 0.05) this.boatSurge(sec, SW.surgeK ?? 0.8);
+      this.events.push('splashClean');
+    } else if (nose >= 1) {
+      kind = 'nose';
+      const sev = Math.min(1, 0.5 + 0.5 * (nose - 1));
+      this.speed *= 1 - (SW.noseLoss ?? 0.12) * sev;
+      this.events.push('noseDive');
+    }
+    this.lastLanding = { t: this.simT, kind, gamma: +sp.gamma.toFixed(3), yaw: +sp.yaw.toFixed(3), air: +sp.air.toFixed(2), dv: +(this.speed - v0).toFixed(2), k: this.swellK };
+  }
+
   /** 배 모드로 물 위: 프로펠러 추진 + 물 저항, 키(방향타)로 돌고 옆으로 잘 미끄러짐 */
   boatMotion(dt, c) {
     const cfg = this.cfg, b = cfg.modes.boat, e = cfg.engine;
@@ -1377,6 +1448,24 @@ export class Car {
       thrust += SG.thrust * k;
       if (this.thr <= 0) f += SG.thrust * 0.5 * k * dt; // 페달을 떼도 물살이 조금 밀어 줌
     } else this.surgeT = 0;
+    // 물살 레인 (boat3): 레인 안이면 물이 밀어 줌 (modes.boat.current × currentGain × 레인 세기)
+    const CU = b.current;
+    if (this.flowT > 0 && CU) {
+      this.flowT -= dt;
+      const kf = this.flowK * (b.currentGain ?? 1);
+      maxF *= 1 + CU.speed * kf;
+      thrust += CU.thrust * kf;
+      if (this.thr <= 0) f += CU.thrust * 0.5 * kf * dt;
+    } else this.flowK = this.flowT = 0;
+    // 파도 골 (boat3): 낮은 파도(골)에 올라타면 솟아오르는 물벽에 걸려 조금 느려짐 (꼭대기 쪽이면 없음)
+    const SW = b.swell;
+    if (SW && SW.punch && this.pos.y > 0.08 && this.track.swellAt) {
+      const sw = this.track.swellAt(this.pos.x, this.pos.z, 0.5);
+      if (sw) {
+        const wv = sw.wave, kN = (wv.k - wv.hMin) / Math.max(1e-3, wv.hMax - wv.hMin);
+        if (kN < 0.5) f -= SW.punch * (1 - kN * 2) * dt * Math.sign(f);
+      }
+    }
     // 추진: W 앞으로, S 브레이크 → 멈추면 뒤로
     if (this.thr > 0 && f > -0.5) f += this.thr * thrust * dt;
     if (this.brk > 0) {
@@ -1396,6 +1485,32 @@ export class Car {
     if (carving && this.boatCarve < 0.05) this.events.push('boatCarve');
     this.boatCarve = THREE.MathUtils.lerp(this.boatCarve || 0, carving ? 1 : 0, 1 - Math.exp(-(carving ? 7 : 4) * dt));
     const cv = CV ? this.boatCarve : 0;
+    // 카빙 탈출 (boat3): 카빙을 exitMinHold초 넘게 버티다 핸들을 똑바로 펴서 빠지면, 카빙으로 잃은 속도의 exitKeep만큼 돌려받음
+    //   (땅 드리프트의 깔끔한 탈출과 같은 생각. 카빙은 잃는 쪽이 늘 더 크므로 직선에서 일부러 해도 이득 없음)
+    if (CV && CV.exitKeep) {
+      if (carving) {
+        if (!(this.carveHold > 0)) this.carveV0 = Math.max(0, f);
+        this.carveHold += dt;
+        this.carveLost = Math.max(this.carveLost || 0, this.carveV0 - f);
+        this.carveRelease = 0;
+      } else if (this.carveHold > 0) {
+        this.carveRelease += dt;
+        const straight = Math.abs(this.steerIn) < (CV.exitStraight ?? 0.3);
+        if (straight && this.carveHold >= (CV.exitMinHold ?? 0.5) && this.carveLost > 0.5) {
+          const dv = Math.min(CV.exitMax ?? 8, this.carveLost * Math.min(0.95, CV.exitKeep)); // 0.95 넘게는 안 줌 (카빙이 늘 손해여야 직선에서 일부러 안 함)
+          this.carveRefund += dv;
+          this.lastCarveExit = { t: this.simT, dv, hold: this.carveHold };
+          this.carveSnap = CV.exitSnap ?? 0.35; // 깔끔히 펴면 옆 미끄러짐이 빨리 잡힘 (뱃머리가 똑바로)
+          this.events.push('carveExit');
+          this.carveHold = this.carveLost = 0;
+        } else if (this.carveRelease > (CV.exitWindow ?? 0.35)) this.carveHold = this.carveLost = 0; // 늦게 폄 = 보상 없음
+      }
+    }
+    if (this.carveRefund > 0) {
+      const r = Math.min(this.carveRefund, (CV.exitRate ?? 14) * dt);
+      f += r;
+      this.carveRefund -= r;
+    }
     // 방향타: 움직일 때만 돌고, 빠를수록 조금 덜 돎
     const rudder = THREE.MathUtils.clamp(v / 6, 0, 1) * (1 - 0.35 * Math.min(1, v / b.maxSpeed));
     const want = this.steerIn * b.turnRate * rudder * Math.sign(f || 1) * (1 + ((CV ? CV.turn : 1) - 1) * cv);
@@ -1403,7 +1518,8 @@ export class Car {
     const dYaw = -this.yawRate * dt;
     this.fwd.applyAxisAngle(this.up, dYaw);
     this.slip -= dYaw; // 배는 옆으로 잘 미끄러짐 (천천히 진행 방향을 따라감)
-    this.slip *= Math.exp(-b.grip * (1 + ((CV ? CV.grip : 1) - 1) * cv) * dt);
+    this.slip *= Math.exp(-b.grip * (1 + ((CV ? CV.grip : 1) - 1) * cv) * (this.carveSnap > 0 ? CV.exitGrip ?? 3 : 1) * dt);
+    if (this.carveSnap > 0) this.carveSnap -= dt;
     this.slip = THREE.MathUtils.clamp(this.slip, -1.2, 1.2);
     f -= f * Math.abs(Math.sin(this.slip)) * 0.8 * dt;
     if (cv > 0) f -= f * CV.drag * cv * dt;
@@ -1571,12 +1687,13 @@ export class Car {
     // 중력 (맵이 track.gravityAt(pos)를 주면 구역마다 배수: 달 기지 저중력 등)
     this.vel.y -= cfg.gravity * this.gravityScale() * dt;
 
-    // 공중 조작: 살짝 방향 전환
-    const turn = -c.steer * 0.8 * dt;
+    // 공중 조작: 살짝 방향 전환 (배가 파도에서 뜬 동안은 modes.boat.swell.airTurn배: 배는 공중에서 거의 못 돎 → 반듯하게 착수하기 쉬움, boat3)
+    const SWa = this.mode === 'boat' && this.swellK != null ? cfg.modes.boat.swell : null;
+    const turn = -c.steer * 0.8 * (SWa ? SWa.airTurn ?? 1 : 1) * dt;
     this.fwd.applyAxisAngle(WORLD_UP, turn);
     // 공기 저항: 초당 airDragPerSec 비율 (2026-11-10: 예전엔 물리 스텝(1/120초)마다 airDrag 0.2%씩이라 초당 21%나 줄었음
-    //   → 점프·저중력에서 착지 속도가 30~40% 깎였음. 지금은 시간 기준 초당 약 5%)
-    this.vel.multiplyScalar(Math.exp(-(cfg.airDragPerSec ?? 0.05) * dt));
+    //   → 점프·저중력에서 착지 속도가 30~40% 깎였음. 지금은 시간 기준 초당 약 5%). 파도에서 뜬 배는 × swell.airDrag (boat3)
+    this.vel.multiplyScalar(Math.exp(-(cfg.airDragPerSec ?? 0.05) * (SWa ? SWa.airDrag ?? 1 : 1) * dt));
 
     // 공중에서 천천히 똑바로 돌아옴 (천장에서 떨어지면 뒤집힌 채로 회전)
     _q.setFromUnitVectors(this.up, WORLD_UP);
@@ -1599,6 +1716,8 @@ export class Car {
     if (!hit && this.vel.dot(this.up) <= 0) {
       hit = this.track.castRay(this.pos.clone().addScaledVector(this.up, 0.5), this.up.clone().negate(), 0.55);
     }
+    // (boat3) 배가 파도의 가파른 옆면(물)에 닿으면 튕기지 않고 지나감 (그 아래 바다·완만한 면에 내려앉음)
+    if (hit && this.mode === 'boat' && hit.surface === 'water' && hit.normal.y <= 0.5 && this.track.swellAt) hit = null;
     if (hit && this.vel.dot(hit.normal) < 0) {
       const canLand = hit.surface === 'magnet' || hit.normal.y > 0.5;
       if (canLand) {
@@ -1626,9 +1745,13 @@ export class Car {
           this.up.copy(WORLD_UP);
           this.fwd.setY(0).normalize();
         }
+        // 배 착수 판정 (boat3): 땅에 닿기 전 속도로 내려오는 각도·비뚤어짐을 잼
+        const splash = !wasFlying && this.mode === 'boat' && hit.surface === 'water' && this.airTime > 0.2 ? this.splashInfo() : null;
         this.pos.copy(hit.point);
         this.alignTo(hit.normal);
         this.setVelocityOnSurface(this.vel);
+        if (splash) this.splashDown(splash);
+        this.swellK = null;
         if (wasFlying) {
           // 땅과 나란한 속도 + 내려오던 속도의 대부분(landKeep)을 앞으로 이어 줌 → 부드럽게 내려앉으면 속도가 거의 그대로
           const F = cfg.modes.fly, tang = Math.max(0, this.speed);

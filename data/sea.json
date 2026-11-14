@@ -426,13 +426,17 @@
    "height": 13
   }
  ],
+ "_swell": "너울 파도 (boat3 2026-11-15): 파도 점프대 높이가 레이스 시계로 오르내림 = 기본 높이 height × (hMin ~ hMax; 0.4~1.2로 해 봤더니 봇마다 점프가 너무 달라 물 위 접촉이 0 → 수십~200번으로 늘어서 0.75~1.15), 한 번 오르내리는 데 period초. 파도마다 period·phase(0~1, 시작 위상)·hMin·hMax로 덮어쓸 수 있음. 꼭대기에 올라타면 높이·멀리 날고, 골이면 작은 턱 + 조금 느려짐 (car.json modes.boat.swell). 파도 앞 하얀 거품 줄이 밝을수록 지금 지나가면 꼭대기 (src/seaGates.js foamLead초 앞을 보여 줌)",
+ "swell": { "period": 3.2, "hMin": 0.75, "hMax": 1.15, "foamAhead": 30, "foamLead": 0.6 },
  "features": [
   {
    "type": "wave",
    "p": 35.5,
    "length": 16,
    "height": 1.6,
-   "width": 12
+   "width": 12,
+   "period": 3.0,
+   "phase": 0
   },
   {
    "type": "wave",
@@ -440,21 +444,27 @@
    "offset": 5,
    "length": 14,
    "height": 2.0,
-   "width": 7
+   "width": 7,
+   "period": 3.4,
+   "phase": 0.35
   },
   {
    "type": "wave",
    "p": 37.4,
    "length": 16,
    "height": 1.6,
-   "width": 12
+   "width": 12,
+   "period": 3.0,
+   "phase": 0.62
   },
   {
    "type": "wave",
    "p": 39.6,
    "length": 18,
    "height": 1.9,
-   "width": 13
+   "width": 13,
+   "period": 3.6,
+   "phase": 0.15
   },
   {
    "type": "wave",
@@ -462,14 +472,23 @@
    "offset": -5,
    "length": 14,
    "height": 2.0,
-   "width": 7
+   "width": 7,
+   "period": 3.2,
+   "phase": 0.8
   }
  ],
+ "_whirlpools": "소용돌이 (boat3 2026-11-15에 큰 곡선 안쪽 물길 옆으로 옮김, 예전 {p 40.6, offset 27, r 20}): 가장자리를 스치면 물이 앞으로 밀고 배를 안쪽으로 돌려 줌(빨리 돎), 깊이 들어가면(core 넘게) 느려지며 빙글. r 반지름(m), pull 안으로 끄는 물살(m/s, × 깊이²), spin 도는 물살(m/s, × 깊이 = 가장자리도 밂), turn 배를 돌리는 빠르기(rad/s, × 깊이²), core 0~1 이보다 깊으면 coreDrag(초당 비율)로 느려지고 coreTurn(rad/s)으로 돎. 봇·사람 같은 규칙 (src/seaGates.js)",
  "whirlpools": [
   {
-   "p": 40.6,
-   "offset": 27,
-   "r": 20
+   "p": 40.0,
+   "offset": -22,
+   "r": 13.5,
+   "pull": 9,
+   "spin": 11,
+   "turn": 0.5,
+   "core": 0.5,
+   "coreDrag": 0.8,
+   "coreTurn": 2.5
   }
  ],
  "_buoyGates": "(2026-11-10 사용자 요청 \"통과해야 하는 건 다 없애고 빠르게 가는 것만\"으로 꺼 둠: 다시 켜려면 _off_buoyGates → buoyGates, _off_currents → currents, laneBuoys roughDrag 0.15·hitSlow 0.94, 원본 .debug/sea.before-nogates.json) 부표 게이트 (2026-11-10, 사용자 요청 \"배 옆 콘이 아무 의미가 없다\", src/seaGates.js): 물길에 주황 부표 두 개 + 위 깃발 띠로 된 문. 사이로 지나가면 물살 가속(car.boatSurge) + 띵 소리 + '부표 게이트 n/전체', 연달아 지나가면 연속 ×n으로 더 셈, 전부 지나가면 '퍼펙트 슬라럼!' 큰 가속. 부표에 박으면 부표가 튕겨 나가고 느려짐. list = [점 번호 p, 문 가운데 옆 위치(m, + = 오른쪽)], half = 문 반폭(m), hitR = 부표 기둥에 박는 거리(m), surge = [초, 세기], comboStep = 연속마다 세기 +, comboMax, perfect = [초, 세기], hitSlow = 부표에 박으면 남는 속도 비율",
@@ -481,7 +500,10 @@
  "_offCourse": "코스 밖 물 (2026-11-10 seafix, 사용자 요청 \"바다에서 숏컷을 가도 페널티가 없음\", src/seaGates.js offCourse): 배로 물길 부표 줄 밖 free m까지는 괜찮음, 그 밖은 멀수록 느려짐(초당 k0 + kPer×넘은 m, 최대 kMax) + '🌊 코스 밖! 느려져요', 부표 줄 밖 resetOut m 넘게(resetDelay초) 나가거나 코스 밖에 maxOutT초 넘게 있으면 물길로 복귀. 플레이어만 (봇은 그대로). enabled false면 끔, rope false면 밧줄·뜨개 안 보임",
  "offCourse": { "free": 4, "k0": 0.2, "kPer": 0.05, "kMax": 1.2, "resetOut": 24, "resetDelay": 0.35, "maxOutT": 4, "rope": true, "ropeEvery": 3 },
  "laneBuoys": { "every": 20, "out": 1.6, "roughDrag": 0, "hitSlow": 1 },
- "_currents": "급류 (2026-11-10): 물 위에 하늘색 화살표 띠. 그 안에 있으면 물살 가속(car.boatSurge). [p0, p1, 시작 옆 위치, 끝 옆 위치, 폭, 세기]",
+ "_currents": "물살 레인 (boat3 2026-11-15, 예전 급류 [p0,p1,옆0,옆1,폭,세기]는 _off_currents): 물길 부표 줄 바깥의 다른 길. 하늘색 화살표 물결 띠 안이면 물이 밀어 줌 (car.boatFlow → car.json modes.boat.current × currentGain). 점수·글자 없음, 안 타도 손해 없음 (순정 배는 물길 안쪽 라인과 비슷한 시간). pts = [[점 번호 p, 옆 위치 m(+ 오른쪽)], ...] (부드럽게 이음), width 폭(m), k 세기, kind 'fast'. 레인·소용돌이 안은 '코스 밖'이 아님",
+ "currents": [
+  { "pts": [[38.95, 10.5], [39.3, 15.5], [39.8, 17], [40.6, 17], [41.0, 16], [41.25, 13.5]], "width": 8, "k": 1.0, "kind": "fast" }
+ ],
  "_off_currents": [[37.5, 39.45, 2.0, -1.0, 7, 1.0]
  ]
 }

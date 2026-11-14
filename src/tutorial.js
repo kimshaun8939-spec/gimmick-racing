@@ -316,7 +316,7 @@ export function startTutorial(game) {
     add({
       id: 'boatIntro', ic: '🚤', chip: '배 모드', title: '바다에서는 배로 변신!', info: true,
       card: () => `<p>이 코스에는 <b>바다 구간</b>이 있어요. 물에 닿으면 차가 <b>자동으로 배</b>로 변신하고, 땅에 올라오면 다시 차가 돼요.</p>
-        ${SVG.forms}<p class="tut-tip">💡 배는 물살에 살짝 미끄러져요. 꺾으면서 ${K('drift')}를 누르면 더 빨리 돌아요(카빙).</p>`,
+        ${SVG.forms}<p class="tut-tip">💡 배는 물살에 살짝 미끄러져요. 꺾으면서 ${K('drift')}를 누르면 더 빨리 돌아요(카빙). 파도는 오르내려요: 앞의 하얀 거품 줄이 밝을 때 타면 높이 날아요. 부표 줄 밖 하늘색 물살 길은 밀어 주는 다른 길이에요(안 타도 괜찮아요).</p>`,
       go: '연습하러 가기',
     });
     add({
@@ -722,14 +722,14 @@ export function startTutorial(game) {
       card: () => `${SVG.modes}<p>홈에서 <b>레이스 시작</b>을 누르면 방식을 골라요. 봇 수·실력, 고스트는 설정에서도 바꿀 수 있어요.</p>
         <p class="tut-tip">💡 기록을 줄이는 순서: ① 코너 전 바깥으로 → ② 직선에서 브레이크 → ③ 에이펙스 → ④ 에이펙스 뒤 일찍 액셀</p>
         <p class="tut-tip">🎥 달리는 중 ${K('camView')} 로 시점을 바꿀 수 있어요 (기본 · 가까이 · 멀리 · 보닛 · 운전석).</p>
-        <p class="tut-tip">🟩 레이스에서 뒤처지면: 도로의 <b>DRS DETECTION</b> 선에서 앞차와 1초 안이면 다음 <b>DRS ZONE</b> 직선에서 뒷날개가 열려 빨라져요 · 앞차 뒤에 붙으면 💨 슬립스트림.</p>`,
+        <p class="tut-tip">💨 레이스에서 뒤처지면: 앞차 바로 뒤에 붙으면 슬립스트림으로 빨라져요 · 많이 멀어지면 🧲 견인이 가속을 도와줘요.</p>`,
       go: '다음',
     });
     add({
       id: 'done', ic: '🎉', chip: '끝', title: '튜토리얼 완료!', info: true, final: true,
       card: () => `<div class="tut-summary">${STEPS.filter((x) => !x.info).map((x) => `<span class="${doneSet.has(x.id) ? 'ok' : 'skip'}">${doneSet.has(x.id) ? '✓' : '–'} ${esc(x.chip)}</span>`).join('')}</div>
         <p>이제 마음껏 달려 보세요! 처음엔 <b>봇 실력 '쉬움'</b>이 좋아요. 언제든 홈의 <b>튜토리얼</b>로 다시 볼 수 있어요.</p>
-        <button class="gm-btn tut-next-ac" data-goto="academy"><span class="ic">🎓</span><span><b>다음은 드라이빙 아카데미</b><small>브레이크 포인트·트레일 브레이킹·연석·슬립스트림·DRS… 레슨 11개로 메달을 모으고 라이선스 C → S를 따요</small></span><i>›</i></button>
+        <button class="gm-btn tut-next-ac" data-goto="academy"><span class="ic">🎓</span><span><b>다음은 드라이빙 아카데미</b><small>브레이크 포인트·트레일 브레이킹·연석·슬립스트림… 레슨 10개로 메달을 모으고 라이선스 C → S를 따요</small></span><i>›</i></button>
         <div class="tut-choices"><button class="gm-btn" data-goto="time">⏱️ 타임 어택</button><button class="gm-btn" data-goto="free">🧭 자유 연습</button><button class="gm-btn" data-goto="home">🏠 홈으로</button></div>`,
       go: '봇 레이스 시작',
       onGo: () => goTo('race'),

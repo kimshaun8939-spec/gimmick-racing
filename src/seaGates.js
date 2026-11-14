@@ -6,9 +6,11 @@
 //      문을 놓치면 빨갛게 꺼지고 연속이 끊김. 부표 기둥에 박으면 기둥이 튕겨 나가고 느려짐
 //   2) 물길 양옆 부표 줄 (data.laneBuoys): 예전엔 그냥 장식(콘처럼 보였음) → 이제 "빠른 물" 경계.
 //      부표 밖은 거친 물이라 느려지고, 부표에 박으면 부표가 날아가고 느려짐 (시간이 지나면 제자리로 돌아옴)
-//   3) 급류 (data.currents): 물 위 하늘색 화살표 띠. 안에 있으면 물살 가속
+//   3) 물살 레인 (data.currents, boat3 2026-11-15): 물길 부표 줄 바깥의 하늘색 화살표 물결 띠 = 길지만 물이 밀어 주는 다른 길 (car.boatFlow)
 //   4) 배 연출: 꼬리 물기둥(수탉 꼬리), 카빙(드리프트 키) 때 바깥으로 솟는 물벽, 뒤에 남는 거품 자국, 물살 소리·게이트 소리
-//   모두 플레이어 차만 점수·가속을 받음 (봇은 레이싱 라인대로 달리고, 부표는 봇이 스치면 모습만 튕김)
+//   5) (boat3) 너울 파도 높이(track.updateWaves, 레이스 시계) + 파도 앞 거품 줄(밝으면 지금 가면 꼭대기) + 꼭대기 물보라,
+//      소용돌이(data.whirlpools: 가장자리 = 앞으로 밀고 안쪽으로 돌려 줌, 깊으면 빙글), 착수·카빙 탈출 물보라 고리
+//   게이트 점수는 플레이어만. 물살 레인·소용돌이·파도는 봇도 같은 규칙 (sea 봇 레이스로 복귀·코스 밖·접촉 확인, 2026-11-15)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -116,7 +118,7 @@ function arrowTexture(kind) {
 
 export function createSeaGates(track, scene) {
   const data = track.data || {};
-  const G = data.buoyGates, LB = data.laneBuoys, CUR = data.currents || [];
+  const G = data.buoyGates, LB = data.laneBuoys, CUR = (data.currents || []).filter((c) => c && !Array.isArray(c) && c.pts);
   const HW = track.width / 2;
   const group = new THREE.Group();
   group.name = 'seaGates';
@@ -125,6 +127,41 @@ export function createSeaGates(track, scene) {
   const flat = (v) => new THREE.Vector3(v.x, 0, v.z).normalize();
   const waterT = track.waterRanges && track.waterRanges[0] ? track.waterRanges[0] : { t0: 2, t1: -1 };
   const inWaterT = (t, pad = 0) => t > waterT.t0 - pad && t < waterT.t1 + pad;
+
+  // ================================================================ 물살 레인·소용돌이 자료 (boat3 2026-11-15)
+  const lanes = CUR.map((c) => {
+    const pts = c.pts.map(([p, lat]) => [track.tOfP(p), lat]).sort((a, b) => a[0] - b[0]);
+    return { pts, t0: pts[0][0], t1: pts[pts.length - 1][0], w: c.width ?? 8, k: c.k ?? 1, kind: c.kind || 'fast', fade: c.fade ?? 0.006 };
+  });
+  /** 레인 가운데 옆 위치 (t에서, 점 사이는 코사인으로 부드럽게) */
+  function laneLat(L, t) {
+    const P = L.pts;
+    let k = 1;
+    while (k < P.length - 1 && P[k][0] < t) k++;
+    const a = P[k - 1], b = P[k];
+    const u = Math.min(1, Math.max(0, (t - a[0]) / (b[0] - a[0] || 1)));
+    return a[1] + (b[1] - a[1]) * (1 - Math.cos(Math.PI * u)) * 0.5;
+  }
+  /** (t, 옆 위치)가 어느 레인 안인지 (pad = 폭에 더하는 여유) */
+  function laneAt(t, lat, pad = 0) {
+    for (const L of lanes) {
+      if (t < L.t0 || t > L.t1) continue;
+      // 양 끝(입구·출구)은 띠가 좁아짐 (모습과 같게)
+      const u = Math.min(1, (t - L.t0) / L.fade, (L.t1 - t) / L.fade);
+      if (Math.abs(lat - laneLat(L, t)) < (L.w / 2) * (0.45 + 0.55 * u) + pad) return L;
+    }
+    return null;
+  }
+  const pools = track.whirlpools || [];
+  const inPool = (x, z, pad = 0) => pools.some((p) => (x - p.x) ** 2 + (z - p.z) ** 2 < (p.r + pad) ** 2);
+  const _nv = new THREE.Vector3();
+  /** 이 자리가 물살 레인·소용돌이 자리인가 (부표 줄 틈·바위 치우기·코스 밖 판정에 씀) */
+  function inLaneOrPool(x, z, pad = 0) {
+    if (inPool(x, z, pad)) return true;
+    if (!lanes.length) return false;
+    const n = track.nearest(_nv.set(x, 0, z));
+    return !!laneAt(n.t, n.lateral, pad);
+  }
 
   // ================================================================ 소리 (첫 키 입력 뒤에 만듦, 소리 끄기는 audioMix가 함께 처리)
   const sfx = (() => {
@@ -219,6 +256,28 @@ export function createSeaGates(track, scene) {
         if (!ok()) return;
         noise(ctx.currentTime, 0.8, 0.12, 400, 2200);
       },
+      /** (boat3) 깔끔한 착수: 촤악 + 밝은 두 음 */
+      splashClean() {
+        if (!ok()) return;
+        const t = ctx.currentTime;
+        noise(t, 0.5, 0.13, 3200, 700);
+        tone(880, t + 0.03, 0.22, 0.06, 'sine');
+        tone(1320, t + 0.09, 0.25, 0.05, 'sine');
+      },
+      /** (boat3) 뱃머리 박기: 퍽 + 무거운 물 */
+      noseDive() {
+        if (!ok()) return;
+        const t = ctx.currentTime;
+        tone(95, t, 0.3, 0.22, 'sine', 50);
+        noise(t, 0.7, 0.22, 900, 180, 'lowpass');
+      },
+      /** (boat3) 카빙 탈출: 물을 차고 나가는 쉬익 + 올라가는 음 */
+      carveExit() {
+        if (!ok()) return;
+        const t = ctx.currentTime;
+        noise(t, 0.45, 0.1, 600, 3000);
+        tone(520, t + 0.05, 0.3, 0.05, 'triangle', 780);
+      },
       /** 물살 소리: 물 위에서 빠를수록, 카빙할수록 크고 밝게 */
       hiss(level, bright) {
         if (!hiss) return;
@@ -263,7 +322,7 @@ export function createSeaGates(track, scene) {
   gates.forEach((g, i) => (g.k = i));
   const NG = gates.length;
   const run = { active: false, passed: 0, combo: 0, best: 0, done: false };
-  const totals = { runs: 0, passed: 0, missed: 0, perfect: 0, hits: 0, buoyHits: 0, roughT: 0, currentT: 0, offT: 0, offMax: 0, offResets: 0, slowLost: 0 };
+  const totals = { poolT: 0, poolDeepT: 0, runs: 0, passed: 0, missed: 0, perfect: 0, hits: 0, buoyHits: 0, roughT: 0, currentT: 0, offT: 0, offMax: 0, offResets: 0, slowLost: 0 };
   let lastRun = null;
 
   const postMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -355,6 +414,7 @@ export function createSeaGates(track, scene) {
         n++;
         for (const side of [-1, 1]) {
           const p = track.surf(s, side * (HW + (LB.out ?? 1.6)), 0, V());
+          if (inLaneOrPool(p.x, p.z, 1)) continue; // 물살 레인 입구·소용돌이 자리 = 부표 줄 틈 (boat3)
           const red = (n + (side > 0 ? 1 : 0)) % 2 === 1;
           buoys.push({ base: new THREE.Vector3(p.x, 0, p.z), off: V(), vel: V(), rot: V(), spin: V(), air: false, gone: 0, ph: R(0, 6.3), color: red ? '#ff4a1c' : '#f6f6f6', cool: 0 });
         }
@@ -384,8 +444,8 @@ export function createSeaGates(track, scene) {
           last = s.dist;
           const p = track.surf(s, side * (HW + (LB.out ?? 1.6)), 0, V());
           const gy = track.groundY(p.x, p.z);
-          // 물 위만 (선착장 끝 콘크리트·모래 위에는 안 놓음)
-          if (gy !== null && gy > -0.25) {
+          // 물 위만 (선착장 끝 콘크리트·모래 위에는 안 놓음), 물살 레인 입구·소용돌이 자리는 틈 (boat3)
+          if ((gy !== null && gy > -0.25) || inLaneOrPool(p.x, p.z, 1)) {
             prev = null;
             continue;
           }
@@ -428,31 +488,53 @@ export function createSeaGates(track, scene) {
     if (playerHit) sfx.thunk(false);
   }
 
-  // ================================================================ 급류 (하늘색 화살표 띠)
-  const currents = CUR.map(([p0, p1, off0, off1, w, k]) => {
-    const t0 = track.tOfP(p0), t1 = track.tOfP(p1);
-    return { t0, t1, off0, off1, w, k: k ?? 1, inside: false };
-  });
-  const curTex = arrowTexture('current');
-  const curMat = new THREE.MeshBasicMaterial({ map: curTex, color: '#3fcfff', transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const curEdgeMat = new THREE.MeshBasicMaterial({ color: '#9feaff', transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  for (const cu of currents) {
+  // ================================================================ 물살 레인 (하늘색 화살표 물결 띠 + 바깥 가장자리 뜨개, boat3 2026-11-15)
+  const currents = lanes; // (예전 이름: 테스트 도구가 api.currents를 봄)
+  // 레인 무늬: 진한 하늘색 띠 + 흰 V자 물결 (밝은 노을 물 위에서도 하얗게 바래지 않게 보통 섞기)
+  const curTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(20,170,255,0.5)';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(255,255,255,0.92)';
+    g.beginPath();
+    g.moveTo(6, 46);
+    g.lineTo(32, 18);
+    g.lineTo(58, 46);
+    g.lineTo(48, 52);
+    g.lineTo(32, 34);
+    g.lineTo(16, 52);
+    g.closePath();
+    g.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  })();
+  const curMat = new THREE.MeshBasicMaterial({ map: curTex, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const curEdgeMat = new THREE.MeshBasicMaterial({ color: '#7fe6ff', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  const laneFloats = [];
+  for (const cu of lanes) {
     const N = track.samples.length - 1;
     const a = Math.round(cu.t0 * N), b = Math.round(cu.t1 * N);
     const list = track.spanList(a, b);
     const pos = [], uv = [], idx = [], epos = [], eidx = [];
     const d0 = list[0].dist;
+    let lastF = -99;
     list.forEach((s, i) => {
-      const u = i / (list.length - 1);
-      const c = cu.off0 + (cu.off1 - cu.off0) * u;
-      const fade = Math.min(1, i / 4, (list.length - 1 - i) / 4);
-      const w = (cu.w / 2) * (0.4 + 0.6 * fade);
+      const t = s.dist / track.length;
+      const c = laneLat(cu, t);
+      const fade = Math.min(1, i / 5, (list.length - 1 - i) / 5);
+      const w = (cu.w / 2) * (0.45 + 0.55 * fade);
       const L = track.surf(s, c - w, 0, V()), Rr = track.surf(s, c + w, 0, V());
       pos.push(L.x, 0.07, L.z, Rr.x, 0.07, Rr.z);
-      const v = (s.dist - d0) / 5.5;
-      uv.push(0, v, Math.max(1, Math.round(cu.w / 5.5)), v);
+      const v = (s.dist - d0) / 4;
+      uv.push(0, v, Math.max(1, Math.round(cu.w / 4)), v);
       for (const [sd, q] of [[-1, L], [1, Rr]]) {
-        const o = track.surf(s, c + sd * (w + 0.5), 0, V());
+        const o = track.surf(s, c + sd * (w + 0.7), 0, V());
         epos.push(q.x, 0.08, q.z, o.x, 0.08, o.z);
       }
       if (i) {
@@ -460,6 +542,13 @@ export function createSeaGates(track, scene) {
         idx.push(j, j + 2, j + 1, j + 1, j + 2, j + 3);
         const e = (i - 1) * 4;
         eidx.push(e, e + 4, e + 1, e + 1, e + 4, e + 5, e + 2, e + 6, e + 3, e + 3, e + 6, e + 7);
+      }
+      // 바깥 가장자리 뜨개 (하늘색·흰색, 6 m마다, 부딪히지 않음): 물길 쪽 가장자리는 원래 부표 줄
+      if (s.dist - lastF > 6 && fade > 0.6) {
+        lastF = s.dist;
+        const sd = Math.sign(c) || 1;
+        const q = track.surf(s, c + sd * (cu.w / 2 + 0.6), 0, V());
+        laneFloats.push({ x: q.x, z: q.z, c: laneFloats.length % 2 });
       }
     });
     const geo = new THREE.BufferGeometry();
@@ -472,8 +561,91 @@ export function createSeaGates(track, scene) {
     eg.setAttribute('position', new THREE.Float32BufferAttribute(epos, 3));
     eg.setIndex(eidx);
     const em = new THREE.Mesh(eg, curEdgeMat);
+    em.name = 'currentEdge';
     group.add(m, em);
   }
+  if (laneFloats.length) {
+    const fIm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.34, 8, 6).scale(1, 0.7, 1), new THREE.MeshLambertMaterial({ emissive: '#0a3a48' }), laneFloats.length);
+    const m4b = new THREE.Matrix4();
+    const cA = new THREE.Color('#5fe3ff'), cB = new THREE.Color('#ffffff');
+    laneFloats.forEach((f, i) => {
+      fIm.setMatrixAt(i, m4b.makeTranslation(f.x, 0.1, f.z));
+      fIm.setColorAt(i, f.c ? cA : cB);
+    });
+    fIm.instanceColor.needsUpdate = true;
+    fIm.name = 'laneEdgeFloats';
+    fIm.computeBoundingSphere();
+    group.add(fIm);
+  }
+
+  // ================================================================ 바위 치우기 (boat3): 풍경의 물길 옆 작은 바위가 물살 레인·소용돌이 안에 있으면 숨김 (모습만, 충돌 없던 바위)
+  let hiddenRocks = 0;
+  if (lanes.length || pools.length) {
+    const rockIm = scene.getObjectByName('rocks');
+    if (rockIm && rockIm.isInstancedMesh) {
+      const m4r = new THREE.Matrix4(), pr = V(), qr = new THREE.Quaternion(), sr = V();
+      let hid = 0;
+      for (let i = 0; i < rockIm.count; i++) {
+        rockIm.getMatrixAt(i, m4r);
+        m4r.decompose(pr, qr, sr);
+        if (pr.y > 3 || !inLaneOrPool(pr.x, pr.z, 2.5 + Math.max(sr.x, sr.z))) continue;
+        rockIm.setMatrixAt(i, m4r.makeScale(0, 0, 0));
+        hid++;
+      }
+      if (hid) rockIm.instanceMatrix.needsUpdate = true;
+      hiddenRocks = hid;
+    }
+  }
+
+  // ================================================================ 파도 앞 거품 줄 (boat3): 밝은 하얀 줄 = 지금 이 줄을 지나면 파도 꼭대기에 닿음
+  //   줄은 파도 경사 시작에서 foamAhead m 앞, 밝기 = foamLead초 뒤 파도 높이 (글자 안내 없음, 눈으로 타이밍)
+  const SWD = data.swell || {};
+  const waves = track.waves || [];
+  const foamAhead = SWD.foamAhead ?? 30, foamLead = SWD.foamLead ?? 0.6;
+  const foamTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 32;
+    const g = c.getContext('2d');
+    for (let k = 0; k < 260; k++) {
+      const x = Math.random() * 128, y = 16 + (Math.random() - 0.5) * 22 * Math.random(), r = 1.5 + Math.random() * 5;
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = THREE.RepeatWrapping;
+    return t;
+  })();
+  // 파도마다 메시 하나(재질 투명도로 밝기): 하얀 거품 띠 + 그 앞 옅은 물결 띠
+  const foamLines = waves.map((wv) => {
+    // 줄 자리: 코스를 따라 파도 경사 시작에서 foamAhead m 앞 (굽은 물길에서도 물길 가운데·파도 옆 위치에 맞게)
+    const n0 = track.nearest(V().set(wv.x, 0, wv.z));
+    const N = track.samples.length - 1;
+    let i = n0.index, back = wv.len + foamAhead;
+    while (back > 0) {
+      const j = (i - 1 + N) % N;
+      back -= Math.max(0.01, track.samples[i].dist - track.samples[j].dist);
+      i = j;
+    }
+    const sl = track.samples[i];
+    const pl = track.surf(sl, wv.offset, 0, V());
+    const mat = new THREE.MeshBasicMaterial({ map: foamTex, color: '#ffffff', transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat);
+    m.position.set(pl.x, 0.07, pl.z);
+    m.rotation.y = Math.atan2(sl.tan.x, sl.tan.z);
+    m.scale.set(wv.w + 6, 1, 3);
+    m.name = 'waveFoamLine';
+    m.renderOrder = 1;
+    group.add(m);
+    // 파도 꼭대기 거품 (seaScenery가 파도 메시에 붙인 판): 높을수록 진하게
+    const crest = wv.mesh.children.find((c) => c.material && c.material.map && c.name !== 'seaWaveBack');
+    return { wv, m, mat, crest };
+  });
+  const foamLineIm = foamLines.length ? true : null;
 
   // ================================================================ 물보라 입자 (꼬리 물기둥·카빙 물벽·부표 물보라)
   const NP = 1600;
@@ -529,6 +701,18 @@ export function createSeaGates(track, scene) {
     }
   }
 
+  /** (boat3) 물보라 고리: 둘레로 퍼지는 물방울 + 거품 고리 (착수·카빙 탈출 성공 표시) */
+  //   (뒤쪽 = 카메라 쪽은 빼고 낮고 작게: 크게 하면 화면이 하얗게 덮였음)
+  function ring(x, z, r0, n, power, vx = 0, vz = 0) {
+    const vl = Math.hypot(vx, vz) || 1, fx = vx / vl, fz = vz / vl;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.2, ca = Math.cos(a), sa = Math.sin(a);
+      if (ca * fx + sa * fz < -0.35) continue;
+      const s2 = (3.5 + Math.random() * 2) * power;
+      emit(x + ca * r0, 0.15, z + sa * r0, vx * 0.85 + ca * s2, (1.6 + Math.random() * 1.8) * power, vz * 0.85 + sa * s2, 0.45 + Math.random() * 0.3, 0.35, 1.05); // 배와 같이 앞으로 흘러서 카메라에서 보임
+    }
+  }
+
   // ================================================================ 거품 자국 (배가 지나간 뒤에 남는 하얀 물결, 점점 넓어지며 사라짐)
   const NF = 300;
   const foamIm = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: softTexture(0.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), NF);
@@ -553,6 +737,26 @@ export function createSeaGates(track, scene) {
   function carFx(c, dt, near) {
     let st = fxState.get(c);
     if (!st) fxState.set(c, (st = { acc: 0, cacc: 0, lastX: c.pos.x, lastZ: c.pos.z, foamD: 0 }));
+    // (boat3) 착수·카빙 탈출 순간: 물보라 고리 (플레이어는 소리도)
+    const LL = c.lastLanding;
+    if (LL && LL.t !== st.landT) {
+      st.landT = LL.t;
+      if (LL.kind === 'clean') {
+        ring(c.pos.x, c.pos.z, 2.4, near ? 30 : 14, 1, c.vel.x, c.vel.z);
+        for (let k = 0; k < 10; k++) dropFoam(c.pos.x + Math.cos(k * 0.628) * 3.4, c.pos.z + Math.sin(k * 0.628) * 3.4, k * 0.628 + 1.57, 2.4, 3.4, near ? 2.2 : 1.2);
+        if (c === carRef) sfx.splashClean();
+      } else if (LL.kind === 'nose') {
+        burst(V().set(c.pos.x + c.fwd.x * 2.4, 0, c.pos.z + c.fwd.z * 2.4), near ? 60 : 24, 1.6);
+        if (c === carRef) sfx.noseDive();
+      } else burst(c.pos, near ? 18 : 8, 0.8);
+    }
+    const CE = c.lastCarveExit;
+    if (CE && CE.t !== st.cexT) {
+      st.cexT = CE.t;
+      ring(c.pos.x, c.pos.z, 2, near ? 26 : 12, 0.9, c.vel.x, c.vel.z);
+      for (let k = 0; k < 12; k++) dropFoam(c.pos.x + Math.cos(k * 0.524) * 3.8, c.pos.z + Math.sin(k * 0.524) * 3.8, k * 0.524 + 1.57, 2.2, 3.4, near ? 2.4 : 1.2);
+      if (c === carRef) sfx.carveExit();
+    }
     const onW = c.mode === 'boat' && c.surface === 'water' && c.grounded && c.pos.y < 1.2;
     const sp = Math.hypot(c.vel.x, c.vel.z);
     const moved = Math.hypot(c.pos.x - st.lastX, c.pos.z - st.lastZ);
@@ -624,7 +828,8 @@ export function createSeaGates(track, scene) {
       off.flag = false;
       return;
     }
-    const out = ti.dist - (HW + (LB.out ?? 1.6)); // 부표 줄 밖으로 몇 m
+    let out = ti.dist - (HW + (LB.out ?? 1.6)); // 부표 줄 밖으로 몇 m
+    if (out > 0 && (laneAt(ti.t, ti.lateral, 2.5) || inPool(car.pos.x, car.pos.z, 2))) out = 0; // 물살 레인·소용돌이 = 코스 (boat3)
     off.last = out;
     if (airOverWater) return; // 공중에서는 판정만 멈춤 (착지하면 다시)
     if (out > totals.offMax) totals.offMax = out;
@@ -666,8 +871,57 @@ export function createSeaGates(track, scene) {
     }
   }
 
+  /**
+   * 물살 레인·소용돌이 (boat3 2026-11-15): 물 위의 배 하나에 (플레이어·봇 같은 규칙)
+   *   레인 안 = car.boatFlow(세기, 레인 양 끝은 점점), 소용돌이 = 물이 배를 옮김(가장자리는 앞으로 미는 물살, 깊을수록 안으로 끌기) + 뱃머리를 돌림, 깊으면 느려지며 빙글
+   */
+  function waterForces(dt, c, isPlayer) {
+    if (c.mode !== 'boat' || c.surface !== 'water' || !c.grounded) return null;
+    const ti = c.trackInfo;
+    if (!ti) return null;
+    let inLane = null;
+    if (lanes.length && inWaterT(ti.t, 0.005)) {
+      const L = laneAt(ti.t, ti.lateral, 0.3);
+      if (L) {
+        const u = Math.min(1, (ti.t - L.t0) / L.fade, (L.t1 - ti.t) / L.fade);
+        c.boatFlow(L.k * Math.max(0.15, u));
+        inLane = L;
+        if (isPlayer) totals.currentT += dt;
+      }
+    }
+    for (const p of pools) {
+      const dx = c.pos.x - p.x, dz = c.pos.z - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= p.r || d < 0.3) continue;
+      const k = 1 - d / p.r, rx = dx / d, rz = dz / d;
+      const tx = p.dir * rz, tz = -p.dir * rx; // 도는 물 방향
+      // 가장자리(k 작음)는 앞으로 미는 물살이 대부분, 안으로 끄는 힘·뱃머리 돌림은 깊을수록(k²) 커짐
+      const k2 = k * k;
+      c.pos.x += (tx * p.spin * k - rx * p.pull * k2) * dt;
+      c.pos.z += (tz * p.spin * k - rz * p.pull * k2) * dt;
+      const deep = k > p.core ? (k - p.core) / (1 - p.core) : 0;
+      c.fwd.applyAxisAngle(c.up, p.dir * (p.turn * k2 + p.coreTurn * deep) * dt);
+      if (deep > 0) {
+        const f = Math.exp(-p.coreDrag * deep * dt);
+        c.speed *= f;
+        c.vel.x *= f;
+        c.vel.z *= f;
+      }
+      if (isPlayer) (totals.poolT += dt), deep > 0 && (totals.poolDeepT += dt);
+    }
+    return inLane;
+  }
+
   function update(dt, car) {
     carRef = car;
+    const GM = window.game;
+    // 너울 파도 높이: 레이스 시계 (모두 같은 시각이면 같은 높이)
+    if (track.updateWaves) track.updateWaves(GM && GM.race ? GM.race.clock || 0 : 0);
+    const inLane = waterForces(dt, car, true);
+    const rsB = GM && GM.raceSys;
+    if (rsB && rsB.bots) for (const b of rsB.bots) if (b.car && b.car !== car) waterForces(dt, b.car, false);
+    if (inLane && !curFlag) sfx.whoosh();
+    curFlag = !!inLane;
     const ti = car.trackInfo;
     if (!ti) return;
     offCourse(dt, car, ti);
@@ -679,7 +933,7 @@ export function createSeaGates(track, scene) {
     if (!near) {
       for (const g of gates) g.prev = null;
       if (run.active && !run.done && ti.t > waterT.t1) finishRun();
-      roughFlag = curFlag = false;
+      roughFlag = false;
       return;
     }
     const boat = car.mode === 'boat';
@@ -742,23 +996,6 @@ export function createSeaGates(track, scene) {
       }
     }
     roughFlag = !!rough;
-    // --- 급류: 띠 안이면 물살 가속
-    let inCur = null;
-    for (const cu of currents) {
-      if (ti.t < cu.t0 || ti.t > cu.t1) continue;
-      const u = (ti.t - cu.t0) / (cu.t1 - cu.t0);
-      const c = cu.off0 + (cu.off1 - cu.off0) * u;
-      if (Math.abs(ti.lateral - c) < cu.w / 2 + 0.3) inCur = cu;
-    }
-    if (inCur && car.grounded) {
-      car.boatSurge(0.45, inCur.k);
-      totals.currentT += dt;
-      if (!curFlag) {
-        sfx.whoosh();
-        popText('🌊 급류 타기!', '#8ff0ff', false, 1.0);
-      }
-    }
-    curFlag = !!inCur;
   }
 
   // ================================================================ 화면마다 (모습·입자·소리·글자)
@@ -779,7 +1016,8 @@ export function createSeaGates(track, scene) {
     if (car) {
       const onW = car.mode === 'boat' && car.surface === 'water' && car.grounded;
       const sp = Math.abs(car.speed), fast = clamp01((sp - 8) / 40), cv = car.boatCarve || 0;
-      sfx.hiss(onW ? 0.025 + 0.11 * fast + 0.16 * cv + (car.surgeT > 0 ? 0.04 : 0) : 0, clamp01(0.3 * fast + 0.7 * cv));
+      const fl = car.flowK > 0 ? 1 : 0;
+      sfx.hiss(onW ? 0.025 + 0.11 * fast + 0.16 * cv + (car.surgeT > 0 ? 0.04 : 0) + 0.05 * fl : 0, clamp01(0.3 * fast + 0.7 * cv + 0.25 * fl));
     }
     if (dt <= 0) return;
 
@@ -874,8 +1112,33 @@ export function createSeaGates(track, scene) {
     }
     if (lastBuoyUpd <= 0) lastBuoyUpd = 0.3;
 
-    // --- 급류 화살표 흐름
-    curTex.offset.y -= dt * 2.2;
+    // --- 물살 레인 화살표 흐름
+    curTex.offset.y -= dt * 2.6;
+    // --- (boat3) 파도 앞 거품 줄 (밝을수록 지금 지나가면 꼭대기) + 꼭대기 근처 물보라
+    if (foamLineIm) {
+      const GM = window.game;
+      const clock = GM && GM.race ? GM.race.clock || 0 : 0;
+      foamTex.offset.x += dt * 0.05;
+      for (const fl of foamLines) {
+        const wv = fl.wv;
+        const kAhead = track.waveU ? track.waveU(wv, clock + foamLead) : 0.5;
+        const kNow = (wv.k - wv.hMin) / Math.max(1e-3, wv.hMax - wv.hMin);
+        const b = Math.pow(kAhead, 2);
+        fl.mat.opacity = 0.1 + 0.9 * b;
+        fl.m.scale.set(wv.w + 4 + 4 * b, 1, 2.5 + 5 * b);
+        if (fl.crest) fl.crest.material.opacity = 0.2 + 0.8 * kNow;
+        // 꼭대기 물보라: 파도가 높을 때 꼭대기 줄에서 하얀 물이 흩날림 (가까울 때만)
+        if (near && kNow > 0.78 && car && (car.pos.x - wv.x) ** 2 + (car.pos.z - wv.z) ** 2 < 260 * 260) {
+          wv._sprayAcc = (wv._sprayAcc || 0) + (dt * 40 * (kNow - 0.78)) / 0.22;
+          while (wv._sprayAcc >= 1) {
+            wv._sprayAcc -= 1;
+            const u = (Math.random() - 0.5) * wv.w * 0.8;
+            const top = wv.h * wv.k * 0.95;
+            emit(wv.x + wv.tz * u, top, wv.z - wv.tx * u, wv.tx * R(1, 3), R(1.5, 3.5), wv.tz * R(1, 3), R(0.5, 0.9), 0.4, 1.4);
+          }
+        }
+      }
+    }
 
     // --- 입자
     if (pAlive > 0) {
@@ -967,6 +1230,13 @@ export function createSeaGates(track, scene) {
     gates,
     buoys,
     currents,
+    lanes,
+    pools,
+    laneAt,
+    laneLat,
+    get hiddenRocks() {
+      return hiddenRocks;
+    },
     /** 테스트용: 이번 바퀴·전체 기록 */
     sfx,
     stats: () => ({ run: { ...run }, lastRun, total: NG, ...totals, crossLog: crossLog.slice(), off: { ...off } }),

@@ -1020,9 +1020,75 @@ export function buildSeaTrack(data, scene) {
     m.position.set(p.x, -0.02, p.z);
     m.rotation.y = Math.atan2(s.tan.x, s.tan.z);
     m.updateMatrixWorld();
-    addGround(m, 'water');
-    waves.push({ mesh: m, s, len, h, w, offset: f.offset || 0 });
+    // (boat3) 땅 메시 목록에는 첫 물리 스텝에 넣음(updateWaves): 봇·플레이어용 빠른 레이(fastTrack.js)는 만들 때 삼각형을 굳히고
+    //   위치만 바뀌었는지 보므로, 크기(높이)가 바뀌는 파도는 나중에 더해진 메시(= 원래 방식 Raycaster)로 검사되게
+    m.userData.surface = 'water';
+    group.add(m);
+    // 너울 (boat3 2026-11-15): 높이가 레이스 시계로 오르내림 (모두 같은 시계 → 온라인·리플레이·고스트에서 같은 시각이면 같은 높이)
+    //   k = hMin ~ hMax (기본 높이 h의 배수). 꼭대기(hMax)에 올라타면 높이·멀리, 골(hMin)이면 작은 턱
+    const SW = data.swell || {};
+    const wv = {
+      mesh: m, s, len, h, w, offset: f.offset || 0, k: 1,
+      period: f.period ?? SW.period ?? 3.2, phase: f.phase ?? 0, hMin: f.hMin ?? SW.hMin ?? 0.4, hMax: f.hMax ?? SW.hMax ?? 1.2,
+      x: p.x, z: p.z, tx: Math.sin(m.rotation.y), tz: Math.cos(m.rotation.y),
+    };
+    m.name = 'seaWave'; // 이름 + onBeforeRender → staticBatch가 안 묶음 (높이가 계속 바뀜)
+    m.children[0].name = 'seaWaveBack';
+    m.userData.dynamic = true;
+    m.onBeforeRender = () => {
+      // 리플레이 중에는 물리가 멈춰 있으므로 리플레이 시계로 높이를 맞춤
+      const G = typeof window !== 'undefined' && window.game;
+      if (G && G.replay && G.replay.active) setWave(wv, waveK(wv, G.replay.state.t));
+    };
+    waves.push(wv);
   }
+  /** 너울 높이 배수 (clock = 레이스 시계 초). 위상 u: 0 = 골, 1 = 꼭대기 */
+  function waveU(wv, clock) {
+    return 0.5 - 0.5 * Math.cos(2 * Math.PI * (clock / wv.period + wv.phase));
+  }
+  function waveK(wv, clock) {
+    return wv.hMin + (wv.hMax - wv.hMin) * waveU(wv, clock);
+  }
+  function setWave(wv, k) {
+    if (Math.abs(k - wv.k) < 1e-4) return;
+    wv.k = k;
+    wv.mesh.scale.y = k;
+    wv.mesh.updateMatrixWorld(true);
+  }
+  /** 매 물리 스텝 (seaGates.update가 레이스 시계로 부름): 모든 파도 높이를 맞춤 (충돌 면도 같이 = 메시 크기) */
+  let wavesLive = false;
+  function updateWaves(clock) {
+    if (!wavesLive) {
+      wavesLive = true;
+      for (const wv of waves) groundMeshes.push(wv.mesh);
+    }
+    for (const wv of waves) setWave(wv, waveK(wv, clock));
+  }
+  /** (x, z)가 어느 파도 위(경사면 발자국 안)인지: { wave, along(−len~0, 0 = 꼭대기 끝), lat } 또는 null */
+  function swellAt(x, z, pad = 1.5) {
+    for (const wv of waves) {
+      const dx = x - wv.x, dz = z - wv.z;
+      const along = dx * wv.tx + dz * wv.tz;
+      if (along < -wv.len - pad || along > pad) continue;
+      const lat = dx * wv.tz - dz * wv.tx;
+      if (Math.abs(lat) > wv.w / 2 + pad) continue;
+      return { wave: wv, along, lat };
+    }
+    return null;
+  }
+  for (const wv of waves) setWave(wv, waveK(wv, 0));
+
+  // 소용돌이 (boat3 2026-11-15, data.whirlpools [{p, offset, r, pull, spin, turn, core, coreDrag, coreTurn}]): 물길 옆에 걸친 소용돌이
+  //   예전엔 seaMap.buildProps에서 만들어 풍경(seaScenery)이 그릴 때 아직 없었음(안 보였음) → 트랙을 만들 때 정함
+  //   dir = 도는 방향(+1 = 위에서 볼 때 반시계). 코스 쪽 가장자리에서 물이 진행 방향으로 흐르게 자동으로 고름
+  const whirlpools = (data.whirlpools || []).map((wp) => {
+    const s = sampleAt(tOfP(wp.p));
+    const c = surf(s, wp.offset || 0, 0, new THREE.Vector3());
+    const rx = s.pos.x - c.x, rz = s.pos.z - c.z, rl = Math.hypot(rx, rz) || 1;
+    // 반시계(+1)일 때 코스 쪽 점의 물 흐름 = (rz, −rx)
+    const dir = (rz / rl) * s.tan.x - (rx / rl) * s.tan.z >= 0 ? 1 : -1;
+    return { p: wp.p, x: c.x, z: c.z, r: wp.r || 14, pull: wp.pull ?? 5, spin: wp.spin ?? 7, turn: wp.turn ?? 0.5, core: wp.core ?? 0.5, coreDrag: wp.coreDrag ?? 0.8, coreTurn: wp.coreTurn ?? 2.5, dir };
+  });
 
   group.updateMatrixWorld(true);
 
@@ -1187,7 +1253,7 @@ export function buildSeaTrack(data, scene) {
     grandprix: true, seaside: true, surf, roadYAt, heightAt, fieldAt, groundY, groundNormal, natural, coastField, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
     runway: null, apron: null, plank: null, rings: [], skyPath: [], inSkyCorridor: () => false, onAltPath, altPaths: [], indexAt, S, spanList, noise,
     dimension: null, setWorld() {}, inSpace: false,
-    tOfP, pointT, bridgeRuns, waterRuns, slipways, caves, waves, seaMat, setUnderwater, grid: { gx0, gz0, NX, NZ, CELL, HG },
+    tOfP, pointT, bridgeRuns, waterRuns, slipways, caves, waves, waveU, waveK, updateWaves, swellAt, whirlpools, seaMat, setUnderwater, grid: { gx0, gz0, NX, NZ, CELL, HG },
     buildMs, sampleCount: SAMPLES,
   };
   // castRay: 봇용 빠른 레이(fastTrack.js)는 Object.create(track) 위에 castRay를 새로 넣는데, 그 레이는 땅 메시만 봐서
