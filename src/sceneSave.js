@@ -1,13 +1,12 @@
 // 장면 저장 (F8, 사용자 요청 2026-11-14 "봇이 이상한 장면을 녹화 대신 키 하나로 보내기")
 //   레이스 중 항상 직전 20초를 기억해 둠: 모든 차(나 + 봇)의 위치·속도·페달·핸들·모드, 내가 누른 키,
-//   봇 운전사가 낸 조작(액셀·브레이크·핸들)과 추월 판단 상태. 1초마다 차·봇 상태 전체 스냅샷도 같이.
+//   봇 운전사가 낸 조작(액셀·브레이크·핸들)과 추월 판단 상태. F8을 누른 순간의 차·봇 상태 전체 스냅샷도 같이.
 //   F8을 누르면 그 20초를 JSON 파일 하나로 내려받음 → 개발자가 .debug/scene_play.js로 분석·재현.
 //   봇 코드(bots.js·raceSystem.js)는 건드리지 않음: 봇 운전 함수를 밖에서 감싸서 결과만 엿봄.
 //   개인 정보(온라인 계정 열쇠·이름 등)는 담지 않음.
 
 const SEC = 20; // 기억하는 시간 (초)
 const HZ = 30; // 1초에 몇 번 기록
-const KEY_EVERY = 1; // 전체 스냅샷 간격 (초)
 const MODES = ['normal', 'accel', 'boat', 'fly'];
 const SKIP = new Set(['cfg', 'track', 'trackInfo', 'events', 'apexHits', 'cornerStart', 'apexWatch', 'lastApexInfo', 'lastCornerInfo', 'lastDriftInfo']);
 
@@ -28,6 +27,7 @@ export function snapValues(obj, skip = SKIP) {
     if (v instanceof Map || v instanceof Set || ArrayBuffer.isView(v) || v.isObject3D || v.isMaterial) continue;
     const proto = Object.getPrototypeOf(v);
     if (proto !== Object.prototype && proto !== Array.prototype) continue;
+    if (Array.isArray(v) ? v.length > 64 : Object.keys(v).length > 40) continue; // 큰 것은 통째로 문자열을 만들면 멈칫함 (예전 1.8초)
     try {
       let bad = false; // 안에 벡터·three 객체가 있으면 되돌릴 때 모양이 깨지니 뺌 (car.trackInfo 등은 다음 스텝에 다시 계산됨)
       const s = JSON.stringify(v, (kk, vv) => {
@@ -65,8 +65,7 @@ export function restoreValues(obj, snap) {
 export function createSceneSave(o) {
   const { car, raceSys, race, hud } = o;
   const frames = []; // { t, p: 내 조작, c: [차마다 숫자 배열], b: [봇마다 판단] }
-  const keys = []; // { t, race, cars: [{ car, entry, st }] }
-  let lastCtl = null, nextT = 0, nextKey = 0, lastClock = -1;
+  let lastCtl = null, nextT = 0, lastClock = -1;
   const wrapped = new WeakSet();
 
   // 봇 운전 함수 감싸기 (raceSystem이 매 스텝 b.driver.controls(...)를 부름 → 결과를 b.__ssCtl에 남김)
@@ -119,19 +118,9 @@ export function createSceneSave(o) {
   function sample() {
     if (race.phase === 'countdown') return;
     const t = race.clock;
-    if (t < lastClock - 0.5) { frames.length = 0; keys.length = 0; nextT = nextKey = 0; } // 다시 시작
+    if (t < lastClock - 0.5) { frames.length = 0; nextT = 0; } // 다시 시작
     lastClock = t;
     wrapBots();
-    if (t >= nextKey) {
-      nextKey = t + KEY_EVERY;
-      keys.push({
-        t: r3(t),
-        race: snapValues(race),
-        player: { car: snapValues(car) },
-        bots: raceSys.bots.map((b) => ({ car: snapValues(b.car), entry: snapValues(b, new Set(['car', 'driver', 'cfg', 'view', 'entry', '__ssCtl'])), st: snapValues(b.driver && b.driver.state) })),
-      });
-      while (keys.length && keys[0].t < t - SEC - KEY_EVERY) keys.shift();
-    }
     if (t < nextT) return;
     nextT = t + 1 / HZ;
     frames.push({
@@ -143,6 +132,16 @@ export function createSceneSave(o) {
     while (frames.length && frames[0].t < t - SEC) frames.shift();
   }
 
+  /** F8 누른 순간의 차·봇 상태 전체 (예전엔 1초마다 찍었는데 봇 7대에서 한 번에 약 2초가 걸려 게임이 주기적으로 멈췄음, 2026-11-14) */
+  function snapshotNow() {
+    const skipEntry = new Set(['car', 'driver', 'cfg', 'view', 'entry', '__ssCtl', 'model', 'proxy', 'tag', 'lod', 'marks', 'towInfo']);
+    return {
+      t: r3(race.clock),
+      race: snapValues(race),
+      player: { car: snapValues(car) },
+      bots: raceSys.bots.map((b) => ({ car: snapValues(b.car), entry: snapValues(b, skipEntry), st: snapValues(b.driver && b.driver.state) })),
+    };
+  }
   function build(note = '') {
     const q = new URLSearchParams(location.search);
     const settings = (() => { try { return JSON.parse(localStorage.getItem('gimmick.settings') || '{}'); } catch { return {}; } })();
@@ -159,7 +158,7 @@ export function createSceneSave(o) {
       settings, storage: keep,
       cols: ['x', 'y', 'z', 'vx', 'vy', 'vz', 'fx', 'fy', 'fz', 'speed', 't', 'lat', 'thr', 'brk', 'steerIn', 'mode', 'flags(1땅 2드리프트 4잔디 8비행 16시동꺼짐)', 'draft', 'tow', 'drs', 'yawRate', 'slip', 'gear', 'ctlThrottle', 'ctlBrake', 'ctlSteer', 'ctlDrift'],
       cars: ['나', ...raceSys.bots.map((b) => b.name)],
-      frames, keys,
+      frames, keys: [snapshotNow()],
     };
   }
 
@@ -190,5 +189,5 @@ export function createSceneSave(o) {
     return name;
   }
 
-  return { input, sample, save, build, get frames() { return frames; }, get keys() { return keys; } };
+  return { input, sample, save, build, get frames() { return frames; } };
 }
