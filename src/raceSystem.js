@@ -440,12 +440,18 @@ export async function createRaceSystem(o) {
         }
       }
     }
-    // 옆면으로 실제 닿은 사람만 봇 운전에 알린다. 밀림/마찰/속도 교환은 바꾸지 않는다.
-    if (!bStatic && (a === car || b === car)) {
-      const bot = a === car ? b : a;
-      if (Math.abs(_n.x * bot.fwd.x + _n.z * bot.fwd.z) < .25 && car.fwd.dot(bot.fwd) > .995) {
-        bot._sideContactAt = bot.simT;
-        bot._sideContactOther = car.pos;
+    // 같은 도로 방향을 뺀 옆 접근으로 맞은 쪽만 알린다. 사람/봇 구별 없음.
+    if (!bStatic && a.fwd.dot(b.fwd) > .98) {
+      const ta = a.trackInfo?.sample?.tan || a.fwd, tb = b.trackInfo?.sample?.tan || b.fwd;
+      const len = Math.hypot(ta.x + tb.x, ta.z + tb.z) || 1, tx = (ta.x + tb.x) / len, tz = (ta.z + tb.z) / len;
+      const nd = _n.x * tx + _n.z * tz;
+      const ca = Math.max(0, -(_va.x * _n.x + _va.z * _n.z - (_va.x * tx + _va.z * tz) * nd));
+      const cb = Math.max(0, _vb.x * _n.x + _vb.z * _n.z - (_vb.x * tx + _vb.z * tz) * nd);
+      if (ca + .15 < cb && Math.abs(_n.x * a.fwd.x + _n.z * a.fwd.z) < .7) {
+        a._sideContactAt = a.simT; a._sideContactOther = b.pos;
+      }
+      if (cb + .15 < ca && Math.abs(_n.x * b.fwd.x + _n.z * b.fwd.z) < .7) {
+        b._sideContactAt = b.simT; b._sideContactOther = a.pos;
       }
     }
     if (a === car || b === car) {

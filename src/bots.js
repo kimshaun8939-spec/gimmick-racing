@@ -9,7 +9,7 @@
 //   부스터(E): 앞에 브레이크 구간이 없는 긴 직선에서 씀 (보통·어려움)
 import * as THREE from 'three';
 import { lineCarModel } from './car.js';
-import { hitboxFor } from './carHitbox.js';
+import { hitboxFor, obbOverlap } from './carHitbox.js';
 import { createShortcutDriver } from './botShortcut.js'; // 그랑프리 판자 지름길 (2026-11-14)
 
 export const BOT_NAMES = ['레오', '미나', '카이', '루나', '준호', '사라', '토르', '하나', '제트', '노바'];
@@ -805,6 +805,54 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         }
       }
     }
+    // 실제 옆면 접촉 직후에는 같은 옆줄의 차를 앞차로 오인하지 않는다.
+    // 코너 속도 계획/조향 한계와 좁아짐/점프의 안전 제동은 그대로 둔다.
+    // 라인 허용 폭에는 이미 차 중심 여유가 들어 있다. 현재 실제 움직임과 차 폭으로 짧은 앞 구간만 확인한다.
+    const contactRoom = () => {
+      const p = new THREE.Vector3();
+      for (const sec of [0, .125, .25]) {
+        p.copy(car.pos).addScaledVector(car.vel, sec);
+        const near = track.nearest(p), sample = near.sample;
+        if (!sample || Math.abs(p.y - sample.pos.y) > 2) return false;
+        const tan = sample.tan, tl = Math.hypot(tan.x, tan.z) || 1, fl = Math.hypot(car.fwd.x, car.fwd.z) || 1;
+        const along = Math.abs((car.fwd.x * tan.x + car.fwd.z * tan.z) / (fl * tl));
+        const across = Math.abs((car.fwd.x * tan.z - car.fwd.z * tan.x) / (fl * tl));
+        const reach = ownBox.half * along + Math.max(ownBox.front, ownBox.back) * across;
+        const edge = (sample.hw ?? (track.width || 16) / 2) + (track.kerbAt?.(near.index, near.lateral < 0 ? -1 : 1) || 0) - .5;
+        if (Math.abs(near.lateral) + reach > edge) return false;
+      }
+      return true;
+    };
+    let sideContactAnswer;
+    const briefSideContact = o => {
+      const age = car.simT - (car._sideContactAt ?? -Infinity);
+      if (!o.human || o.pos !== car._sideContactOther || age < 0 || age > 3 || cornerSoon || brakeSoon || risky || mergeHazard || speed < 12) return false;
+      if (sideContactAnswer !== undefined) return sideContactAnswer;
+      sideContactAnswer = false;
+      // 접촉 뒤 판단을 유지하는 3초 안에 다른 차가 닿을 수 있는 무리에서는 원래 제동을 유지한다.
+      if (peers.some(p => p !== o && (!p.pos || car.pos.distanceToSquared(p.pos) < (35 + v * 3) ** 2))) return false;
+      const f = o.fwd, fl = f && Math.hypot(f.x, f.z), ownFl = Math.hypot(car.fwd.x, car.fwd.z);
+      if (!(fl > 0 && ownFl > 0) || (f.x * car.fwd.x + f.z * car.fwd.z) / (fl * ownFl) < .98 ||
+          Math.abs(actualGap(o)) > rearSpace(o) + 3 ||
+          Math.abs(o.lat - myLat) < (ownBox.half + boxOf(o).half) * .6 || !contactRoom()) return false;
+      // 도로 축에 투영한 큰 직사각형 대신 실제 외곽과 짧은 접근을 확인한다.
+      // 계속 옆으로 닿는 것은 전방 추돌이 아니다. 앞/뒤 면으로 만날 위험이 있으면 원래 제동.
+      const own = { pos: car.pos.clone(), fwd: car.fwd, up: car.up, _displayHitbox: ownBox };
+      const other = { pos: o.pos.clone(), fwd: o.fwd, up: car.up, _displayHitbox: boxOf(o) };
+      for (const sec of [0, .15, .3]) {
+        own.pos.copy(car.pos).addScaledVector(car.vel, sec);
+        if (car.cNudge) own.pos.addScaledVector(car.cNudge, sec);
+        other.pos.copy(o.pos).addScaledVector(o.fwd, o.speed * sec / fl);
+        const hit = obbOverlap(own, other);
+        if (hit.hit && Math.abs(hit.normal.x * car.fwd.x + hit.normal.z * car.fwd.z) / ownFl > .7) {
+          const closing = (car.vel.x - o.fwd.x * o.speed / fl) * hit.normal.x + (car.vel.z - o.fwd.z * o.speed / fl) * hit.normal.z;
+          if (closing < -.1) return false;
+        }
+      }
+      sideContactAnswer = true;
+      return true;
+    };
+
     let want=st.laneTarget;
     const launchColumns=ctx.since<6&&!narrowSoon&&!brakeSoon&&!cornerSoon;
     if(launchColumns)want=clamp(st.gridLat-L.offset[i0],L.lo[i0]+.35-L.offset[i0],L.hi[i0]-.35-L.offset[i0]);
@@ -838,7 +886,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if(!launchColumns&&Math.abs(want-actualLane)>.15&&crosses(want)) {
       // 자기 줄로 되돌아오는 작은 보정은 버티고, 옆 차를 가로지르는 합류만 보류.
       const blockedBy=beside.filter(o=>(want-o.lane)*(actualLane-o.lane)<0||Math.abs(want-o.lane)<sideSpace(o)+.12);
-      for(const o of blockedBy)if(yieldTo(o)&&Math.abs(actualLane-o.lane)<sideSpace(o)*.75)follow=Math.min(follow,Math.max(3,o.speed-1));
+      for(const o of blockedBy)if(!briefSideContact(o)&&yieldTo(o)&&Math.abs(actualLane-o.lane)<sideSpace(o)*.75)follow=Math.min(follow,Math.max(3,o.speed-1));
       want=actualLane;
     }
     if(beside.length&&!risky&&!mergeHazard)hold=bold?.25:.1;
@@ -846,36 +894,6 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const laneRate=cornerSoon&&speed>35?(bold?2:1.6):2.6;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
     let lane=st.lane;
-    // 실제 사람과 옆면이 닿은 직후, 충분히 긴 직선에서만 나란히 달리는 차를 앞차로 보지 않는다.
-    // 코너/좁아짐/점프와 조향 한계 제동은 그대로 둔다. 옆 자리를 오래 고정하지 않는다.
-    // 라인 허용 폭에는 이미 차 중심 여유가 들어 있다. 현재 실제 움직임과 차 폭으로 짧은 앞 구간만 확인한다.
-    const contactRoom = () => {
-      const p = new THREE.Vector3();
-      for (const sec of [0, .125, .25]) {
-        p.copy(car.pos).addScaledVector(car.vel, sec);
-        const near = track.nearest(p), sample = near.sample;
-        if (!sample || Math.abs(p.y - sample.pos.y) > 2) return false;
-        const tan = sample.tan, tl = Math.hypot(tan.x, tan.z) || 1, fl = Math.hypot(car.fwd.x, car.fwd.z) || 1;
-        const along = Math.abs((car.fwd.x * tan.x + car.fwd.z * tan.z) / (fl * tl));
-        const across = Math.abs((car.fwd.x * tan.z - car.fwd.z * tan.x) / (fl * tl));
-        const reach = ownBox.half * along + Math.max(ownBox.front, ownBox.back) * across;
-        const edge = (sample.hw ?? (track.width || 16) / 2) + (track.kerbAt?.(near.index, near.lateral < 0 ? -1 : 1) || 0) - .5;
-        if (Math.abs(near.lateral) + reach > edge) return false;
-      }
-      return true;
-    };
-    const briefSideContact = o => {
-      const age = car.simT - (car._sideContactAt ?? -Infinity);
-      if (!o.human || o.pos !== car._sideContactOther || age < 0 || age > .22 ||
-          cornerSoon || brakeSoon || risky || mergeHazard || speed < 12 ||
-          straightM < 35 + v * 2.5 || Math.abs(actualLane) > 2.5 || !contactRoom()) return false;
-      // 여러 차가 얽히면 기존 추종 제동을 유지한다.
-      if (peers.some(p => p !== o && (!p.pos || car.pos.distanceToSquared(p.pos) < (35 + v * 1.2) ** 2))) return false;
-      const f = o.fwd, fl = f && Math.hypot(f.x, f.z), ownFl = Math.hypot(car.fwd.x, car.fwd.z);
-      return fl > 0 && ownFl > 0 && (f.x * car.fwd.x + f.z * car.fwd.z) / (fl * ownFl) > .995 &&
-        Math.abs(actualGap(o)) < rearSpace(o) - .35 &&
-        Math.abs(o.lat - myLat) > sideSpace(o) * .92;
-    };
 
     for(const o of peers){
       const dLat=o.lat-myLat,gap=actualGap(o),closing=Math.max(0,speed-o.speed),width=sideSpace(o);
