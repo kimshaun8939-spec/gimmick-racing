@@ -168,9 +168,11 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 //   → 고리를 잇는 매끈한 곡선(.debug/fly.js flyTest와 같은 곡선)을 따라 날고 → 착륙장에 내려 라인으로 돌아감
 //   비행 구역(car.flightAllowed) 안에서만 날게 되어 있어서 따로 막을 필요 없음
 const planCache = new WeakMap();
+const masterPlanCache = new WeakMap();
 const APPROACH = 170; // 활주로 시작 몇 m 앞부터 활주로로 들어갈 준비 (속도 줄이기)
-export function flightPlan(track) {
-  if (planCache.has(track)) return planCache.get(track);
+export function flightPlan(track, master = false) {
+  const cache = master ? masterPlanCache : planCache;
+  if (cache.has(track)) return cache.get(track);
   let p = null;
   const rw = track.runway, path = track.skyPath;
   if (rw && path && path.length >= 3 && track.racingLine && track.sampleAt) {
@@ -181,7 +183,10 @@ export function flightPlan(track) {
     const last = path[path.length - 1];
     const landPt = track.surf ? track.surf(track.sampleAt(landT), -6, 0, new THREE.Vector3()) : last.clone();
     const n = Math.round(path[0].distanceTo(last) * 1.3);
-    const dense = new THREE.CatmullRomCurve3([...path.map((v) => v.clone()), landPt], false, 'centripetal').getSpacedPoints(n);
+    const route = path.map(v=>v.clone());
+    // 고리 뒤부터 도로 쪽으로 합류해 착륙 직후 갓길을 가로지르는 손실을 줄인다.
+    if(master){const landing=track.sampleAt(track.nearest(last).t);route[route.length-1].addScaledVector(landing.right,8);route[route.length-1].y+=2;}
+    const dense = new THREE.CatmullRomCurve3([...route, landPt], false, 'centripetal').getSpacedPoints(n);
     const dir = rw.end.pos.clone().sub(rw.start.pos).setY(0).normalize();
     const rwI = Math.round(rwT * N) % N;
     // 활주로로 들어가는 길: 활주로 시작 APPROACH m 앞부터 도로 가운데 선 → 활주로 가운데 선 (1 m 간격, 굽은 정도 = 오른쪽 +)
@@ -238,7 +243,7 @@ export function flightPlan(track) {
       ap, kap: kapS, apRw: ap.length - Math.round(rw.end.dist - 25),
     };
   }
-  planCache.set(track, p);
+  cache.set(track, p);
   return p;
 }
 
@@ -279,7 +284,7 @@ function masterDriveModel(cfg) {
 }
 
 // 실제로 받은 공통 공력 효과만 계획에 반영한다. 차 cfg/물리는 바꾸지 않는다.
-function aeroPlan(line, cfg, base, car, cache, master = false) {
+function aeroPlan(line, cfg, base, car, cache, master = false, circuit = false) {
   if (!BOT_AERO || !car.grounded || car.surface === 'magnet' || car.up.y < .8 || (car.gravityScale && car.gravityScale() < .95) || car.mode === 'boat' || car.mode === 'fly') return base;
   const D = cfg.draft || {}, T = cfg.tow || {}, R = cfg.drs || {};
   // 작은 변화마다 전체 코스 계획을 다시 만들지 않도록 아래쪽 1/16 단위로 묶는다.
@@ -312,7 +317,7 @@ function aeroPlan(line, cfg, base, car, cache, master = false) {
     },
     aBrake: v => Math.max(.1, cm.aBrake(v) - cfg.aero.drag * v * v * (1 - drag)),
   };
-  const plan = line.profile(model);
+  const plan = line.profile(circuit ? {...model,aLat:v=>model.aLat(v)*(1.16/1.08)} : model);
   if (cache.size >= 48) cache.delete(cache.keys().next().value);
   cache.set(key, plan);
   return plan;
@@ -355,10 +360,16 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   if(exactMaster)prof=L.profile(masterDriveModel(car.cfg));
   const cm = exactMaster?masterDriveModel(car.cfg):lineCarModel(car.cfg); // 제동력 계산용
   const aeroPlans = new Map();
+  // 구름섬 마스터만 별도 코너 계획. 타이어·엔진·공통 공력 값은 바꾸지 않는다.
+  const circuit = exactMaster && !!track.runway;
+  // 제동/코스팅으로 앞 하중을 남기는 구간의 목표. 실제 가속과 회전은 Car가 제한한다.
+  const circuitProf = circuit ? L.profile({...cm,aLat:v=>cm.aLat(v)*(1.16/1.08)}) : null;
+  const circuitAeroPlans = new Map();
   const thrK = level.thrK ? Math.min(1, (level.thrK * pace) / level.pace) : 1; // 봇마다 조금씩 다른 액셀 (실력 차이)
   let vTop = 0;
   for (let i = 0; i < N; i++) vTop = Math.max(vTop, prof.speed[i]);
   const st = {
+    circuitClear: false, cornerLoad: 1,
     lane: 0, // 지금 라인에서 옆으로 비킨 거리 (m, + 오른쪽)
     laneTarget: 0,
     laneHold: 0, // 추월 줄을 유지할 남은 시간
@@ -401,7 +412,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   }
 
   // 비행 루트: 실력별 비행 속도·흔들림 (level.fly). 쉬움일수록 느리고 조금 흔들림
-  const plan = flightPlan(track);
+  const plan = flightPlan(track, exactMaster);
   const FLY = { speed: 42, look: 22, gain: 2.5, wobble: 0, ...(level.fly || {}) };
   const flyV = FLY.speed * (1 + (pace / level.pace - 1) * 0.5); // 봇마다 조금씩 다름
   // 활주로로 들어가는 길의 속도 계획 (이 차의 옆 접지력으로, 뒤에서부터 제동 거리)
@@ -543,6 +554,18 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       c.throttle = 0;
       c.brake = clamp((speed - tgt) / 3, 0, 1);
     } else c.throttle = Math.min(1, thrK);
+    if (exactMaster) {
+      const h = A[Math.max(0,bi-2)], t = A[Math.min(A.length-1,bi+4)];
+      const tx=t.x-h.x,tz=t.z-h.z,tl=Math.hypot(tx,tz)||1;
+      const fl=Math.hypot(car.fwd.x,car.fwd.z)||1;
+      const hd=Math.atan2((car.fwd.x*tz-car.fwd.z*tx)/fl,(car.fwd.x*tx+car.fwd.z*tz)/fl);
+      const side=(tx*(A[bi].z-car.pos.z)-tz*(A[bi].x-car.pos.x))/tl;
+      const cfg=car.cfg, v=Math.max(8,speed), df=cfg.aero.downforce*Math.min(1.6,(v/cfg.maxSpeed)**2);
+      const lat=cfg.steerLat*(1+(cfg.steerLatDownforce||0)*df)*(1-(cfg.steerLatLoad||0)*(car.load||0));
+      const yaw=plan.kap[Math.min(A.length-1,bi+Math.round(v*.2))]*v+3*hd+.15*clamp(side,-6,6);
+      const per=cfg.steerRate*Math.min(1,v/8)*Math.min(1,lat/(cfg.steerRate*v));
+      c.steer=clamp((yaw+.3*(yaw-(car.yawRate||0))-.8*(car.slip||0))/Math.max(.05,per),-1,1);
+    }
     st.dbg = { fly: st.fly, apI: bi, tgt: +tgt.toFixed(1) };
     return c;
   }
@@ -577,7 +600,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const e = car.cfg.engine, G = car.gearSpeeds(), g = car.gear;
     const rpm = e.redline * Math.abs(car.speed) / G[g - 1];
     c.shiftUp = c.throttle > .2 && c.brake < .1 && g < G.length && rpm >= Math.min(e.limiter * .985, e.redline * 1.02) && car.rpm >= e.redline * e.perfectShift;
-    c.shiftDown = !c.shiftUp && g > 1 && e.redline * Math.abs(car.speed) / G[g - 2] < e.redline * (c.brake > .1 ? .92 : .86) && (c.brake > .1 || rpm < e.redline * .7);
+    c.shiftDown = !c.shiftUp && g > 1 && e.redline * Math.abs(car.speed) / G[g - 2] < e.redline * (st.circuitClear ? .98 : c.brake > .1 ? .92 : .86) && (c.brake > .1 || rpm < e.redline * (st.circuitClear ? .86 : .7));
     if (c.shiftUp || c.shiftDown) st.shiftLock = .25;
     return c;
   }
@@ -595,6 +618,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const i0 = ti.index % N;
     const v = Math.max(8, Math.abs(car.speed));
     const speed = car.speed;
+    // 실제 차가 라인으로 돌아왔고 주변 차·추월 경로가 없을 때만 적극적인 계획을 쓴다(사람/봇 공통).
+    st.circuitClear = circuit && !ctx.finished && !st.overtake && st.laneHold <= 0 && Math.abs(st.lane) < .5 && Math.abs(ti.lateral-L.offset[i0]) < 1.5 && !ctx.others.some(o => !o.fin && o.progM > -15 && o.progM < 70);
     // 비행 루트 (그랑프리): 활주로·공중에서는 땅 운전 대신
     const fc = plan ? flyControls(ctx, c, i0, speed) : null;
     if (fc) {
@@ -914,6 +939,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.lastFx=fx;st.lastFz=fz;
       steerCmd = (yawDes + .45*(yawDes-st.actualYaw) - .8*(car.slip||0)) / Math.max(0.05, perSteer);
       // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
+      st.cornerLoad = circuit && !trafficPath && Math.abs(car.slip||0)<.12 && cfg.steerLatLoad
+        ? clamp((1-(Math.abs(L.curvature[kf])*v*v-bankLat)/(cfg.steerLat*(1+(cfg.steerLatDownforce||0)*dfz)))/cfg.steerLatLoad,-.6,1) : 1;
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
 
     } else if (car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && track.roll?.loop && (car.surface === 'magnet' || ti.sample?.magnet || ti.sample?.roll)) {
@@ -979,8 +1006,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 일반 3단계는 앞차가 제한을 걸면 기존 추종/추월 판단을 유지한다.
     // 앞이 열린 경우에만 새 공력 계획을 써서 받은 견인의 나머지를 활용한다.
     const trafficPlan = !exactMaster && Number.isFinite(follow);
-    const activeProf = st.calm || trafficPlan ? prof : aeroPlan(L,car.cfg,prof,car,aeroPlans,exactMaster);
-    st.aeroPlan = activeProf !== prof;
+    const drivingProf = st.circuitClear ? circuitProf : prof;
+    const activeProf = st.calm || trafficPlan ? prof : aeroPlan(L,car.cfg,drivingProf,car,st.circuitClear?circuitAeroPlans:aeroPlans,exactMaster,st.circuitClear);
+    st.aeroPlan = activeProf !== prof && activeProf !== circuitProf;
     for (let q = 0; q <= reach; q += q < 8 ? 1 : 3) {
       const iq = W(lead + q);
       const free = boosting && activeProf.speed[iq] >= vTop * 0.97 && !activeProf.brake[iq];
@@ -1009,7 +1037,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 마스터(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
     //   접전(CLOSE)으로 빨라진 봇(eq.keep > 1)도 같은 규칙 (화산에서 사람보다 뒤인 봇이 계속 빨라져 낭떠러지로 떨어졌음)
-    const sBrake = (level.master && level.master.saturBrake) || (st.closeOn && eq.keep > 1.001 ? 8 : 3);
+    const sBrake = st.circuitClear ? 1.5 : (level.master && level.master.saturBrake) || (st.closeOn && eq.keep > 1.001 ? 8 : 3);
     const straightPass = !!st.overtake && st.overtake.phase === 'pass' && !cornerSoon && !brakeSoon && !risky && !mergeHazard;
     if (sBrake && !straightPass && car.grounded && speed > 12 && st.satur > 0.05) tgt = Math.min(tgt, speed - 1 - sBrake * st.satur);
     st.satur = 0;
@@ -1039,6 +1067,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if (speed > tgt + 0.4) {
       c.throttle = 0;
       c.brake = clamp((speed - tgt) / 3, 0, 1);
+    }
+    if (circuit && car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && st.cornerLoad < -.1 && speed > 25 && c.brake < .1) {
+      // 코너 전에 액셀을 덜 밟아 앞 하중을 남긴다. 차 물리의 하중/접지는 그대로다.
+      c.throttle=Math.min(c.throttle,clamp(.35+st.cornerLoad,0,.3));
     }
     if (car.grounded && car.mode !== 'boat' && car.surface !== 'magnet') c.throttle=Math.min(c.throttle,clamp(1-2.5*Math.max(0,Math.abs(car.slip||0)-.12),.45,1));
     if (st.mistake === 'lift') c.throttle = Math.min(c.throttle, 0.35);
@@ -1087,6 +1119,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.sc = null; st.scTry = 0; // 판자 지름길 (botShortcut.js)
       st.flyI = 0;
       st.shiftLock = 0;
+      st.circuitClear = false;
+      st.cornerLoad = 1;
       st.mistake = null;
       st.prevLat = null;
       st.lastFx=st.lastFz=st.actualYaw=null;
