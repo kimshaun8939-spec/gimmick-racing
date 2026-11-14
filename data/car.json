@@ -51,7 +51,8 @@
   },
   "_impact": "세게 부딪혔을 때 (벽·블록·건물·가드레일). 들이받는 속도(벽 쪽 성분)가 minSpeed m/s부터 효과가 생겨 minSpeed+fullSpeed에서 최대. friction: 긁히는 마찰로 잃는 속도 = 들이받는 속도 × 이 값 (최대 maxLoss 비율), align: 차 방향을 새 진행 방향 쪽으로 돌리는 비율, maxSlip: 부딪힌 뒤 남는 미끄러짐 최대(rad), yawKeep: 돌던 회전이 남는 비율, recover: 이 시간(초) 동안 꼬리가 더 돌아가지 않고 드리프트도 다시 안 걸림, alignRate: 차 방향이 돌아가는 빠르기 (클수록 확 돎, 15면 0.1초에 약 78%)",
   "impact": { "minSpeed": 6, "fullSpeed": 14, "friction": 0.35, "maxLoss": 0.45, "align": 0.7, "maxSlip": 0.3, "yawKeep": 0.25, "recover": 0.7, "alignRate": 15,
-    "wallClearance": 0.18
+    "wallClearance": 0.18,
+    "steerRecover": 1
   },
   "_입력": "키보드를 눌러도 페달과 핸들이 한 번에 끝까지 가지 않고 이 속도(초당)로 움직임",
   "input": { "throttleRise": 3.0, "throttleFall": 6, "brakeRise": 5, "brakeFall": 8, "steerRise": 3.2, "steerReturn": 6, "steerRiseHighSpeed": 0.45 },

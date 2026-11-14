@@ -337,6 +337,17 @@ const STUCK_RETRY = new URLSearchParams((typeof location !== 'undefined' && loca
 //   이제 직선에서는 슬립스트림 안에서 더 붙었다가 마지막에 빠르게(초당 SLING_RATE m) 옆으로 빠짐. 차 성능·물리는 그대로. &sling=0 = 예전
 const SLING = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('sling') !== '0';
 const SLING_RATE = 6.5;
+// 바로 뒤에서 앞차 속도만 맞추지 않기 (2026-11-14, 사용자 "내가 브레이크를 밟았는데 뒤 봇이 박지도 추월하지도 않고 간격만 유지"):
+//   (1) 범퍼에 거의 붙어 있으면(간격 < 겹침 길이+0.3 m) 추월을 시작하지 않았음 → 붙어 있어도 옆에 자리가 있으면 시작
+//   (2) 추월 중에도 옆으로 다 비키기 전엔 앞차 감속을 그대로 따라 해 같이 섰음 → 사람처럼 빠르게 옆으로 빠지고,
+//       다 비킬 때까지 범퍼에 안 닿을 만큼만 브레이크 (앞차가 줄이는 몫도 계산). 차 성능·물리는 그대로. &nofollow=0 = 예전
+//   (시험했다 뺀 것: 붙어 있을 때 막힌 쪽 바꾸기 허용 = 7봇 빙하 어려움 6판 평균 강한 닿음 7→9로 늘어남)
+const DBG_OT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('dbgot') === '1';
+//   앞차가 사람일 때만 (봇끼리는 예전 그대로: 7봇 레이스에서 봇끼리 다 쓰면 닿음 271→996·강한 닿음 5→14로 늘었음). &nofollow=2 = 봇끼리도
+const NOFOLLOW_Q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('nofollow');
+const NOFOLLOW = NOFOLLOW_Q !== '0', NOFOLLOW_ALL = NOFOLLOW_Q === '2';
+const nfFor = o => NOFOLLOW && !!o && (NOFOLLOW_ALL || !!o.human);
+const NF_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('nfoff') || '').split(',')); // (시험) 부분별 끄기: close,evade,wide
 const SAT_LIFT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('satlift') !== '0';
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const L = track.racingLine, N = L.N, ds = track.length / N, S = track.samples;
@@ -740,6 +751,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const sideSpace = o => projection(ownBox,car.fwd,null) + projection(boxOf(o),o.fwd,null);
     const rearSpace = o => projection(ownBox,car.fwd,true)+projection(boxOf(o),o.fwd,false);
     const beside = peers.filter(o => Math.abs(o.dm) < (ownBox.front+ownBox.back+boxOf(o).front+boxOf(o).back)*.5);
+    // NOFOLLOW는 사람 앞차 말고 내 옆~앞 45 m에 다른 차가 없을 때만 (내 뒤 차는 상관없음: 장면 sea 2분17초도 뒤에 봇 2대). 앞·옆에 다른 차가 있으면 무리 속 = 예전 그대로
+    //   (7봇 빙하 마스터에서 무리 속까지 쓰면 사람과 강한 닿음 2.5→5.3). &nfoff=alone = 무리 속에서도
+    const nfOK=o=>nfFor(o)&&(NF_OFF.has('alone')||!peers.some(p=>p!==o&&p.dm>-4&&p.dm<45));
     const crosses = off => beside.some(o => (off-o.lane)*(actualLane-o.lane)<0 || Math.abs(off-o.lane)<sideSpace(o)+.12);
     // 이미 얻은 옆 자리는 지킨다. 상대 쪽으로 계속 조향해 밀어내지는 않는다.
     const yieldTo = o => {
@@ -795,7 +809,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const spread=Math.max(3.1,sideSpace(leader)+(bold?.5:.75));
       const low=L.lo[i0]+Math.max(1,ownBox.half)-L.offset[i0],high=L.hi[i0]-Math.max(1,ownBox.half)-L.offset[i0];
       const choices=[0,-spread,spread,leader.lane-spread,leader.lane+spread,clamp(st.lane,low,high)];
-      return choices.filter((off,i)=>(wide||Math.abs(off)<=6.4)&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off,secs,wide)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15)&&!laneTooSlow(off,leader));
+      return choices.filter((off,i)=>(wide||Math.abs(off)<=6.4)&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off,secs,wide===true)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15)&&!laneTooSlow(off,leader));
     };
     const safeWindow=()=>{for(let q=0;q<(25+v*2.5)/ds;q+=3){const j=W(i0+q);if(narrowAt(j)||jumpZone?.[j]||S[j].roll||S[j].gap||track.isWaterT?.(j/N))return false;}return true;};
     const mergeHazard=!safeWindow();
@@ -833,7 +847,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
             //   아래 '빠지는 중' 판단(toSideS)과 같은 식 + 0.6초 여유 → 빠지는 동안 앞차 속도에 맞춰 브레이크를 안 밟음
             const slingTime=Math.max(0,sideSpace(leader)+.12-Math.abs(leader.lat-myLat))/(SLING_RATE*.7)+.45+.6;
             const pullAt=sling?rearSpace(leader)+.25+Math.max(2,closing*slingTime):rearSpace(leader)+Math.max(bold?3.5:5,closing*laneTime+v*.04);
-            if(gap<pullAt&&fits(move.off)) {move.phase='pass';move.kind=brakeSoon&&move.side===turnSide?'dive':cornerSoon?'outside':'slingshot';move.sling=sling&&move.kind==='slingshot';}
+            if(gap<pullAt&&fits(move.off,move.shortFit&&nfOK(leader)?.6:1.1)) {move.phase='pass';move.kind=brakeSoon&&move.side===turnSide?'dive':cornerSoon?'outside':'slingshot';move.sling=sling&&move.kind==='slingshot';}
           }else if((!fits(move.off,move.shortFit?.6:1.1,!!move.wideRetry)||laneTooSlow(move.off,leader))&&gap>rearSpace(leader)+1)endMove();
           // 추월 줄이 앞차와 여전히 겹쳐 뒤에 붙어 있으면 (앞차가 줄을 바꿨거나 굽은 길이라 선택지가 없었음)
           //   0.8초 뒤 같은 쪽을 더 넓게 → 안 되면 반대쪽으로, 짧은 앞(0.6초)만 보고 도로 안에서. 한 추월에 2번까지
@@ -901,19 +915,27 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if(launchColumns)want=clamp(st.gridLat-L.offset[i0],L.lo[i0]+.35-L.offset[i0],L.hi[i0]-.35-L.offset[i0]);
     else if(narrowSoon||mergeHazard)want=0;
     else{
+      st.otWhy=move?'':!front?'nofront':risky?'risky':st.overtakeCool>0?'cool':''; // (진단) 추월을 시작 안 한 이유
       if(!move&&front&&!ctx.finished&&!risky&&st.overtakeCool<=0){
         // 마스터끼리는 작은 속도 차로 코너에서 싸우지 않고 직선의 뚜렷한 기회를 쓴다.
         // 사람 상대는 기존의 과감한 추월 판단을 유지한다.
         const cooperative=!!level.master&&!front.human;
         const closing=Math.max(0,speed-front.speed),gap=actualGap(front),minClosing=cooperative?1.2:bold?.2:1.1;
         const trapped=gap<25&&st.heldT>(bold?.25:.9)&&st.tgt0>front.speed+.15;
-        if(gap>rearSpace(front)+.3&&gap<Math.min(65,Math.max(30,v*1.1))&&(closing>minClosing||trapped)&&(bold||!cornerSoon)&&(!cooperative||!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2))){
+        const closeOK=nfOK(front)&&!NF_OFF.has('close')?rearSpace(front)-.3:rearSpace(front)+.3;
+        st.otWhy=!(gap>closeOK)?(DBG_OT?'close'+gap.toFixed(2)+'/'+rearSpace(front).toFixed(2)+'c'+closing.toFixed(1):'close'):!(gap<Math.min(65,Math.max(30,v*1.1)))?'far':!(closing>minClosing||trapped)?'noclose':!(bold||!cornerSoon)?'corner':(cooperative&&!(!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2)))?'coop':'';
+        if(gap>closeOK&&gap<Math.min(65,Math.max(30,v*1.1))&&(closing>minClosing||trapped)&&(bold||!cornerSoon)&&(!cooperative||!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2))){
           const choices=options(front).sort((a,b)=>{
             const cost=x=>Math.abs(x-st.lane)+(brakeSoon&&Math.sign(x-front.lane)!==turnSide?1.1:0);
             return cost(a)-cost(b);
           });
-          const off=choices[0];
-          if(off!=null){move=st.overtake={key:keyOf(front),off,side:Math.sign(off-front.lane),startLane:front.lane,phase:gap<rearSpace(front)+4?'pass':'approach',base:Math.abs(st.lane)<2?0:Math.round(st.lane/3.1)*3.1,bestGap:gap,switched:false,age:0,noGain:0,wasCorner:cornerSoon,dm:front.dm,lane:front.lane,sep:Math.abs(front.lat-myLat),sepV:0,kind:brakeSoon&&Math.sign(off-front.lane)===turnSide?'dive':cornerSoon?'outside':'slingshot'};leader=front;st.overtakeStarts=(st.overtakeStarts||0)+1;}
+          let off=choices[0],short=false;
+          // 코너 안·제동 구간에서 앞차가 확 느려졌으면(이 자리 계획 속도의 85%보다 2 m/s 넘게 느림) 0.6초 앞까지만 도로 안이면 됨 (지나가는 데 오래 안 걸림)
+          //   이때는 라인에서 6.4 m 넘게 떨어진 넓은 쪽도 씀 (코너에서 라인이 한쪽 끝에 붙으면 반대쪽은 10 m 넘게 비어 있음)
+          //   ('safe' = 6.4 m 제한만 풀고 차 전체가 도로 안에 들어가는 자리만: 길 끝 0.4 m 여유로는 사람 근처 봇이 길 밖으로 나갔음)
+          if(off==null&&nfOK(front)&&!NF_OFF.has('wide')&&(front.speed<prof.speed[i0]*.85-2||(st.sideSight?.get(keyOf(front))?.acc||0)<-4)){off=options(front,0,'safe',.6).sort((a,b)=>Math.abs(a-st.lane)-Math.abs(b-st.lane))[0];short=off!=null;}
+          if(off==null){st.otWhy='nolane';if(DBG_OT){const spread=Math.max(3.1,sideSpace(front)+(bold?.5:.75));st.otWhy+=` L${front.lane.toFixed(1)} sp${spread.toFixed(1)} `+[-spread,spread,front.lane-spread,front.lane+spread].map(o=>o.toFixed(1)+':'+(Math.abs(o)>6.4?'w':'')+(Math.abs(o-front.lane)<sideSpace(front)+.2?'s':'')+(!fits(o,.5)?'f':'')+(crosses(o)?'x':'')+(laneTooSlow(o,front)?'t':'')).join(',')+` lo${(L.lo[i0]-L.offset[i0]).toFixed(1)} hi${(L.hi[i0]-L.offset[i0]).toFixed(1)}`;}}
+          if(off!=null){move=st.overtake={key:keyOf(front),off,side:Math.sign(off-front.lane),startLane:front.lane,phase:gap<rearSpace(front)+4?'pass':'approach',base:Math.abs(st.lane)<2?0:Math.round(st.lane/3.1)*3.1,bestGap:gap,switched:false,age:0,noGain:0,wasCorner:cornerSoon,dm:front.dm,lane:front.lane,sep:Math.abs(front.lat-myLat),sepV:0,kind:brakeSoon&&Math.sign(off-front.lane)===turnSide?'dive':cornerSoon?'outside':'slingshot'};leader=front;st.overtakeStarts=(st.overtakeStarts||0)+1;if(short){move.shortFit=true;move.wideRetry=true;}}
         }
       }
       if(move){
@@ -934,7 +956,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const ownRaw=old?clamp((actualLane-old.mine)/Math.max(.001,dt),-8,8):0;
       const ov=(old?.ov||0)+(raw-(old?.ov||0))*Math.min(1,dt*10);
       const mv=(old?.mv||0)+(ownRaw-(old?.mv||0))*Math.min(1,dt*10);
-      sight.set(key,{lane:o.lane,mine:actualLane,ov,mv});
+      const acc=old&&old.sp!=null?(old.acc||0)+(clamp((o.speed-old.sp)/Math.max(.001,dt),-60,30)-(old.acc||0))*Math.min(1,dt*12):0;
+      sight.set(key,{lane:o.lane,mine:actualLane,ov,mv,sp:o.speed,acc});
       if(!old||!move||leader!==o||o.fin||!o.fwd||crowded(o)||risky||mergeHazard||narrowSoon||!car.grounded||speed<12||car.mode==='fly'||car.mode==='boat'||car.fwd.dot(o.fwd)<.94)continue;
       const gap=actualGap(o),width=sideSpace(o);
       if(gap<-(ownBox.front+ownBox.back)*.25&&Math.abs(gap)<rearSpace(o)+2&&move.phase==='pass'&&Math.abs(sep)>width*.6&&Math.abs(sep)<width+.7&&!cornerSoon&&!brakeSoon&&-ov*side>.45&&(mv-ov)*side>.35){
@@ -978,11 +1001,17 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     }
     if(beside.length&&!risky&&!mergeHazard)hold=bold?.25:.1;
     st.laneTarget=move?.wideRetry?clamp(want,L.lo[i0]+.2-L.offset[i0],L.hi[i0]-.2-L.offset[i0]):clamp(want,-6.4,6.4);
-    const slingNow=!!(move&&move.sling&&move.phase==='pass'&&slingOK&&!beside.some(o=>o!==leader));
-    const laneRate=slingNow?SLING_RATE:cornerSoon&&speed>35?(bold?2:1.6):2.6;
+    // 앞차가 브레이크 중(감속 3 m/s² 넘음)이면 슬립스트림 추월의 '브레이크 안 밟기'를 쓰지 않음 (NOFOLLOW: 아래 '빠지는 중' 제동으로)
+    const leaderBraking=nfFor(leader)&&!NF_OFF.has('evade')&&(sight.get(keyOf(leader))?.acc||0)<-3;
+    const slingNow=!!(move&&move.sling&&move.phase==='pass'&&slingOK&&!leaderBraking&&!beside.some(o=>o!==leader));
+    // 빠지는 중(슬립스트림 추월이 아닌 추월): 땅 위·옆에 다른 차 없음·짧은 앞이 도로 안일 때. 코너에서는 접지 여유(계획 속도보다 15% 넘게 느림)가 있을 때만 빠르게
+    const evadeNow=!!(nfOK(leader)&&!NF_OFF.has('evade')&&!slingNow&&move&&move.phase==='pass'&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&!risky&&!narrowSoon&&!mergeHazard&&!beside.some(o=>o!==leader)&&fits(move.off,.6,!!move.wideRetry));
+    const evadeRate=!evadeNow?0:!cornerSoon?SLING_RATE:speed<prof.speed[i0]*.85?4.5:0;
+    const laneRate=slingNow?SLING_RATE:evadeRate?Math.max(evadeRate,2.6):cornerSoon&&speed>35?(bold?2:1.6):2.6;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
     let lane=st.lane;
 
+    let evadeTc=Infinity;
     for(const o of peers){
       const dLat=o.lat-myLat,gap=actualGap(o),closing=Math.max(0,speed-o.speed),width=sideSpace(o);
       if(!briefSideContact(o)&&gap>0&&gap<100&&Math.abs(dLat)<width+.08){
@@ -997,12 +1026,21 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         const gapM=envelope+Math.max(0,speed)*(bold?.025:.06);
         if(!clearing){
           // 슬립스트림에서 빠지는 첫 1.2초는 사람처럼 액셀을 유지 (정말 닿기 직전이면 아래 마지막 안전 브레이크가 잡음)
-          if(target){if(!(slingNow&&(move.passAge||0)<1.2&&Math.abs(desired-o.lat)>width+.12)){const room=gap-gapM;follow=Math.min(follow,Math.max(0,o.speed+Math.sign(room)*Math.sqrt(10*gHere*Math.abs(room))));}}
+          if(target&&evadeNow&&Math.abs(desired-o.lat)>width+.12){
+            // 옆으로 다 비킬 때까지(Tc) 남은 범퍼 간격을 다 쓰지 않을 만큼만 줄임: (내 속도−앞차)·Tc − 앞차 감속·Tc²/2 ≤ 간격
+            // 앞차 반대쪽으로 건너가는 중이면 앞차 뒤를 지나 반대편까지 (|옆 간격|을 더함)
+            const away=Math.sign(desired-o.lat)===Math.sign(-dLat)||Math.abs(dLat)<.05,need=width+.12+(away?-1:1)*Math.abs(dLat);
+            const rate=away?Math.max(move.sepV,1.5):laneRate*.5,Tc=Math.max(.2,Math.max(0,need)/rate+(!away||move.sepV<1?Math.max(.1,.45-(move.passAge||0)):0));
+            const aL=Math.min(0,sight.get(keyOf(o))?.acc||0),room=gap-envelope-.35;
+            follow=Math.min(follow,Math.max(0,o.speed+(room>0?room/Tc:-Math.sqrt(10*gHere*-room))+aL*Tc*.5));
+            evadeTc=Tc;
+          }
+          else if(target){if(!(slingNow&&(move.passAge||0)<1.2&&Math.abs(desired-o.lat)>width+.12)){const room=gap-gapM;follow=Math.min(follow,Math.max(0,o.speed+Math.sign(room)*Math.sqrt(10*gHere*Math.abs(room))));}}
           else if(Math.abs(o.lane-lane)<width+.25||gap<gapM+closing*2+3)follow=Math.min(follow,Math.sqrt(Math.max(0,o.speed*o.speed+2*7*gHere*(o.dm-gapM))));
         }
         // 앞날개가 뒷범퍼에 닿기 전에는 반드시 제동. 나란히 확보한 옆 접촉과 구별.
         // 슬립스트림 추월로 옆으로 빠르게 비키는 중이면, 다 비키는 시간이 범퍼에 닿는 시간의 70%보다 짧을 때는 안 밟음
-        const sideClear=target&&slingNow&&move.sepV>1&&Math.max(0,width+.08-Math.abs(dLat))/move.sepV<Math.max(0,gap-rearSpace(o))/Math.max(closing,.1)*.7;
+        const sideClear=target&&evadeTc<Infinity&&evadeTc<Math.max(0,gap-rearSpace(o))/Math.max(closing,.1)*.7||target&&slingNow&&move.sepV>1&&Math.max(0,width+.08-Math.abs(dLat))/move.sepV<Math.max(0,gap-rearSpace(o))/Math.max(closing,.1)*.7;
         if(!sideClear&&gap<envelope+closing*.2+closing*closing/(16*gHere))follow=Math.min(follow,Math.max(0,o.speed-2));
       }
     }

@@ -18,6 +18,9 @@ import { hitboxFor, constrainHitbox } from './carHitbox.js';
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
+// steerlock (2026-11-14): 벽·레일에 머리를 박은 채 벽 반대로 꺾으면, 고속 조향 한계(steerLat) 대신 느릴 때의 조향 속도로 머리를 진행 방향에 맞춤
+//   (예전엔 40°로 박으면 1.4초 동안 진행 방향이 안 바뀌고 오히려 벽 쪽으로 끌렸음). &wallsteer=0 = 예전 그대로
+const WALL_STEER = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('wallsteer') === '0');
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
@@ -181,6 +184,7 @@ export class Car {
     this._wallNormal = null;
     this._wallAt = -Infinity;
     this._impactGrip = false;
+    this._recoverOn = false; // steerlock: 벽 반대로 꺾어 머리를 맞추는 중 (_recoverN = 그 벽 방향)
 
     // 화면 연출용 값
     this.forwardSpeed = 0;
@@ -245,7 +249,7 @@ export class Car {
     if (this._pv) this._pv.set(0, 0, 0);
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
-    this._impactGrip = false;
+    this._impactGrip = this._recoverOn = false;
     this._wallNormal = null;
     this._wallAt = -Infinity;
     this.jumpStall = 0; // 부정 출발로 시동 꺼진 남은 시간
@@ -566,6 +570,9 @@ export class Car {
       // 도로 접평면의 법선: 뱅크에서도 바닥에 붙은 속도만 제한한다.
       this._wallNormal.addScaledVector(this.up, -this._wallNormal.dot(this.up)).normalize();
       this._wallAt = this.simT;
+      // steerlock: 벽에서 살짝 떨어져도(wallSliding 해제) 머리를 맞추는 동안 쓸 벽 방향
+      (this._recoverN || (this._recoverN = new THREE.Vector3())).copy(this._wallNormal);
+      this._recoverOn = true;
     }
     if (this.drifting) this.endDrift(false);
     // 충돌로 생긴 큰 slip이 타이어의 꼬리 회전으로 바뀌는 것만 막는다.
@@ -716,7 +723,7 @@ export class Car {
     const wallSlide = this.wallSliding();
     // 벽이 끝나도 충돌로 생긴 옆 미끄럼이 가라앉기 전에는 꼬리 회전을 다시 켜지 않는다.
     if (this._impactGrip) {
-      if (!wallSlide && Math.abs(this.slip) < 0.12) this._impactGrip = false;
+      if (!wallSlide && Math.abs(this.slip) < 0.12) this._impactGrip = this._recoverOn = false;
       else this.hitT = Math.max(this.hitT, dt * 2);
     }
     const spike = this.form === 'spike';
@@ -939,6 +946,17 @@ export class Car {
       turn = this.yawRate;
     }
     let dYaw = -turn * dt;
+    // 벽·레일·물체에 부딪힌 뒤 머리가 진행 방향과 어긋난 채(slip)일 때 그 어긋남을 줄이는 쪽으로 꺾으면(= 벽 반대로 꺾기)
+    //   고속 조향 한계 대신 느릴 때의 조향 속도(steerRate × impact.steerRecover × 핸들)까지 머리가 돎.
+    //   늘어난 몫은 yawRate에 넣지 않고 slip이 0이 될 때까지만 → 진행 방향과 나란해지면 끝, 넘쳐서 반대로 돌 일 없음(스핀 없음).
+    //   핸들을 안 꺾으면 0 (벽이 차를 저절로 돌리지 않음), 사람·봇 같은 규칙.
+    const steerFix = WALL_STEER && !this.drifting && f > 2 && (this._impactGrip || wallSlide) && Math.abs(this.slip) > 0.01 && this.steerIn * this.slip < 0; // 앞으로 갈 때만 (뒤로 밀리는 중은 예전 그대로)
+    if (steerFix) {
+      const rec = (cfg.impact?.steerRecover ?? 1) * cfg.steerRate * speedK * Math.abs(this.steerIn) * dt;
+      const room = Math.abs(this.slip) - Math.abs(dYaw);
+      const extra = Math.min(Math.max(0, rec - Math.abs(dYaw)), Math.max(0, room));
+      if (extra > 0) dYaw += Math.sign(this.slip) * extra;
+    }
     // 벽 위에서는 중력 때문에 진행 방향이 점점 아래로 휨 (천장에서는 중력이 수직이라 영향 없음)
     if (this.magnet && this.up.y < 0.9 && f > 5 && !spike) {
       const gT = DOWN.clone().addScaledVector(this.up, -DOWN.dot(this.up)); // 벽면을 따라 아래로
@@ -960,7 +978,8 @@ export class Car {
         f *= 1 - (D.spinLoss ?? 0.15);
         this.endDrift(false, false, true);
       }
-    } else if (wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) {
+    } else if ((wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) || (steerFix && dYaw * this.slip > 0 && this._recoverOn && this._impactGrip && this.fwd.dot(this._recoverN) < -1e-5)) {
+      // (steerlock) 벽에서 살짝 떨어진 순간에도, 벽 반대로 꺾어 머리를 맞추는 동안은 타이어가 진행 방향을 벽 쪽으로 다시 끌지 않음
       // 머리가 벽 안쪽을 향하는 동안 접지력이 이동 방향을 다시 벽 쪽으로 끌지 않게 한다.
       // 위의 조향 회전(dYaw)은 이미 적용됨. 벽 바깥을 향해 꺾으면 즉시 정상 접지로 돌아간다.
     } else {
