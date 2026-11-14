@@ -247,6 +247,7 @@ export function createDrs(o) {
   }
   const cross = zones.map(() => new Map()); // 구간마다: 차 → 마지막으로 감지선을 지난 시각
   let marks = null, box = null, shown = '';
+  let armed = false; // 처음으로 DRS가 켜진 레이스 스텝(불 꺼짐)부터 표시가 보임 = 예전과 같음
 
   function ensureMarks() {
     if (marks || !zones.length || typeof document === 'undefined') return;
@@ -254,11 +255,21 @@ export function createDrs(o) {
     if (!scene) return;
     try {
       marks = buildMarks(track, zones);
+      marks.visible = armed;
       scene.add(marks);
     } catch (err) {
       console.warn('DRS 표시 만들기 실패', err);
       marks = { visible: false };
     }
+  }
+  // 불러오는 동안 미리 만듦 (drswarm 2026-11-14): 예전엔 불이 꺼지는 첫 스텝에 레이 약 9×(길이/2+1)개/표시 + 새 셰이더·글자 그림을 처음 그려서
+  //   그 프레임이 멈칫했음 (빙하 1배 약 105 ms, CPU 4배 350~760 ms). 지금은 여기서 만들어 숨겨 두고 → prewarm.js가 숨은 것까지 셰이더·텍스처를 준비 → 레이스 중엔 보이기만 바꿈.
+  //   DRS를 안 쓰는 판(&drs=0·설정 끔·상대 없음)은 안 만듦. 온라인은 상대가 나중에 들어오니 주소에 room이 있으면 같이 미리 만듦. 못 만들면 예전처럼 첫 스텝에.
+  try {
+    const qs = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    if (zones.length && (o.isOn() || (qs && qs.get('room') && qs.get('drs') !== '0'))) ensureMarks();
+  } catch (err) {
+    console.warn('DRS 표시 미리 만들기 실패', err);
   }
   function reset() {
     for (const m of cross) m.clear();
@@ -277,8 +288,11 @@ export function createDrs(o) {
   function step(dt, time, racing) {
     const on = racing && zones.length && o.isOn();
     const list = o.all();
-    if (on) ensureMarks();
-    if (marks) marks.visible = !!(zones.length && o.isOn());
+    if (on) {
+      armed = true;
+      ensureMarks();
+    }
+    if (marks) marks.visible = !!(armed && zones.length && o.isOn());
     const locals = o.local();
     for (const e of list) {
       const p = e.progress;
