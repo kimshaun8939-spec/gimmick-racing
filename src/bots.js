@@ -739,9 +739,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if(mine!==theirs)return mine>theirs;
       return o.dm>0 || (o.dm===0&&myLat>o.lat);
     };
-    const fits = off => {
-      const margin = Math.max(1, ownBox.half);
-      for(let q=0;q<(25+v*1.1)/ds;q+=3){const j=W(i0+q),lat=L.offset[j]+off;if(lat<L.lo[j]+margin||lat>L.hi[j]-margin)return false;}
+    const fits = (off,seconds=1.1,wide=false) => {
+      const margin=wide?Math.max(.2,projection(ownBox,car.fwd,null)-1+.4):Math.max(1,ownBox.half);
+      for(let q=0;q<(25+v*seconds)/ds;q+=3){const j=W(i0+q),lat=L.offset[j]+off;if(lat<L.lo[j]+margin||lat>L.hi[j]-margin)return false;}
       return true;
     };
     let front = null;
@@ -761,13 +761,14 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const gap=(dx*tan.x+dz*tan.z)/Math.max(.01,Math.hypot(tan.x,tan.z));
       return Math.hypot(dx,dz)<65&&Math.abs(o.pos.y-car.pos.y)<5&&Math.abs(gap-o.dm)<10?gap:o.dm;
     };
+    const crowded=o=>ctx.others.some(p=>keyOf(p)!==keyOf(o)&&(!p.pos||car.pos.distanceToSquared(p.pos)<(35+v*3)**2));
     let turnSide=0,straightM=30+v*3;
     for(let q=0;q<straightM/ds;q+=3){const j=W(i0+q);if(Math.abs(L.curvature[j])>1/150){turnSide=-Math.sign(L.curvature[j]);straightM=q*ds;break;}}
-    const options=(leader,side=0)=>{
+    const options=(leader,side=0,wide=false)=>{
       const spread=Math.max(3.1,sideSpace(leader)+(bold?.5:.75));
       const low=L.lo[i0]+Math.max(1,ownBox.half)-L.offset[i0],high=L.hi[i0]-Math.max(1,ownBox.half)-L.offset[i0];
       const choices=[0,-spread,spread,leader.lane-spread,leader.lane+spread,clamp(st.lane,low,high)];
-      return choices.filter((off,i)=>Math.abs(off)<=6.4&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15));
+      return choices.filter((off,i)=>(wide||Math.abs(off)<=6.4)&&choices.indexOf(off)===i&&Math.abs(off-leader.lane)>=sideSpace(leader)+.2&&(!side||Math.sign(off-leader.lane)===side)&&fits(off,wide?2.5:1.1,wide)&&!crosses(off)&&!peers.some(o=>o!==leader&&o.dm>-rearSpace(o)-2&&o.dm<rearSpace(o)+12&&Math.abs(o.lane-off)<sideSpace(o)+.15));
     };
     const safeWindow=()=>{for(let q=0;q<(25+v*2.5)/ds;q+=3){const j=W(i0+q);if(narrowAt(j)||jumpZone?.[j]||S[j].roll||S[j].gap||track.isWaterT?.(j/N))return false;}return true;};
     const mergeHazard=!safeWindow();
@@ -775,7 +776,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     let leader=move&&peers.find(o=>move.key!=null&&keyOf(o)===move.key);
     if(move&&move.key==null){let best=8;for(const o of peers){const score=Math.abs(o.dm-move.dm)+2*Math.abs(o.lane-move.lane);if(score<best){best=score;leader=o;}}}
     const endMove=(won=false)=>{if(won)st.overtakeWins=(st.overtakeWins||0)+1;st.overtake=null;st.overtakeCool=bold?.35:1.2;st.laneHold=0;move=null;};
-    const changeSide=(kind='crossover')=>{const off=options(leader,-move.side)[0];if(off==null)return false;move.off=off;move.side=Math.sign(off-leader.lane);move.switched=true;move.kind=kind;move.noGain=0;st.overtakeSwitches=(st.overtakeSwitches||0)+1;return true;};
+    const changeSide=(kind='crossover')=>{const off=options(leader,-move.side,kind==='retry'&&bold)[0];if(off==null)return false;move.off=off;move.side=Math.sign(off-leader.lane);move.switched=true;move.kind=kind;move.wideRetry=kind==='retry'&&bold;move.evadeOff=null;move.noGain=0;st.overtakeSwitches=(st.overtakeSwitches||0)+1;return true;};
     if(move){
       move.age+=dt;
       if(!leader||narrowSoon||risky||mergeHazard||ctx.finished||move.age>30)endMove();
@@ -801,7 +802,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
             const laneTime=Math.max(0,sideSpace(leader)+.2-Math.abs(leader.lat-myLat))/2.6+.35;
             const pullAt=rearSpace(leader)+Math.max(bold?3.5:5,closing*laneTime+v*.04);
             if(gap<pullAt&&fits(move.off)) {move.phase='pass';move.kind=brakeSoon&&move.side===turnSide?'dive':cornerSoon?'outside':'slingshot';}
-          }else if(!fits(move.off)&&gap>rearSpace(leader)+1)endMove();
+          }else if(!fits(move.off,1.1,!!move.wideRetry)&&gap>rearSpace(leader)+1)endMove();
         }
       }
     }
@@ -883,6 +884,50 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       }else if(st.laneHold<=0&&!crosses(0)&&!cornerSoon)want=0;
       if(!move&&!fits(want)){want=0;st.laneHold=0;}
     }
+    // 레이싱 라인의 이동을 뺀 옆 접근. 다른 차가 없는 두 대의 접전에서만 재시도를 준비한다.
+    const oldSight=st.sideSight||new Map(),sight=new Map();
+    for(const o of peers){
+      const key=keyOf(o),old=oldSight.get(key),sep=o.lat-myLat,side=Math.sign(sep);
+      const raw=old?clamp((o.lane-old.lane)/Math.max(.001,dt),-8,8):0;
+      const ownRaw=old?clamp((actualLane-old.mine)/Math.max(.001,dt),-8,8):0;
+      const ov=(old?.ov||0)+(raw-(old?.ov||0))*Math.min(1,dt*10);
+      const mv=(old?.mv||0)+(ownRaw-(old?.mv||0))*Math.min(1,dt*10);
+      sight.set(key,{lane:o.lane,mine:actualLane,ov,mv});
+      if(!old||!move||leader!==o||o.fin||!o.fwd||crowded(o)||risky||mergeHazard||narrowSoon||!car.grounded||speed<12||car.mode==='fly'||car.mode==='boat'||car.fwd.dot(o.fwd)<.94)continue;
+      const gap=actualGap(o),width=sideSpace(o);
+      if(gap<-(ownBox.front+ownBox.back)*.25&&Math.abs(gap)<rearSpace(o)+2&&move.phase==='pass'&&Math.abs(sep)>width*.6&&Math.abs(sep)<width+.7&&!cornerSoon&&!brakeSoon&&-ov*side>.45&&(mv-ov)*side>.35){
+        const away=move.evadeOff??(move.off-side*(bold?.4:.2));
+        if(fits(away,1.1,!!move.wideRetry)&&!crosses(away)){move.evadeOff=away;move.off=away;want=away;st.laneHold=1.2;}
+      }
+      if(gap>0&&gap<rearSpace(o)+2&&Math.abs(sep)>width*.6&&Math.abs(sep)<width+1.8&&-ov*side>.45&&(mv-ov)*side>.35)
+        st.sideRetreat={key,side:move.side,off:move.off,switched:move.switched,until:st.t+4};
+    }
+    st.sideSight=sight;
+    const retreat=st.sideRetreat,peer=retreat&&peers.find(o=>keyOf(o)===retreat.key);
+    if(retreat&&(!peer||st.t>retreat.until||risky||mergeHazard))st.sideRetreat=null;
+    else if(peer){
+      const gap=actualGap(peer),width=sideSpace(peer);
+      if(gap<-(ownBox.front+ownBox.back)*.25||Math.abs(peer.lat-myLat)>width+.15)st.sideRetreat=null;
+      else if(gap<rearSpace(peer)+2){retreat.clearT=0;}
+      else{
+        const off=move&&leader===peer?move.off:retreat.off;
+        const motion=sight.get(keyOf(peer));
+        const opening=motion&&(motion.ov-motion.mv)*Math.sign(peer.lat-myLat)>.3;
+        const open=opening||(off!=null&&Math.abs(off-peer.lane)>width+.25&&fits(off,1.1,!!move?.wideRetry));
+        retreat.clearT=(retreat.clearT||0)+dt;
+        if(!open&&retreat.clearT>=.5&&bold&&!retreat.switched&&!crowded(peer)){
+          if(move&&leader===peer&&!move.switched){if(changeSide('retry')){move.phase='pass';want=move.off;}}
+          else if(!move){
+            const next=options(peer,-retreat.side,true)[0];
+            if(next!=null){
+              move=st.overtake={key:keyOf(peer),off:next,side:Math.sign(next-peer.lane),startLane:peer.lane,phase:'pass',base:actualLane,bestGap:gap,switched:true,age:0,noGain:0,wasCorner:cornerSoon,dm:peer.dm,lane:peer.lane,sep:Math.abs(peer.lat-myLat),sepV:0,kind:'retry',wideRetry:true};
+              leader=peer;want=next;st.laneHold=1.2;busy=true;attack={dM:peer.dm,o:peer};st.overtakeStarts=(st.overtakeStarts||0)+1;st.overtakeSwitches=(st.overtakeSwitches||0)+1;
+            }
+          }
+        }
+        if(open||retreat.clearT>=.5)st.sideRetreat=null;
+      }
+    }
     if(!launchColumns&&Math.abs(want-actualLane)>.15&&crosses(want)) {
       // 자기 줄로 되돌아오는 작은 보정은 버티고, 옆 차를 가로지르는 합류만 보류.
       const blockedBy=beside.filter(o=>(want-o.lane)*(actualLane-o.lane)<0||Math.abs(want-o.lane)<sideSpace(o)+.12);
@@ -890,7 +935,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       want=actualLane;
     }
     if(beside.length&&!risky&&!mergeHazard)hold=bold?.25:.1;
-    st.laneTarget=clamp(want,-6.4,6.4);
+    st.laneTarget=move?.wideRetry?clamp(want,L.lo[i0]+.2-L.offset[i0],L.hi[i0]-.2-L.offset[i0]):clamp(want,-6.4,6.4);
     const laneRate=cornerSoon&&speed>35?(bold?2:1.6):2.6;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
     let lane=st.lane;
@@ -1127,6 +1172,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     /** 복귀(리스폰) 뒤: 줄·실수 초기화 */
     reset(grid = false) {
       st.lane = st.laneTarget = 0;
+      st.sideSight=null;st.sideRetreat=null;
       delete car._sideContactAt;
       delete car._sideContactOther;
 
