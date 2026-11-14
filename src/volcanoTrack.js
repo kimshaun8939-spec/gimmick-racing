@@ -413,9 +413,12 @@ export function buildVolcanoTrack(data, scene) {
   const lineUse = [new Float32Array(SAMPLES), new Float32Array(SAMPLES)];
   // 점프: 립 60 m 앞부터는 가운데 ±1.2 m로 곧게, 착지 뒤 50 m까지도 곧게
   const centerOnly = new Float32Array(SAMPLES).fill(Infinity);
-  for (const j of jumps)
-    for (let i = j.lipI - mS(100); i <= j.landI + mS(70); i++)
-      centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(55) || i > j.landI + mS(45) ? hwAt(i) - 2.5 : 1.2);
+  //   json jumps[].lineShift(m): 착지 뒤 곧은 구간을 그만큼 더 뒤까지 (volcanofix 2026-11-15: DROP 착지를 19 m 당겼지만 라인·속도 계획은 예전 그대로 두려고)
+  for (const j of jumps) {
+    const sh = mS(j.lineShift || 0);
+    for (let i = j.lipI - mS(100); i <= j.landI + mS(70) + sh; i++)
+      centerOnly[wrapI(i)] = Math.min(centerOnly[wrapI(i)], i < j.lipI - mS(55) || i > j.landI + mS(45) + sh ? hwAt(i) - 2.5 : 1.2);
+  }
   const lineLimit = (i, side) => {
     const q = wrapI(i);
     const u = lineUse[sideN(side)][q];
@@ -505,9 +508,10 @@ export function buildVolcanoTrack(data, scene) {
     }
   };
   // 점프 립 앞 35 m·착지 뒤 30 m는 가드레일 (립 바로 앞에서 낭떠러지로 떨어지는 건 너무 가혹)
+  //   착지 뒤 길이는 json jumps[].railAfter로 바꿀 수 있음 (volcanofix 2026-11-15: DROP은 틈을 줄여 빠른 차가 착지점보다 멀리 내려앉으므로 50 m)
   for (const j of jumps) {
     setRail(j.lipI - mS(35), j.lipI, 0);
-    setRail(j.landI, j.landI + mS(30), 0);
+    setRail(j.landI, j.landI + mS(j.railAfter || 30), 0);
   }
   for (let n = 0; n < 2; n++)
     for (let i = 0; i < SAMPLES; i++) if (edgeT[n][i] === EDGE.rail || edgeT[n][i] === EDGE.wall) railSide[n][i] = 1;

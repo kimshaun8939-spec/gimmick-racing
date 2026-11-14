@@ -17,10 +17,12 @@ import { lineCarModel } from './car.js';
 const Q = (() => { try { return new URLSearchParams((typeof location !== 'undefined' && location.search) || ''); } catch { return new URLSearchParams(''); } })();
 export const LEARNED_ON = Q.get('learned') !== '0';
 const MAP_FILE = { gp: 'gp', grandprix: 'gp' };
+// 학습 파일이 있는 맵만 불러옴 (없는 맵을 부르면 콘솔에 404가 뜸). data/lines/에 맵을 더하면 여기도 더할 것
+const HAS_FILE = new Set(['foundry', 'glacier', 'gp', 'sea', 'jungle', 'neon', 'moon']);
 let DATA = null, CLASS_OF = {};
 if (LEARNED_ON) {
   const map = Q.get('map');
-  if (map && /^[a-z0-9_-]+$/i.test(map)) {
+  if (map && /^[a-z0-9_-]+$/i.test(map) && HAS_FILE.has(MAP_FILE[map] || map)) {
     try {
       const [d, cars] = await Promise.all([
         fetch(new URL(`../data/lines/${MAP_FILE[map] || map}.json`, import.meta.url)).then((r) => (r.ok ? r.json() : null)).catch(() => null),

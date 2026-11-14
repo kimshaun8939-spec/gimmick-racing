@@ -74,6 +74,8 @@ export function buildVolcanoProps(track, scene) {
     st.underT = underDeck ? (st.underT || 0) + dt : 0;
     if (isPlayer) fallHeat = falling ? Math.min(1, fallHeat + dt * 4) : fallHeat;
     if (st.fallT > 0.25 || st.underT > 0.4) {
+      // 시험용 기록 (window.__volFallLog가 배열이면 왜 복귀했는지 남김)
+      if (Array.isArray(window.__volFallLog)) window.__volFallLog.push({ t: +(i / N).toFixed(4), lat: +lat.toFixed(2), out: +out.toFixed(2), below: +below.toFixed(2), hw: +s.hw.toFixed(2), gap: s.gap, why: st.fallT > 0.25 ? 'fall' : 'under', y: +car.pos.y.toFixed(2), v: Math.round(car.speed * 3.6), grounded: car.grounded });
       if (st.fallT > 0.25) events.carFell(car); // 용암에 닿을 곳에서 첨벙 (보기·소리만)
       st.fallT = st.underT = 0;
       car.respawn();
