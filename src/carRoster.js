@@ -9,6 +9,7 @@
 
 import { registerCars, applyPaint, getCostume, isCostumeUnlocked } from './unlocks.js';
 import { applyCostume } from './carCostumes.js'; // 레벨 잠금·색 고르기
+import { applyBuild, getBuild } from './parts.js'; // 부품 조립 (2026-11-15): opts.build를 줄 때만
 
 export const DEFAULT_CAR_ID = 'f1';
 
@@ -98,14 +99,7 @@ export async function carsInClass(classId) {
 }
 
 let playerLoaded = false;
-/**
- * 차 하나의 전체 설정: car.json + 그 차의 tune. 모르는 id면 기본 차
- * 색(페인트): 이 페이지에서 맨 처음 부르는 것(= main.js의 내 차)에만 내가 고른 색을 입힘. 봇·고스트는 원래 색
- *   opts.paint: true = 꼭 입힘, false = 안 입힘
- */
-export async function loadCarConfig(id, opts = {}) {
-  const first = !playerLoaded;
-  playerLoaded = true;
+async function stockConfig(id) {
   const [base, roster] = await Promise.all([loadBase(), loadRoster().catch(() => ({ cars: [] }))]);
   const entry = findCar(roster, id);
   const cfg = deepMerge(base, (entry && entry.tune) || {});
@@ -113,6 +107,29 @@ export async function loadCarConfig(id, opts = {}) {
   cfg.carName = entry ? entry.name : '';
   cfg.carClass = (entry && entry.class) || null;
   cfg.look = clone(entry && entry.look) || { style: 'f1', body: '#e8463a' };
+  return cfg;
+}
+/** 순정 설정 (색·조립 없음, '첫 호출 = 내 차' 표시도 안 건드림) — 능력치 계산(carStats.js)·균형 도구용 */
+export const stockCarConfig = (id) => stockConfig(id);
+
+/**
+ * 차 하나의 전체 설정: car.json + 그 차의 tune. 모르는 id면 기본 차
+ * 색(페인트): 이 페이지에서 맨 처음 부르는 것(= main.js의 내 차)에만 내가 고른 색을 입힘. 봇·고스트는 원래 색
+ *   opts.paint: true = 꼭 입힘, false = 안 입힘
+ *   opts.build (부품 조립, 2026-11-15): 'mine' = 이 차에 저장된 내 조립 (가진 부품만), 객체 { 칸: 부품 id } 또는 buildSig 문자열.
+ *     주지 않으면 언제나 순정 (봇·친구 고스트·아카데미·튜토리얼). 주면 cfg.partsInfo { build, sig, ... }가 붙음 (parts.js applyBuild)
+ */
+export async function loadCarConfig(id, opts = {}) {
+  const first = !playerLoaded;
+  playerLoaded = true;
+  let cfg = await stockConfig(id);
+  if (opts.build) {
+    try {
+      cfg = applyBuild(cfg, opts.build === 'mine' ? getBuild(cfg.carId) : opts.build);
+    } catch (e) {
+      console.warn('부품 조립 적용 실패 → 순정', e);
+    }
+  }
   if (opts.paint === true || (first && opts.paint !== false)) {
     try {
       cfg.look = applyPaint(cfg.look, cfg.carId);

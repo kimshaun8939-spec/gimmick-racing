@@ -46,6 +46,10 @@ export const CELEBRATIONS = [
 ];
 export const costumePrice = c => 160 + Math.ceil((Number(c.unlockLevel)||5)/5)*80;
 export const paintPrice = p => !p || p.license || !p.level ? 0 : 80+Number(p.level)*20;
+// 부품 조립 1차 (2026-11-15): 부품 가격은 data/parts.json의 price (레벨이 되면 구매, 일부는 업적·아카데미로 바로 받음)
+export const partPrice = p => Math.max(0, Math.round(Number(p?.price) || 0));
+/** 상점 종류 [id, 이름, 아이콘] (meta.shop의 kind) */
+export const SHOP_KINDS = [ ['part','부품','🔧'], ['costume','코스튬','✦'], ['paint','색','🎨'], ['celebration','세리머니','🏁'] ];
 export const GOAL_POOLS = {
  daily:[
  {metric:'distance',goal:5000,name:'오늘의 드라이브',unit:'m',icon:'🛣️'},

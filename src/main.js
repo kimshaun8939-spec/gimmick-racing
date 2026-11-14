@@ -78,7 +78,7 @@ async function loadingStage(step, text) {
 }
 if (!mapParam) {
   const title = document.getElementById('ldMap');
-  if (title) title.textContent = '기믹 레이싱에 오신 걸 환영해요';
+  if (title) title.textContent = '트랜스폼 레이서에 오신 걸 환영해요';
   await loadingStage(0, '홈과 차고를 준비해요');
   // 홈 화면 (차·맵 고르기). 출발하면 ?map=..&car=.. 주소로 새로 불러와서 아래 게임이 시작됨
   const { runHome } = await import('./home.js');
@@ -122,7 +122,9 @@ let carCfg;
 let rosterMod = null; // 봇 차 설정 불러오기용
 try {
   const roster = (rosterMod = await loadRoster());
-  carCfg = await roster.loadCarConfig(carParam || roster.DEFAULT_CAR_ID || 'f1');
+  // 부품 조립 (2026-11-15): 내 차에만 내 조립을 넣음 (봇·고스트는 build를 안 넘겨 순정). 아카데미·튜토리얼·&parts=0이면 순정
+  const partsOk = !params.get('academy') && !params.get('tutorial') && params.get('parts') !== '0';
+  carCfg = await roster.loadCarConfig(carParam || roster.DEFAULT_CAR_ID || 'f1', partsOk ? { build: 'mine' } : {});
 } catch (err) {
   console.warn('차 설정 불러오기 실패 → 기본 차', err);
   carCfg = await loadJSON('data/car.json');
@@ -147,7 +149,7 @@ try {
 }
 const FREE = !!trackData.pad; // 시험장: 카운트다운, 바퀴 수 없이 자유 주행
 const mapTitle = mapMeta().title || trackData.name || mapName;
-document.title = `${mapTitle} · 기믹 레이싱`;
+document.title = `${mapTitle} · 트랜스폼 레이서`;
 
 // --- 렌더러와 씬 ---
 const canvas = document.getElementById('game');

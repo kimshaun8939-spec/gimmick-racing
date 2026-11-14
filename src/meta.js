@@ -2,8 +2,9 @@
 import { profile, xpFor } from './profile.js';
 import { academy, LESSONS, LICENSES } from './academyStore.js';
 import { listCostumes } from './carCostumes.js';
-import { PAINTS } from './unlocks.js';
-import { ACHIEVEMENTS, CELEBRATIONS, GOAL_POOLS, costumePrice, paintPrice } from './metaCatalog.js';
+import { PAINTS, getPaint, setPaint, isPaintUnlocked, getCostume, setCostume } from './unlocks.js';
+import { partOf, partState, listParts, getBuild, setPart, boxCount, boxPerPart } from './parts.js'; // 부품 조립 1차 (2026-11-15): 부품 구매·상점 목록·부품 상자
+import { ACHIEVEMENTS, CELEBRATIONS, GOAL_POOLS, SHOP_KINDS, costumePrice, paintPrice, partPrice } from './metaCatalog.js';
 const KEY='gimmick.meta';
 const num = v => Number.isFinite(Number(v)) ? Math.max(0,Number(v)) : 0;
 function fresh(){ return {v:1,coins:0,earned:0,spent:0,stats:{},maps:{},cars:{},achievements:{},owned:{},title:'',celebration:'stock',academyPaid:{},login:{day:'',streak:0,total:0},periods:{},history:[]}; }
@@ -46,11 +47,27 @@ export const meta={
  setTitle(id){if(id&&!ACHIEVEMENTS.some(a=>a.id===id&&a.title&&state.achievements[id]))return false;state.title=id;save();emit('gimmick:meta');return true;},
  celebration(){return CELEBRATIONS.find(c=>c.id===state.celebration)||CELEBRATIONS[0];},
  equipCelebration(id){if(!CELEBRATIONS.some(c=>c.id===id)||!this.owns('celebration:'+id))return false;state.celebration=id;save();emit('gimmick:meta');return true;},
- buy(kind,item){bootMeta();let key,price;if(kind==='costume'){const c=listCostumes(item.carId).find(c=>c.id===item.id);if(!c)return {ok:false,message:'이 코스튬을 찾지 못했어요'};if(profile.get().level<c.unlockLevel)return {ok:false,message:'Lv.'+c.unlockLevel+'부터 구매할 수 있어요. 잠긴 모습도 미리 볼 수 있어요.'};key='costume:'+c.id;price=costumePrice(c);}else if(kind==='paint'){item=PAINTS.find(p=>p.id===item?.id);if(!item||item.license||!Number.isInteger(item.id)||item.id<3||item.id>10)return {ok:false,message:'이 색은 레벨 또는 아카데미로 열려요.'};key='paint:'+item.id;price=paintPrice(item);}else if(kind==='celebration'){const c=CELEBRATIONS.find(c=>c.id===item.id);if(!c)return {ok:false,message:'상품을 찾지 못했어요'};key='celebration:'+c.id;price=c.price;}else return {ok:false,message:'상품을 찾지 못했어요'};
+ buy(kind,item){bootMeta();let key,price;if(kind==='costume'){const c=listCostumes(item.carId).find(c=>c.id===item.id);if(!c)return {ok:false,message:'이 코스튬을 찾지 못했어요'};if(profile.get().level<c.unlockLevel)return {ok:false,message:'Lv.'+c.unlockLevel+'부터 구매할 수 있어요. 잠긴 모습도 미리 볼 수 있어요.'};key='costume:'+c.id;price=costumePrice(c);}else if(kind==='paint'){item=PAINTS.find(p=>p.id===item?.id);if(!item||item.license||!Number.isInteger(item.id)||item.id<3||item.id>10)return {ok:false,message:'이 색은 레벨 또는 아카데미로 열려요.'};key='paint:'+item.id;price=paintPrice(item);}else if(kind==='celebration'){const c=CELEBRATIONS.find(c=>c.id===item.id);if(!c)return {ok:false,message:'상품을 찾지 못했어요'};key='celebration:'+c.id;price=c.price;}else if(kind==='part'){const p=partOf(item?.id),st=p&&partState(p.id);if(!p||!st)return {ok:false,message:'이 부품을 찾지 못했어요'};if(st.owned)return {ok:true,owned:true,price:0};if(!st.levelOk)return {ok:false,message:st.lockReason};key='part:'+p.id;price=partPrice(p);item={...item,name:p.name};}else return {ok:false,message:'상품을 찾지 못했어요'};
  if(this.owns(key))return {ok:true,owned:true,price:0};if(state.coins<price)return {ok:false,message:'⬡ '+(price-state.coins).toLocaleString()+' 피트 코인이 더 필요해요. 레이스·목표·아카데미에서 모아 보세요.'};
  const before=structuredClone(state);state.coins-=price;state.spent+=price;state.owned[key]={at:Date.now(),price};state.history.push({at:Date.now(),amount:-price,reason:item.name||key});inc('purchases',1);if(!save()){state=before;return {ok:false,message:'저장하지 못했어요. 구매는 취소했어요.'};}scan();emit('gimmick:meta');return {ok:true,price};
  },
  flush:save,
+ /** 부품 상자 (부품 조립 1차): 조립 화면을 처음 열 때 한 번만 부름. 이미 레벨이 된 부품(Lv2 이상) 수 × 100 코인. 처음이면 { count, coins, at }, 이미 받았으면 null */
+ claimPartsBox(){bootMeta();if(state.partsBox)return null;const count=boxCount(),coins=count*boxPerPart();state.partsBox={at:Date.now(),count,coins,level:profile.get().level};if(coins){credit(coins,'부품 상자 · 이미 열린 부품 '+count+'개');}save();if(coins)announce({icon:'🔧',kicker:'부품 상자',name:'이미 열린 부품 '+count+'개 · 차고에서 골라 사요',coins});emit('gimmick:meta');return {...state.partsBox};},
+ /** 부품 상자를 받았나 (받은 내용 또는 null) */
+ partsBox(){return state.partsBox?{...state.partsBox}:null;},
+ /**
+  * 상점 공통 목록 (부품 조립 1차): 부품·코스튬·색·세리머니를 한 줄로. opts = { kinds: ['part','costume','paint','celebration'], carId, carIds }
+  *   코스튬은 carId(또는 carIds) 차의 것만, 색·부품의 '착용'도 carId 기준. 항목:
+  *   { key, kind, id, carId?, slot?, name, desc, icon, price, level, owned, equipped, canBuy, locked, lockReason, altText?, canAfford, missing, buy() → buy 결과, equip() → { ok, message? } }
+  *   canBuy = 지금 살 수 있음(코인은 canAfford), locked = 레벨·라이선스가 아직 안 됨. 기존 코스튬·색 구매 규칙은 그대로
+  */
+ shop(opts={}){bootMeta();const kinds=opts.kinds||SHOP_KINDS.map(k=>k[0]),coins=state.coins,lv=profile.get().level,out=[];const money=price=>({canAfford:coins>=price,missing:Math.max(0,price-coins)});const carIds=opts.carIds||(opts.carId?[opts.carId]:[]);
+  if(kinds.includes('part')){const cur=opts.carId?getBuild(opts.carId):null;for(const p of listParts()){const price=partPrice(p);out.push({key:'part:'+p.id,kind:'part',id:p.id,slot:p.slot,slotName:p.slotName,name:p.name,desc:p.desc,icon:p.icon,pros:p.pros,cons:p.cons,shines:p.shines,price,level:p.level,owned:p.owned,equipped:!!cur&&cur[p.slot]===p.id,canBuy:p.canBuy,locked:p.locked,lockReason:p.lockReason,altText:p.altText,source:p.source,...money(price),buy:()=>meta.buy('part',{id:p.id}),equip:()=>opts.carId?setPart(opts.carId,p.slot,p.id):{ok:false,message:'차를 먼저 골라 주세요'}});}}
+  if(kinds.includes('costume'))for(const carId of carIds)for(const c of listCostumes(carId)){const price=costumePrice(c),key='costume:'+c.id,equipped=getCostume(carId)===c.id,owned=meta.owns(key)||equipped,levelOk=lv>=c.unlockLevel;out.push({key,kind:'costume',id:c.id,carId,name:c.name,desc:c.desc||'',icon:'✦',price,level:c.unlockLevel,owned,equipped,canBuy:!owned&&levelOk,locked:!levelOk,lockReason:levelOk?'':'Lv.'+c.unlockLevel+'부터 구매·착용할 수 있어요',...money(price),buy:()=>meta.buy('costume',c),equip:()=>owned&&setCostume(carId,c.id)?{ok:true}:{ok:false,message:owned?'Lv.'+c.unlockLevel+'부터 입을 수 있어요':'먼저 구매해 주세요'}});}
+  if(kinds.includes('paint'))for(const p of PAINTS){if(!p.id)continue;const price=paintPrice(p),owned=isPaintUnlocked(p.id),early=!p.license&&p.id>=3&&p.id<=10;out.push({key:'paint:'+p.id,kind:'paint',id:p.id,name:p.name,desc:p.license?p.license+' 라이선스 색':'모든 차에 쓸 수 있는 색',icon:'🎨',color:p.body,price:p.license?0:price,level:p.level,license:p.license||null,owned,equipped:!!opts.carId&&getPaint(opts.carId)===p.id,canBuy:!owned&&early,locked:!owned&&!early,lockReason:owned?'':p.license?p.license+' 라이선스를 따면 열려요':early?'Lv.'+p.level+'에 무료로 열려요 · 지금 코인으로 미리 열 수 있어요':'Lv.'+p.level+'에 열려요',...money(p.license?0:price),buy:()=>meta.buy('paint',p),equip:()=>{if(!opts.carId)return {ok:false,message:'차를 먼저 골라 주세요'};if(!isPaintUnlocked(p.id))return {ok:false,message:'아직 잠긴 색이에요'};setPaint(opts.carId,p.id);return {ok:true};}});}
+  if(kinds.includes('celebration'))for(const c of CELEBRATIONS){const key='celebration:'+c.id,owned=meta.owns(key);out.push({key,kind:'celebration',id:c.id,name:c.name,desc:c.desc,icon:c.icon,price:c.price,level:0,owned,equipped:state.celebration===c.id,canBuy:!owned,locked:false,lockReason:'',...money(c.price),buy:()=>meta.buy('celebration',c),equip:()=>meta.equipCelebration(c.id)?{ok:true}:{ok:false,message:'먼저 구매해 주세요'}});}
+  return out;},
 };
 
 /** 플레이어 한 대만 집계. main의 실제 물리 스텝에서 호출. 봇·시범·리플레이·테스트 운전은 caller와 여기서 모두 제외. */

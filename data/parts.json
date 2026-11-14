@@ -1,0 +1,203 @@
+{
+  "_설명": "부품 조립 1차 (2026-11-15, 설계 .debug/design/parts-design.md, 약속 .debug/agents/parts-contract.md). 부품 = 장단점만 있는 옆으로 바꾸기 (업그레이드 아님). 값은 '그 차의 원래 값(차 tune을 합친 뒤)에 대한 비율'. mul = 곱하기(배열 값이면 칸마다 곱함, 숫자면 배열 전체에 곱함), add = 더하기, set = 덮어쓰기(꼭 필요할 때만), fx = 특수 계산(torqueTilt: 토크 표를 회전수 쪽으로 기울임, turbo: 터보 넣기/세게). 키는 car.json 경로를 점으로 (engine.power). 차 cfg에 없는 키는 defaults에서 시작하고, defaults에도 없으면 건너뜀(partsInfo.skipped) → ②가 car.json modes.boat에 새 키를 넣으면 그때부터 저절로 효과. 이 파일은 부품 뼈대 담당(①)과 균형 담당(⑥)만 고침",
+  "version": 1,
+  "_limits": "안전장치: 한 키는 여러 칸을 합쳐도 순정(그 차 원래 값) 대비 ±default(8%) 안으로 자름. 단, 설계에서 부품 하나만으로도 8%를 넘게 정한 '성격 키'(연석·잔디·드리프트·변속 시간·다운포스·배 방향타·소리 등)는 keys에 따로 적은 범위(ratio = 원래 값 대비 배수, abs = 최종 값의 절대 한계) 안으로 자름. 'sound.*'처럼 끝이 *이면 그 아래 모든 키. 속도에 바로 닿는 키(engine.power, maxSpeed, gears, aero.drag, tire.lateral/traction/brakeGrip, steerLat, yawResponse, 배 thrust/maxSpeed/drag)는 keys에 없음 = ±8%",
+  "limits": {
+    "default": 0.08,
+    "torqueTilt": 0.3,
+    "_tilt": "torqueTilt 합은 ±torqueTilt 안. 토크 표 행마다 값 × (1 + k·(rpm/redline − tiltPivot)) → tiltPivot 아래 회전은 k>0이면 약해지고 위는 세짐",
+    "tiltPivot": 0.6,
+    "keys": {
+      "engine.engineBrake": { "ratio": [0.6, 1.7] },
+      "engine.shiftTime": { "ratio": [0.5, 1.1] },
+      "engine.downShiftTime": { "ratio": [0.5, 1.1] },
+      "engine.perfectShiftKick": { "ratio": [0.8, 1.6] },
+      "tire.liftOff": { "ratio": [0.8, 1.2], "abs": [0, 0.5] },
+      "tire.rearGrip": { "ratio": [0.84, 1.1], "abs": [1.0, 3] },
+      "offroad.gripFactor": { "ratio": [0.75, 1.4], "abs": [0.2, 0.98] },
+      "offroad.maxSpeedFactor": { "ratio": [0.85, 1.3], "abs": [0.2, 0.92] },
+      "offroad.drag": { "ratio": [0.65, 1.3] },
+      "kerb.gripLoss": { "ratio": [0.4, 1.6] },
+      "kerb.jitter": { "ratio": [0.4, 1.6] },
+      "drift.grip": { "ratio": [0.8, 1.2] },
+      "drift.holdAngle": { "ratio": [0.9, 1.15] },
+      "drift.exitKeep": { "ratio": [0.8, 1.4], "abs": [0, 0.8] },
+      "drift.holdDrag": { "ratio": [0.85, 1.1] },
+      "aero.downforce": { "ratio": [0.65, 1.4] },
+      "steerLatDownforce": { "ratio": [0.75, 1.25] },
+      "modes.boat.turnRate": { "ratio": [0.82, 1.18] },
+      "modes.boat.carve.turn": { "ratio": [0.8, 1.25] },
+      "modes.boat.carve.drag": { "ratio": [0.55, 1.2] },
+      "modes.boat.carve.*": { "ratio": [0.5, 1.6] },
+      "modes.boat.surge.thrust": { "ratio": [0.8, 1.4] },
+      "modes.boat.landSpeedFactor": { "ratio": [0.8, 1.6], "abs": [0, 0.8] },
+      "modes.boat.landPowerFactor": { "ratio": [0.8, 1.4], "abs": [0, 0.9] },
+      "modes.boat.swell.*": { "ratio": [0.5, 1.7] },
+      "modes.boat.currentGain": { "ratio": [0.5, 1.7] },
+      "sound.turbo": { "ratio": [0.5, 3], "abs": [0, 2] },
+      "sound.*": { "ratio": [0.7, 1.4] }
+    }
+  },
+  "_blocked": "부품이 절대 못 건드리는 키 (사람·봇 같은 규칙: 슬립스트림·견인·몸싸움·DRS, 벽 충돌, 아이템·부스터, 중력, 자동 변신 규칙). 이 키로 시작하는 경로는 무시하고 partsInfo.blocked에 남김",
+  "blocked": ["draft", "tow", "contact", "drs", "impact", "items", "booster", "boost", "boostsEnabled", "gravity", "modes.accel", "modes.manualSelect", "modes.fly.zoneRadius"],
+  "_defaults": "차 cfg에 없을 때 시작값. sound = src/engineAudio.js SOUND_DEFAULTS의 숫자 값 복사 (f1처럼 tune.sound가 없는 차). 엔진 소리 기본값을 바꾸면 여기도 같이",
+  "defaults": {
+    "sound": { "fBase": 46, "fRange": 150, "pulse": 1, "saw": 1, "sub": 1, "grit": 2.8, "drive": 1, "bright": 1, "tex": 1, "eqFreq": 140, "eqGain": 6, "turbo": 0, "turboMax": 1, "whine": 0, "pops": 1, "volume": 1 }
+  },
+  "_slots": "칸. letter = 조립 표시 문자열(buildSig)의 글자, phase 2 = 2차에 쓸 칸(지금은 부품 없음, listSlots()가 기본으로 숨김). order 순서로 buildSig를 만듦 → 글자·순서·부품 no는 절대 바꾸지 말 것 (기록·고스트·순위표에 남음)",
+  "slots": [
+    { "id": "engine", "letter": "e", "name": "엔진", "icon": "🔥", "desc": "힘이 어느 회전수에서 나오는지", "camera": "rearTop", "phase": 1 },
+    { "id": "gearbox", "letter": "g", "name": "변속기", "icon": "⚙️", "desc": "가속과 최고 속도 사이", "camera": "rearTop", "phase": 1 },
+    { "id": "tire", "letter": "t", "name": "타이어", "icon": "🛞", "desc": "아스팔트·잔디·연석·드리프트", "camera": "wheelLow", "phase": 1 },
+    { "id": "aero", "letter": "a", "name": "날개", "icon": "🪽", "desc": "직선 속도와 고속 코너 사이", "camera": "rear", "phase": 1 },
+    { "id": "water", "letter": "w", "name": "물 모듈", "icon": "🚤", "desc": "물 위에서 배로 변신했을 때", "camera": "sideLow", "phase": 1 },
+    { "id": "susp", "letter": "s", "name": "서스펜션", "icon": "🔩", "desc": "반응·연석·점프 (2차)", "camera": "wheelLow", "phase": 2 },
+    { "id": "wing", "letter": "f", "name": "하늘 모듈", "icon": "✈️", "desc": "비행으로 변신했을 때 (2차)", "camera": "top", "phase": 2 }
+  ],
+  "_parts": "부품. no = 그 칸 안의 번호(1부터, 순정 = 0, 바꾸지 말 것). level = 이 레벨부터 피트 코인으로 살 수 있음, price = 코인. alt = 레벨·코인 없이 바로 받는 다른 길 (tutorial: 입문 튜토리얼 끝 / achievement: metaCatalog 업적 id / academy: 레슨 id + medal 1동 2은 3금 / license: C·B·A·S). look = 모양 힌트 (④ 부품 모양·⑤ 고스트가 씀). shines.maps = 잘 맞는 맵 id, shines.text = 잘 맞는 곳 글. pros·cons = 화면에 보일 장단점",
+  "parts": [
+    {
+      "id": "engine_highrev", "slot": "engine", "no": 1, "name": "고회전 레이스 엔진", "short": "고회전",
+      "desc": "높은 회전수에서 힘이 가장 셉니다. 직선 끝까지 밀어 주지만 낮은 회전에서는 힘이 빠져요.",
+      "pros": ["고속에서 계속 밀어 줌", "최고 속도 조금 ↑"], "cons": ["출발·헤어핀 탈출이 느림"],
+      "shines": { "maps": ["glacier", "neon"], "text": ["긴 직선", "고속 코너"] },
+      "level": 5, "price": 300,
+      "mul": { "engine.power": 1.03, "maxSpeed": 1.01, "sound.fRange": 1.1, "sound.bright": 1.15 },
+      "fx": { "torqueTilt": 0.25 },
+      "look": { "exhaust": "twin", "exhaustColor": "#c9d2dc", "glow": "#ff5a3c", "garage": "v10" }
+    },
+    {
+      "id": "engine_torque", "slot": "engine", "no": 2, "name": "저회전 토크 엔진", "short": "토크",
+      "desc": "낮은 회전수부터 힘이 꽉 찹니다. 코너 탈출·오르막에 강하고 액셀을 떼면 잘 줄어들어요.",
+      "pros": ["출발·헤어핀 탈출·오르막 강함", "액셀을 떼면 잘 줄어 브레이크가 짧음"], "cons": ["최고 속도 ↓"],
+      "shines": { "maps": ["volcano", "jungle", "foundry"], "text": ["헤어핀", "오르막"] },
+      "level": 10, "price": 400,
+      "mul": { "engine.power": 1.02, "maxSpeed": 0.98, "engine.engineBrake": 1.2, "sound.fBase": 0.9, "sound.sub": 1.2 },
+      "fx": { "torqueTilt": -0.25 },
+      "look": { "exhaust": "big", "exhaustColor": "#3a3d44", "glow": "#ff8a2a", "garage": "v8" }
+    },
+    {
+      "id": "engine_turbo", "slot": "engine", "no": 3, "name": "터보 엔진", "short": "터보",
+      "desc": "직선 끝까지 가장 셉니다. 대신 밟고 0.5초쯤 뒤에 힘이 붙어요(터보 랙). 코너 앞에서 미리 밟는 실력이 필요해요.",
+      "pros": ["직선 끝까지 가장 셈"], "cons": ["밟고 0.5초 뒤에 힘이 붙음 (터보 랙)", "톡톡 밟으면 손해"],
+      "shines": { "maps": ["gp", "moon"], "text": ["고속 코너", "실력자용"] },
+      "level": 15, "price": 600, "alt": { "type": "license", "id": "A" },
+      "mul": { "engine.power": 1.07 },
+      "add": { "sound.turbo": 0.6 },
+      "fx": { "turbo": { "share": 0.3, "lag": 0.55, "haveMul": { "share": 1.15, "lag": 1.3 }, "max": { "share": 0.45, "lag": 0.8 } } },
+      "look": { "exhaust": "turbo", "exhaustColor": "#8a5a2e", "glow": "#ffb23a", "garage": "turbo" }
+    },
+    {
+      "id": "gear_short", "slot": "gearbox", "no": 1, "name": "숏 기어", "short": "숏",
+      "desc": "기어 간격을 촘촘하게. 가속이 빨라지지만 최고 속도가 조금 줄어요.",
+      "pros": ["가속 ↑ (0→150 약 −0.3초)"], "cons": ["최고 속도 약 −6 km/h"],
+      "shines": { "maps": ["volcano", "foundry"], "text": ["코너가 많은 맵"] },
+      "level": 1, "price": 150, "alt": { "type": "tutorial", "gift": true },
+      "mul": { "gears": 0.93, "maxSpeed": 0.97 },
+      "look": { "garage": "short", "color": "#4fd1ff" }
+    },
+    {
+      "id": "gear_long", "slot": "gearbox", "no": 2, "name": "롱 기어", "short": "롱",
+      "desc": "기어 간격을 넓게. 최고 속도가 오르지만 출발과 코너 탈출이 느려요.",
+      "pros": ["최고 속도 약 +6 km/h"], "cons": ["출발·탈출 느림"],
+      "shines": { "maps": ["glacier", "gp"], "text": ["긴 직선"] },
+      "level": 7, "price": 300,
+      "mul": { "gears": 1.07, "maxSpeed": 1.03, "camera.topKmh": 1.03 },
+      "look": { "garage": "long", "color": "#ffb21a" }
+    },
+    {
+      "id": "gear_seq", "slot": "gearbox", "no": 3, "name": "레이스 시퀀셜", "short": "시퀀셜",
+      "desc": "변속이 아주 빠르고, 수동(T)으로 완벽하게 바꾸면 보상이 커요. 대신 액셀을 떼면 확 줄고 꼬리가 가벼워져요.",
+      "pros": ["변속이 빠름", "수동 완벽 변속 보상 ↑"], "cons": ["액셀을 떼면 확 줄어듦", "꼬리가 가벼워짐 (리프트오프)"],
+      "shines": { "maps": ["neon", "moon"], "text": ["수동 변속 쓰는 사람"] },
+      "level": 12, "price": 450, "alt": { "type": "license", "id": "B" },
+      "mul": { "engine.shiftTime": 0.55, "engine.downShiftTime": 0.6, "engine.perfectShiftKick": 1.5, "engine.engineBrake": 1.4, "tire.liftOff": 1.15 },
+      "look": { "garage": "seq", "color": "#ff4f6a" }
+    },
+    {
+      "id": "tire_soft", "slot": "tire", "no": 1, "name": "소프트 레이싱 타이어", "short": "소프트",
+      "desc": "말랑한 레이싱 고무. 아스팔트 코너·제동이 가장 세지만 잔디·연석에서는 약해요.",
+      "pros": ["아스팔트 코너·제동 최강"], "cons": ["잔디·연석에 약함", "드리프트가 잘 안 걸림"],
+      "shines": { "maps": ["gp", "glacier"], "text": ["깔끔한 라인"] },
+      "level": 2, "price": 200,
+      "mul": { "tire.lateral": 1.05, "tire.traction": 1.06, "tire.brakeGrip": 1.05, "offroad.gripFactor": 0.8, "offroad.maxSpeedFactor": 0.9, "kerb.gripLoss": 1.5, "drift.grip": 1.15 },
+      "look": { "sidewall": "#ff3b3b", "tread": "slick", "label": "S" }
+    },
+    {
+      "id": "tire_allterrain", "slot": "tire", "no": 2, "name": "올터레인 타이어", "short": "올터레인",
+      "desc": "울퉁불퉁한 블록 고무. 잔디·연석을 마음껏 밟아도 덜 느려지지만 포장도로 코너는 조금 손해예요.",
+      "pros": ["잔디 컷·연석 마음껏", "실수해도 덜 느려짐"], "cons": ["포장도로 코너·제동 조금 손해"],
+      "shines": { "maps": ["jungle", "mirage"], "text": ["잔디 컷", "초보"] },
+      "level": 6, "price": 300, "alt": { "type": "academy", "id": "kerb", "medal": 2 },
+      "mul": { "offroad.gripFactor": 1.35, "offroad.maxSpeedFactor": 1.25, "offroad.drag": 0.7, "kerb.gripLoss": 0.5, "tire.lateral": 0.96, "tire.brakeGrip": 0.96 },
+      "look": { "sidewall": "#ffd23a", "tread": "knob", "label": "AT" }
+    },
+    {
+      "id": "tire_drift", "slot": "tire", "no": 3, "name": "드리프트 타이어", "short": "드리프트",
+      "desc": "뒤 고무를 딱딱하게. 드리프트 각도를 오래 버티고 깔끔하게 빠지면 속도를 더 돌려받아요.",
+      "pros": ["드리프트 유지·깔끔한 탈출 보상 ↑"], "cons": ["그립 주행 코너 손해", "꼬리가 잘 나감"],
+      "shines": { "maps": ["volcano", "foundry"], "text": ["헤어핀", "드리프트 잘하는 사람"] },
+      "level": 11, "price": 450, "alt": { "type": "academy", "id": "drift", "medal": 3 },
+      "mul": { "tire.rearGrip": 0.88, "drift.grip": 0.85, "drift.holdAngle": [1, 1.12], "drift.exitKeep": 1.3, "drift.holdDrag": 0.9, "tire.lateral": 0.97 },
+      "look": { "sidewall": "#a04bff", "tread": "drift", "label": "D" }
+    },
+    {
+      "id": "aero_lowdrag", "slot": "aero", "no": 1, "name": "로우 드래그 윙", "short": "로우 드래그",
+      "desc": "날개를 납작하게. 공기 저항이 줄어 직선이 빠르지만 고속 코너·고속 제동이 약해져요.",
+      "pros": ["직선 최고 속도·고속 가속 ↑"], "cons": ["고속 코너·고속 제동 약함"],
+      "shines": { "maps": ["glacier", "neon"], "text": ["긴 직선"] },
+      "level": 3, "price": 250,
+      "mul": { "aero.drag": 0.92, "maxSpeed": 1.02, "aero.downforce": 0.7, "steerLatDownforce": 0.8 },
+      "_maxSpeed": "대부분의 차는 최고 속도가 공기 저항이 아니라 maxSpeed(한계)에서 멈춤 → drag만 줄이면 직선 최고 속도가 안 오름. 설계의 '직선 최고 속도 ↑'를 maxSpeed로 직접 (①, 2026-11-15)",
+      "look": { "kind": "lip", "color": "#cfd8e3" }
+    },
+    {
+      "id": "aero_highdf", "slot": "aero", "no": 2, "name": "하이 다운포스 윙", "short": "하이 다운포스",
+      "desc": "날개를 두 장으로 크게. 고속 코너를 밟고 돌고 제동이 안정적이지만 직선 최고 속도가 줄어요.",
+      "pros": ["고속 코너를 밟고 돎", "제동 안정"], "cons": ["직선 최고 속도 ↓"],
+      "shines": { "maps": ["gp", "moon"], "text": ["고속 스위퍼"] },
+      "level": 8, "price": 350,
+      "mul": { "aero.downforce": 1.35, "steerLatDownforce": 1.2, "aero.drag": 1.08, "maxSpeed": 0.98 },
+      "_maxSpeed": "drag만 늘리면 maxSpeed 한계에 걸리는 차는 손해가 없어 그냥 좋은 부품이 됨 → maxSpeed도 같이 (①)",
+      "look": { "kind": "double", "color": "#1b1e24", "endplate": "big" }
+    },
+    {
+      "id": "aero_splitter", "slot": "aero", "no": 3, "name": "프론트 스플리터", "short": "스플리터",
+      "desc": "차 앞 바닥에 판을 달아요. 느린 코너에서 앞이 잘 돌지만 꼬리가 가벼워져요.",
+      "pros": ["느린 코너에서 앞이 잘 돎"], "cons": ["꼬리가 가벼워짐 (오버스티어)", "직선 조금 손해"],
+      "shines": { "maps": ["volcano", "jungle"], "text": ["헤어핀", "지그재그"] },
+      "level": 13, "price": 500,
+      "mul": { "steerLat": 1.04, "tire.yawResponse": 1.05, "tire.rearGrip": 0.95, "aero.drag": 1.03, "maxSpeed": 0.995 },
+      "look": { "kind": "splitter", "color": "#20242b" }
+    },
+    {
+      "id": "hull_planing", "slot": "water", "no": 1, "name": "플레이닝 선체", "short": "플레이닝",
+      "desc": "물 위로 떠서 미끄러지는 선체. 물 직선이 가장 빠르고 파도 꼭대기를 맞추면 멀리 날아요. 카빙은 약해요.",
+      "pros": ["물 직선 최고 속도 ↑ (약 200 km/h)", "파도 점프 장인"], "cons": ["카빙·방향타 약함", "파도를 잘못 맞추면 뱃머리 박기 손해 큼", "땅에서 조금 무거움"],
+      "shines": { "maps": ["sea"], "text": ["긴 물 직선", "파도"] },
+      "level": 4, "price": 250, "alt": { "type": "achievement", "id": "sea-1" },
+      "mul": { "modes.boat.thrust": 1.06, "modes.boat.maxSpeed": 1.08, "modes.boat.drag": 0.94, "modes.boat.turnRate": 0.85, "modes.boat.carve.turn": 0.85, "modes.boat.swell.launch": 1.3, "modes.boat.swell.noseLoss": 1.5, "engine.power": 0.99 },
+      "look": { "hull": "planing", "steps": true, "sponson": "long" }
+    },
+    {
+      "id": "hull_deepv", "slot": "water", "no": 2, "name": "딥V 카빙 선체", "short": "딥V",
+      "desc": "깊은 V자 용골. 물을 깎으며 날카롭게 꺾고, 카빙을 깔끔히 펴서 빠지면 속도를 돌려받아요.",
+      "pros": ["카빙 장인: 짧은 안쪽 길", "카빙 속도 손해 ↓"], "cons": ["물 직선 최고 속도 ↓", "파도 점프 작음", "땅에서 조금 무거움"],
+      "shines": { "maps": ["sea"], "text": ["물 위 코너"] },
+      "level": 9, "price": 350, "alt": { "type": "academy", "id": "boat", "medal": 3 },
+      "mul": { "modes.boat.turnRate": 1.15, "modes.boat.carve.turn": 1.2, "modes.boat.carve.drag": 0.6, "modes.boat.carve.exitKeep": 1.5, "modes.boat.maxSpeed": 0.95, "modes.boat.swell.launch": 0.8, "modes.boat.swell.noseLoss": 0.6, "engine.power": 0.99 },
+      "look": { "hull": "deepv", "keel": "deep" }
+    },
+    {
+      "id": "hull_jet", "slot": "water", "no": 3, "name": "경량 워터젯", "short": "워터젯",
+      "desc": "가벼운 물 분사 추진. 빠른 물살을 타면 가장 빠르고 물↔땅 경사로에서 덜 느려져요. 땅에서 무게가 없어요.",
+      "pros": ["물살 레인 장인", "물↔땅 경사로에서 덜 느려짐", "땅에서 무게 없음"], "cons": ["잔잔한 물 최고 속도 ↓"],
+      "shines": { "maps": ["sea"], "text": ["물살 레인", "슬립웨이"] },
+      "level": 14, "price": 500, "alt": { "type": "achievement", "id": "sea-2" },
+      "mul": { "modes.boat.currentGain": 1.6, "modes.boat.surge.thrust": 1.3, "modes.boat.landSpeedFactor": 1.5, "modes.boat.landPowerFactor": 1.3, "modes.boat.maxSpeed": 0.95 },
+      "look": { "hull": "jet", "nozzles": 2, "motor": false }
+    }
+  ],
+  "_box": "부품 상자: 부품 기능이 생기기 전부터 레벨이 높은 사람에게 처음 조립 화면을 열 때 한 번만, 이미 레벨이 된 부품(Lv2 이상) 수 × perPart 코인 (meta.claimPartsBox)",
+  "box": { "perPart": 100, "minLevel": 2 }
+}
