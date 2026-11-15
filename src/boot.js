@@ -3,7 +3,8 @@ const status = document.getElementById('ldStatus');
 const progress = document.getElementById('ldProgress');
 const title = document.getElementById('ldMap');
 const home = !new URLSearchParams(location.search).get('map');
-if (title) title.textContent = home ? '트랜스폼 레이서에 오신 걸 환영해요' : '첫 레이스를 준비해요';
+// wheelfx: 앞 화면이 바퀴를 굴려 넣으며 넘겨준 제목이 있으면 그대로 둠 (index.html 인라인 바퀴 엔진이 채움)
+if (title && !document.getElementById('loading')?.hasAttribute('data-wf-title')) title.textContent = home ? '트랜스폼 레이서에 오신 걸 환영해요' : '첫 레이스를 준비해요';
 let downloading = true, count = 0, lastProgressAt = 0;
 const say = text => { if (status) status.textContent = text; };
 say('기본 파일 불러오기');

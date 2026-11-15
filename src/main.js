@@ -39,6 +39,7 @@ import { liveGaps } from './standingsGap.js'; // 순위표 간격 순서 고침 
 import { createItems } from './items.js'; // 아이템전 (?mode=item)
 import { createMetaTracker } from './meta.js';
 import './profile.js'; // 완주 이벤트(gimmick:raceDone)를 듣고 경험치 표시
+import { ready as wheelReady, go as wheelGo } from './wheelTransition.js'; // 화면 전환 바퀴 (wheelfx)
 
 const FIXED_DT = 1 / 120; // 물리는 항상 같은 간격으로 계산 (멀티플레이/리플레이 대비)
 
@@ -1051,7 +1052,8 @@ applySettings();
 const totalLaps = trackData.laps;
 function goHome(page) {
   setLast({ map: mapName, car: carId });
-  location.href = homeUrl(page);
+  // wheelfx: 바퀴가 굴러 들어와 덮은 뒤 이동 (두 번 눌러도 한 번만)
+  wheelGo(homeUrl(page), { title: page ? '레이스 준비' : '홈으로', sub: '트랜스폼 레이서' });
 }
 const menu = createPauseMenu({
   getInfo: () => ({
@@ -1205,7 +1207,7 @@ function showFinish() {
       }
       else if (a === 'next' && champ) {
         const u = champ.final ? null : champUrl();
-        if (u) location.href = u;
+        if (u) wheelGo(u, { title: '다음 경기', sub: String(champ.next || '') });
         else goHome();
       }
       else if (a === 'replay') replay.start();
@@ -1279,8 +1281,8 @@ if (params.get('prewarm') !== '0') {
   const bar = document.getElementById('ldProgress');
   bar?.style.setProperty('--wheel-progress', 100);
   ld('ldStatus', '준비 완료! 곧 출발해요');
-  l.classList.add('out');
-  setTimeout(() => l.remove(), 450);
+  // wheelfx: 바퀴가 왼쪽으로 굴러 나가며 게임 화면이 드러남 (끝나면 #loading을 지움)
+  if (l) wheelReady();
 }
 
 // 출발 전 설명 뒤에도 준비된 코스가 보이도록 첫 장면을 한 번 그려요.
