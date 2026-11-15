@@ -409,3 +409,6 @@
  #home .ax-head,#home .ax-foot { flex-shrink:0; }
  #home .ax-body { min-height:0; overflow:auto; overscroll-behavior:contain; }
 }
+.hm-tutorial { display:flex; align-items:center; gap:14px; width:100%; text-align:left; padding:12px 16px; margin-bottom:12px; background:#1d3e40; border-color:#8ae3d055; }
+.hm-tutorial small { display:block; font-size:12px; margin-top:4px; color:#c7dfdc; }
+.hm-tutorial>span:last-child { margin-left:auto; }
