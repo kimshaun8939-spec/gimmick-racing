@@ -988,10 +988,16 @@ RUN.fly = {
     P.momentAt = () => {
       if (car.flying) {
         P.st.flown = true;
-        const aps = track.apron && track.apron.samples;
-        const ap = aps && aps.length ? aps[Math.floor(aps.length / 2)].pos : null;
-        const apronNear = ap ? Math.hypot(car.pos.x - ap.x, car.pos.z - ap.z) < 220 : false;
-        return apronNear ? M.land : car.pos.y > (P.st.y0 ?? car.pos.y) + 2 || P.st.ring ? M.rings : M.takeoff;
+        P.st.takeoffY ??= car.pos.y;
+        // 착륙장 반경 220 m는 이륙 지점까지 포함했다. 마지막 고리를 지난 뒤에만 착륙 안내.
+        const path = track.skyPath || [];
+        const last = path[path.length - 2], end = path[path.length - 1];
+        const pastRings = last && end && (car.pos.x - last.x) * (end.x - last.x) + (car.pos.z - last.z) * (end.z - last.z) > 0;
+        const demo = ctx.game.tutorial?.stage === 'demo';
+        // 자막 읽기 대기 중에도 물리는 조금 흐른다. 짧은 이륙 순간을 건너뛰지 않게 순서를 지킨다.
+        if (demo && !P.st.takeoffShown) return M.takeoff;
+        if (demo && !P.st.ringsShown) return M.rings;
+        return pastRings ? M.land : car.pos.y > P.st.takeoffY + 2 || P.st.ring || P.st.ringsShown ? M.rings : M.takeoff;
       }
       if (P.st.flown) return M.land;
       return car.mode === 'fly' ? M.runway : M.drive;
@@ -1009,7 +1015,12 @@ RUN.fly = {
             land: ['착륙장에 내려요', '땅에 닿으면 저절로 차로 돌아와요'],
           }[id];
     P.driver = () => botDemoDriver(ctx);
-    P.demoCtl = () => {};
+    P.demoCtl = (c, cur) => {
+      // 운전사는 물리 시간 1/60초마다 호출됨. 최소 이륙 구간을 유지해야
+      // 시범 엔진의 읽기·멈춤(실제 시간 0.6초)이 다음 자막으로 취소되지 않는다.
+      if (cur?.id === 'takeoff') P.st.takeoffShown = (P.st.takeoffT = (P.st.takeoffT || 0) + 1 / 60) >= 0.8;
+      if (cur?.id === 'rings') P.st.ringsShown = true;
+    };
     P.done = (m, dt) => P.st.flown && !car.flying && car.grounded && (P.st.landedT += dt || 1 / 60) > 0.6;
     P.end = 1e9;
     return P;

@@ -51,12 +51,18 @@ export function startAcademy(game) {
   if (game.tutorial && game.tutorial.el) return game.tutorial; // 두 번 부르지 않게 (튜토리얼과도 같이 안 켬)
   if (game.__academyOn) return game.tutorial; // main.js 연결과 academyStore.js 자동 시작이 둘 다 불러도 한 번만
   game.__academyOn = true;
+  const stylesReady = [];
   for (const [id, f] of [['tut2css', './tutorial2.css'], ['acadcss', './academy.css']]) {
-    if (document.getElementById(id)) continue;
-    const l = document.createElement('link');
+    let l = document.getElementById(id);
+    if (l) {
+      if (!l.sheet) stylesReady.push(new Promise((resolve) => l.addEventListener('load', resolve, { once: true })));
+      continue;
+    }
+    l = document.createElement('link');
     l.id = id;
     l.rel = 'stylesheet';
     l.href = new URL(f, import.meta.url).href;
+    stylesReady.push(new Promise((resolve) => l.addEventListener('load', resolve, { once: true })));
     document.head.appendChild(l);
   }
   const params = new URLSearchParams(location.search);
@@ -143,6 +149,9 @@ export function startAcademy(game) {
 
   // ------------------------------------------------------------------ 화면
   const root = document.createElement('div');
+  // 외부 CSS가 늦게 와도 꾸밈 없는 코치 글자가 먼저 나타나지 않게.
+  root.style.visibility = 'hidden';
+  Promise.all(stylesReady).then(() => root.style.removeProperty('visibility'));
   root.id = 'tutorial';
   root.className = 'acad';
   root.innerHTML = `
