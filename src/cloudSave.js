@@ -21,7 +21,7 @@ const STASH = 'gimmick.ghostStash.'; // + 계정 id → { 고스트 키: 값 }
 const TOAST_KEY = 'gimmick.cloudToast'; // (sessionStorage) 새로 고침 뒤 띄울 알림
 const MAX_BYTES = 204800; // 서버와 같은 크기 제한 (200 KB)
 const UNKNOWN_MAX = 20000; // 목록에 없는 새 키는 20 KB까지만
-const MISSING_WAIT = 10 * 60e3;
+const MISSING_WAIT = 60e3; // 서버에 계정 저장(v6)이 없을 때 다시 묻기까지 (관제탑 2026-11-16: 10분 → 1분, SQL 실행 직후 바로 켜지게)
 const DEBOUNCE = 4000, MIN_GAP = 15000;
 
 /** 기기 키 (계정을 바꿔도 남음, 서버에 안 올림) */
@@ -661,6 +661,7 @@ function effectiveOwner(cur) {
 }
 /** gr_login 전: 다른 이름으로 바꿔 들어가려 하면 지금 진행을 지금 계정에 먼저 저장. 못 하면 예외 (reason 'save') */
 export async function beforeLogin(cur, nick) {
+  writeSync({ missingAt: 0 }); // 직접 로그인할 때는 '서버 준비 전' 기다림을 지우고 바로 다시 확인
   const prep = { owner: effectiveOwner(cur), cloud: !!(api && !off()) };
   if (!prep.cloud) {
     if (cur?.claimed && !sameName(cur.nick, nick)) throw Object.assign(new Error('계정 저장이 꺼져 있어 계정을 바꿀 수 없어요 · 지금은 비밀번호를 비우고 이름만 바꿀 수 있어요'), { reason: 'save' });
