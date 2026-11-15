@@ -1,12 +1,12 @@
-// 부품의 실제 장착 모습을 확대 촬영하며, 숨은 렌더러 하나와 파일 해시 캐시를 재사용합니다.
+// 부품의 조립되지 않은 단독 모습을 촬영하며, 숨은 렌더러 하나와 파일 해시 캐시를 재사용합니다.
 import * as T from 'three';
 import {createCarModel} from './carModel.js';
 import {listCars} from './carRoster.js';
 import {partOf,partLook} from './parts.js';
 export {PART_VIEW} from './carParts3d.js';
-import {PART_VIEW} from './carParts3d.js';
+import {PART_VIEW,isolatedPart} from './carParts3d.js';
 
-const VERSION=8,STORE='gimmick.partThumbs',mem=new Map();
+const VERSION=9,STORE='gimmick.partThumbs',mem=new Map();
 let studio,queue=Promise.resolve(),source;
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0).toString(36);};
 async function sourceHash(){
@@ -24,7 +24,16 @@ async function getStudio(){
  for(const [pos,col,power]of [[[4,6,-6],'#fff3e4',3],[[-4,3,-4],'#b6d9ff',2],[[0,5,5],'#ffffff',2]]){const l=new T.DirectionalLight(col,power);l.position.set(...pos);scene.add(l);}
  const {RoomEnvironment}=await import('three/addons/environments/RoomEnvironment.js');
  const pm=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pm.fromScene(room,.04);scene.environment=env.texture;room.dispose();pm.dispose();
- studio={renderer,scene,camera,env};return studio;
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+ const ctx=canvas.getContext('2d'),gradient=ctx.createRadialGradient(64,64,4,64,64,64);gradient.addColorStop(0,'#0007');gradient.addColorStop(1,'#0000');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
+ const shadowMap=new T.CanvasTexture(canvas),shadow=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshBasicMaterial({map:shadowMap,transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.visible=false;scene.add(shadow);
+ studio={renderer,scene,camera,env,shadow,shadowMap};return studio;
+}
+function stockIcon(slot,width,height){
+ const labels={engine:'순정 배기',gearbox:'순정 변속기',tire:'순정 휠',aero:'순정 날개',water:'순정 선체'};
+ const paths={gearbox:'M55 60L83 42H129L153 60V99L129 117H83L55 99ZM70 70H138M70 86H138M88 43V116M119 43V116',engine:'M55 62H145V98H55ZM68 98V117H83V98M116 98V117H131V98',aero:'M37 70H171V81H37ZM67 81V111M141 81V111',water:'M35 61H174L147 106H65ZM65 106L105 125L147 106'};
+ const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 210 160"><g fill="#344b60" stroke="#acc6d9" stroke-width="4" stroke-linejoin="round"><path d="'+(paths[slot]||paths.gearbox)+'"/></g><text x="105" y="150" text-anchor="middle" fill="#cee6ed" font-size="15" font-family="sans-serif">'+labels[slot]+'</text></svg>';
+ return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }
 const fake=()=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode:'normal',sink:0,forwardSpeed:0,thr:0,grounded:true,surface:'road',drifting:false,driftDir:0,driftLevel:0,steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
 /** partThumb('engine_turbo', {carId:'f1',size:400}) → Promise<dataURL>.
@@ -40,25 +49,32 @@ export function partThumb(partId,{carId='f1',size=400,slot='engine'}={}){
   const key=hash(JSON.stringify([VERSION,partId,carId,slot,width,height,await sourceHash(),car.look,p?.look]));
   if(mem.has(key))return mem.get(key);
   try{const old=JSON.parse(localStorage.getItem(STORE)||'{}');if(old[key]){mem.set(key,old[key]);return old[key];}}catch{}
-  const st=await getStudio(),m=createCarModel(car.look,{parts:partLook(p?{[slot]:partId}:{})});
+  const st=await getStudio();
+  if(st.carId!==carId){st.model?.dispose();st.model=createCarModel(car.look);st.carId=carId;}
+  const m=st.model;m.setParts(partLook(p?{[slot]:partId}:{}));
   try{
-   const f=fake();if(slot==='water'){f.mode='boat';f.surface='water';}m.sync(f,2,0);st.scene.add(m.root);m.root.updateMatrixWorld(true);
-   const v=PART_VIEW[slot],target=new T.Vector3(...v.look);let span=1.35;
-   const group=m.root.getObjectByName('part-'+(slot==='tire'?'tire-0':slot==='aero'&&p?.look.kind==='splitter'?'splitter':slot));
-   if(group){const b=new T.Box3().setFromObject(group);b.getCenter(target);span=Math.max(.65,b.getSize(new T.Vector3()).length());}
-   else if(slot==='engine'||slot==='gearbox'){const a=m.partMounts[slot];target.set(0,a.y,a.z);span=1.35;}
-   if(slot==='water'&&group){const b=new T.Box3().setFromObject(group);b.getCenter(target);span=p?.look.hull==='jet'?1.9:4.2;}
-   if(slot==='tire')span=Math.max(span,2.1);
-   if(slot==='aero'&&p?.look.kind==='splitter')span=Math.max(.9,span*.72);
-   if(slot==='aero'&&p?.look.kind==='lip')span=Math.max(.9,span*.78);
-
-   const cam=st.camera;cam.fov=v.fov;cam.aspect=width/height;cam.zoom=1;cam.position.copy(target).add((slot==='aero'&&p?.look.kind==='splitter'?new T.Vector3(2,.65,4):slot==='water'?new T.Vector3(5,-.45,-1.8):new T.Vector3(...v.pos).sub(new T.Vector3(...v.look))).normalize().multiplyScalar(span*.55/Math.min(1,width/height)/Math.tan(T.MathUtils.degToRad(v.fov/2))));cam.lookAt(target);cam.updateProjectionMatrix();cam.layers.mask=511;
+   const f=fake();if(slot==='water'){f.mode='boat';f.surface='water';}m.sync(f,2,0);m.root.updateMatrixWorld(true);
+   const product=isolatedPart(m,slot,p?.look);st.scene.add(product);st.product=product;
+   // 순정에 독립된 메시가 없는 칸은 명확한 순정 표식으로 표시.
+   if(!product.children.length){const url=stockIcon(slot,width,height);mem.set(key,url);return url;}
+   const bounds=new T.Box3().setFromObject(product);if(bounds.isEmpty()){const url=stockIcon(slot,width,height);mem.set(key,url);return url;}
+   const center=bounds.getCenter(new T.Vector3());product.position.sub(center);product.updateMatrixWorld(true);
+   const extent=bounds.getSize(new T.Vector3());st.shadow.scale.set(Math.max(extent.x,.3)*1.35,Math.max(extent.z,.3)*1.35,1);st.shadow.position.set(0,-extent.y/2-.025,0);st.shadow.visible=true;
+   const cam=st.camera;cam.fov=32;cam.aspect=width/height;cam.zoom=1;cam.layers.mask=511;
+   const direction=(slot==='tire'?new T.Vector3(-3,1.4,-4):slot==='water'?new T.Vector3(4,3,-5):new T.Vector3(2.7,2.1,-4)).normalize();
+   cam.position.copy(direction);cam.lookAt(0,0,0);cam.updateMatrixWorld(true);
+   const inv=cam.matrixWorldInverse,box=new T.Box3().setFromObject(product),q=new T.Vector3();let distance=0;
+   const tan=Math.tan(T.MathUtils.degToRad(cam.fov/2));
+   // 8개 모서리를 카메라 축에 투영: 길고 얇은 부품도 잘림 없이 꽉 채운다.
+   for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){q.set(x,y,z).applyMatrix4(inv);q.z+=1;distance=Math.max(distance,q.z+Math.abs(q.x)/(tan*cam.aspect),q.z+Math.abs(q.y)/tan);}
+   cam.position.copy(direction).multiplyScalar(distance*1.14);cam.lookAt(0,0,0);cam.updateProjectionMatrix();
+   st.product=product;
    st.renderer.setSize(width,height,false);st.renderer.render(st.scene,cam);
    const url=st.renderer.domElement.toDataURL('image/webp',.88);mem.set(key,url);
    try{const old=JSON.parse(localStorage.getItem(STORE)||'{}');old[key]=url;const entries=Object.entries(old).slice(-60);localStorage.setItem(STORE,JSON.stringify(Object.fromEntries(entries)));}catch{}
    return url;
-  }finally{m.dispose();}
+  }finally{st.shadow.visible=false;if(st.product){st.product.traverse(o=>{if(o.userData.photoGeometry)o.geometry.dispose();});st.scene.remove(st.product);st.product=null;}}
  });queue=job.catch(()=>{});return job;
 }
 /** 메뉴 종료 시 GPU 자원 반환. 진행 중인 촬영이 끝난 뒤 실행. */
-export function disposePartThumbs(){const job=queue.then(()=>{if(studio){studio.env.dispose();studio.renderer.dispose();studio.renderer.forceContextLoss();studio=null;}});queue=job.catch(()=>{});return job;}
+export function disposePartThumbs(){const job=queue.then(()=>{if(studio){studio.model?.dispose();studio.shadow.geometry.dispose();studio.shadow.material.dispose();studio.shadowMap.dispose();studio.env.dispose();studio.renderer.dispose();studio.renderer.forceContextLoss();studio=null;}});queue=job.catch(()=>{});return job;}

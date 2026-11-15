@@ -140,3 +140,33 @@
 }
 @media(min-width:901px) and (max-height:760px){#home .h-car.g2-detail .pu-art{height:36px}#home .h-car.g2-detail .pu-cards button{padding:4px}}
 .pu-new { color:#8ae3d0; font-size:9px; margin-left:4px; font-style:normal; }
+/* partcard: 단독 부품 사진이 카드의 절반 이상을 차지하게. */
+@media(min-width:901px) and (min-height:521px){
+ #home .h-car.g2-detail .ct-pane[data-pane=parts]{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:6px 10px;align-content:start}
+ #home .h-car.g2-detail .ct-pane[data-pane=parts][hidden]{display:none}
+ #home .h-car.g2-detail :is(.pu-head,.pu-lock,.pu-slots,.pu-cards,.pu-tools,.pu-feedback){grid-column:1/-1}
+ #home .h-car.g2-detail .pu-head{display:none}
+ #home .h-car.g2-detail .pu-art{height:120px;margin-bottom:3px}
+ #home .h-car.g2-detail .pu-art img{filter:drop-shadow(0 7px 5px #0007)}
+ #home .h-car.g2-detail .pu-detail{grid-column:1;display:flex;flex-direction:column;gap:3px;text-align:left;padding:7px}
+ #home .h-car.g2-detail .pu-detail>p{display:block}
+ #home .h-car.g2-detail .pu-detail>.gm-btn{max-width:none;width:100%;margin-top:auto}
+ #home .h-car.g2-detail .pu-trades{display:flex;flex-wrap:wrap;gap:2px 6px;font-size:10px}
+ #home .h-car.g2-detail .pu-detail>small{font-size:9px;line-height:1.25;margin:0}
+ #home .h-car.g2-detail .pu-stats{grid-column:2;grid-template-columns:1fr 1fr;align-content:start;gap:5px 7px}
+ #home .h-car.g2-detail .pu-stats>div{grid-template-columns:26px minmax(0,1fr) 25px;font-size:9px;gap:3px}
+ #home .h-car.g2-detail .pu-stats>small{font-size:9px;line-height:1.3}
+}
+@media(min-width:901px) and (min-height:521px){
+ #home .h-car.g2-detail .pu-cardtrade{display:none}
+ #home .h-car.g2-detail .pu-cards small{margin-top:3px}
+ #home .h-car.g2-detail .ct-pane[data-pane=parts]{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
+ #home .h-car.g2-detail .pu-detail{display:grid;grid-template-columns:minmax(0,1fr) auto;align-content:start;gap:3px 7px}
+ #home .h-car.g2-detail .pu-detail>b{align-self:center;text-align:left}
+ #home .h-car.g2-detail .pu-detail>.gm-btn{grid-column:2;grid-row:1 / span 2;width:110px;min-height:36px;margin:0;font-size:11px}
+ #home .h-car.g2-detail .pu-detail>p{grid-column:1}
+ #home .h-car.g2-detail .pu-trades,#home .h-car.g2-detail .pu-detail>small{grid-column:1/-1}
+ #home .h-car.g2-detail .pu-stats{grid-template-columns:1fr;gap:3px}
+ #home .h-car.g2-detail .pu-stats>div{grid-template-columns:44px minmax(0,1fr) 29px}
+}
+@media(min-width:901px) and (min-height:521px) and (max-height:740px){#home .h-car.g2-detail .pu-art{height:96px}}

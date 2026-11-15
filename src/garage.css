@@ -751,6 +751,10 @@ body.touch-on .ct-keys { display: none; }
  #home .h-car.g2-detail .h-carinfo.ct>.btns{padding-top:6px;padding-bottom:6px}
 }
 /* 목록의 카드 크기는 마지막에 본 상세 탭과 무관하게 유지. */
+/* partcard: 조립 설명과 큰 네 장 사진에 충분한 가로 폭을 준다. */
+@media(min-width:901px) and (min-height:521px){
+ #home .h-view .h-car.g2-detail:has(.h-carinfo[data-tab=parts]){grid-template-columns:minmax(0,1fr) minmax(590px,56%)}
+}
 #home .h-car.g2-list .h-carlist .list{position:relative;margin:0;padding:4px;scroll-snap-type:none;scroll-padding:8px;overscroll-behavior:contain}
 #home .h-car.g2-list .h-carlist .list .h-carcard{height:auto}
 #home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:112px!important;min-height:112px!important}

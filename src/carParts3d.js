@@ -1,6 +1,32 @@
 ﻿import * as T from 'three';
 
 import {batchLocal} from './staticBatch.js';
+// 사진 전용 참조. 게임의 메시·재질·그림 호출은 바꾸지 않는다.
+const photoKits=new WeakMap();
+export function isolatedPart(model,slot,look){
+ const kit=photoKits.get(model.fp.body),out=new T.Group();
+ if(!kit)return out;
+ const source=slot==='tire'?kit.wheels[0].spin:look?model.root.getObjectByName('part-'+(slot==='aero'&&look.kind==='splitter'?'splitter':slot)):slot==='aero'?kit.spoiler:slot==='water'?kit.hull:null;
+ if(source){const c=source.clone(true),hidden=[];c.traverse(o=>{if(o!==c&&(!o.visible||Math.max(o.scale.x,o.scale.y,o.scale.z)<.01))hidden.push(o);});for(const o of hidden)o.removeFromParent();c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;out.add(c);}
+ else if(slot==='engine'){
+  if(kit.style==='f1'||kit.style==='kart'){
+   // 순정 차체는 재질별로 합쳐져 있다. 엔진 구역 안의 삼각형만 사진용으로 복사.
+   const region=kit.style==='kart'?new T.Box3(new T.Vector3(.20,.14,-1.15),new T.Vector3(.56,.60,-.33)):new T.Box3(new T.Vector3(-.13,.42,-2.18),new T.Vector3(.13,.61,-1.88));
+   kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual)return;for(let n=o;n;n=n.parent)if(!n.visible)return;if(kit.style==='f1'&&o.material?.color?.getHSL({}).s>.3)return;const pos=o.geometry.attributes.position,idx=o.geometry.index,points=[],a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3();
+    for(let i=0;i<(idx?.count||pos.count);i+=3){a.fromBufferAttribute(pos,idx?idx.getX(i):i).applyMatrix4(o.matrixWorld);b.fromBufferAttribute(pos,idx?idx.getX(i+1):i+1).applyMatrix4(o.matrixWorld);c.fromBufferAttribute(pos,idx?idx.getX(i+2):i+2).applyMatrix4(o.matrixWorld);if(region.containsPoint(a)&&region.containsPoint(b)&&region.containsPoint(c))points.push(...a.toArray(),...b.toArray(),...c.toArray());}
+    if(points.length){const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(points,3));geo.computeVertexNormals();const m=new T.Mesh(geo,o.material);m.userData.photoGeometry=true;out.add(m);}
+   });return out;
+  }
+  // 순정 배기처럼 차체와 별도인 작은 금속 메시만 추출한다.
+  const b=new T.Box3(),v=new T.Vector3();
+  const candidates=[];
+  kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual)return;for(let n=o;n;n=n.parent)if(!n.visible)return;o.geometry.computeBoundingBox();b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);b.getSize(v);const c=b.getCenter(new T.Vector3());if(c.z<-.45&&v.z<1.9&&v.y<.65&&v.x<1.65&&v.length()<2&&v.length()>.15&&o.material?.metalness>.4)candidates.push({o,volume:v.x*v.y*v.z});});
+  // 작은 고정쇠나 다른 장치를 섞지 않고 독립된 주 부품만 꺼낸다.
+  const o=candidates.sort((a,b)=>b.volume-a.volume)[0]?.o;
+  if(o){const m=o.clone(false);m.matrix.copy(o.matrixWorld);m.matrix.decompose(m.position,m.quaternion,m.scale);out.add(m);}
+ }
+ return out;
+}
 // 차 지역 좌표: +x 오른쪽, +y 위, +z 앞. 조립 화면과 부품 사진 공용.
 export const PART_VIEW=Object.freeze({
  engine:{pos:[2.8,1.3,-5.2],look:[0,.4,-1.8],fov:32},
@@ -12,6 +38,7 @@ export const PART_VIEW=Object.freeze({
 // 순정 날개/앞 범퍼를 차체 좌표가 아닌 해당 그룹의 지역 좌표로 잰다.
 function bounds(group){group.updateMatrixWorld(true);const inv=group.matrixWorld.clone().invert(),b=new T.Box3(),q=new T.Box3();group.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld));b.union(q);});return b;}
 export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBounds,style}){
+ photoKits.set(body,{body,spoiler,hull,wheels,style});
  const rear=bounds(spoiler),front=bounds(fWing),nodes=[],resources=new Set(),materials=new Set();
  if(drs){drs.updateMatrix();drs.geometry.computeBoundingBox();rear.copy(drs.geometry.boundingBox).applyMatrix4(drs.matrix);}
  const rearSize=rear.getSize(new T.Vector3()),rearCenter=rear.getCenter(new T.Vector3());
