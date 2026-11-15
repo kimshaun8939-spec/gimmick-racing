@@ -369,7 +369,8 @@ export function createReplay(o) {
     camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();
     if (hooks.onExit) hooks.onExit();
-    const rb = root.querySelector('[data-res="replay"]');
+    // 결과로 돌아오면 Enter 안내와 같은 기본 동작으로. 온라인은 같은 방 버튼을 우선해요.
+    const rb = root.querySelector('[data-res="restart"]') || root.querySelector('.ra-main button, .ra-sub button');
     if (rb) rb.focus({ preventScroll: true });
   }
   let barT = 0;

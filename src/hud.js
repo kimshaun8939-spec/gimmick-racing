@@ -85,7 +85,7 @@ function champHtml(c) {
   const dots = c.maps
     .map((m, i) => `<span class="${i < c.no ? 'done' : ''}${i === c.no - 1 ? ' now' : ''}">${esc(m)}</span>`)
     .join('');
-  return `<div class="champ"><div class="ct">🏆 챔피언십 ${c.final ? '최종 순위' : `${c.no}/${c.total} 경기 뒤 순위`}</div><div class="cmaps">${dots}</div>
+  return `<div class="champ"><div class="ct">🏆 시즌 ${c.final ? '최종 순위' : `${c.no}/${c.total} 경기 뒤 순위`}</div><div class="cmaps">${dots}</div>
     <table class="cst"><tr class="hd"><td>순위</td><td>이름</td><td>이번 경기</td><td>합계</td></tr>${c.table
       .map((r) => `<tr class="${r.isPlayer ? 'me' : ''}"><td>${r.pos}</td><td class="nm"><i style="background:${esc(r.color)}"></i>${esc(r.name)}${r.wins ? ` <small>🏆×${r.wins}</small>` : ''}</td><td class="gain">${r.gained ? '+' + r.gained : '-'}</td><td><b>${r.points}</b></td></tr>`)
       .join('')}</table><p class="res-rule">1~8위: 25·18·15·12·10·8·6·4점 · 합계가 높으면 우승해요.<br>동점이면 우승 횟수 → 가장 높은 순위로 비교해요. 진행은 이 브라우저에 자동 저장돼요.</p></div>`;
@@ -545,6 +545,7 @@ export function createHud(track) {
     },
     /** 결과 화면의 온라인 순위표 한 줄 (html, 빈 문자열이면 숨김) */
     setOnline(html) {
+      if (route.get('mode') === 'item') html = html?.replace(/^(봇과|온라인 상대와) 함께 달린 기록은 /, '파워업 레이스 기록은 ');
       const o = el.results.querySelector('[data-online]');
       if (o) {
         o.innerHTML = html || '';
@@ -569,7 +570,7 @@ export function createHud(track) {
       const esc = (x) => String(x ?? '').replace(/</g, '&lt;');
       const badges = [];
       const canCompare = !route.has('room') && route.get('mode') !== 'item' && !(info.standings?.length > 1);
-      const modeName = route.has('room') ? (route.get('mode') === 'item' ? '온라인 파워업 레이스' : '온라인 레이스') : info.champ ? '챔피언십' : route.get('mode') === 'item' ? '파워업 레이스' : route.get('mode') === 'time' ? '타임 어택' : info.standings?.length > 1 ? '봇 레이스' : '혼자 달리기';
+      const modeName = route.has('room') ? (route.get('mode') === 'item' ? '온라인 파워업 레이스' : '온라인 레이스') : info.champ ? '시즌' : route.get('mode') === 'item' ? '파워업 레이스' : route.get('mode') === 'time' ? '타임 어택' : info.standings?.length > 1 ? '봇 레이스' : '혼자 달리기';
       // 최고 기록 = 완주 시간 (여러 바퀴면 모든 바퀴 합)으로 판단 (사용자 요청 2026-11-10)
       const diff = info.prevRace ? total - info.prevRace : 0;
       const diffTxt = `${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(3)}초`;
@@ -617,7 +618,7 @@ export function createHud(track) {
         <div class="res-clock"><small>완주 시간</small><div class="total">${fmtTime(total)}</div></div>
         ${rw ? rewardBandHtml(rw) : ''}
         <div class="badges">${badges.join('')}</div>
-        <div class="online" data-online></div>
+        <div class="online" data-online>${route.get('mode') === 'item' ? '파워업 레이스 기록은 내 기록·고스트·온라인 순위표에 안 남아요' : ''}</div>
         </div>
         <div class="res-scroll">
         ${rw ? levelUpHtml(rw) : ''}
@@ -636,7 +637,7 @@ export function createHud(track) {
           <div class="ra-sub">
             ${info.replay ? '<button class="gm-btn sub" data-res="replay"><span class="ic">▶</span>리플레이</button>' : ''}
             ${info.corners?.rows?.length ? '<button class="gm-btn sub corner-toggle" data-res="corners" aria-controls="resultCorners" aria-expanded="false">코너 분석</button>' : ''}
-            <button class="gm-btn sub" data-res="car">차·맵 바꾸기</button>
+            <button class="gm-btn sub" data-res="car">${route.has('room') ? '방 나가기' : '차·맵 바꾸기'}</button>
             <button class="gm-btn sub" data-res="home">홈으로</button>
           </div>
         </div></div>`;

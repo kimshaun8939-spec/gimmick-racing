@@ -162,3 +162,15 @@ body.touch-on #slipDock #draftBox { width: 198px; }
 @media (orientation:landscape) and (max-height:430px) {
  body.touch-on #flightInfo { left:auto; right:10px; top:102px; bottom:auto; transform:none; max-width:156px; padding:2px 6px; font-size:10px; text-align:right; }
 }
+
+/* qa3fixB: 착지계가 떠 있는 동안 업적은 위쪽 중앙 빈자리에 표시해요.
+   meta.css가 나중에 불러와져도 적용되도록 비행 상태를 함께 지정해요. */
+body:not(:has(#home)):has(#flyGauge.on) .mt-notice {
+ top:16px; left:50%; right:auto; translate:-50% 0;
+ width:300px; max-width:32vw; box-sizing:border-box;
+}
+@media (orientation:landscape) and (max-height:430px) {
+ body.touch-on:not(:has(#home)):has(#flyGauge.on) .mt-notice {
+  top:8px; width:220px; max-width:30vw; padding:6px 8px;
+ }
+}

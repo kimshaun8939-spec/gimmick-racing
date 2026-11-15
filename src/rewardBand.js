@@ -142,7 +142,7 @@ export function rewardBandHtml(m) {
     const when = m.toReward && m.toReward.xp && m.next.level > m.after.level + 1 ? `${n(m.toReward.xp)} XP 남음 · 약 ${m.toReward.races}판` : '';
     next = `<div class="rw-next" title="${esc(m.next.items.map((x) => `${KIND_LABEL[x.kind]} · ${x.name}`).join('\n'))}">
       <div class="rw-art rw-k-${main.kind}">${artHtml(main)}</div>
-      <div class="rw-ntext"><small>다음 보상 · <b>Lv.${m.next.level}</b>${when ? ` · ${when}` : ''}</small><b class="rw-nname">${main.kind === 'costume' && !main.mine ? esc(main.carName) + ' · ' : ''}${esc(main.name)}</b><span>${esc(KIND_LABEL[main.kind])}${main.kind === 'part' ? ' · ' + esc(main.slotName) : ''}${more ? ' · + ' + esc(more) : ''}${esc(mineTxt)}</span></div></div>`;
+      <div class="rw-ntext"><small>다음 보상 · <b>Lv.${m.next.level}</b>${when ? ` · ${when}` : ''}</small><b class="rw-nname">${main.kind === 'costume' && !main.mine ? esc(main.carName) + ' · ' : ''}${esc(main.name)}</b><span>${esc(KIND_LABEL[main.kind])}${main.kind === 'part' ? ' · ' + esc(main.slotName) : ''}${more ? ' 외 ' + rest.length + '개: ' + esc(more) : ''}${esc(mineTxt)}</span></div></div>`;
   } else {
     next = `<div class="rw-next rw-done"><div class="rw-art"><span class="rw-emoji">🏁</span></div><div class="rw-ntext"><small>다음 보상</small><b class="rw-nname">모든 레벨 보상 달성</b><span>피트 샵에서 조각으로 차·부품·꾸미기를 사 보세요</span></div></div>`;
   }

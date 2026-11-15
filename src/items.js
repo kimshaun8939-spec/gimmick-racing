@@ -313,6 +313,17 @@ export function createItems(o) {
     if (e.finished || s.roulT > 0 || !s.slots[0]) return false;
     const kind = s.slots[0];
     const me = isMe(e);
+    // 슬롯을 비우기 전에 대상을 확정해요. 선두가 된 사람·봇은 공격 아이템을 보관해요.
+    const ahead = (kind === 'rocket' || kind === 'shock')
+      ? (online ? remotes() : racers()).filter((x) => x !== e && !x.finished && x.progress > e.progress)
+      : [];
+    const target = kind === 'rocket'
+      ? ahead.filter((x) => x.progress - e.progress < CFG.rocketRange / L).sort((a, b) => a.progress - b.progress)[0]
+      : null;
+    if ((kind === 'rocket' && !target) || (kind === 'shock' && !ahead.length)) {
+      if (me) say(ahead.length ? '앞차가 너무 멀어요 · 가까워지면 쓰세요' : '앞에 차가 없어요 · 나중에 쓰세요');
+      return false;
+    }
     if (kind === 'rocket' && !rockets.some((r) => !r.on)) return false;
     s.slots[0] = s.slots[1];
     s.slots[1] = null;
@@ -349,12 +360,7 @@ export function createItems(o) {
     } else if (kind === 'rocket') {
       const r = rockets.find((x) => !x.on);
       // 바로 앞 차를 겨냥
-      let tgt = null, best = CFG.rocketRange / L;
-      for (const x of online ? remotes() : racers()) {
-        if (x === e || x.finished) continue;
-        const d = x.progress - e.progress;
-        if (d > 0 && d < best) (best = d), (tgt = x);
-      }
+      const tgt = target;
       Object.assign(r, { on: true, owner: e, target: tgt, d: e.progress * L + 5, lat: latOf(e), v: Math.max(CFG.rocketMin, Math.abs(c.speed) + CFG.rocketSpeed), life: tgt ? CFG.rocketLife : 2.5 });
       r.mesh.position.copy(c.pos);
       r.mesh.visible = visible;
@@ -389,7 +395,7 @@ export function createItems(o) {
       }
       if (me) {
         sfx('shock');
-        say(n ? `⚡ 앞차 ${n}대가 느려졌어요!` : '⚡ 앞에 아무도 없어요');
+        say(n ? `⚡ 앞차 ${n}대가 느려졌어요!` : '🛡 앞차의 방어막이 전기 충격을 막았어요');
         if (hud.flash) hud.flash('#fff25a', 0.3);
       }
     }
