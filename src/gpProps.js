@@ -1,9 +1,10 @@
-// 구름섬 그랑프리 전용 소품: 하늘 협곡의 비행 고리
+// 구름섬 그랑프리 전용 소품: 하늘 협곡의 비행 고리 (2026-11-15 fly2: 고리는 길 안내 표시. 통과 부스트는 car.json boostsEnabled false로 꺼져 있음)
 //   고리를 통과하면 부스트 (car.startBoost) + 고리가 반짝이며 번호가 다음 고리로 넘어감
 //   (props.js의 buildProps가 그랑프리 맵이면 이것을 대신 씀. update/reset/animate 모양은 같음)
 import * as THREE from 'three';
 import { canvasTexture } from './track.js';
 import { createSpaceHazards } from './gpSpaceHazards.js';
+import { createFlightFx } from './gpFlight.js';
 
 export function buildGrandPrixProps(track, scene) {
   const group = new THREE.Group();
@@ -12,6 +13,8 @@ export function buildGrandPrixProps(track, scene) {
   const rings = track.rings || [];
   // 우주 차원 위험 (2026-11-15 space2): 난간 없는 길에서 떨어지면 복귀, 블랙홀 중력 (사람·봇 같이). 우주 쪽 물체라 이 그룹 밖에 둠
   const spaceHz = createSpaceHazards(track, scene);
+  // 비행 기술 (2026-11-15 fly2): 상승 기류 기둥·착지계·착지 흙먼지·바람 소리 (구름섬 쪽이라 이 그룹 안)
+  const flightFx = createFlightFx(track, group);
 
   // 고리 모양: 두꺼운 도넛 + 안쪽 얇은 빛 고리 + 가운데 화살표
   const arrowTex = canvasTexture(128, 128, (g, w, h) => {
@@ -65,6 +68,7 @@ export function buildGrandPrixProps(track, scene) {
   let passed = 0;
   function update(dt, car) {
     if (spaceHz) spaceHz.update(dt, car);
+    if (flightFx) flightFx.update(dt, car);
     if (!hasPrev) {
       prev.copy(car.pos);
       hasPrev = true;
@@ -94,6 +98,7 @@ export function buildGrandPrixProps(track, scene) {
 
   function animate(time) {
     if (spaceHz) spaceHz.animate(time);
+    if (flightFx) flightFx.animate(time);
     for (const it of items) {
       it.torus.rotation.z = time * 0.6 + it.spin;
       it.flash = Math.max(0, it.flash - 0.02);
@@ -106,10 +111,11 @@ export function buildGrandPrixProps(track, scene) {
   }
   function reset() {
     if (spaceHz) spaceHz.reset();
+    if (flightFx) flightFx.reset();
     hasPrev = false;
     passed = 0;
     for (const it of items) it.flash = 0;
   }
 
-  return { group, update, reset, animate, props: [], cubes: [], barricade: null, barricades: [], rings: items, spaceHz, stats: { rings: items.length, get passed() { return passed; } } };
+  return { group, update, reset, animate, props: [], cubes: [], barricade: null, barricades: [], rings: items, spaceHz, flightFx, stats: { rings: items.length, get passed() { return passed; } } };
 }

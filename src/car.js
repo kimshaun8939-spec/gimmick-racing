@@ -21,6 +21,9 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 // steerlock (2026-11-14): 벽·레일에 머리를 박은 채 벽 반대로 꺾으면, 고속 조향 한계(steerLat) 대신 느릴 때의 조향 속도로 머리를 진행 방향에 맞춤
 //   (예전엔 40°로 박으면 1.4초 동안 진행 방향이 안 바뀌고 오히려 벽 쪽으로 끌렸음). &wallsteer=0 = 예전 그대로
 const WALL_STEER = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('wallsteer') === '0');
+// 비행 기술 (2026-11-15 fly2, 사용자 "비행 모드만의 특징이 없음"): 상승 기류·급강하 가속·부드러운 착지 (modes.fly.thermal·dive·flare).
+//   사람·봇 같은 규칙, 통과 판정·점수 없음. &fly2=0 = 예전 비행 그대로
+const FLY2 = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('fly2') === '0');
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
@@ -259,6 +262,9 @@ export class Car {
     this.flying = false;
     this.pitch = this.bank = this.stallFall = this.forceSink = 0;
     this.forceLanding = false;
+    // fly2: 상승 기류 세기(0~1)·기류가 밀어 올리는 속도, 급강하로 올라간 비행 최고 속도, 부드러운 착지 가속 남은 시간, 마지막 비행 착지 기록
+    this.thermalK = this.thermalUp = this.diveCap = this.landKickT = this.diveK = this.flyAir = 0;
+    this.lastFlyLanding = null;
     this.surgeT = this.surgeK = this.boatCarve = 0; // 배: 물살 가속 남은 시간·세기, 카빙 정도 (0~1)
     // 배 개편 (boat3 2026-11-15): 물살 레인 세기·남은 시간, 카빙 탈출(버틴 시간·시작 속도·돌려받을 속도), 마지막 착수·카빙 탈출 기록
     this.flowK = this.flowT = 0;
@@ -712,6 +718,7 @@ export class Car {
     if (this.boostTime > 0) this.boostTime -= dt;
     if (this.itemBoostT > 0) this.itemBoostT -= dt;
     if (this.slingT > 0) this.slingT -= dt;
+    if (this.landKickT > 0) this.landKickT -= dt;
     if (this.itemSlowT > 0) this.itemSlowT -= dt;
     if (this.pos.y < -30 || (!this.grounded && this.airTime > 8)) this.respawn();
 
@@ -777,6 +784,9 @@ export class Car {
     const IT = cfg.items || {};
     if (this.itemBoostT > 0 && !flyGround) maxSpeed *= IT.boostTop ?? 1.22;
     if (this.itemSlowT > 0) maxSpeed *= IT.shockTop ?? 0.75;
+    // fly2 부드러운 착지 가속: 잠깐 최고 속도 +kickTop (급강하로 얻은 속도를 조금 더 오래 지킴)
+    const FLK = this.landKickT > 0 && M.fly && M.fly.flare ? M.fly.flare : null;
+    if (FLK && !flyGround) maxSpeed *= 1 + (FLK.kickTop ?? 0.05) * Math.min(1, this.landKickT / 0.3);
     if (flyGround) maxSpeed = Math.min(maxSpeed, M.fly.maxSpeed);
     const e = cfg.engine, G = this.gearSpeeds(), tire = cfg.tire;
     const v = Math.abs(f);
@@ -885,7 +895,8 @@ export class Car {
       this.exitRefund -= a;
       if (f > 0 && f < maxSpeed) f = Math.min(maxSpeed, f + a);
     }
-    if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : 2.5) * dt));
+    if (FLK && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (FLK.kickAccel ?? 5) * dt); // fly2 부드러운 착지 가속
+    if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : FLK ? FLK.keepRate ?? 0.8 : 2.5) * dt));
     if (offK > 0) f -= f * cfg.offroad.drag * offK * (this.runoff ? 0.3 : 1) * dt;
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
     if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDirTo(_md).y * 0.5 * dt;
@@ -1586,6 +1597,7 @@ export class Car {
     this.pitch = 0.22;
     this.bank = 0;
     this.stallFall = 0;
+    this.thermalUp = this.thermalK = this.diveCap = this.diveK = 0;
     if (this.drifting) this.endDrift(false);
     this.leaveGround(this.moveDir.multiplyScalar(this.speed).addScaledVector(WORLD_UP, 4));
     this.events.push('takeoff');
@@ -1599,12 +1611,27 @@ export class Car {
   updateFlight(dt, c) {
     const cfg = this.cfg, F = cfg.modes.fly, e = cfg.engine;
     this.airTime = 0; // 날고 있는 동안은 "공중에 너무 오래" 복귀 없음
+    this.flyAir = (this.flyAir || 0) + dt; // fly2: 이번 비행 시간 (활주로 끝에서 살짝 뛴 것은 착지 판정 안 함)
     // 강제 착륙으로 더해 둔 아래 속도는 빼고 잼 (안 빼면 매 스텝 속도가 불어남)
-    let s = this.forceSink ? Math.hypot(this.vel.x, this.vel.y + this.forceSink, this.vel.z) : this.vel.length();
+    //   (fly2) 상승 기류가 밀어 올린 속도도 빼고 잼 (안 빼면 기류 안에서 비행 속도가 불어남)
+    const lift0 = this.thermalUp || 0;
+    let s = this.forceSink || lift0 ? Math.hypot(this.vel.x, this.vel.y + (this.forceSink || 0) - lift0, this.vel.z) : this.vel.length();
     const boosting = this.boostTime > 0;
-    const maxS = F.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
+    let maxS = F.maxSpeed * (boosting ? cfg.boost.speedFactor : 1);
+    // fly2 급강하 가속: 기수를 내리면(Shift) 비행 최고 속도가 dive.over m/s까지 올라감 → 높이를 속도로 바꿈.
+    //   다시 수평이 되면 올라간 최고 속도는 초당 dive.fade m/s씩 내려옴 (그동안 공기 저항으로 서서히 느려짐)
+    const DV = FLY2 && F.dive ? F.dive : null;
+    //   기준은 실제로 내려가는 빠르기 (상승 기류 안에서 기수만 내리고 높이를 지키면 급강하가 아님 = 기류로 속도를 무한히 못 얻음)
+    const sinkNet = DV ? Math.max(0, -(s * Math.sin(this.pitch) + lift0 - (this.stallFall || 0))) : 0;
+    if (DV) {
+      const dk = THREE.MathUtils.clamp(sinkNet / (Math.max(15, s) * Math.sin(F.pitchMax || 0.6)), 0, 1);
+      this.diveK = dk;
+      this.diveCap = Math.max(maxS + DV.over * dk, (this.diveCap || maxS) - (DV.fade ?? 4) * dt);
+      maxS = Math.max(maxS, this.diveCap);
+    }
     // 속도: 추력 - 공기 저항 - 브레이크 - 오르막 손해(내리막이면 이득)
     s += (this.thr * F.thrust - F.drag * s * s - this.brk * F.brake - F.climbDecel * Math.sin(this.pitch)) * dt;
+    if (DV && sinkNet > 0) s += F.climbDecel * (sinkNet / Math.max(15, s)) * ((DV.gain ?? 1) - 1) * dt; // fly2: 실제로 내리꽂을 때 더 빨라짐
     if (boosting && s < maxS) s = Math.min(maxS, s + cfg.boost.accel * dt);
     if (s > maxS) s = THREE.MathUtils.lerp(s, maxS, 1 - Math.exp(-1.5 * dt));
     s = Math.max(0, s);
@@ -1620,6 +1647,15 @@ export class Car {
     this.forceLanding = forced;
     this.forceSink = forced ? Math.min(F.forceSinkMax ?? 30, (this.forceSink || 0) + (F.forceSinkRate ?? 15) * dt) : 0;
     if (forced && s > F.takeoffSpeed) s = Math.max(F.takeoffSpeed, s - (F.forceBrake ?? F.brake) * dt); // 강제 착륙 감속 (forceBrake, 예전엔 brake 10으로 확 줄었음)
+    // fly2 상승 기류: track.thermalAt(pos) 0~1 안에 있으면 위로 thermal.lift m/s까지 밀어 올림 (속도는 안 깎임 = 공짜 높이)
+    const TH = FLY2 && F.thermal ? F.thermal : null;
+    if (TH) {
+      const tk = !forced && this.track.thermalAt ? this.track.thermalAt(this.pos) : 0;
+      this.thermalK = tk;
+      const want = (TH.lift ?? 12) * tk;
+      this.thermalUp += (want - this.thermalUp) * (1 - Math.exp(-(want > this.thermalUp ? TH.rise ?? 2.5 : TH.fall ?? 1.6) * dt));
+      if (tk > 0.2) this.stallFall *= Math.exp(-3 * dt); // 기류 안에서는 실속으로 떨어지던 것도 받쳐 줌
+    } else this.thermalUp = this.thermalK = 0;
     // 기수: Space 위, Shift 아래, 둘 다 안 누르면 수평으로
     let pT = (c.climb && !forced ? F.pitchMax : 0) - (c.dive ? F.pitchMax : 0);
     if (forced) pT = Math.min(pT, -(F.forceDive ?? 0.5));
@@ -1639,6 +1675,7 @@ export class Car {
     this.up.copy(up0).multiplyScalar(Math.cos(this.bank)).addScaledVector(right0, Math.sin(this.bank)).normalize();
     this.vel.copy(this.fwd).multiplyScalar(s);
     this.vel.y -= this.stallFall + (this.forceSink || 0);
+    if (this.thermalUp) this.vel.y += this.thermalUp;
 
     this.speed = s;
     this.slip = 0;
@@ -1730,11 +1767,30 @@ export class Car {
           //   지금: 억지로 끌어내린 속도는 빼고 재고, 아주 세게 내리꽂을 때만 조금(crashLoss까지) 잃음
           const F = cfg.modes.fly, fs = this.forceSink || 0;
           const descent = -this.vel.dot(hit.normal) - fs * Math.max(0, hit.normal.y);
-          landS = Math.hypot(this.vel.x, this.vel.y + fs, this.vel.z); // 진짜 비행 속도 (끌어내린 속도 뺌)
-          landHard = THREE.MathUtils.clamp((descent - F.crashSpeed) / (F.crashRange ?? 20), 0, 1);
+          landS = Math.hypot(this.vel.x, this.vel.y + fs - (this.thermalUp || 0), this.vel.z); // 진짜 비행 속도 (끌어내린·기류가 올린 속도 뺌)
+          const FL = FLY2 && F.flare ? F.flare : null;
+          landHard = THREE.MathUtils.clamp((descent - (FL ? FL.crashSpeed ?? F.crashSpeed : F.crashSpeed)) / ((FL ? FL.crashRange : null) ?? F.crashRange ?? 20), 0, 1);
           if (landHard > 0) this.events.push('bump');
+          // fly2 착지 판정: 내려오는 속도(descent)·도로와 어긋난 각도(yaw)·날개 기울기(bank)
+          //   부드럽게 = descent ≤ soft + 도로와 나란함 + 날개 수평 → 속도 그대로 + 잠깐 착지 가속(landKickT)
+          //   비뚤게 = yaw > yawBad → 옆으로 끌리며 손해 (skewLoss까지), 쿵 = 위 landHard
+          this._flyLand = null;
+          if (FL && (this.flyAir || 0) > (FL.minAir ?? 0.6)) {
+            const ti = this.track.nearest(hit.point);
+            const tan = ti && ti.sample ? ti.sample.tan : null;
+            let yaw = 0;
+            if (tan) {
+              const fx = this.fwd.x, fz = this.fwd.z, fl = Math.hypot(fx, fz) || 1, tl = Math.hypot(tan.x, tan.z) || 1;
+              yaw = Math.acos(THREE.MathUtils.clamp((fx * tan.x + fz * tan.z) / (fl * tl), -1, 1));
+            }
+            const bank = Math.abs(this.bank || 0);
+            const q = landHard > 0 ? 'hard' : descent <= (FL.soft ?? 4) && yaw <= (FL.yawTol ?? 0.21) && bank <= (FL.bankTol ?? 0.35) ? 'soft' : 'ok';
+            const skew = THREE.MathUtils.clamp((yaw - (FL.yawBad ?? 0.45)) / (FL.skewRange ?? 0.6), 0, 1);
+            this._flyLand = { q, descent, yaw, bank, skew };
+          }
           this.flying = false;
           this.pitch = this.bank = this.stallFall = 0;
+          this.thermalUp = this.thermalK = this.diveCap = this.diveK = this.flyAir = 0;
           if (this.forceLanding && this.mode === 'fly') {
             this.setMode(this.autoFlyFrom || 'normal');
             this.autoFlyFrom = null;
@@ -1757,6 +1813,19 @@ export class Car {
           const F = cfg.modes.fly, tang = Math.max(0, this.speed);
           const keep = tang + Math.max(0, landS - tang) * (F.landKeep ?? 0.8);
           this.speed = Math.min(landS, keep) * (1 - (F.crashLoss ?? 0.35) * landHard);
+          const fl = this._flyLand;
+          if (fl) {
+            const FL = F.flare;
+            const v0 = this.speed;
+            if (fl.q === 'soft') {
+              this.speed = Math.max(this.speed, landS); // 부드러운 착지: 비행 속도 그대로
+              this.landKickT = FL.kickSec ?? 1;
+            }
+            if (fl.skew > 0) this.speed *= 1 - (FL.skewLoss ?? 0.15) * fl.skew;
+            this.lastFlyLanding = { ...fl, vIn: landS, vOut: this.speed, gain: this.speed - v0 };
+            this.events.push(fl.q === 'soft' ? 'flySoft' : fl.q === 'hard' ? 'flyHard' : fl.skew > 0 ? 'flySkew' : 'flyLand');
+            this._flyLand = null;
+          }
           this.fitGear(); // 비행 중 기어(대충 정한 값)를 이 속도에 맞는 기어로 → 착지 뒤 변속을 여러 번 하느라 힘이 끊기지 않게
         }
         this.grounded = true;

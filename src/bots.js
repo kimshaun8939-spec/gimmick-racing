@@ -46,7 +46,7 @@ export const BOT_LEVELS = {
 //   wobble = 공중에서 핸들·높이 흔들림 (쉬움일수록 큼). 없으면 { speed: 42, latK: 0.85, wobble: 0 }
   easy: { pace: 0.69, topK: 0.71, thrK: 0.8, paceVar: 0.001, react: [0.45, 0.8], noise: 0.05, mistakeEvery: 1e9, lateP: 0.1, boost: 0.15, boostLook: 3.4, lead: 0.3, brakeK: 0.95, firm: 0.15, playerPush: 0.5, catchUp: { aheadM: 120, releaseM: 30, slowMul: 0.85 }, fly: { speed: 38, latK: 0.75, wobble: 0.08 } },
   normal: { pace: 0.85, topK: 0.87, thrK: 0.88, paceVar: 0.001, react: [0.28, 0.5], noise: 0.025, mistakeEvery: 1e9, boost: 0.6, boostLook: 3, lead: 0.26, brakeK: 0.95, firm: 1, playerPush: 0.5, fly: { speed: 44, latK: 0.8, wobble: 0.04 } },
-  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.001, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 1e9, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 1, playerPush: 0.5, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50 } },
+  hard: { pace: 1.04, topK: 1, thrK: 1, paceVar: 0.001, react: [0.17, 0.3], noise: 0.012, mistakeEvery: 1e9, boost: 3, boostLook: 2.2, lead: 0.24, brakeK: 1, jumpK: 1.3, firm: 1, playerPush: 0.5, catchUp: { sec: 2.5, upMul: 1.03, upDraft: 0.6, downMul: 0.97, secDown: 5 }, fly: { speed: 50, flare: 2.6 } },
 };
 
 // 마스터(master, 2026-11-10 사용자 요청: 처음엔 "내 기록보다 빠르게" → 고침 "내 기록과 상관없이 그냥 어렵게, 이름은 마스터"):
@@ -61,7 +61,7 @@ BOT_LEVELS.master = {
   ...BOT_LEVELS.hard,
   catchUp: null,
   // 고정 운전 실력만 상향. 차 cfg/숨은 슬립스트림은 바꾸지 않음.
-  lead: 0.02, brakeK: 1.03, noise: 0.001, fly: { speed: 55 },
+  lead: 0.02, brakeK: 1.03, noise: 0.001, fly: { speed: 55, flare: 0 }, // fly2: 마스터는 착륙장 끝 가까이 내려서 플레어로 뜨면 비행 구역을 지나침 → 안 함
   master: { help: [1, 1], startHelp: 0.45, gain: 1.5, humanSec: 1.5, paceMax: 0.16, gripMax: 0.24, powerMax: 0.25, draftMax: 1, calmGrav: false, saturBrake: 3 },
   jumpTrafficM: [8, 30], // 점프 앞 '다른 차가 있으면 44 m/s' 판단 범위 (어려움은 뒤 15 m ~ 앞 60 m): 무리에서 점프마다 손해가 커서 바로 붙은 차만
 };
@@ -170,6 +170,11 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 //   비행 구역(car.flightAllowed) 안에서만 날게 되어 있어서 따로 막을 필요 없음
 const planCache = new WeakMap();
 const masterPlanCache = new WeakMap();
+// 비행 기술 (2026-11-15 fly2, car.js modes.fly.thermal·dive·flare): 봇도 사람과 같은 규칙.
+//   봇은 고리 줄 그대로 날고(기류는 지나가며 받는 만큼만), 급강하로 올라간 최고 속도만큼은 브레이크를 안 밟고,
+//   어려움은 땅 fly.flare m 위에서 기수를 살짝 들어 부드럽게 내림. &fly2=0 = 예전 봇 비행
+const FLY2 = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('fly2') === '0');
+const FLY_DOWN = new THREE.Vector3(0, -1, 0), flyRayP = new THREE.Vector3();
 const APPROACH = 170; // 활주로 시작 몇 m 앞부터 활주로로 들어갈 준비 (속도 줄이기)
 export function flightPlan(track, master = false) {
   const cache = master ? masterPlanCache : planCache;
@@ -510,9 +515,12 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const dy = tgt.y - car.pos.y - car.vel.y * 0.3 + wob * 2;
       c.climb = dy > 0.5;
       c.dive = dy < -0.5;
-      const vNow = car.vel.length();
-      c.throttle = vNow > flyV ? 0 : 1;
-      c.brake = vNow > flyV + 4 ? 0.5 : 0;
+      // fly2: 비행 속도는 기류가 밀어 올린 위 속도를 뺀 값(car.speed)으로, 급강하로 올라간 최고 속도만큼은 더 내도 됨
+      const FM = car.cfg.modes.fly;
+      const vNow = FLY2 ? car.speed : car.vel.length();
+      const over = FLY2 ? Math.max(0, (car.diveCap || 0) - FM.maxSpeed) : 0;
+      c.throttle = vNow > flyV + over ? 0 : 1;
+      c.brake = vNow > flyV + over + 4 ? 0.5 : 0;
       // 바로 앞(14 m 안, 옆 4 m 안)에 다른 차가 날고 있으면 액셀을 뗌 (공중에서 부딪히지 않게)
       for (const o of ctx.others) {
         if (!o.pos) continue;
@@ -526,6 +534,14 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         c.climb = car.vel.y < -9;
         c.throttle = level.master ? .65 : .3;
         c.brake = 0;
+        // fly2 부드러운 착지 (어려움만, 마스터는 flare 0): 땅 바로 위에서 내려오는 속도를 3~5 m/s로 (사람의 플레어와 같은 조작)
+        if (FLY2 && FLY.flare) {
+          const h = track.castRay(flyRayP.copy(car.pos).setY(car.pos.y + 0.3), FLY_DOWN, 12);
+          if (h && car.pos.y - h.point.y < FLY.flare) {
+            c.dive = car.vel.y > -3.2; // 계속 조금씩은 내려감 (수평으로 떠 있으면 착륙장을 지나쳐 강제 착륙)
+            c.climb = car.vel.y < -4.8;
+          }
+        }
       }
       return c;
     }

@@ -182,7 +182,11 @@
       "_landing": "착지 (2026-11-10): 땅과 나란한 속도에 내려오던 속도의 landKeep 비율을 더해 앞으로 이어 줌 (부드럽게 내려앉으면 속도 거의 그대로). 내려오는 속도(강제 착륙으로 끌어내린 속도는 뺌)가 crashSpeed m/s를 넘으면 쿵: crashSpeed+crashRange에서 최대 crashLoss 비율 손해. forceBrake = 강제 착륙 중 감속(m/s², 이륙 속도까지)",
       "crashSpeed": 26, "crashRange": 20, "crashLoss": 0.35, "landKeep": 0.8, "forceBrake": 4,
       "_zoneRadius": "비행 구역 (사용자 요청 2026-11-09): 활주로 시작 → 고리 → 착륙장 착지점을 잇는 선에서 옆으로 zoneRadius m 밖에서는 강제 착륙 (Space 상승 안 됨, 기수 forceDive rad 아래로, 속도는 이륙 속도까지 줄고, 아래로 forceSinkRate m/s²씩 최대 forceSinkMax m/s 더 떨어짐). 착지하면 바로 원래 모드, 구역 밖 땅에서는 이륙 안 됨. 0이면 끔",
-      "zoneRadius": 50, "forceDive": 0.5, "forceSinkRate": 15, "forceSinkMax": 30 }
+      "zoneRadius": 50, "forceDive": 0.5, "forceSinkRate": 15, "forceSinkMax": 30,
+      "_fly2": "비행 기술 (2026-11-15 fly2, 사용자·봇 같은 규칙, 통과 판정 없음, &fly2=0이면 끔). thermal = 상승 기류(track.thermalAt 0~1) 안에서 위로 lift m/s까지 밀어 올림(rise/fall = 세지고 약해지는 빠르기, 속도는 안 깎임). dive = 실제로 내려가는 빠르기만큼 비행 최고 속도가 over m/s까지 올라가고(수평이 되면 초당 fade씩 내려옴) 내려가는 동안 속도로 바뀌는 양이 gain배 = 높이를 속도로(기류 안에서 기수만 내려 높이를 지키면 안 됨). flare = 착지 판정 (0.6초보다 짧은 비행은 안 함): 내려오는 속도 soft m/s 이하 + 도로와 yawTol rad 안 + 날개 기울기 bankTol 안 = 부드러운 착지 → 비행 속도 그대로 + kickSec초 동안 가속 +kickAccel m/s²·최고 속도 +kickTop, 최고 속도를 넘은 속도는 keepRate로 천천히 줄어듦. yawBad rad보다 비뚤게 내리면 skewRange에 걸쳐 최대 skewLoss 손해. crashSpeed/crashRange = 쿵 기준(위 crashSpeed 대신)",
+      "thermal": { "lift": 13, "rise": 2.2, "fall": 3.5 },
+      "dive": { "over": 14, "fade": 3, "gain": 3 },
+      "flare": { "soft": 3.5, "yawTol": 0.21, "bankTol": 0.35, "kickSec": 1.0, "kickAccel": 5, "kickTop": 0.05, "keepRate": 0.8, "yawBad": 0.45, "skewRange": 0.6, "skewLoss": 0.15, "crashSpeed": 13, "crashRange": 16 } }
   },
   "camera": {
     "_설명": "속도감 카메라. 속도 비율 = fxFromKmh(0) → topKmh(1) km/h. fovBase 서 있을 때 시야각(도), fovSpeed 최고 속도에서 더 넓어지는 각도, fovBooster 부스터 때 더, fovRate 바뀌는 빠르기. followLead 0~1: 빠를 때 카메라가 뒤로 처지는 것을 얼마나 없앨지 (0 = 예전처럼 209 km/h에서 7 m 뒤로 처짐, 1 = 안 처짐). speedBack/speedUp 최고 속도에서 카메라 거리·높이 변화(m, 음수 = 가깝게·낮게). accelPull 가속도(m/s²)마다 뒤로 밀리는 거리(m), accelPullMax/brakePullMax 최대. lookAhead 빠를 때 더 멀리 보는 거리(m), lookSlip 미끄러질 때 가는 쪽을 보는 비율. buzz 최고 속도 근처 노면 잔진동 크기(m, buzzFromKmh부터)",

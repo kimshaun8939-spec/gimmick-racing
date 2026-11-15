@@ -21,6 +21,8 @@ export const EDGE = { open: 0, cliff: 1, wall: 2, rail: 3, lava: 4 };
 const SAMPLE_STEP = 1.87; // 중심선 샘플 간격 (m). 샘플 수는 코스 길이에 맞춰 정함 (예전 3 km 코스 = 1600개)
 const CELL = 4; // 지형 격자 한 칸 (m)
 const CHUNK = 24; // 지형 메시 한 덩어리 = 24×24칸 (그리기 횟수와 충돌 계산 속도의 균형)
+// fly2 상승 기류 자동 배치 (sky.thermals가 없을 때): 활주로 끝→착륙 곧은 선의 u 구간, 고리 쪽으로 떨어진 거리(m), 반지름(m), 가장 높은 고리보다 몇 m 위까지
+const THERMAL_U = [0.2, 0.46], THERMAL_OFF = 20, THERMAL_R = 13, THERMAL_TOP = 26;
 const smooth = (a, b, x) => {
   const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
   return k * k * (3 - 2 * k);
@@ -738,6 +740,42 @@ export function buildGrandPrixTrack(data, scene) {
       return { pos: p, dir, r: R, index: k };
     });
   }
+  // fly2 상승 기류 (2026-11-15, car.js modes.fly.thermal): 하늘 협곡 옆에서 위로 부는 바람 기둥 = 타면 공짜로 높이를 얻음 → 급강하로 속도
+  //   sky.thermals = [[x1, z1, x2, z2, r, top], ...] (기둥 아래 끝 선분 두 점 x·z, 반지름 m, 기류가 끝나는 높이 m)이 있으면 그것,
+  //   없으면 비행 루트에서 자동으로: 활주로 끝→착륙 지점 곧은 선에서 고리 줄 쪽으로 THERMAL_OFF m 떨어진 곳 (u 0.24~0.5)
+  //   &fly2=0이면 없음. 사람·봇 같은 힘 (gpFlight.js가 그림, car.js가 밀어 올림)
+  const thermals = [];
+  if (sky && skyPath.length >= 3 && !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('fly2') === '0')) {
+    if (Array.isArray(sky.thermals)) {
+      for (const [x1, z1, x2, z2, r, top] of sky.thermals) thermals.push({ ax: x1 * SC, az: z1 * SC, bx: x2 * SC, bz: z2 * SC, r, y1: top });
+    } else {
+      const a = skyPath[0], b = skyPath[skyPath.length - 1];
+      const cx = b.x - a.x, cz = b.z - a.z, cl = Math.hypot(cx, cz) || 1;
+      const nx = -cz / cl, nz = cx / cl; // 곧은 선의 왼쪽
+      // 고리들이 곧은 선의 어느 쪽에 있는지 (기류는 고리 줄 바깥쪽)
+      let side = 0;
+      for (let k = 1; k < skyPath.length - 1; k++) side += (skyPath[k].x - a.x) * nx + (skyPath[k].z - a.z) * nz;
+      side = Math.sign(side) || 1;
+      const at = (u, off) => [a.x + cx * u + nx * side * off, a.z + cz * u + nz * side * off];
+      const [x1, z1] = at(THERMAL_U[0], THERMAL_OFF), [x2, z2] = at(THERMAL_U[1], THERMAL_OFF);
+      const topY = Math.max(...skyPath.map((p) => p.y)) + THERMAL_TOP;
+      thermals.push({ ax: x1, az: z1, bx: x2, bz: z2, r: THERMAL_R, y1: topY });
+    }
+  }
+  /** 이 자리 상승 기류 세기 0~1 (기둥 가운데 45%까지 1, 바깥 가장자리 0, 꼭대기 14 m 전부터 약해짐) */
+  function thermalAt(p) {
+    let best = 0;
+    for (const T of thermals) {
+      const abx = T.bx - T.ax, abz = T.bz - T.az;
+      const u = THREE.MathUtils.clamp(((p.x - T.ax) * abx + (p.z - T.az) * abz) / (abx * abx + abz * abz || 1), 0, 1);
+      const d = Math.hypot(p.x - (T.ax + abx * u), p.z - (T.az + abz * u));
+      if (d >= T.r || p.y >= T.y1) continue;
+      const k = (1 - smooth(T.r * 0.45, T.r, d)) * (1 - smooth(T.y1 - 14, T.y1, p.y));
+      if (k > best) best = k;
+    }
+    return best;
+  }
+
   // 판자 지름길
   let plank = null;
   if (data.shortcut) {
@@ -1337,7 +1375,7 @@ export function buildGrandPrixTrack(data, scene) {
     sea: null, inSea: () => false, waterRanges: [], isWaterT: () => false, buoys: [],
     // 그랑프리 전용
     grandprix: true, surf, roadYAt, heightAt, fieldAt, islands, loops, bridgeRuns, railRuns, railSide, railLimit, deckHalf: DECK, curb: CURB,
-    runway, apron, plank, rings, skyPath, inSkyCorridor, onAltPath, altPaths, indexAt, S, spanList, noise,
+    runway, apron, plank, rings, skyPath, thermals, thermalAt, inSkyCorridor, onAltPath, altPaths, indexAt, S, spanList, noise,
     dimension, setWorld, get inSpace() { return curWorld; }, buildMs, sampleCount: SAMPLES,
     // space2 우주 위험 (gpSpaceHazards.js)
     EDGE, edgeAt, spaceEdgeLat, isOpen, openEdge, pullA, openRuns, pullRuns, spaceHazards: HZ ? { cfg: HZ } : null,
