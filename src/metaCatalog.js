@@ -29,6 +29,11 @@ export const ECON = {
   levelUpMaxJump: 5,                     // 한 번에 5레벨 넘게 오르면(계정 합치기·서버 동기화) 레벨 업 보상 안 줌
   academy: { pit: [0, 20, 40, 60], up: [0, 10, 20, 35] }, // 레슨 최고 메달 동/은/금 (누적, 오른 만큼)
   license: { C: { up: 30, custom: 30 }, B: { up: 50, custom: 50 }, A: { up: 80, custom: 80 }, S: { up: 120, custom: 120 } },
+  // 교환소 (exchange, 2026-11-15): 피트 조각 → 강화/커스텀 조각, 한 방향만. 한 번 = ⬡ pit개 → get개.
+  //   레이스로 버는 비율(한 판 ⬡213 : ◆45 : ✿34)보다 조금 손해 = 남는 피트 조각을 쓰는 곳. 숫자만 바꾸면 화면·검사가 따라감
+  exchange: { up: { pit: 100, get: 10 }, custom: { pit: 100, get: 12 } },
+  exchangeTimes: [1, 5, 10],             // 화면 버튼 (×1·×5·×10)
+  exchangeMaxTimes: 100,                 // meta.exchange 한 번에 최대 횟수
 };
 /** 차 가격 (설계 3.3): 시작 5대 무료, 나머지는 레벨이 되면 피트 조각으로 */
 export const START_CARS = ['f1', 'gt', 'rally', 'buggy', 'kart'];

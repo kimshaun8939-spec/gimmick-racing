@@ -17,10 +17,10 @@ const curLevel = () => { try { return profile.get().level || 1; } catch { return
 const tutorialDone = () => { try { return localStorage.getItem(TUT_KEY) === 'done'; } catch { return false; } };
 const goalReward = (type,i) => ({...(type==='daily'?ECON.daily:ECON.weekly)[Math.max(0,Math.min(2,i))]});
 // v는 1 그대로 (업데이트 전에 열어 둔 탭의 예전 meta.js가 v≠1이면 빈 저장으로 덮어써서), 지갑 버전은 wv
-function fresh(){ return {v:1,wv:WALLET_V,wallet:W0(),earnedBy:W0(),spentBy:W0(),coins:0,earned:0,spent:0,stats:{},maps:{},cars:{},achievements:{},owned:{},title:'',celebration:'stock',academyPaid:{},login:{day:'',streak:0,total:0},periods:{},history:[],levelPaid:curLevel(),tutorialPaid:false}; }
+function fresh(){ return {v:1,wv:WALLET_V,wallet:W0(),earnedBy:W0(),spentBy:W0(),coins:0,earned:0,spent:0,stats:{},maps:{},cars:{},achievements:{},owned:{},title:'',celebration:'stock',academyPaid:{},login:{day:'',streak:0,total:0},periods:{},history:[],levelPaid:curLevel(),tutorialPaid:false,exchanged:{pit:0,up:0,custom:0,count:0}}; }
 /** 지갑 → 예전 이름(coins·earned·spent = 피트 조각) */
 function mirror(s=state){s.coins=s.wallet.pit;s.earned=s.earnedBy.pit;s.spent=s.spentBy.pit;}
-function normalize(s){for(const k of ['stats','maps','cars','achievements','owned','academyPaid','periods'])if(!s[k]||typeof s[k]!=='object'||Array.isArray(s[k]))s[k]={};for(const k of ['wallet','earnedBy','spentBy']){const w=s[k]&&typeof s[k]==='object'?s[k]:{};if(w.cu!=null&&w.custom==null)w.custom=w.cu;s[k]={pit:Math.floor(num(w.pit)),up:Math.floor(num(w.up)),custom:Math.floor(num(w.custom))};}s.login={day:'',streak:0,total:0,...s.login};s.history=Array.isArray(s.history)?s.history.slice(-60):[];s.levelPaid=Math.max(1,Math.floor(num(s.levelPaid))||curLevel());mirror(s);return s;}
+function normalize(s){for(const k of ['stats','maps','cars','achievements','owned','academyPaid','periods'])if(!s[k]||typeof s[k]!=='object'||Array.isArray(s[k]))s[k]={};for(const k of ['wallet','earnedBy','spentBy']){const w=s[k]&&typeof s[k]==='object'?s[k]:{};if(w.cu!=null&&w.custom==null)w.custom=w.cu;s[k]={pit:Math.floor(num(w.pit)),up:Math.floor(num(w.up)),custom:Math.floor(num(w.custom))};}s.login={day:'',streak:0,total:0,...s.login};{const x=s.exchanged&&typeof s.exchanged==='object'?s.exchanged:{};s.exchanged={pit:Math.floor(num(x.pit)),up:Math.floor(num(x.up)),custom:Math.floor(num(x.custom)),count:Math.floor(num(x.count))};}s.history=Array.isArray(s.history)?s.history.slice(-60):[];s.levelPaid=Math.max(1,Math.floor(num(s.levelPaid))||curLevel());mirror(s);return s;}
 /** 예전 저장(피트 코인) → 재화 3종. j = 예전 gimmick.meta (없으면 {}), legacy = 예전에 놀았던 사람 */
 function migrate(j,legacy){
  const at=Date.now(),lv=curLevel(),old={coins:Math.floor(num(j.coins)),earned:num(j.earned),spent:num(j.spent),at};
@@ -95,6 +95,24 @@ export function wallet(){bootMeta();return {...state.wallet};}
 export function credit(kind,amount,reason='지급'){bootMeta();const k=currencyId(kind);if(!k)return 0;if(give(k,amount,reason)){save();emit('gimmick:meta');}return state.wallet[k];}
 /** 쓰기: 모자라거나 잘못된 값·저장 실패면 false (하나도 안 뺌), 되면 true */
 export function spend(kind,amount,reason='사용'){bootMeta();const k=currencyId(kind),n=Math.ceil(Number(amount));if(!k||!Number.isFinite(n)||n<0)return false;if(n===0)return true;if(state.wallet[k]<n)return false;const before=structuredClone(state);state.wallet[k]-=n;state.spentBy[k]+=n;mirror();state.history.push({at:Date.now(),amount:-n,kind:k,reason});state.history=state.history.slice(-60);if(!save()){state=before;return false;}emit('gimmick:wallet',{kind:k,delta:-n,balance:state.wallet[k],wallet:{...state.wallet},reason});emit('gimmick:meta');return true;}
+// ───────── 교환소 (exchange, 2026-11-15): 피트 조각 → 강화·커스텀 조각, 반대 방향 없음. 비율 = metaCatalog ECON.exchange ─────────
+const xchFail=(to,message,extra={})=>({ok:false,from:'pit',to,spent:0,got:0,wallet:{...state.wallet},message,...extra});
+/** 바꾸기 전 계산 (아무것도 안 바꿈). → { ok, from:'pit', to, times, spent, got, have, missing, after:{pit, [to]}, rate } */
+export function exchangeQuote(to,times=1){bootMeta();const k=currencyId(to),rate=k&&k!=='pit'?ECON.exchange?.[k]:null,t=Math.floor(Number(times));
+ if(!rate)return xchFail(to,'피트 조각은 강화 조각·커스텀 조각으로만 바꿀 수 있어요');
+ if(!Number.isFinite(t)||t<1||t>(ECON.exchangeMaxTimes||100))return xchFail(k,'바꿀 횟수가 올바르지 않아요');
+ const spent=rate.pit*t,got=rate.get*t,have=state.wallet.pit,missing=Math.max(0,spent-have);
+ return {ok:!missing,from:'pit',to:k,times:t,spent,got,have,missing,rate:{...rate},after:{pit:have-spent,[k]:state.wallet[k]+got},wallet:{...state.wallet},...(missing?{message:missingText('pit',missing)}:{})};}
+/** 교환: ⬡ (rate.pit×times) 빼고 + (rate.get×times) 넣기를 한 번에 (부족·저장 실패면 둘 다 안 됨). → { ok, from, to, spent, got, wallet, message?, missing? } */
+export function exchange(to,times=1){const q=exchangeQuote(to,times);if(!q.ok)return {ok:false,from:'pit',to:q.to,spent:0,got:0,wallet:{...state.wallet},message:q.message,...(q.missing?{missing:q.missing}:{})};
+ const k=q.to,before=structuredClone(state),at=Date.now(),ci=CURRENCIES[k];
+ state.wallet.pit-=q.spent;state.spentBy.pit+=q.spent;state.wallet[k]+=q.got;state.earnedBy[k]+=q.got;mirror();
+ const x=state.exchanged;x.pit+=q.spent;x[k]+=q.got;x.count+=q.times;
+ state.history.push({at,amount:-q.spent,kind:'pit',reason:'교환 → '+ci.name},{at,amount:q.got,kind:k,reason:'교환 ← 피트 조각'});state.history=state.history.slice(-60);
+ if(!save()){state=before;return {ok:false,from:'pit',to:k,spent:0,got:0,wallet:{...state.wallet},message:'저장하지 못했어요. 교환은 취소했어요.'};}
+ const w={...state.wallet},reason='교환 · '+CURRENCIES.pit.icon+' '+q.spent+' → '+ci.icon+' '+q.got;
+ emit('gimmick:wallet',{kind:'pit',delta:-q.spent,balance:w.pit,wallet:w,reason});emit('gimmick:wallet',{kind:k,delta:q.got,balance:w[k],wallet:{...w},reason});emit('gimmick:meta');
+ return {ok:true,from:'pit',to:k,times:q.times,spent:q.spent,got:q.got,wallet:{...w}};}
 /** 차: 가진 차인가 · 값(⬡) · 사기 */
 export const isCarOwned = (id) => carOwned(id);
 export const carPrice = (id) => carPriceOf(id);
@@ -110,7 +128,9 @@ export const meta={
  setTitle(id){if(id&&!ACHIEVEMENTS.some(a=>a.id===id&&a.title&&state.achievements[id]))return false;state.title=id;save();emit('gimmick:meta');return true;},
  celebration(){return CELEBRATIONS.find(c=>c.id===state.celebration)||CELEBRATIONS[0];},
  equipCelebration(id){if(!CELEBRATIONS.some(c=>c.id===id)||!this.owns('celebration:'+id))return false;state.celebration=id;save();emit('gimmick:meta');return true;},
- balance, wallet, credit, spend, buyCar, carPrice, isCarOwned,
+ balance, wallet, credit, spend, buyCar, carPrice, isCarOwned, exchange, exchangeQuote,
+ /** 교환 합계 { pit(쓴 ⬡), up, custom(받은 양), count(바꾼 횟수) } */
+ exchanged(){bootMeta();return {...state.exchanged};},
  /** 구매: kind = 'car'·'part'(피트 조각) | 'costume'·'paint'·'celebration'(커스텀 조각). → { ok, price, currency, owned?, message?, missing? } */
  buy(kind,item){bootMeta();let key,price,name;const cur=SHOP_CURRENCY[kind];const lv=curLevel();
   if(kind==='car'){const id=item?.id||item?.carId;if(START_CARS.includes(id))return {ok:true,owned:true,price:0,currency:cur};if(!CAR_SHOP[id])return {ok:false,currency:cur,message:'이 차를 찾지 못했어요'};if(carOwned(id))return {ok:true,owned:true,price:0,currency:cur};const need=carUnlockLevel(id);if(lv<need)return {ok:false,currency:cur,message:'Lv.'+need+'부터 피트 조각으로 살 수 있어요. 잠긴 차도 미리 볼 수 있어요.'};key='car:'+id;price=carPriceOf(id);name=carName(id);}
