@@ -278,6 +278,21 @@
   <link rel="stylesheet" href="src/vendor/black-han-sans-5.3.0/black-han-sans.css" />
   <link rel="stylesheet" href="src/menu.css" />
   <link rel="stylesheet" href="src/raceFx.css" />
+  <style>
+  /* overlapfixB: 세로 화면에서 HUD 세 구역을 분리 */
+  @media(max-width:520px) {
+    body:not(.touch-on) #menuBtn { left:16px; right:auto; top:16px; }
+    body:not(.touch-on) #forms { left:16px; bottom:16px; transform:none; width:146px; box-sizing:border-box; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; }
+    body:not(.touch-on) #forms .mode { min-width:0; padding:6px 3px; font-size:10px; }
+    body:not(.touch-on) #forms .mode .hint { font-size:10px; }
+    body:not(.touch-on) #leftCol { width:154px; top:56px; }
+    #sectorRow { width:100%; box-sizing:border-box; }
+    #sectorRow .sec { min-width:0; padding:3px; font-size:10px; }
+    #results .res-head { flex-wrap:wrap; }
+    #results .res-identity { flex:1 1 100%; min-width:0; }
+    #results .res-identity .who { word-break:keep-all; text-wrap:balance; }
+  }
+  </style>
   <script type="importmap">
     { "imports": {
       "three": "./src/vendor/three-0.160.0/build/three.module.js",

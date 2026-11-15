@@ -278,3 +278,22 @@ body:has(#pauseMenu.on) .mt-notice { display:none; }
 }
 #home .mt-title-picker .mt-title-list[hidden] { display:none; }
 #home .mt-title-picker>.gm-btn { padding:5px 9px; min-height:28px; font-size:12px; }
+
+/* overlapfixB: 제목·탭은 문서 흐름 안에, 짧은 말은 통째로 줄바꿈. */
+.mt-page .head > .gm-btn { position:static!important; transform:none!important; margin:0!important; flex-shrink:0; }
+.mt-tabs button { word-break:keep-all; white-space:nowrap; }
+.mt-product :is(p,.mt-tradeoffs,.mt-shop-state) { word-break:keep-all; overflow-wrap:break-word; text-wrap:pretty; }
+.mt-costume-pic:has(>i)>span { padding-bottom:16px; box-sizing:border-box; }
+@media(max-width:719px){
+ .mt-tabs { flex-wrap:wrap; }
+ .mt-tabs button { flex:1 1 auto; }
+ .mt-wallet-btn { gap:4px; padding:6px; font-size:11px; }
+ .mt-product p { text-wrap:balance; }
+ .mt-shop-state { text-wrap:balance; }
+}
+@media(max-height:560px) and (min-width:720px){
+ .mt-page .head { min-height:38px; align-items:center; padding:0!important; }
+ .mt-page .head > .gm-btn { min-height:34px; padding:6px 12px; }
+}
+
+@media(max-height:560px) and (min-width:720px){#home .mt-page .head{height:auto!important;min-height:44px!important;flex:0 0 auto!important;}#home .mt-page .head>.gm-btn{min-height:38px!important;height:38px!important;}}

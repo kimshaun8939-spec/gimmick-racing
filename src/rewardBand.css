@@ -168,3 +168,6 @@
   #results button.rw-tile { transition: none; }
 }
 #results .res-scroll > .rw-levelup { margin-top: 0; }
+
+/* overlapfixB: 긴 보상 안내도 끝까지 읽기 */
+@media(max-width:700px){#results .rw-ntext :is(.rw-nname,span){white-space:normal;overflow:visible;text-overflow:clip;word-break:keep-all;text-wrap:pretty;}#results .rw-next{min-width:0;} }

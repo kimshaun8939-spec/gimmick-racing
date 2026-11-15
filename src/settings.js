@@ -19,7 +19,7 @@ export const SETTING_DEFS = [
 
   { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 해상도·그림자를 차례로 줄여요. 낮음 = 낮은 해상도, 햇빛 그림자 끔. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
     options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
-  { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 배터리·발열이 줄어요', type: 'choice',
+  { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 발열과 배터리 소모가 줄어요', type: 'choice',
     options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 60 }, // 2026-11-12 기본 0 → 60 (사용자 요청: 발열)
   { group: '화면·그래픽', key: 'speedFx', label: '속도감 효과', desc: '바람 줄기·속도선·시야 넓어짐', type: 'choice',
     options: [[0, '끔'], [0.5, '약하게'], [1, '보통'], [1.5, '강하게']], def: 1 },
@@ -209,7 +209,29 @@ function compactSectionTabs(host, sections, label) {
  * 설정 화면 만들기. 돌려주는 element를 아무 곳에나 붙이면 됨.
  * opts.inGame: 게임 중(ESC 메뉴)이면 "다음 시작부터 적용" 같은 안내를 다르게
  */
+
+function overlapLayoutCss() {
+ if(document.getElementById('overlapSettingsCss')) return;
+ const st=document.createElement('style'); st.id='overlapSettingsCss';
+ st.textContent=`
+ .gm-settings .gm-set-label small,.gm-controls .gm-ctl-row small { word-break:keep-all; text-wrap:pretty; }
+ .gm-pad-panel .pad-txt { min-width:0; flex:1; word-break:keep-all; }
+ .gm-pad-panel .pad-status { flex-wrap:wrap; }
+ @media(max-width:520px){
+  .gm-pad-panel .pad-txt { flex-basis:100%; }
+  .gm-pad-panel .pad-txt b { font-size:14px; }
+  #home .gm-set-foot:has(.gm-set-help) { display:flex; flex-direction:column; align-items:stretch; }
+  #home .gm-set-foot>.gm-set-help { flex:auto; width:100%; box-sizing:border-box; }
+  #home .gm-set-foot>.gm-set-help>span { min-width:0; }
+  #home .gm-set-foot>.gm-btn { align-self:flex-start; }
+ }
+ .gm-ctl-row small { word-break:keep-all; text-wrap:pretty; }
+ `;
+ document.head.appendChild(st);
+}
+
 export function createSettingsPanel(opts = {}) {
+  overlapLayoutCss();
   const wrap = document.createElement('div');
   wrap.className = 'gm-setwrap';
   wrap.innerHTML = `<div class="gm-set-tabs" role="tablist">
@@ -407,6 +429,7 @@ export function createSettingsPanel(opts = {}) {
 
 /** 조작법 화면 (홈·ESC 메뉴 같이 씀). 키 글자는 지금 정한 조작키(keybinds.js)를 따라 바뀜. opts.onEditKeys = "키 바꾸기" 버튼 */
 export function createControlsPage(opts = {}) {
+  overlapLayoutCss();
   const el = document.createElement('div');
   el.className = 'gm-controls';
   const K = (...ids) => ids.map((id) => keybinds.html(id)).join('');

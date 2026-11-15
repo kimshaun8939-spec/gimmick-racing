@@ -529,7 +529,7 @@ export async function openLobby(opts = {}) {
   function enterRoom() {
     abort = null;
     views.room.innerHTML = `
-      <div class="lb-room">
+      <div class="lb-room"><div class="lb-room-content">
         <section class="lb-card lb-codecard">
           <div class="lbl">방 코드</div>
           <div class="code" data-act="copyCode" title="눌러서 복사"></div>
@@ -540,7 +540,7 @@ export async function openLobby(opts = {}) {
         <section class="lb-card lb-maps"><h3 id="lbMapTitle">맵</h3><div class="grid" id="lbMaps"></div><div class="lb-bots" id="lbMode"></div><p class="lb-modehelp" id="lbModeHelp"></p><div class="lb-bots" id="lbBots"></div></section>
         <section class="lb-card lb-mycar"><h3>내 차 <button class="gm-btn small" data-act="rename">✏️ 이름 바꾸기</button></h3><div class="lb-cars" id="lbCars2"></div></section>
         <section class="lb-card lb-chat"><h3>채팅</h3><div class="log" id="lbChat"></div><form id="lbChatForm"><input id="lbChatIn" maxlength="80" placeholder="메시지 입력 후 Enter" autocomplete="off"><button class="gm-btn small">보내기</button></form></section>
-        <div class="lb-bar"><button class="gm-btn danger" data-act="leave">← 방 나가기</button><span class="status" id="lbStatus"></span><button class="gm-btn primary" id="lbMain"></button></div>
+        </div><div class="lb-bar"><button class="gm-btn danger" data-act="leave">← 방 나가기</button><span class="status" id="lbStatus"></span><button class="gm-btn primary" id="lbMain"></button></div>
       </div>`;
     $('#lbLink').value = inviteUrl(session.code);
     if (!navigator.share) $('#lbShare').style.display = 'none';
@@ -824,6 +824,8 @@ function injectCss() {
 #lobby input:focus { border-color: var(--gm-accent, #ffcf3f); box-shadow: 0 0 0 3px rgba(255, 207, 63, .18); }
 #lobby .gm-btn:disabled { opacity: .45; cursor: not-allowed; filter: grayscale(.4); }
 /* 입장 */
+#lobby .lb-big p { word-break:keep-all; text-wrap:pretty; }
+#lobby .lb-car .pic:has(.cl) .ph { margin-left:24px; margin-right:24px; }
 #lobby .lb-entry { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 #lobby .lb-me { grid-column: 1 / -1; display: grid; gap: 14px; }
 #lobby .lb-field { display: grid; grid-template-columns: 80px 1fr; gap: 12px; align-items: center; }
@@ -851,7 +853,12 @@ function injectCss() {
 #lobby .spin { width: 58px; height: 58px; border-radius: 50%; border: 5px solid rgba(255,255,255,.1); border-top-color: var(--gm-accent, #ffcf3f); border-right-color: var(--gm-accent2, #ff9a2e); animation: lbSpin .8s linear infinite; }
 @keyframes lbSpin { to { transform: rotate(360deg); } }
 /* 방 */
-#lobby .lb-room { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.25fr); grid-template-rows: auto 1fr auto auto; grid-template-areas: "code maps" "players maps" "players car" "chat chat" "bar bar"; gap: 14px; min-height: 100%; }
+#lobby .lb-room { display:flex; flex-direction:column; height:100%; min-height:0; }
+#lobby .lb-room-content > .lb-card { min-height:0; overflow:auto; }
+@media(min-width:821px){body #lobby .lb-room-content { grid-template-columns:minmax(300px,.9fr) minmax(360px,1.3fr);grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas: "code maps" "players maps" "players car" "chat car"; }}
+@media(max-width:820px){body #lobby .lb-room-content{grid-template-rows:none;grid-auto-rows:max-content;align-content:start;}body #lobby .lb-room-content>.lb-card{overflow:visible;min-height:auto;}}
+
+#lobby .lb-room-content { flex:1; overflow:auto; min-height:0; display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 1.25fr); grid-template-rows: auto 1fr auto auto; grid-template-areas: "code maps" "players maps" "players car" "chat chat" "bar bar"; gap: 14px; }
 #lobby .lb-codecard { grid-area: code; display: grid; gap: 8px; background: linear-gradient(140deg, rgba(255, 207, 63, .16), rgba(13,19,36,.85) 55%); }
 #lobby .lb-codecard .lbl { font-size: 12px; font-weight: 800; color: var(--gm-dim, #95a2bb); letter-spacing: .12em; }
 #lobby .lb-codecard .code { font-family: "Consolas", "Pretendard", monospace; font-size: 54px; font-weight: 900; letter-spacing: .22em; line-height: 1; cursor: pointer; color: #fff; text-shadow: 0 0 24px rgba(255, 207, 63, .45); }
@@ -914,7 +921,7 @@ function injectCss() {
 #lobby .lb-chat .log .sys { color: var(--gm-dim, #95a2bb); font-size: 12px; }
 #lobby .lb-chat form { display: flex; gap: 8px; margin-top: 8px; }
 #lobby .lb-chat form input { flex: 1; padding: 8px 12px; }
-#lobby .lb-bar { grid-area: bar; display: flex; align-items: center; gap: 14px; position: sticky; bottom: 0; padding: 18px 0 2px; background: linear-gradient(rgba(6, 9, 20, 0), rgba(6, 9, 20, .96) 40%); }
+#lobby .lb-bar { flex-shrink:0; display: flex; align-items: center; gap: 14px; position: relative; bottom: auto; padding: 18px 0 2px; background: linear-gradient(rgba(6, 9, 20, 0), rgba(6, 9, 20, .96) 40%); }
 #lobby .lb-bar .status { flex: 1; text-align: right; color: var(--gm-dim, #95a2bb); font-weight: 800; font-size: 14px; }
 #lobby .lb-bar .status.flash { animation: lbFlash .6s; color: #ff8a7a; }
 @keyframes lbFlash { 30% { transform: translateX(-6px); } 60% { transform: translateX(4px); } }
@@ -929,7 +936,7 @@ function injectCss() {
   #lobby .lb-top { padding: 14px 16px; } #lobby .lb-title small { display: none; }
   #lobby .lb-view { inset: 78px 16px 16px; }
   #lobby .lb-entry { grid-template-columns: 1fr; }
-  #lobby .lb-room { grid-template-columns: 1fr; grid-template-areas: "code" "players" "maps" "car" "chat" "bar"; }
+  #lobby .lb-room-content { grid-template-columns: 1fr; grid-template-areas: "code" "players" "maps" "car" "chat" "bar"; }
   #lobby .lb-codecard .code { font-size: 42px; }
   #lobby .lb-field { grid-template-columns: 1fr; gap: 6px; }
 }
