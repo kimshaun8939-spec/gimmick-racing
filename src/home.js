@@ -1052,7 +1052,7 @@ export async function runHome() {
     loggingOut = false;
     if (!r.ok) {
       $('#hToast').classList.remove('on');
-      await confirmDialog('로그아웃하지 못했어요', `${r.message} · 이 기기 진행은 그대로예요.`, '확인', '닫기');
+      await accountNotice('로그아웃하지 못했어요', `${r.message} · 이 기기 진행은 그대로예요.`);
       return;
     }
     location.replace(location.pathname);
@@ -2089,9 +2089,14 @@ export async function runHome() {
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
   // 레벨 합치기 (2026-11-12): 서버에서 같은 계정 다른 기기 경험치를 받아 온 뒤 레벨·레벨 업 알림
   let newsDone = false;
-  const levelNews = () => {
+  const levelNews = async () => {
     if (newsDone) return;
     newsDone = true;
+    const migration = meta.migrationNotice();
+    if (migration) {
+      await accountNotice('재화가 3가지 조각으로 바뀌었어요', `예전 피트 코인 ${migration.coins.toLocaleString('ko-KR')}은 정리되고 산 물건은 모두 그대로예요 · 조각은 레이스·업적·목표로 모아요`, 'wallet-migration');
+      meta.acknowledgeMigration();
+    }
     applyGate(); // 서버 경험치를 받은 뒤 레벨이 바뀌었을 수 있음
     // 해금 안내 순서: (기존 사용자) '새 안내 n개' 한 번 → 레벨 업 창(+새 기능) → 설정·주소로 부탁한 안내
     if (gate.urlCoach() && gate.coachActive()) { gate.markSeen(); gate.markSeenAll(false); } // ?coach=<id> 시험: 창 없이 그 안내만
@@ -2518,7 +2523,7 @@ function welcomeDialog({ first = false } = {}) {
       <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
       ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="••••"${online.isMine(cur) ? ' aria-describedby="wlPinNote"' : ''}></label>
         ${online.isMine(cur) ? '<small class="wl-pinhint" id="wlPinNote">이 이름은 이미 내 것 · 비워 둬도 돼요</small>' : ''}
-        ${acc ? `<small class="wl-switch">↪ 다른 이름 + 비밀번호 = 그 계정으로 들어가요 (없는 이름이면 새 계정) · 지금 진행은 <b>${esc(acc.nick)}</b> 계정에 저장돼요. 이름만 바꾸려면 비밀번호를 비워 두세요</small>` : `<small class="wl-pinhint">🌐 <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요 · 순위표 기록과 레벨·조각·산 물건이 같이 이어져요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>`}
+        ${acc ? `<small class="wl-switch">↪ 다른 이름 + 비밀번호 = 그 계정으로 들어가요 (없는 이름이면 새 계정) · ${accCs.missing ? '서버가 아직 계정 저장을 지원하지 않아 지금은 계정 바꾸기를 막고 있어요.' : `지금 진행을 <b>${esc(acc.nick)}</b> 계정에 저장할 수 있을 때만 바꿀 수 있어요.`} 이름만 바꾸려면 비밀번호를 비워 두세요</small>` : `<small class="wl-pinhint">🌐 <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요 · 순위표 기록과 레벨을 이어 해요 · 조각·산 물건은 서버가 계정 저장을 지원할 때 이어져요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>`}
         <div class="wl-err" role="alert"></div></div>` : ''}
       ${first ? `<div class="wl-keypreset"><label for="welcomeKeyPreset"><b>⌨️ 어떤 배치로 할래요?</b></label>
         <select id="welcomeKeyPreset" aria-label="조작키 배치">${PRESETS.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
@@ -2576,12 +2581,14 @@ function welcomeDialog({ first = false } = {}) {
           try {
             if (pin) {
               const res = await online.login(n, pin);
-              wrap.dataset.msg = res.switched ? `👤 ${res.nick} 계정으로 바꿨어요 · 그 계정 진행을 불러왔어요` : res.merged ? `👤 ${res.nick} 계정으로 이어 해요 · 이 기기 기록 ${res.merged}개를 합쳤어요` : res.created || res.claimed ? `🔐 ${res.nick} 이름을 지켰어요` : res.reload ? `👤 ${res.nick} 계정으로 이어 해요 · 계정 진행을 불러왔어요` : `👤 ${res.nick} 계정으로 이어 해요`;
+              wrap.dataset.msg = res.switched ? (res.cloud?.ok ? `👤 ${res.nick} 계정으로 바꿨어요 · 그 계정 진행을 불러왔어요` : `👤 ${res.nick} 계정으로 바꿨어요 · 진행을 받지 못했어요. 인터넷 연결 뒤 홈을 다시 열어 주세요`) : res.cloud?.missing ? `🔐 ${res.nick} 이름을 지켰어요 · 진행은 지금 이 기기에만 있어요` : res.merged ? `👤 ${res.nick} 계정으로 이어 해요 · 이 기기 기록 ${res.merged}개를 합쳤어요` : res.created || res.claimed ? `🔐 ${res.nick} 이름을 지켰어요` : res.reload ? `👤 ${res.nick} 계정으로 이어 해요 · 계정 진행을 불러왔어요` : `👤 ${res.nick} 계정으로 이어 해요`;
               if (res.reload) wrap.dataset.reload = '1';
             } else if (!(await online.rename(n))) {
               busy = false;
               wrap.classList.remove('busy');
               return fail('이미 다른 사람이 비밀번호로 지킨 이름이에요 · 내 이름이면 비밀번호를 넣어 주세요');
+            } else {
+              wrap.dataset.msg = `👤 이름을 ${n}(으)로 바꿨어요 · 진행은 그대로예요`;
             }
           } catch (err) {
             busy = false;
@@ -2716,4 +2723,16 @@ function firstDriveDialog(onMode) {
     document.body.appendChild(wrap);
     wrap.querySelector('[data-nf="tutorial"]').focus({ preventScroll: true });
   });
+}
+
+function accountNotice(title, text, extraClass = '') {
+ return new Promise(resolve => {
+  const previous=document.activeElement, wrap=document.createElement('div');
+  wrap.className='gm-confirm account-notice '+extraClass;
+  wrap.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-labelledby="accountNoticeTitle"><h3 id="accountNoticeTitle"></h3><p></p><div class="btns"><button class="gm-btn primary">확인<kbd>Enter</kbd></button></div></div>';
+  wrap.querySelector('h3').textContent=title;wrap.querySelector('p').textContent=text;
+  const close=()=>{window.removeEventListener('keydown',key,true);wrap.remove();previous?.focus?.({preventScroll:true});resolve();};
+  const key=e=>{e.stopImmediatePropagation();if(['Enter','NumpadEnter','Escape'].includes(e.code)){e.preventDefault();close();}else if(e.code==='Tab'){e.preventDefault();wrap.querySelector('button').focus();}};
+  wrap.querySelector('button').onclick=close;window.addEventListener('keydown',key,true);document.body.append(wrap);wrap.querySelector('button').focus();
+ });
 }

@@ -34,7 +34,7 @@ function migrate(j,legacy){
  }
  // 아직 안 받은 목표는 새 보상으로 (받은 것은 그대로)
  for(const type of ['daily','weekly'])(s.periods[type]?.goals||[]).forEach((g,i)=>{if(!g.claimed){g.reward=goalReward(type,i);g.coins=g.reward.pit;}});
- if(legacy)s.history.push({at,amount:0,kind:'pit',reason:'재화 개편: 피트 코인 '+old.coins.toLocaleString('ko-KR')+' → 0'});
+ if(legacy){s.migrationRecord={at,amount:0,kind:'pit',reason:'재화 개편: 피트 코인 '+old.coins.toLocaleString('ko-KR')+' → 0'};s.history.push(s.migrationRecord);}
  return s;
 }
 function load(){
@@ -49,7 +49,7 @@ function load(){
 let state=load(),dirty=false,started=false,scanning=false,silent=false,calendarAt=0,calendarCache=null;
 let run=null, notifyQueue=[],notifyBusy=false;
 const emit=(name,detail)=>{try{window.dispatchEvent(new CustomEvent(name,{detail}));}catch{}};
-function save(){try{mirror();localStorage.setItem(KEY,JSON.stringify(state));dirty=false;return true;}catch{emit('gimmick:metaError',{message:'저장 공간이 부족해요. 이 창을 닫기 전에 브라우저 저장 공간을 확인해 주세요.'});return false;}}
+function save(){try{mirror();if(state.legacy&&state.migratedAt){state.migrationRecord ||= {at:state.migratedAt,amount:0,kind:'pit',reason:'재화 개편: 피트 코인 '+num(state.legacy.coins).toLocaleString('ko-KR')+' → 0'};state.history=[...state.history.filter(h=>!String(h.reason).startsWith('재화 개편:')),state.migrationRecord].slice(-60);}localStorage.setItem(KEY,JSON.stringify(state));dirty=false;return true;}catch{emit('gimmick:metaError',{message:'저장 공간이 부족해요. 이 창을 닫기 전에 브라우저 저장 공간을 확인해 주세요.'});return false;}}
 export function ensureMetaStyle(){if(typeof document==='undefined'||document.querySelector('link[data-meta]'))return;const ln=document.createElement('link');ln.rel='stylesheet';ln.href=new URL('./meta.css',import.meta.url).href;ln.dataset.meta='1';document.head.appendChild(ln);}
 /** '⬡ +25 · ◆ +8 · ✿ +8' */
 export function rewardText(r,sep=' · '){return CURRENCY_IDS.filter(k=>num(r?.[k])>0).map(k=>CURRENCIES[k].icon+' +'+Math.floor(num(r[k])).toLocaleString('ko-KR')).join(sep);}
@@ -124,6 +124,8 @@ const missingText=(cur,missing)=>CURRENCIES[cur].icon+' '+missing.toLocaleString
 const carName=id=>carInfo(id)?.name||carUnlockList().find(c=>c.id===id)?.name||id;
 
 export const meta={
+ migrationNotice(){bootMeta();return state.legacy&&state.migratedAt&&!state.migrationNoticeSeen?{coins:num(state.legacy.coins)}:null;},
+ acknowledgeMigration(){state.migrationNoticeSeen=true;return save();},
  get(){bootMeta();periods();return structuredClone(state);},
  achievements(){bootMeta();return ACHIEVEMENTS.map(a=>({...a,value:metricValue(a),done:!!state.achievements[a.id],at:state.achievements[a.id]?.at||null}));},
  owns(key){if(key==='celebration:stock')return true;if(String(key).startsWith('car:'))return carOwned(String(key).slice(4))||!!state.owned[key];return !!state.owned[key];},

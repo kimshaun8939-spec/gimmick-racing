@@ -662,11 +662,14 @@ function effectiveOwner(cur) {
 /** gr_login 전: 다른 이름으로 바꿔 들어가려 하면 지금 진행을 지금 계정에 먼저 저장. 못 하면 예외 (reason 'save') */
 export async function beforeLogin(cur, nick) {
   const prep = { owner: effectiveOwner(cur), cloud: !!(api && !off()) };
-  if (!prep.cloud) return prep;
+  if (!prep.cloud) {
+    if (cur?.claimed && !sameName(cur.nick, nick)) throw Object.assign(new Error('계정 저장이 꺼져 있어 계정을 바꿀 수 없어요 · 지금은 비밀번호를 비우고 이름만 바꿀 수 있어요'), { reason: 'save' });
+    return prep;
+  }
   if (prep.owner && cur && cur.claimed && prep.owner === cur.id && !sameName(cur.nick, nick)) {
     const r = await serialize(() => pushCore(cur).catch(fail));
     if (r.ok) prep.saved = true;
-    else if (r.missing) prep.missing = true; // SQL 전 서버: 예전처럼 (진행은 이 기기에 그대로)
+    else if (r.missing) throw Object.assign(new Error('서버가 아직 계정 저장을 지원하지 않아 계정을 바꾸면 진행이 섞여요 · 지금은 비밀번호를 비우고 이름만 바꿀 수 있어요'), { reason: 'save' });
     else throw Object.assign(new Error(r.offline ? '지금 진행을 계정에 저장하지 못했어요 · 인터넷 연결 뒤 다시 해 주세요' : '지금 진행을 계정에 저장하지 못했어요 · 잠시 뒤 다시 해 주세요'), { reason: 'save' });
     try {
       await api.syncXp();
