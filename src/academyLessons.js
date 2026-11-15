@@ -180,7 +180,7 @@ function cornerRec(ctx, P) {
   const { game, car } = ctx;
   const drill = createDrill(game, P);
   const prof = car._lineProfile || (car.lineSpeed(0), car._lineProfile);
-  const X = { trailT: 0, hardTurnT: 0, lastBrkD: null, liftT: 0, liftRun: 0, liftMax: 0, brkMax: 0, brkInLift: 0, steerSum: 0, steerN: 0, kerbIn: 0, kerbOut: 0, offT: 0, vEnd: null, vPlan: null, corners: {}, apex2: null, outLat2: null, minV2: Infinity };
+  const X = { brakeT: 0, brakePeak: 0, trailT: 0, hardTurnT: 0, lastBrkD: null, liftT: 0, liftRun: 0, liftMax: 0, brkMax: 0, brkInLift: 0, steerSum: 0, steerN: 0, kerbIn: 0, kerbOut: 0, offT: 0, vEnd: null, vPlan: null, corners: {}, apex2: null, outLat2: null, minV2: Infinity };
   return {
     drill,
     X,
@@ -189,6 +189,11 @@ function cornerRec(ctx, P) {
       if (!car.trackInfo) return r;
       const idx = car.trackInfo.index % P.N;
       const m = P.dist(idx), v = Math.abs(car.speed), brk = car.brk, thr = car.thr;
+      if (brk > 0.05) {
+        X.brakeT += dt;
+        if (X.firstBrakeM == null) X.firstBrakeM = m;
+      }
+      X.brakePeak = Math.max(X.brakePeak, brk);
       const lat = car.trackInfo.lateral * P.side; // + = 안쪽
       const st = (car.steerIn || 0) * P.side; // + = 안쪽으로 꺾음
       // S 톡톡의 누름·뗌 사이도 이어서 합산 (연속으로 밟을 필요 없음).
@@ -219,6 +224,10 @@ function cornerRec(ctx, P) {
     rows() {
       const res = drill.result();
       const by = Object.fromEntries(res.rows.map((r) => [r.id, r]));
+      // 공통 판정이 놓치는 제동 구간 밖의 브레이크도 성적표에 설명.
+      if ((!P.brakeKind || P.brakeKind === 'brake') && drill.R.brakeD == null && X.brakeT > 0.1) {
+        by.brake = row('brake', 'bad', '브레이크 시점', X.firstBrakeM >= P.dB ? '브레이크를 늦게 밟아 코너 앞 제동을 놓쳤어요. 빨간 라인에서 더 일찍 밟아요' : '제동 구간에 들어오기 전에 브레이크를 밟았어요. 직선에서 가속하고 빨간 라인에서 짧게 밟아요');
+      }
       return { res, by };
     },
   };
@@ -299,16 +308,17 @@ RUN.brake = {
         const X = R.X, D = R.drill.R;
         const rows = [by.brake];
         // (핸들 곧게는 판정 안 함: 코너에 따라 레이싱 라인이 브레이크 중에 이미 꺾이기 시작해서 자동 운전도 꺾으며 밟음)
-        if (D.brakeD == null) rows.push(row('hard', 'bad', '한 번에 세게', '브레이크를 안 밟았어요'));
+        if (D.brakeD == null) rows.push(row('hard', 'bad', '한 번에 세게', X.brakeT > 0.1 ? `브레이크는 밟았지만 코너 앞 제동 구간에서 밟아야 해요 (최대 ${Math.round(X.brakePeak * 100)}%)` : '브레이크를 안 밟았어요'));
         else if (X.brkMax === 0 && !Number.isFinite(D.minV)) rows.push(row('hard', 'bad', '한 번에 세게', '코너 앞 제동 구간까지 못 갔어요. 먼저 직선에서 가속한 뒤 빨간 라인에서 짧게 꾹 눌러요'));
         else if (X.brkMax < 0.55) rows.push(row('hard', 'bad', '한 번에 세게', `너무 살살 밟았어요 (${Math.round(X.brkMax * 100)}%). 짧게 꾹!`));
         else if (X.brkMax < 0.8) rows.push(row('hard', 'meh', '한 번에 세게', `조금 약해요 (${Math.round(X.brkMax * 100)}%). 처음엔 끝까지 꾹`));
         else rows.push(row('hard', 'ok', '한 번에 세게', `좋아요! ${Math.round(X.brkMax * 100)}%로 꾹 밟았어요`));
         const ratio = D.minV < Infinity ? D.minV / P.vMin : 0;
         if (!ratio) rows.push(row('speed', 'bad', '코너 속도', '코너까지 못 갔어요'));
-        else if (D.offT > 0.4 || res.respawn) rows.push(row('speed', 'bad', '코너 속도', `너무 빨라서 밖으로 나갔어요 (${kmh(D.minV)} km/h). 조금 더 일찍`));
+        else if (D.offT > 0.4 || res.respawn) rows.push(row('speed', 'bad', '코너 속도', `도로 밖으로 나갔어요 (코너 최저 ${kmh(D.minV)} km/h). 라인을 따라 꺾고 속도를 맞춰요`));
         else if (ratio < 0.78) rows.push(row('speed', 'bad', '코너 속도', `너무 많이 줄였어요: ${kmh(D.minV)} km/h (목표 약 ${kmh(P.vMin)}). 덜 밟아도 돼요`));
         else if (ratio < 0.9) rows.push(row('speed', 'meh', '코너 속도', `조금 많이 줄였어요: ${kmh(D.minV)} km/h (목표 약 ${kmh(P.vMin)})`));
+        else if (ratio > 1.15) rows.push(row('speed', 'bad', '코너 속도', `아직 빨라요: ${kmh(D.minV)} km/h (목표 약 ${kmh(P.vMin)}). 조금 더 줄여요`));
         else rows.push(row('speed', 'ok', '코너 속도', `딱 맞아요: ${kmh(D.minV)} km/h (목표 약 ${kmh(P.vMin)})`));
         rows.push(by.gas);
         return { rows, respawn: res.respawn };

@@ -227,7 +227,7 @@ export async function createHub(id, handlers = {}, opts = {}) {
       for (const l of links.values()) {
         if (l.pid === except) continue;
         const c = l.st && l.st.open ? l.st : l.ctl;
-        if (c && c.open) safeSend(c, msg);
+        if (c && c.open) safeSend(c, c === l.st ? msg : { t: 'fast-fallback', data: msg });
       }
     },
     kick(pid, msg) {
@@ -276,6 +276,7 @@ export async function createHub(id, handlers = {}, opts = {}) {
         if (handlers.onJoin) handlers.onJoin(pid, rec);
         return;
       }
+      if (msg.t === 'fast-fallback') return void (rec.pid && handlers.onFast && handlers.onFast(rec.pid, msg.data));
       if (msg.t === 'ping') return safeSend(conn, { t: 'pong', c: msg.c, h: performance.now() });
       if (rec.pid && handlers.onMessage) handlers.onMessage(rec.pid, msg, rec);
     });
@@ -348,7 +349,7 @@ export async function joinHub(hostId, hello, handlers = {}, { tries = 20, delay 
     },
     fast(msg) {
       const c = st && st.open ? st : ctl;
-      if (c.open) safeSend(c, msg);
+      if (c.open) safeSend(c, c === st ? msg : { t: 'fast-fallback', data: msg });
     },
     ping() {
       if (ctl.open) safeSend(ctl, { t: 'ping', c: performance.now() });
@@ -373,6 +374,7 @@ export async function joinHub(hostId, hello, handlers = {}, { tries = 20, delay 
   ctl.on('data', (msg) => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'pong') return onPong(msg);
+    if (msg.t === 'fast-fallback') return void (handlers.onFast && handlers.onFast(msg.data));
     if (handlers.onMessage) handlers.onMessage(msg);
   });
   const onClose = () => {
@@ -399,8 +401,11 @@ export async function joinHub(hostId, hello, handlers = {}, { tries = 20, delay 
   for (let i = 0; i < 5; i++) setTimeout(() => link.ping(), 60 + i * 120); // 처음엔 빨리 몇 번 재서 시계를 맞춤
   const pinger = setInterval(() => link.ping(), 2000);
   // 위치용 통로 (실패해도 ctl로 보내면 되니 기다리지 않음)
-  connectOnce(peer, hostId, { label: 'st', reliable: false, serialization: 'json' })
+  // 로컬 통로는 CPU 지연 중 반쪽 st 연결을 피하도록 ctl로 위치를 보냄.
+  // 실제 PeerJS의 독립 위치 통로는 그대로 사용.
+  if (!useLocal()) connectOnce(peer, hostId, { label: 'st', reliable: false, serialization: 'json' })
     .then((c) => {
+      if (closed) return c.close();
       st = c;
       st.on('data', (msg) => handlers.onFast && handlers.onFast(msg));
     })
@@ -459,7 +464,8 @@ class LocalConn extends Emitter {
     if (this.open) chan().postMessage({ k: 'd', to: this.peer, cid: this.cid, data: JSON.parse(JSON.stringify(data)) });
   }
   close() {
-    if (!this.open) return;
+    if (!this._peer.conns.has(this.cid)) return;
+    clearTimeout(this._to);
     this.open = false;
     chan().postMessage({ k: 'x', to: this.peer, cid: this.cid });
     this._peer.conns.delete(this.cid);
@@ -515,7 +521,7 @@ class LocalPeer extends Emitter {
     chan().postMessage({ k: 'c', to: id, from: this.id, cid, label: opts.label });
     c._to = setTimeout(() => {
       if (c.open) return;
-      this.conns.delete(cid);
+      c.close(); // 상대가 이미 열었더라도 함께 정리
       this.emit('error', Object.assign(new Error('Could not connect to peer ' + id), { type: 'peer-unavailable' }));
     }, 1200);
     return c;
