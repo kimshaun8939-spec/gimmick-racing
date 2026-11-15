@@ -11,7 +11,7 @@ const STATS = [
  ['grip','접지력','150 km/h에서 옆 가속 한계','lateral150','m/s²',1],
  ['brake','브레이크','100→0 km/h · 짧을수록 좋음','brake100M','m',0],
  ['drift','드리프트','미끄러짐을 유지하기 쉬운 정도'],
- ['offroad','오프로드','잔디에서 속도 유지율','offroadKeep','%',0],
+ ['offroad','험한 길','잔디에서 속도 유지율','offroadKeep','%',0],
  ['boat','배 성능','물 위 최고 속도','boatKmh','km/h',0],
 ];
 const esc = s => String(s ?? '').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
