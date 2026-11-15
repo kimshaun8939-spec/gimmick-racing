@@ -6,13 +6,13 @@ const home = !new URLSearchParams(location.search).get('map');
 if (title) title.textContent = home ? '트랜스폼 레이서에 오신 걸 환영해요' : '첫 레이스를 준비해요';
 let downloading = true, count = 0, lastProgressAt = 0;
 const say = text => { if (status) status.textContent = text; };
-say('기본 파일을 받고 있어요 · 처음에는 조금 더 걸려요');
+say('기본 파일 불러오기');
 // 퍼센트를 추측하지 않고 실제 도착한 파일 수를 알려 줘요.
 const observer = typeof PerformanceObserver === 'function' ? new PerformanceObserver(list => {
   count += list.getEntries().length;
   if (downloading && performance.now()-lastProgressAt>400 && status?.textContent.startsWith('기본 파일')) {
     lastProgressAt=performance.now();
-    say('기본 파일을 받고 있어요 · ' + count + '개 도착');
+    say('기본 파일 · ' + count + '개 도착');
   }
 }) : null;
 observer?.observe({ type: 'resource', buffered: true });
@@ -33,14 +33,13 @@ try {
           // src/vendor/는 폴더 이름에 버전이 붙은 안 바뀌는 파일(three·PeerJS·글꼴) → 새 버전마다 다시 받지 않음
           const files = (ver.files || []).filter(f => !String(f).replace(/^\.\//, '').startsWith('src/vendor/'));
           say('새 버전 준비 중 · 0 / ' + files.length + '개');
-          progress?.classList.add('progress');
+          progress?.style.setProperty('--wheel-progress', 0);
           const loaded = await Promise.all(files.map(async f => {
             let ok = false;
             try { ok = (await fetch(f, { cache: 'reload', signal: AbortSignal.timeout(20000) })).ok; } catch {}
             done++;
             say('새 버전 준비 중 · ' + done + ' / ' + files.length + '개');
-            const fill = progress?.querySelector('i');
-            if (fill) fill.style.width = Math.round(done / Math.max(1, files.length) * 100) + '%';
+            progress?.style.setProperty('--wheel-progress', Math.round(done / Math.max(1, files.length) * 100));
             return ok;
           }));
           if (!loaded.every(Boolean)) throw new Error('업데이트 파일을 다 받지 못했어요.');
@@ -53,11 +52,9 @@ try {
       say('연결을 다시 확인하며 게임을 준비해요');
     }
   }
-  // 업데이트 막대의 100%는 갱신 파일만 뜻해요. 화면에 필요한 나머지는 별도 준비예요.
-  progress?.classList.remove('progress');
-  const fill = progress?.querySelector('i');
-  if (fill) fill.style.width = '';
-  say('기본 파일을 받고 있어요 · ' + count + '개 도착');
+  // 갱신 진행 100%는 업데이트 파일만 뜻해요. 화면에 필요한 나머지는 별도 준비예요.
+  progress?.style.setProperty('--wheel-progress', 12);
+  say('기본 파일 · ' + count + '개 도착');
   if (home) {
     // 주행 물리·봇·다른 코스는 레이스를 시작할 때 main.js가 불러와요.
     await import('./audioMix.js');
@@ -65,6 +62,7 @@ try {
     downloading = false;
     say('차고와 코스 목록을 준비해요');
     await runHome();
+    progress?.style.setProperty('--wheel-progress', 100);
   } else {
     await import('./main.js');
     downloading = false;

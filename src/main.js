@@ -67,8 +67,8 @@ async function loadingStage(step, text) {
   const bar = document.getElementById('ldProgress');
   if (status) status.textContent = step ? step + '/5 · ' + text : text;
   if (bar && step) {
-    bar.classList.add('progress');
-    bar.querySelector('i').style.width = [0, 10, 25, 45, 65, 85][step] + '%';
+    bar.style.setProperty('--wheel-progress', [0, 10, 25, 45, 65, 85][step]);
+    bar.style.setProperty('--wheel-speed', (1.4 - step * .1) + 's');
   }
   // 무거운 코스 계산 전에 이번 단계가 화면에 보일 틈을 줌.
   await new Promise((resolve) => {
@@ -86,7 +86,7 @@ if (!mapParam) {
   await new Promise(() => {}); // 홈 화면에서는 게임을 만들지 않음
 }
 let mapName = MAPS[mapParam] ? mapParam : 'gp';
-await loadingStage(1, '코스와 차를 불러와요');
+await loadingStage(1, '코스 · 차 불러오기');
 // 로딩 화면: 맵 이름·차 이름·팁
 const mapsMeta = await loadMaps();
 const mapMeta = () => mapsMeta.find((m) => m.id === mapName) || { title: mapName };
@@ -213,15 +213,15 @@ const [defaultTrack, defaultScenery, defaultProps] = await Promise.all([
   mapMod?.buildProps ? null : import('./props.js'),
 ]);
 const sceneBeforeMap = new Set(scene.children); // 트랙·풍경이 새로 넣은 것만 묶어 그리기 대상 (staticBatch.js)
-await loadingStage(2, '달릴 도로를 만들어요');
+await loadingStage(2, '도로 준비');
 performance.mark('load:start');
 const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : defaultTrack.buildTrack(trackData, scene);
 performance.mark('load:track');
-await loadingStage(3, '풍경과 코스 기믹을 준비해요');
+await loadingStage(3, '풍경 · 기믹 준비');
 const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : defaultScenery.buildScenery(track, scene);
 const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
 performance.mark('load:scenery');
-await loadingStage(4, '차와 출발선을 준비해요');
+await loadingStage(4, '출발선 준비');
 const props = mapMod && mapMod.buildProps ? mapMod.buildProps(track, scene) : defaultProps.buildProps(track, scene);
 performance.mark('load:props');
 // 정적인 코스 표본의 정확한 최근접 탐색. 거리식/동점(앞 번호 우선)은
@@ -1246,7 +1246,7 @@ let capNext = 0; // 프레임 제한: 다음에 그릴 시각
 let elapsed = 0;
 let fpsFrames = 0, fpsT = performance.now();
 // 가만히 있는 트랙·풍경 메시를 재질별로 묶어 그림 호출 수를 줄임 (모양은 그대로, 렉 줄이기). ?batch=0 이면 끔
-await loadingStage(5, '빛과 움직임을 마지막으로 점검해요');
+await loadingStage(5, '마지막 점검');
 const batcher = (() => {
   if (params.get('batch') === '0') return null;
   // 코스에서 먼 물체는 큰 칸으로 묶음 (멀리 있는 하늘 섬·산을 120 m 칸으로 자르면 조각만 많아짐)
@@ -1276,8 +1276,8 @@ if (params.get('prewarm') !== '0') {
 }
 {
   const l = document.getElementById('loading');
-  const bar = document.querySelector('#ldProgress i');
-  if (bar) bar.style.width = '100%';
+  const bar = document.getElementById('ldProgress');
+  bar?.style.setProperty('--wheel-progress', 100);
   ld('ldStatus', '준비 완료! 곧 출발해요');
   l.classList.add('out');
   setTimeout(() => l.remove(), 450);
