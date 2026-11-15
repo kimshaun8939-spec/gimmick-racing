@@ -3206,3 +3206,29 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
   .h-olme .ol-accbtns { width: 100%; }
   .h-olme .ol-accbtns .gm-btn { flex: 1; min-height: 40px; }
 }
+
+/* 이름 창: 휴대폰에서도 계정 안내를 끝까지 읽기 (namewin) */
+.gm-welcome { padding: 12px; }
+.gm-welcome .box { box-sizing: border-box; max-width: 100%; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.gm-welcome .wl-pin label { min-width: 0; }
+.gm-welcome .wl-pin label > span { flex-shrink: 0; }
+.gm-welcome .wl-pinhint, .gm-welcome .wl-switch, .gm-welcome .wl-err, .gm-welcome .wl-hint { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.gm-welcome .wl-acc-who b { white-space: normal; overflow-wrap: anywhere; }
+.gm-welcome .cs-logout { flex-shrink: 0; }
+@media (max-width: 520px) {
+  .gm-welcome .box { padding: 20px 18px; }
+  .gm-welcome .wl-pin { padding: 12px; }
+  .gm-welcome .wl-pin label { flex-wrap: wrap; gap: 8px; }
+  .gm-welcome .wl-pin label > span { flex-basis: 100%; }
+  .gm-welcome .wl-pin label > span small { display: inline; margin-left: 6px; }
+  .gm-welcome .wl-pin input { width: 100%; box-sizing: border-box; }
+  .gm-welcome .btns { flex-wrap: wrap; }
+}
+/* 2차: 한국어는 단어 단위로 넘기고, 낮은 창의 여백을 줄여요. */
+.gm-welcome .wl-pinhint, .gm-welcome .wl-switch, .gm-welcome .wl-err, .gm-welcome .wl-hint { word-break: keep-all; }
+@media (max-height: 420px) {
+  .gm-welcome .box { padding: 16px 20px; }
+  .gm-welcome p { margin-bottom: 10px; }
+  .gm-welcome .wl-name, .gm-welcome .wl-pin, .gm-welcome .wl-acc { margin-top: 10px; }
+  .gm-welcome .btns { margin-top: 12px; }
+}

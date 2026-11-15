@@ -2513,7 +2513,8 @@ function welcomeDialog({ first = false } = {}) {
       ${!first && acc ? `<div class="wl-acc"><span class="wl-acc-who"><small>지금 로그인한 계정</small><b>🔐 ${esc(acc.nick)}</b>${accCs.missing ? '' : `<em>${accCs.linked ? '☁ 진행 저장됨' : '☁ 저장 준비 중'}</em>`}</span><button class="gm-btn small cs-logout" data-r="logout">로그아웃</button></div>` : ''}
       <div class="wl-name"><input type="text" maxlength="12" spellcheck="false" autocomplete="off" aria-label="이름"><button class="gm-btn small" data-r="dice" title="아무 이름이나">🎲</button></div>
       <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
-      ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="${online.isMine(cur) ? '이 이름은 이미 내 것 · 비워 둬도 돼요' : '••••'}"></label>
+      ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="••••"${online.isMine(cur) ? ' aria-describedby="wlPinNote"' : ''}></label>
+        ${online.isMine(cur) ? '<small class="wl-pinhint" id="wlPinNote">이 이름은 이미 내 것 · 비워 둬도 돼요</small>' : ''}
         ${acc ? `<small class="wl-switch">↪ 다른 이름 + 비밀번호 = 그 계정으로 들어가요 (없는 이름이면 새 계정) · 지금 진행은 <b>${esc(acc.nick)}</b> 계정에 저장돼요. 이름만 바꾸려면 비밀번호를 비워 두세요</small>` : `<small class="wl-pinhint">🌐 <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요 · 순위표 기록과 레벨·조각·산 물건이 같이 이어져요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>`}
         <div class="wl-err" role="alert"></div></div>` : ''}
       ${first ? `<div class="wl-keypreset"><label for="welcomeKeyPreset"><b>⌨️ 어떤 배치로 할래요?</b></label>
