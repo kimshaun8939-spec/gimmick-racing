@@ -234,3 +234,16 @@
   #results .rw-c .rw-hold { display: none; }
   #results .rw-cur .rw-c small { font-size: 9px; }
 }
+/* leftovers: 가로 휴대폰에서도 남은 판 수와 다음 보상을 끝까지 읽는다. */
+@media(max-height:560px) and (min-width:701px) and (max-width:900px){
+ #results .rw-left, #results .rw-ntext > :is(small,.rw-nname,span) { white-space:normal; overflow:visible; text-overflow:clip; word-break:keep-all; overflow-wrap:anywhere; }
+ #results .rw-next { min-width:0; }
+}
+/* leftovers 2차 사진 검토: 재화 칩을 세로로 묶어 다음 보상 글에 폭을 준다. */
+@media(max-height:560px) and (min-width:701px) and (max-width:900px){
+ #results .rw-band { grid-template-columns:minmax(0,1.1fr) auto minmax(0,1.3fr); }
+ #results .rw-cv { display:grid; gap:1px; }
+ #results .rw-next { gap:6px; }
+ #results .rw-left { font-size:10px; }
+ #results .rw-ntext > span { font-size:9px; line-height:1.3; }
+}

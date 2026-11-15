@@ -837,3 +837,12 @@ body.touch-on .ct-keys { display: none; }
 #home .g2-list .h-carcard:hover .pic img { transform:scale(1.24); }
 #home .g2-list .h-carcard.sel .pic img { transform:scale(1.26) translateX(2%); }
 @media(max-width:999px){ #home .h-car.g2-list .h-carlist .list .h-carcard .pic { height:clamp(84px,14vh,120px)!important; } }
+/* leftovers 1차: 사진의 양쪽 위에 선택/비교, 아래에는 잠금·가격만 둔다. */
+#home .g2-list .h-carlist .cp-quick { top:6px; bottom:auto; right:6px; width:36px; min-width:36px; height:36px; min-height:36px; }
+#home .g2-list .h-carcard .chk { left:6px; right:auto; top:6px; }
+#home .g2-list .h-carcard .nm { padding-right:10px!important; }
+@media(max-width:900px){
+ #home .g2-list .h-carlist .cp-quick { width:44px; min-width:44px; height:44px; min-height:44px; }
+}
+/* leftovers 2차 사진 검토: 등급 딱지 왼쪽 위 공간도 비워 둔다. */
+#home .g2-list .h-carcard .chk { left:40px; top:8px; }
