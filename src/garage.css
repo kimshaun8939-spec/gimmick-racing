@@ -592,3 +592,180 @@ body.touch-on .ct-keys { display: none; }
   #home .h-view[data-view="car"]:has(.h-carinfo[data-tab="parts"]) > .hx-flow .end { display:none; }
   #home .h-carinfo.ct[data-tab="parts"] { height:calc(100% + 44px); max-height:none; transform:translateY(-44px); }
 }
+/* garage2: 목록 → 상세. 이전 차고의 화면별 배치를 여기서 일관되게 대체. */
+#home .h-car.g2-list,#home .h-car.g2-detail{height:100%;min-height:0;display:grid;gap:24px;grid-template-rows:minmax(0,1fr)}
+#home .h-car.g2-list{grid-template-columns:minmax(0,1fr)}
+#home .g2-list .h-carstage,#home .g2-list .h-carinfo{display:none}
+#home.g2-catalog canvas.h-car,#home.g2-catalog .h-carmark{visibility:hidden;pointer-events:none}
+#home .g2-list .h-carlist{display:flex;flex-direction:column;min-height:0;height:100%;max-height:none;padding:20px;overflow:hidden}
+#home .g2-list .h-title{display:flex;font-size:24px}
+#home .g2-list .h-classtabs{display:flex;gap:8px}
+#home .g2-list .h-ctab{flex:1;min-height:44px}
+#home .g2-list .cx-tools{display:flex;flex-wrap:nowrap}
+#home .g2-list .list{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));height:auto!important;max-height:none!important;min-height:0;overflow:auto;gap:12px;flex:1;align-content:start}
+#home .g2-list .h-cgroup{grid-column:1/-1;width:auto}
+#home .g2-list .cp-tile{width:auto;min-width:0}
+#home .g2-list .h-carcard{width:100%;display:block}
+#home .g2-list .h-carcard .pic{height:112px!important;min-height:112px!important}
+#home .g2-list .h-carcard .nm{padding:10px!important;display:block}
+#home .g2-list .h-carcard .nm b{font-size:16px}
+#home .g2-list .h-carcard .nm small{display:block;font-size:11px}
+#home .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(470px,43%)}
+#home .g2-detail .h-carlist{display:none}
+#home .g2-detail .h-carstage{grid-column:1;grid-row:1;min-height:0;display:flex;padding-bottom:10px;touch-action:none}
+#home .g2-detail .h-carinfo.ct{grid-column:2;grid-row:1;display:flex;flex-direction:column;height:100%;max-height:none;transform:none;min-height:0;flex-basis:auto;padding:18px 20px 0;gap:12px}
+#home .g2-detail .ct-head{display:block}
+#home .g2-detail .ct-head h2{font-size:clamp(26px,2.5vw,38px)}
+#home .g2-detail .ct-head .tg{display:block}
+#home .g2-detail .ct-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px;width:100%;padding:0;flex:none}
+#home .g2-detail .ct-tab{width:auto;min-height:44px;height:auto;flex:auto;padding:8px!important;font-size:14px!important}
+#home .g2-detail .ct-body{flex:1;min-height:0;overflow:auto}
+#home .g2-detail .ct-pane{gap:12px}
+#home .g2-detail .ct-pane .desc{font-size:15px;line-height:1.6}
+#home .g2-detail .btns{flex:none;margin:0 -20px;padding:12px 20px;display:flex}
+#home .g2-detail .btns .gm-btn{min-height:44px}
+#home .g2-stagebar{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;justify-content:flex-start;pointer-events:auto}
+#home .g2-stagebar .gm-btn{font-size:12px;min-height:40px;padding:8px 12px}
+#home .g2-stagebar .gm-btn:last-child{margin-left:auto}
+#home .g2-detail .ns-stat{min-height:35px}
+#home .g2-detail .ns-label{font-size:13px}
+#home .g2-detail .ct-statbox{padding:14px}
+#home.g2-fitting .pu-skip{left:28%;bottom:15%;font-size:13px}
+#home.g2-fitting .h-drag{visibility:hidden}
+@media(min-width:901px) and (max-height:850px){
+ #home .g2-detail .h-carinfo.ct{padding:10px 14px 0;gap:7px}
+ #home .g2-detail .ct-head{display:flex;align-items:center;gap:12px}
+ #home .g2-detail .ct-head h2{font-size:26px}
+ #home .g2-detail .ct-head .tg{display:none}
+ #home .g2-detail .btns{margin:0 -14px;padding:8px 14px}
+ #home .g2-detail .ct-pane{gap:7px}
+}
+@media(max-width:900px){
+ #home .g2-list .list{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #home .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(360px,52%);gap:12px}
+}
+@media(max-width:600px) and (min-height:521px){
+ #home .g2-list .h-carlist{padding:10px;gap:8px}
+ #home .g2-list .list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #home .g2-list .h-carcard .pic{height:90px!important;min-height:90px!important}
+ #home .g2-list .h-carcard .nm b{font-size:13px}
+ #home .g2-list .h-title{font-size:18px}
+ #home .h-car.g2-detail{grid-template-columns:minmax(0,1fr);grid-template-rows:210px minmax(0,1fr);gap:8px}
+ #home .g2-detail .h-carinfo.ct{grid-column:1;grid-row:2;padding:10px 12px 0;gap:5px}
+ #home .g2-detail .ct-head{display:flex;gap:8px;align-items:center}
+ #home .g2-detail .ct-head h2{font-size:22px}
+ #home .g2-detail .ct-head .tg{display:none}
+ #home .g2-detail .ct-pane{gap:7px}
+ #home .g2-detail .btns{margin:0 -12px;padding:7px 12px}
+ #home .g2-detail .btns .gm-btn{font-size:12px;padding:8px}
+ #home .g2-detail .h-carstage .gm-seg{display:flex;position:static}
+ #home .g2-detail .h-carstage .h-drag{bottom:54px;font-size:10px}
+ #home .g2-stagebar .gm-btn{min-height:34px;font-size:10px;padding:6px 8px}
+ #home .g2-detail .ct-tab{min-height:38px;font-size:12px!important}
+ #home.g2-fitting .pu-skip{left:50%;top:190px;bottom:auto;font-size:11px;padding:8px 12px}
+}
+@media(max-height:520px) and (min-width:600px){
+ #home .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(410px,58%);gap:10px}
+ #home .g2-detail .h-carinfo.ct{padding:6px 8px 0;gap:4px}
+ #home .g2-detail .ct-head{display:none}
+ #home .g2-detail .ct-tabs{gap:3px}
+ #home .g2-detail .ct-tab{min-height:32px;font-size:11px!important;padding:5px!important}
+ #home .g2-detail .btns{margin:0 -8px;padding:4px 8px}
+ #home .g2-detail .btns .gm-btn{min-height:34px;padding:5px;font-size:11px}
+ #home .g2-detail .h-carstage .gm-seg{display:grid;grid-template-columns:repeat(2,1fr);position:static}
+ #home .g2-stagebar{flex-wrap:wrap;gap:4px}
+ #home .g2-stagebar .gm-btn{font-size:10px;padding:5px;min-height:30px}
+ #home .g2-list .h-carlist{padding:8px;gap:5px}
+ #home .g2-list .h-title{font-size:18px}
+ #home .g2-list .h-carcard .pic{height:65px!important;min-height:65px!important}
+ #home .g2-list .h-ctab{min-height:32px}
+ #home.g2-fitting .pu-skip{left:21%;bottom:25%;font-size:10px;padding:7px}
+}
+/* 2차 사진 검토: 넓은 화면에서도 상단을 한 줄로, 카드 설명은 두 줄로 정리. */
+@media(min-width:901px) and (min-height:521px){
+ #home .g2-detail .ct-head{display:flex;align-items:center;gap:12px;min-height:40px}
+ #home .g2-detail .ct-head h2{font-size:28px;margin:0}
+ #home .g2-detail .ct-head .tg{display:none}
+ #home .g2-detail .h-carinfo.ct{gap:8px;padding-top:12px}
+ #home .g2-detail .ct-pane{gap:7px}
+ #home .g2-detail .pu-art{height:60px}
+ #home .g2-detail .pu-cardtrade{height:28px;min-height:28px;overflow:hidden}
+ #home .g2-detail .pu-cardtrade,#home .g2-detail .pu-cardtrade em{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+ #home .g2-detail .pu-detail{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 8px;padding:7px 9px}
+ #home .g2-detail .pu-detail>.gm-btn{grid-column:2;grid-row:1 / span 2;min-height:34px;max-width:170px;margin:0;padding:5px 9px;white-space:normal}
+ #home .g2-detail .pu-detail>p{grid-column:1;margin:0!important}
+ #home .g2-detail .pu-trades,#home .g2-detail .pu-detail>small{grid-column:1/-1}
+ #home .g2-detail .pu-stats{gap:3px 9px}
+ #home .g2-detail .pu-tools{gap:4px}
+ #home .g2-detail .pu-tools .gm-btn{min-height:30px;padding:4px}
+}
+@media(min-width:901px) and (max-height:760px){
+ #home .g2-detail .h-carinfo.ct{gap:5px;padding-top:8px}
+ #home .g2-detail .ct-head{min-height:32px}
+ #home .g2-detail .ct-head h2{font-size:24px}
+ #home .g2-detail .pu-art{height:44px;margin-bottom:2px}
+ #home .g2-detail .pu-cards button{padding:4px}
+ #home .g2-detail .ct-pane{gap:5px}
+ #home .g2-detail .pu-detail>small{line-height:1.25;margin:0}
+ #home .g2-detail .pu-slots button{min-height:40px;padding:4px 2px}
+}
+#home .g2-detail .h-carstage .h-arrow{display:none}
+#home canvas.h-car{touch-action:none}
+#home .g2-list .pic{width:100%}
+#home .g2-list .pic img{width:100%;height:100%;object-fit:contain}
+/* 이전 조립 전용 3열 규칙보다 두 단계 배치를 우선. */
+#home .h-view .h-car.g2-list{grid-template-columns:minmax(0,1fr);width:100%}
+#home .h-view .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(470px,43%);width:100%}
+#home .h-view .g2-detail .ct-tabs .ct-tab{width:auto;flex:auto;height:auto}
+@media(max-width:900px){#home .h-view .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(360px,52%)}}
+@media(max-width:600px) and (min-height:521px){
+ #home .h-view .h-car.g2-detail{grid-template-columns:minmax(0,1fr);grid-template-rows:190px minmax(0,1fr)}
+ #home .g2-stagebar [data-act=carList]{width:auto;position:static}
+ #home .g2-detail .pu-cardtrade{white-space:nowrap;height:26px;overflow:hidden;min-height:26px}
+ #home .g2-detail .pu-cardtrade em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+@media(max-height:520px) and (min-width:600px){
+ #home .h-view .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(410px,58%)}
+ #home .h-view[data-view="car"]:has(.g2-detail)>.hx-flow{position:static;transform:none;width:100%;max-width:none;margin:0 0 8px;justify-content:flex-start}
+ #home .g2-detail .h-carinfo.ct[data-tab="parts"]{height:100%;transform:none}
+ #home .g2-detail .h-carstage .gm-seg{grid-template-columns:repeat(2,1fr)}
+}
+@media(min-width:901px) and (min-height:521px){
+ #home .h-car.g2-detail .h-carinfo.ct>.ct-head{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:12px;min-height:34px}
+ #home .h-car.g2-detail .ct-head h2{margin:0;font-size:26px}
+ #home .h-car.g2-detail .ct-head .ihead{display:flex}
+ #home .h-car.g2-detail .ct-head .tg,#home .h-car.g2-detail .ct-head .num{display:none}
+}
+#home .h-view .h-car.g2-detail .g2-stagebar button{position:static;width:auto;height:auto;transform:none;border-radius:10px}
+@media(max-height:520px) and (min-width:600px){
+ #home .h-view .h-car.g2-detail .h-carstage #hForms{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:0;position:static}
+ #home .h-view .h-car.g2-detail .h-carstage #hForms button{min-height:32px;padding:4px 2px;font-size:10px;width:auto}
+}
+@media(min-width:901px) and (min-height:521px) and (max-height:860px){
+ #home .h-view[data-view=car]{top:112px}
+ #home .h-view[data-view=car]>.hx-flow{position:absolute;top:-43px;left:50%;transform:translateX(-50%);margin:0;max-width:460px}
+ #home .h-view .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(490px,46%)}
+ #home .h-car.g2-detail .h-carinfo.ct>.ct-head{min-height:28px}
+ #home .h-car.g2-detail .ct-head h2{font-size:24px}
+ #home .h-car.g2-detail .ct-tabs .ct-tab{min-height:38px;padding:6px!important}
+ #home .h-car.g2-detail .h-carinfo.ct>.btns{padding-top:6px;padding-bottom:6px}
+}
+/* 목록의 카드 크기는 마지막에 본 상세 탭과 무관하게 유지. */
+#home .h-car.g2-list .h-carlist .list{position:relative;margin:0;padding:4px;scroll-snap-type:none;scroll-padding:8px;overscroll-behavior:contain}
+#home .h-car.g2-list .h-carlist .list .h-carcard{height:auto}
+#home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:112px!important;min-height:112px!important}
+#home .h-car.g2-list .h-carlist .list .h-carcard .nm small{display:block}
+@media(min-width:901px){#home .h-car.g2-list .h-carlist.dense .list{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:600px){#home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:90px!important;min-height:90px!important}}
+@media(max-height:520px) and (min-width:600px){#home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:65px!important;min-height:65px!important}}
+/* 가로 휴대폰 목록: 도구 줄이 줄바꿈되어 목록 높이를 삼키지 않게. */
+@media(max-height:520px) and (min-width:600px){
+ #home .h-view .h-car.g2-list .h-carlist{gap:4px;padding:6px 8px}
+ #home .h-view .h-car.g2-list .h-carlist .h-title,#home .h-view .h-car.g2-list .h-carlist .nm-classhelp{display:none}
+ #home .h-view .h-car.g2-list .h-carlist .h-classtabs{display:flex;gap:4px;padding:2px}
+ #home .h-view .h-car.g2-list .h-carlist .h-classtabs .h-ctab{min-height:30px;height:30px;padding:2px 5px}
+ #home .h-view .h-car.g2-list .h-carlist .cx-tools{display:flex;flex-wrap:nowrap;gap:5px}
+ #home .h-view .h-car.g2-list .h-carlist .cx-find{flex:1 1 0;min-width:0}
+ #home .h-view .h-car.g2-list .h-carlist .cx-find input,#home .h-view .h-car.g2-list .h-carlist .cx-sort,#home .h-view .h-car.g2-list .h-carlist .cx-dense{height:30px;min-height:30px;padding:4px 7px}
+ #home .h-view .h-car.g2-list .h-carlist .list{flex:1;min-height:0}
+}

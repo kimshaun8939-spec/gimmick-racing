@@ -59,3 +59,83 @@
 @media(max-width:719px){.mt-product .mt-shop-state{margin:0 10px 8px}}
 /* partsqa: 휴대폰 세로에서 '부품 교체 중' 단추가 일반·가속·배 단추를 덮던 것 → 가운데, 차 이름 줄 위로 */
 @media(max-width:600px){.pu-skip{left:50%;bottom:41%}}
+/* garage2: 실제 부품 사진과 장단점을 카드에서 바로 확인. */
+#home .g2-detail .pu-art{display:block;height:74px;background:radial-gradient(ellipse at 50% 70%,#2d4759,#0c1624 75%);border-radius:7px;margin-bottom:6px;overflow:hidden}
+#home .g2-detail .pu-art img{width:100%;height:100%;object-fit:contain}
+#home .g2-detail .pu-art>span{line-height:74px;font-size:26px;color:#a4c7cd}
+#home .g2-detail .pu-art [hidden]{display:none}
+#home .g2-detail .pu-cards{gap:7px}
+#home .g2-detail .pu-cards button{padding:7px 5px;text-align:left}
+#home .g2-detail .pu-cards b{font-size:12px;display:block}
+#home .g2-detail .pu-cardtrade{display:block;font-size:10px;color:#8ee9bf;line-height:1.4;margin:4px 0;min-height:28px}
+#home .g2-detail .pu-cardtrade em{display:block;color:#ffb2a7;font-style:normal}
+#home .g2-detail .pu-slots button{padding:8px 3px;min-height:44px}
+#home .g2-detail .pu-slots span{font-size:12px}
+#home .g2-detail .pu-detail{padding:10px 12px}
+#home .g2-detail .pu-trades{grid-template-columns:1fr 1fr}
+#home .g2-detail .pu-tools .gm-btn{min-height:34px;font-size:11px}
+@media(min-width:901px) and (max-height:800px){
+ #home .g2-detail .pu-art{height:54px;margin-bottom:3px}
+ #home .g2-detail .pu-cardtrade{font-size:9px;min-height:25px;margin:2px 0}
+ #home .g2-detail .pu-cards button{padding:5px}
+ #home .g2-detail .pu-detail{padding:7px 9px}
+ #home .g2-detail .pu-slots button{padding:5px 2px}
+}
+@media(max-width:600px){
+ #home .g2-detail .pu-art{height:52px;margin-bottom:3px}
+ #home .g2-detail .pu-cardtrade{font-size:9px;min-height:26px}
+ #home .g2-detail .pu-cards b{font-size:10px}
+ #home .g2-detail .pu-cards{gap:4px}
+ #home .g2-detail .pu-cards button{padding:4px}
+ #home .g2-detail .pu-slots span{font-size:10px}
+}
+@media(max-height:520px) and (min-width:600px){
+ #home .g2-detail .pu-art{height:46px;margin-bottom:2px}
+ #home .g2-detail .pu-cardtrade{display:none}
+ #home .g2-detail .pu-cards button{min-height:44px;padding:4px}
+ #home .g2-detail .pu-slots button{min-height:38px;padding:3px}
+ #home .g2-detail .pu-slots span{font-size:10px}
+ #home .g2-detail .pu-detail{padding:5px 7px}
+}
+/* garage2 2차: 사진은 유지하고 네 카드의 설명 길이를 일정하게 맞춤. */
+@media(min-width:901px) and (min-height:521px){
+ #home .h-car.g2-detail .pu-art{height:54px;margin-bottom:3px}
+ #home .h-car.g2-detail .pu-cardtrade{height:26px;min-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+ #home .h-car.g2-detail .pu-cardtrade em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #home .h-car.g2-detail .pu-cards button{padding:5px}
+ #home .h-car.g2-detail .ct-pane[data-pane=parts]{gap:5px}
+ #home .h-car.g2-detail .pu-detail{padding:6px 8px}
+ #home .h-car.g2-detail .pu-detail>small{line-height:1.3;margin:0}
+ #home .h-car.g2-detail .pu-slots button{min-height:40px;padding:4px 2px}
+}
+@media(min-width:901px) and (max-height:760px){#home .h-car.g2-detail .pu-art{height:40px}#home .h-car.g2-detail .pu-cardtrade{font-size:9px;height:24px;min-height:24px}}
+/* 낮은 PC: 상세 설명과 성능 비교를 나란히 두어 모든 조작이 화면 안에. */
+@media(min-width:901px) and (min-height:521px) and (max-height:800px){
+ #home .h-car.g2-detail .ct-pane[data-pane=parts]{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:5px 9px;align-content:start}
+ #home .h-car.g2-detail .ct-pane[data-pane=parts][hidden]{display:none}
+ #home .h-car.g2-detail .pu-head,#home .h-car.g2-detail .pu-lock,#home .h-car.g2-detail .pu-slots,#home .h-car.g2-detail .pu-cards,#home .h-car.g2-detail .pu-tools,#home .h-car.g2-detail .pu-feedback{grid-column:1/-1}
+ #home .h-car.g2-detail .pu-head{display:none}
+ #home .h-car.g2-detail .pu-detail{grid-column:1;display:flex;flex-direction:column;gap:3px;padding:7px}
+ #home .h-car.g2-detail .pu-detail>.gm-btn{max-width:none;width:100%;margin-top:auto}
+ #home .h-car.g2-detail .pu-trades{display:flex;flex-wrap:wrap;gap:2px 6px;font-size:10px}
+ #home .h-car.g2-detail .pu-detail>small{font-size:9px}
+ #home .h-car.g2-detail .pu-stats{grid-column:2;grid-template-columns:1fr;align-content:start;gap:4px}
+ #home .h-car.g2-detail .pu-stats>small{font-size:9px;line-height:1.35}
+ #home .h-car.g2-detail .pu-stats>div{grid-template-columns:38px minmax(0,1fr) 28px}
+}
+@media(min-width:901px) and (min-height:521px) and (max-height:860px){
+ #home .h-car.g2-detail .ct-pane[data-pane=parts]{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:5px 9px;align-content:start}
+ #home .h-car.g2-detail .ct-pane[data-pane=parts][hidden]{display:none}
+ #home .h-car.g2-detail :is(.pu-head,.pu-lock,.pu-slots,.pu-cards,.pu-tools,.pu-feedback){grid-column:1/-1}
+ #home .h-car.g2-detail .pu-head{display:none}
+ #home .h-car.g2-detail .pu-detail{grid-column:1;display:flex;flex-direction:column;gap:3px;padding:7px;text-align:left}
+ #home .h-car.g2-detail .pu-detail>.gm-btn{max-width:none;width:100%;margin-top:auto}
+ #home .h-car.g2-detail .pu-trades{display:flex;flex-wrap:wrap;gap:2px 6px;font-size:10px}
+ #home .h-car.g2-detail .pu-detail>small{font-size:9px;line-height:1.25;margin:0}
+ #home .h-car.g2-detail .pu-stats{grid-column:2;grid-template-columns:1fr 1fr;align-content:start;gap:5px 7px}
+ #home .h-car.g2-detail .pu-stats>small{font-size:9px;line-height:1.3}
+ #home .h-car.g2-detail .pu-stats>div{grid-template-columns:26px minmax(0,1fr) 25px;font-size:9px;gap:3px}
+ #home .h-car.g2-detail .pu-art{height:42px}
+ #home .h-car.g2-detail .pu-slots button{min-height:36px}
+}
+@media(min-width:901px) and (max-height:760px){#home .h-car.g2-detail .pu-art{height:36px}#home .h-car.g2-detail .pu-cards button{padding:4px}}

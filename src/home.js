@@ -1,6 +1,6 @@
 // 홈 화면: 주소에 ?map= 이 없으면 게임 대신 이 화면이 뜸
 //   메인 메뉴(레이스 시작 / 차 고르기 / 맵 고르기 / 기록 / 설정 / 조작법)
-//   차 고르기: 빙글빙글 도는 3D 차 미리보기(작은 Three.js 장면) + 성능 막대 + 변신 미리보기
+//   차 고르기: 직접 돌려 보는 3D 차 미리보기(작은 Three.js 장면) + 성능 막대 + 변신 미리보기
 //   맵 고르기: 코스 모양 그림 카드 (길이·바퀴 수·특징·내 최고 기록)
 //   레이스 방식 고르기: 봇 레이스(mode=race) / 타임 어택(mode=time, 고스트) / 멀티플레이(lobby.js) / 자유 연습(mode 없음)
 //   차 등급(클래스) 탭: data/cars.json의 classes (없으면 탭 없이 전체 목록)
@@ -29,6 +29,7 @@ import { createMetaPage, createCostumePicker } from './metaUI.js';
 import { paintPrice } from './metaCatalog.js';
 import { createPartsUI } from './partsUI.js';
 import * as parts from './parts.js';
+import { PART_VIEW } from './partThumbs.js';
 import { createGarageLift } from './garageLift.js';
 import { touchWanted } from './touch.js';
 
@@ -227,19 +228,19 @@ export async function runHome() {
     { id: 'custom', icon: '🎨', label: '커스텀' },
   ];
   views.car.innerHTML = `
-    <div class="h-car">
+    <div class="h-car g2-list">
       <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><div class="h-classtabs"></div>
         <div class="cx-tools"><label class="cx-find"><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
           <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
           <button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
         <div class="list"></div></div>
-      <div class="h-carstage">
+      <div class="h-carstage"><div class="g2-stagebar"><button class="gm-btn" data-act="carList" data-nav>‹ 차 목록</button><button class="gm-btn" data-act="carCompare" data-nav>⚖ 비교</button><button class="gm-btn" data-act="carFront" data-nav>정면으로</button></div>
         <div class="h-drag">↔ 끌어서 돌려 보기</div>
-        <button class="gm-btn h-arrow" data-act="prevCar" aria-label="이전 차">‹</button>
+        
         <div class="gm-seg" id="hForms" title="자동 변신 모습 미리 보기">
           <button data-mode="normal" class="on">🚗 일반</button><button data-mode="accel">🔥 가속</button><button data-mode="boat">🚤 배</button><button data-mode="fly">✈️ 비행</button>
         </div>
-        <button class="gm-btn h-arrow" data-act="nextCar" aria-label="다음 차">›</button>
+        
       </div>
       <div class="h-panel h-carinfo ct">
         <!-- 정보 칸 탭 (사용자 요청 2026-11-15 "설명 칸이 길어서 커스텀이 있는지 모름"): 위 = 이름, 가운데 = 소개 · 성능 · 커스텀 탭, 아래 = 버튼 -->
@@ -279,12 +280,21 @@ export async function runHome() {
         <div class="btns"><button class="gm-btn" data-go="mode" data-nav>‹ 레이스 방식</button><button class="gm-btn primary" data-act="pickCar" data-nav>다음: 맵 고르기 ›</button></div>
       </div>
     </div>`;
+  let carDetail = false;
+  function garageDetail(detail, focus = true) {
+    carDetail = detail;
+    views.car.querySelector('.h-car').classList.toggle('g2-list', !detail);
+    views.car.querySelector('.h-car').classList.toggle('g2-detail', detail);
+    home.classList.toggle('g2-catalog', view === 'car' && !detail);
+    preview.setView(view);
+    if (focus) (detail ? views.car.querySelector('[data-act=pickCar]') : views.car.querySelector('.h-carcard.sel'))?.focus({preventScroll:true});
+  }
   const costumePicker = createCostumePicker(views.car.querySelector('.mt-costume-box'), {
     onPreview(look) { const mode = views.car.querySelector('#hForms button.on')?.dataset.mode; preview.setCar({ ...carOf(carId), look }); if (mode) preview.setMode(mode); },
     onEquipped(look) { const c = carOf(carId); c.look = look; preview.setCar(c); loadCarThumbs([c], { onThumb: putThumb }); heroThumb(); }, toast,
   });
   // 정보 칸 탭: 소개 / 성능 / 커스텀 (마지막에 본 탭 기억 'gimmick.carTab'; 키보드 [ ] · 패드 LT/RT · 탭 위에서 ←→)
-  const partsUI = createPartsUI(views.car.querySelector('[data-pane="parts"]'), {preview: b => preview.setParts?.(b), animate: (b, slot) => preview.replacePart?.(b,slot)});
+  const partsUI = createPartsUI(views.car.querySelector('[data-pane="parts"]'), {viewSlot: slot => { const mode=slot==='water'?'boat':'normal';preview.setMode(mode);views.car.querySelectorAll('#hForms button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode)); }, preview: b => preview.setParts?.(b), animate: (b, slot) => preview.replacePart?.(b,slot)});
   const CAR_TABS = CAR_TAB_DEFS.map((t) => t.id);
   let carTab = 'info';
   try {
@@ -445,8 +455,8 @@ export async function runHome() {
         btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? `<span class="gx-lock" title="레벨 ${c.unlockLevel}에 열려요 · 눌러서 미리 보기">🔒 Lv.${c.unlockLevel}</span>` : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? `레벨 ${c.unlockLevel}에 열려요` : ko || en)}</small></span>`;
         btn.classList.toggle('gx-locked', locked);
         btn.classList.toggle('sel', c.id === carId);
-        btn.addEventListener('click', () => selectCar(c.id, true));
-        btn.addEventListener('dblclick', nextCar); // 두 번 누르면 바로 맵 고르기
+        btn.addEventListener('click', () => { selectCar(c.id, true); garageDetail(true); });
+
         btn.addEventListener('focus', () => selectCar(c.id));
         const tile = document.createElement('div');
         tile.className = 'cp-tile';
@@ -1054,6 +1064,7 @@ export async function runHome() {
       if (!thumbJob) setTimeout(startThumbs, 300); // 차 사진이 아직 없으면 찍기 시작 (도착하면 putThumb가 끼움)
     }
     if (name === 'map') refreshRecords();
+    home.classList.toggle('g2-catalog', name === 'car' && !carDetail);
     if (name === 'car') { startThumbs(); showGarage(carOf(carId));partsUI.show(carOf(carId),isOpen(carId));preview.setParts?.(parts.getBuild(carId)); }
     if (name === 'season') renderSeason();
     refreshFlow();
@@ -1175,7 +1186,7 @@ export async function runHome() {
       const b = e.target.closest('[data-gx]');
       if (!b && e.target !== el) return;
       close();
-      if (b && b.dataset.gx === 'car') {show('car');if (hasParts) setCarTab('parts');}
+      if (b && b.dataset.gx === 'car') {show('car');if (hasParts) setCarTab('parts');garageDetail(true);}
     });
     home.appendChild(el);
     setTimeout(() => {
@@ -1322,6 +1333,7 @@ export async function runHome() {
   }
   function nextMode() {
     if (raceMode === 'net') return openLobby({ map: mapId, car: carId });
+    garageDetail(false, false);
     show('car');
   }
   function nextCar() {
@@ -1529,6 +1541,7 @@ export async function runHome() {
       show(b.dataset.go);
       // 샵의 코스튬 구경은 성능표 아래를 다시 찾지 않아도 바로 보여 줌.
       if (b.dataset.go === 'car' && ['costume','parts'].includes(b.dataset.carSection)) {
+        garageDetail(true);
         setCarTab(b.dataset.carSection === 'parts' ? 'parts' : 'custom');
         requestAnimationFrame(() => views.car.querySelector(b.dataset.carSection==='parts'?'[data-slot]':'.mt-costume-box .mt-costume.on, .mt-costume-box .mt-costume')?.focus({ preventScroll: true }));
       }
@@ -1563,6 +1576,9 @@ export async function runHome() {
     }
     else if (act === 'prevCar') stepCar(-1);
     else if (act === 'nextCar') stepCar(1);
+    else if (act === 'carList') garageDetail(false);
+    else if (act === 'carCompare') compare.open(carId);
+    else if (act === 'carFront') preview.resetView();
     else if (act === 'pickCar') nextCar();
     else if (act === 'editKeys') show('settings', true, 'keys');
     else if (act === 'name') {
@@ -1592,7 +1608,8 @@ export async function runHome() {
     else if (act === 'recRace') {
       // 이 맵으로 레이스 준비 (차 고르기부터)
       selectMap(olMap);
-      show('car');
+      garageDetail(false, false);
+    show('car');
     }
     else if (act === 'olCar') {
       olCarOnly = !olCarOnly;
@@ -1679,7 +1696,8 @@ export async function runHome() {
     const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' }[k];
     if (k === 'Escape' || k === 'Backspace') {
       e.preventDefault();
-      if (view !== 'main') show(backView());
+      if (view === 'car' && carDetail) garageDetail(false);
+      else if (view !== 'main') show(backView());
       return;
     }
     // 설정: PageUp / PageDown (패드 LB / RB) = 탭 넘기기
@@ -1695,7 +1713,7 @@ export async function runHome() {
       return;
     }
     // 차 고르기: Q / E = 등급 탭 바꾸기
-    if (view === 'car' && (k === 'KeyQ' || k === 'KeyE' || k === 'PageUp' || k === 'PageDown')) {
+    if (view === 'car' && !carDetail && (k === 'KeyQ' || k === 'KeyE' || k === 'PageUp' || k === 'PageDown')) {
       e.preventDefault();
       stepClass(k === 'KeyQ' || k === 'PageUp' ? -1 : 1);
       return;
@@ -1725,7 +1743,7 @@ export async function runHome() {
         return;
       }
       // 차 고르기: ←→ = 다른 차
-      if (view === 'car' && (dir === 'left' || dir === 'right') && !(act && act.closest('.h-carinfo .btns'))) {
+      if (view === 'car' && !carDetail && (dir === 'left' || dir === 'right') && !(act && act.closest('.h-carinfo .btns'))) {
         stepCar(dir === 'left' ? -1 : 1);
         return;
       }
@@ -1742,9 +1760,10 @@ export async function runHome() {
       }
       if (view === 'car' && act && act.classList.contains('h-carcard')) {
         e.preventDefault();
-        nextCar();
+        garageDetail(true);
         return;
       }
+      if (view === 'car' && carDetail && k !== 'Space' && !(act && act.closest('.ct-body,.ct-tabs,.g2-stagebar,.btns'))) { e.preventDefault(); nextCar(); return; }
       if (act && act.dataset && act.dataset.adjust) {
         e.preventDefault();
         setPanel.adjust(act.dataset.adjust, 1);
@@ -1765,6 +1784,7 @@ export async function runHome() {
   selectMap(mapId);
   refreshModes();
   const startView = params.get('menu');
+  if (startView === 'car' && (params.has('carTab') || params.has('car'))) garageDetail(true, false);
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else if (['achievements', 'goals', 'shop'].includes(startView)) { show('meta'); metaPage.showTab(startView === 'achievements' ? 'achievements' : startView); }
   else show(['meta', 'car', 'map', 'settings', 'controls', 'records', 'mode', 'academy'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
@@ -1994,14 +2014,16 @@ function createPreview(home) {
   }
 
   const lift = createGarageLift(table);
-  let swapSlot=null;
+  let swapSlot=null, savedOrbit=null, restoreTurn=false;
+  const cameraLook = new THREE.Vector3(0,.45,0);
+  api.resetView=()=>{if(!lift.active){angle=-.6; pitch=.27;zoom=1;restoreTurn=false;}};
   api.setParts = build => { model?.setParts?.(parts.partLook(build)); };
   api.replacePart = async (build,slot) => {
-    const skip=document.createElement('button');skip.className='pu-skip';skip.textContent='🔧 부품 교체 중 · 건너뛰기 ↵';swapSlot=slot;home.append(skip);
+    const skip=document.createElement('button');skip.className='pu-skip';skip.textContent='🔧 부품 교체 중 · 건너뛰기 ↵';swapSlot=slot;savedOrbit={angle,pitch,zoom};dragging=false;home.classList.add('g2-fitting');home.append(skip);
     const key=e=>{if(['Enter','Escape'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();lift.skip();}};
     const click=e=>{e.preventDefault();e.stopImmediatePropagation();lift.skip();};
     window.addEventListener('keydown',key,true);window.addEventListener('pointerdown',click,true);
-    try{await lift.play(()=>api.setParts(build));}finally{swapSlot=null;skip.remove();window.removeEventListener('keydown',key,true);window.removeEventListener('pointerdown',click,true);}
+    try{await lift.play(()=>api.setParts(build));}finally{swapSlot=null;if(savedOrbit){angle=savedOrbit.angle;pitch=savedOrbit.pitch;zoom=savedOrbit.zoom;}savedOrbit=null;restoreTurn=true;home.classList.remove('g2-fitting');skip.remove();window.removeEventListener('keydown',key,true);window.removeEventListener('pointerdown',click,true);}
   };
   api.setCar = (c) => {
     lift.skip();
@@ -2046,6 +2068,7 @@ function createPreview(home) {
   let spot = null, viewName = 'main';
   api.setView = (name) => {
     viewName = name;
+    canvas.style.clipPath='';
     dirty = true;
   };
   function targetSpot() {
@@ -2055,7 +2078,7 @@ function createPreview(home) {
       // 차 고르기: 가운데 칸(목록과 정보 사이) 가운데에
       const st = home.querySelector('.h-carstage');
       const r = st && st.getBoundingClientRect();
-      if (r && r.width > 40) return [(r.left + r.width / 2) / w, (r.top + r.height * 0.45) / h, Math.min(r.width * 0.95, r.height * 1.5)];
+      if (r && r.width > 40) { canvas.style.clipPath=`inset(${Math.max(0,r.top)}px ${Math.max(0,w-r.right)}px ${Math.max(0,h-r.bottom)}px ${Math.max(0,r.left)}px)`;return [(r.left + r.width / 2) / w, (r.top + r.height * 0.45) / h, Math.min(r.width * 0.95, r.height * 1.5)]; }
     }
     // 메인 메뉴: 왼쪽 메뉴 칸 오른쪽 빈 곳 가운데
     const menuEl = home.querySelector('.h-main');
@@ -2070,25 +2093,28 @@ function createPreview(home) {
     return [(left + avail / 2) / w, 0.56, Math.min(avail * 0.95, h * 0.95, w * 0.5)];
   }
 
-  // 마우스로 끌어 돌리기 (손을 떼면 관성 → 2초 뒤 다시 천천히 자동 회전)
-  let angle = -0.6, spin = 0, dragging = false, lastX = 0, idle = 0;
-  canvas.addEventListener('pointerdown', (e) => {
-    dragging = true;
+  // 마우스·터치로 수동 회전, 손을 떼면 정지
+  let angle = -0.6, dragging = false, lastX = 0, lastY=0, pitch=.27, zoom=1;
+  home.addEventListener('pointerdown', (e) => {
+    if(lift.active || e.target.closest('button,input,select,.h-carinfo,.h-carlist,.h-top'))return;
+    const stage=home.querySelector('.g2-detail .h-carstage')?.getBoundingClientRect();
+    if(viewName==='car' && (!stage || e.clientX<stage.left || e.clientX>stage.right || e.clientY<stage.top || e.clientY>stage.bottom))return;
+    dragging = true;lastY=e.clientY;
     lastX = e.clientX;
-    canvas.setPointerCapture(e.pointerId);
+    home.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+  home.addEventListener('pointermove', (e) => {
+    if (!dragging || lift.active) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
+    pitch=THREE.MathUtils.clamp(pitch+(e.clientY-lastY)*.004,.08,.85);lastY=e.clientY;
     angle += dx * 0.009;
-    spin = dx * 0.009 * 60;
-    idle = 0;
   });
   const endDrag = () => (dragging = false);
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  home.addEventListener('pointerup', endDrag);
+  home.addEventListener('pointercancel', endDrag);
 
+  home.addEventListener('wheel',e=>{if(viewName!=='car'||lift.active||e.target.closest('.h-carinfo,.h-carlist'))return;e.preventDefault();zoom=THREE.MathUtils.clamp(zoom+e.deltaY*.0005,.78,1.3);},{passive:false});
   let W = 0, H = 0;
   function resize() {
     const w = innerWidth, h = innerHeight;
@@ -2117,17 +2143,11 @@ function createPreview(home) {
     last = now;
     // 흐리게 깔리는 화면(맵·설정 등)에서는 그리지 않음 (노트북 발열 줄이기)
     const dim = home.classList.contains('dim');
-    if (dim && !dirty) return;
+    if ((dim || home.classList.contains('g2-catalog')) && !dirty) return;
     resize();
     time += dt;
-    idle += dt;
-    if (!dragging) {
-      spin = reduceMotion.matches ? 0 : spin * Math.exp(-3 * dt);
-      const auto = !lift.active && !reduceMotion.matches && idle > 2 ? 0.32 : 0;
-      angle += (spin + auto) * dt;
-    }
-    if(lift.active) angle=THREE.MathUtils.lerp(angle,({engine:2.6,gearbox:2.4,tire:.85,aero:2.9,water:1.2})[swapSlot]||.85,1-Math.exp(-5*dt));
-    table.rotation.y = angle;
+    // 손을 떼면 그 자리에서 멈춤.
+    if(lift.active || restoreTurn){table.rotation.y=THREE.MathUtils.lerp(table.rotation.y,lift.active?0:angle,1-Math.exp(-10*dt));if(!lift.active&&Math.abs(table.rotation.y-angle)<.001)restoreTurn=false;}else table.rotation.y=angle;
     // 새 차가 살짝 위에서 내려앉음
     if (holder) {
       drop = reduceMotion.matches ? 1 : Math.min(1, drop + dt / 0.45);
@@ -2144,9 +2164,14 @@ function createPreview(home) {
     if (!spot) spot = [...spotT];
     for (let i = 0; i < 3; i++) spot[i] = THREE.MathUtils.lerp(spot[i], spotT[i], 1 - Math.exp(-6 * dt));
     // 차+원판 가운데 부분(약 6.4 m)이 spot[2] 픽셀 너비로 보이는 거리: 화면 높이 H 픽셀 = 2·거리·tan(시야/2)
-    const dist = (6.4 * H) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(120, spot[2]));
-    camera.position.set(0, dist * 0.27, dist);
-    camera.lookAt(0, 0.45, 0);
+    const dist = (6.4 * H) / (2 * Math.tan(THREE.MathUtils.degToRad(28 / 2)) * Math.max(120, spot[2]));
+    const fitting = lift.active && PART_VIEW[swapSlot];
+    const dest = fitting ? new THREE.Vector3(...fitting.pos).multiplyScalar(Math.max(1,dist/9)) : new THREE.Vector3(0,dist*pitch*zoom,dist*zoom);
+    const aim = fitting ? new THREE.Vector3(...fitting.look) : new THREE.Vector3(0,.45,0);
+    if(fitting){const liftY=(holder?.userData.baseY || 0)+.3;dest.y+=liftY;aim.y+=liftY;}
+    camera.position.lerp(dest,1-Math.exp(-8*dt));cameraLook.lerp(aim,1-Math.exp(-8*dt));
+    camera.fov=THREE.MathUtils.lerp(camera.fov,fitting?.fov || 28,1-Math.exp(-8*dt));
+    camera.lookAt(cameraLook);
     camera.setViewOffset(W, H, (0.5 - spot[0]) * W, (0.5 - spot[1]) * H, W, H);
     renderer.render(scene, camera);
     dirty = false;
