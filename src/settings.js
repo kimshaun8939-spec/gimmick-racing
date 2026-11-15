@@ -124,12 +124,20 @@ function createStore() {
   // 첫 레이스 링크 전용: main.js가 설정에서 읽는 봇 수에도 적용. 다른 레이스에는 영향 없음.
   const firstParams = new URLSearchParams(location.search);
   const firstRace = firstParams.get('rookie') === '1' && firstParams.get('mode') === 'race';
-  if (firstRace) Object.assign(values, { bots: 3, botLevel: 'easy', racingLine: true, gearbox: 'auto', steerRamp: 'smooth', brakeAssist: 'light', steerAssist: 'light', tcs: true, ghost: 'off', sectors: false });
+  const temporary = new Map();
+  if (firstRace) {
+    const preset = { bots: 3, botLevel: 'easy', racingLine: true, gearbox: 'auto', steerRamp: 'smooth', brakeAssist: 'light', steerAssist: 'light', tcs: true, ghost: 'off', sectors: false };
+    for (const [k, v] of Object.entries(preset)) {
+      temporary.set(k, values[k]); // 프리셋 적용 전 저장값 (저장한 적 없으면 기본값)
+      values[k] = v;
+    }
+  }
   const listeners = new Set();
   const save = () => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(values));
-      localStorage.setItem('racingLine', values.racingLine ? 'on' : 'off');
+      const stored = { ...values, ...Object.fromEntries(temporary) };
+      localStorage.setItem(KEY, JSON.stringify(stored));
+      localStorage.setItem('racingLine', stored.racingLine ? 'on' : 'off');
     } catch {}
   };
   return {
@@ -138,7 +146,8 @@ function createStore() {
       return values[k];
     },
     set(k, v) {
-      if (values[k] === v) return;
+      const wasTemporary = temporary.delete(k); // 직접 고른 키만 첫 레이스 임시 설정에서 제외
+      if (values[k] === v && !wasTemporary) return;
       values[k] = v;
       save();
       for (const fn of listeners) fn(k, v, values);
