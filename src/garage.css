@@ -822,3 +822,18 @@ body.touch-on .ct-keys { display: none; }
 @media(min-width:1000px) and (min-height:600px){
  #home .g2-list .hm-catalog-home { top:4px; }
 }
+
+/* 차 목록 사진 크게 (관제탑 2026-11-15, 사용자 "차 크기가 너무 작음") — 목록은 목록 안에서 넘기고 사진 칸을 키움 */
+@media(min-width:1000px) and (min-height:600px){
+ #home .h-car.g2-list .h-carlist .list { grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:8px; }
+ #home .h-car.g2-list .h-carlist .list .h-carcard .pic { height:clamp(96px,15vh,150px)!important; min-height:0!important; }
+ #home .h-car.g2-list .h-carlist.dense .list { grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); }
+ #home .h-car.g2-list .h-carlist.dense .list .h-carcard .pic { height:clamp(80px,12vh,120px)!important; }
+ #home .g2-list .h-carcard .nm { min-height:52px; padding:6px 52px 6px 10px!important; }
+ #home .g2-list .h-carcard .nm b { font-size:14px; }
+ #home .g2-list .h-carcard .nm small { font-size:11px!important; }
+}
+#home .g2-list .h-carcard .pic img { transform:scale(1.18); }
+#home .g2-list .h-carcard:hover .pic img { transform:scale(1.24); }
+#home .g2-list .h-carcard.sel .pic img { transform:scale(1.26) translateX(2%); }
+@media(max-width:999px){ #home .h-car.g2-list .h-carlist .list .h-carcard .pic { height:clamp(84px,14vh,120px)!important; } }

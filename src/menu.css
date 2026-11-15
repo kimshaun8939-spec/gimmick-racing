@@ -3154,3 +3154,19 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 #home .h-maps .bar>.f3-ride>.gm-btn{padding:6px 12px;font-size:13px;white-space:nowrap}
 @media(max-width:600px){#home .h-maps .bar{flex-wrap:wrap}#home .h-maps .bar>.f3-ride{order:-1;flex-basis:100%;max-width:none}#home .h-maps .bar>.f3-ride>img,#home .h-maps .bar>.f3-ride>.f3-photo{width:56px;height:32px}#home .h-maps .bar>.f3-ride>div>small:first-child{display:none}}
 @media(max-height:520px){#home .h-maps .bar>.f3-ride{padding:2px 8px}#home .h-maps .bar>.f3-ride>img,#home .h-maps .bar>.f3-ride>.f3-photo{height:28px;width:52px}#home .h-maps .bar>.f3-ride .f3-chips{display:none}}
+
+/* 스크롤 바를 게임 디자인에 맞게 (관제탑 2026-11-15, 사용자 "흰색 스크롤 바가 너무 안 어울림")
+   크롬·엣지·사파리: 흰 바탕·위아래 화살표 없이 얇은 반투명 금빛 막대. 표준 속성이 있으면 크롬이 아래 꾸밈을 무시해서 auto로 되돌림. */
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto !important; scrollbar-color: auto !important; }
+}
+::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 99px; background: linear-gradient(180deg, rgba(255, 196, 77, 0.55), rgba(255, 140, 50, 0.45)) padding-box; }
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(255, 210, 100, 0.85), rgba(255, 150, 60, 0.75)) padding-box; }
+::-webkit-scrollbar-thumb:active { background: rgba(255, 214, 110, 0.95) padding-box; }
+/* 파이어폭스 */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: rgba(255, 186, 73, 0.55) transparent; }
+}
