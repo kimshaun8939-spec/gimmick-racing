@@ -63,16 +63,16 @@ export const SETTING_DEFS = [
   { group: '게임패드', tab: 'pad', key: 'padVibe', label: '진동', desc: '연석·잔디·부딪힘에서 패드가 떨려요 (지원하는 패드만)', type: 'toggle', def: true },
 
   // 레이스 (main.js·봇·고스트가 settings.values.X ?? 기본값으로 읽음. 키 이름·값은 .debug/agents/contracts.md 약속)
-  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '예전 주행을 보여 주는 반투명 차예요 (부딪히지 않음). 맵 최고 = 어느 차로 달렸든 이 맵에서 내 가장 빠른 기록 · 이 차 최고 = 지금 차의 기록 (없으면 다른 차 최고). 화면의 "최고 기록"도 같이 바뀜', type: 'choice',
+  { group: '레이스', key: 'ghost', label: '고스트 차', desc: '충돌 없는 이전 주행 · 맵 최고 = 모든 차 중 가장 빠른 기록 · 이 차 최고 = 지금 차 기록 (없으면 다른 차 최고). 화면 최고 기록도 같은 기준', type: 'choice',
     options: [['off', '끔'], ['best', '맵 최고 (모든 차)'], ['car', '이 차 최고'], ['bot', '봇 기록']], def: 'best' },
   { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
     options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
-  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 처음 해도 이길 수 있음 · 중간 = 처음엔 이기기 어려움 · 어려움 = 잘하는 사람과 비슷 · 마스터 = 어려움보다 훨씬 빠름, 아주 잘해야 이김', type: 'choice',
+  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 입문 · 중간 = 연습 필요 · 어려움 = 잘하는 사람 수준 · 마스터 = 훨씬 빠름', type: 'choice',
     options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '마스터']], def: 'normal' },
   // DRS: 꺼 둠 (사용자 요청 2026-11-15 "DRS도 굳이 필요한지 모르겠어"). 화면에 안 보이고, 예전에 저장된 값은 무시 (load()에서 끔).
   //   코드(src/drs.js)·car.json drs는 남아 있음 → 시험할 때만 주소에 &drs=1. 되살리려면 hidden을 빼고 def: true, load()의 강제 끄기를 지울 것
   { group: '레이스', key: 'drs', label: 'DRS (실험)', desc: '', type: 'toggle', hidden: true, def: false },
-  { group: '레이스', key: 'tow', label: '견인', desc: '바로 앞차와 1초 넘게 벌어지면 자동으로 가속을 도와줘요 (멀수록 셈, 봇도 똑같이, 상대가 있는 레이스). 오래 받으면 결과에 "🛟 도움 켬"', type: 'toggle', def: true },
+  { group: '레이스', key: 'tow', label: '견인', desc: '앞차와 1초 넘게 벌어지면 가속 도움 (멀수록 강함·봇도 동일). 상대가 있는 레이스에서만 적용 · 오래 받으면 결과에 🛟 표시', type: 'toggle', def: true },
   { group: '레이스', key: 'sectors', label: '구간 기록', desc: '한 바퀴를 3구간으로 나눠 내 최고와 비교', type: 'toggle', def: true },
   // 챔피언십 경기 수 (홈 레이스 방식 화면에서 고름)
   { group: '레이스', key: 'champLen', label: '챔피언십 경기 수', desc: '', type: 'choice', hidden: true,
@@ -196,6 +196,15 @@ export function uiSound(kind = 'move') {
   } catch {}
 }
 
+// 긴 안내·버튼 배치는 내용을 지우지 않고 묶음별로 펼쳐요.
+function compactSectionTabs(host, sections, label) {
+  const nav = document.createElement('div'); nav.className = 'gm-section-tabs'; nav.setAttribute('role','tablist'); nav.setAttribute('aria-label',label);
+  const all = sections.flatMap(s => s[1]);
+  const select = id => { sections.forEach(([name,els],i) => els.forEach(el => el.classList.toggle('ns-group-hidden',i !== id))); nav.querySelectorAll('button').forEach((b,i) => { b.classList.toggle('on',i===id); b.setAttribute('aria-selected',String(i===id)); }); host.closest('.scroll')?.scrollTo(0,0); };
+  sections.forEach(([name],i) => { const b=document.createElement('button'); b.type='button'; b.className='gm-btn small'; b.dataset.nav=''; b.setAttribute('role','tab'); b.textContent=name; b.onclick=()=>{select(i);uiSound('toggle');}; nav.appendChild(b); });
+  host.prepend(nav); select(0); return nav;
+}
+
 /**
  * 설정 화면 만들기. 돌려주는 element를 아무 곳에나 붙이면 됨.
  * opts.inGame: 게임 중(ESC 메뉴)이면 "다음 시작부터 적용" 같은 안내를 다르게
@@ -215,6 +224,26 @@ export function createSettingsPanel(opts = {}) {
   help.className = 'gm-set-help';
   help.innerHTML = '<span>처음이면 부드러운 조향과 약한 운전 도움을 추천해요. 도움을 쓰면 기록에 🛟 표시가 남아요.</span><button class="gm-btn" data-nav>초보 추천 적용</button><output class="gm-set-feedback" role="status" aria-live="polite"></output>';
   root.appendChild(help);
+  // 한 번에 읽을 수 있는 크기로 묶음만 나눠요. 설정 키와 값은 그대로예요.
+  const settingPages = [
+    ['media', '소리·화면', ['소리', '화면·그래픽']],
+    ['drive', '운전·도움', ['주행', '조향 · 운전 도움']],
+    ['race', '레이스·표시', ['레이스', '표시']],
+    ['touch', '터치', ['터치 (휴대폰)']],
+  ];
+  const categories = document.createElement('div');
+  categories.className = 'gm-set-categories';
+  categories.setAttribute('role', 'tablist');
+  categories.setAttribute('aria-label', '일반 설정 분류');
+  categories.innerHTML = settingPages.map(([id,label],i) => `<button class="gm-btn small${i ? '' : ' on'}" type="button" role="tab" aria-selected="${!i}" data-setting-page="${id}" data-nav>${label}</button>`).join('');
+  root.prepend(categories);
+  function showSettingPage(id) {
+    const page = settingPages.find(p => p[0] === id) || settingPages[0];
+    categories.querySelectorAll('button').forEach(b => { const on = b.dataset.settingPage === page[0]; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    root.querySelectorAll('.gm-set-group').forEach(g => { g.hidden = !page[2].includes(g.dataset.settingGroup); });
+    root.closest('.scroll')?.scrollTo(0,0);
+  }
+  categories.addEventListener('click', e => { const b = e.target.closest('[data-setting-page]'); if(b) { showSettingPage(b.dataset.settingPage); uiSound('toggle'); } });
   const feedback = text => { help.querySelector('output').textContent = text; };
   help.querySelector('button').addEventListener('click', () => {
     for (const [key, value] of Object.entries({gearbox:'auto',racingLine:true,steerSens:1,steerRamp:'smooth',brakeAssist:'light',steerAssist:'light',tcs:true})) settings.set(key, value);
@@ -264,6 +293,7 @@ export function createSettingsPanel(opts = {}) {
       group = d.group;
       groupEl = document.createElement('section');
       groupEl.className = 'gm-set-group';
+      groupEl.dataset.settingGroup = group;
       groupEl.innerHTML = `<h3>${group}</h3>`;
       host.appendChild(groupEl);
     }
@@ -306,6 +336,18 @@ export function createSettingsPanel(opts = {}) {
     uiSound('select');
   });
   root.appendChild(foot);
+  foot.prepend(help);
+  showSettingPage('media');
+  const presetToggle = document.createElement('button');
+  presetToggle.type='button'; presetToggle.className='gm-btn small ns-presets-toggle'; presetToggle.dataset.nav=''; presetToggle.textContent='배치 고르기 / 내 키 편집';
+  presetToggle.onclick=()=>keyPanel.el.classList.toggle('ns-presets-open');
+  keyPanel.el.prepend(presetToggle);
+  keyPanel.el.addEventListener('click',e=>{if(e.target.closest('[data-preset]'))keyPanel.el.classList.remove('ns-presets-open');});
+  const editor = keyPanel.el.querySelector('.kb-custom-editor');
+  const keyGroups = [...editor.querySelectorAll('.kb-group')];
+  compactSectionTabs(editor, [['운전·비행',keyGroups.slice(0,2)],['변속·레이스',keyGroups.slice(2,4)],['도움·화면',keyGroups.slice(4)]], '조작키 묶음');
+  const padGroups = [...padPanel.el.querySelectorAll('.kb-group')];
+  compactSectionTabs(padPanel.el, [['감도·진동',[padPanel.settingsEl]],['운전·비행',padGroups.slice(0,2)],['변속·레이스',padGroups.slice(2,4)],['도움·화면',padGroups.slice(4)]], '패드 설정 묶음');
 
   function refresh() {
     for (const { d, ctl } of rows) {
@@ -420,6 +462,9 @@ export function createControlsPage(opts = {}) {
     </section>
     <p class="gm-tip">💡 코너 안쪽 빨간·흰 연석을 빠르게 스치면 <b>에이펙스 보너스</b>! 바다에 닿으면 배로, 활주로에 올라서면 비행기로 변신해요.
       ${opts.onEditKeys ? '<button class="gm-btn small" data-nav data-editkeys>⌨️ 조작키 바꾸기</button>' : ''}${keybinds.preset() === 'custom' ? ' <span class="gm-custom">(내 설정으로 보여요)</span>' : ''}</p>`;
+    const sections = [...el.querySelectorAll(':scope > section')];
+    const touch = sections[0]?.classList.contains('gm-touchctl') ? sections.shift() : null;
+    compactSectionTabs(el, [...(touch ? [['터치',[touch]]] : []), ['운전·레이스',sections.slice(0,2)],['변신·화면',sections.slice(2,4)],['게임패드',sections.slice(4)]], '조작법 묶음');
     const b = el.querySelector('[data-editkeys]');
     if (b) b.addEventListener('click', () => opts.onEditKeys());
   }

@@ -1200,7 +1200,7 @@ export async function runHome() {
         <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-nav>다음: 차 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
-          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.desc)}</small><span class="chk">✓</span></button>
+          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 드리프트 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
           <div class="opts"></div></div>`,
       ).join('')}</div>
       <div class="h-modetip"></div>

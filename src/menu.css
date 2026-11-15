@@ -1,4 +1,4 @@
-/* 홈 화면 · ESC 메뉴 · 설정 · 결과 · 로딩 화면 (게임 HUD 스타일은 index.html) */
+﻿/* 홈 화면 · ESC 메뉴 · 설정 · 결과 · 로딩 화면 (게임 HUD 스타일은 index.html) */
 :root {
   --gm-bg: #070b17;
   --gm-panel: rgba(13, 19, 36, 0.82);
@@ -2719,4 +2719,261 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 @media (max-width: 480px) {
   .ol-list li .ol-who img, .ol-list li .ol-who .ph { display: none; }
   .ol-list li.r1 .ol-time strong { font-size: 18px; }
+}
+/* noscroll: 화면은 고정하고 선택 목록에만 공간을 배분한다. */
+@media(min-width:1000px) and (min-height:600px) {
+ #home .h-modes { gap:10px; }
+ #home .h-modegrid { overflow:visible; flex:0 0 auto; align-items:start; gap:12px; }
+ #home .h-modegrid .h-modecard { min-height:82px; padding:14px 38px 12px 16px; }
+ #home .h-modegrid .h-modecard b { font-size:21px; }
+ #home .h-mode:not(.sel) .opts { display:none; }
+ #home .h-mode .opts { display:flex; flex-wrap:wrap; gap:6px; padding:7px 10px; }
+ #home .h-mode .opts .h-mopt { flex:1; min-width:0; padding:2px 4px 2px 8px; }
+ #home .h-mopt .v b { min-width:50px; }
+ #home .h-modetip { margin:0; line-height:1.5; padding:9px 12px; }
+ #home .h-modesum { display:grid; grid-template-columns:100px repeat(3,minmax(0,1fr)) auto; }
+ #home .h-modesum canvas { width:100px; }
+ #home .h-modesum .i b { font-size:17px; }
+ #home .h-modes .bar { padding:7px 10px; }
+ #home .mp-info { gap:8px; padding:12px; }
+ #home .mp-pic canvas { height:clamp(90px,17vh,180px); aspect-ratio:auto; object-fit:contain; }
+ #home .mp-desc { margin:0; font-size:13px; line-height:1.45; }
+ #home .mp-facts { gap:6px; }
+ #home .mp-head h3 { font-size:24px; }
+ #home .sx-season { padding:12px 16px; gap:8px; }
+ #home .sx-scroll { display:flex; flex-direction:column; overflow:visible; padding:0; }
+ #home .sx-kinds .gm-btn { min-height:52px; padding:8px 12px; }
+ #home .sx-presets,#home .sx-random { margin:7px 0; gap:6px; }
+ #home .sx-layout { flex:1; min-height:0; margin-top:5px; align-items:stretch; gap:14px; }
+ #home .sx-order,#home .sx-pool { display:flex; flex-direction:column; min-height:0; }
+ #home .sx-season h3 { margin-bottom:6px; }
+ #home .sx-order ol,#home .sx-mapgrid { overflow:auto; min-height:0; padding:2px 4px; }
+ #home .sx-order li { padding:5px 7px; gap:8px; }
+ #home .sx-order canvas { width:48px; height:30px; }
+ #home .sx-order ol { gap:4px; }
+ #home .sx-mapgrid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+ #home .sx-map canvas { height:40px; }
+ #home .sx-map.gm-btn { padding:6px; }
+ #home .sx-note { align-self:start; padding:14px; }
+ #home .sx-season footer { padding-top:8px; }
+ #home [data-view=records] .h-page>.scroll { display:flex; flex-direction:column; overflow:visible; min-height:0; padding:10px 12px; gap:10px; }
+ #home .hr-mapbar { flex-shrink:0; margin:0; }
+ #home .hr-grid { flex:1; min-height:0; align-items:stretch; gap:12px; }
+ #home .hr-col { min-height:0; }
+ #home .hr-left .h-online { height:100%; box-sizing:border-box; position:static; display:flex; flex-direction:column; padding:10px; gap:6px; }
+ #home .hr-left .h-olboard { flex:1; min-height:0; max-height:none; overflow:auto; }
+ #home .hr-mine { height:100%; display:flex; flex-direction:column; gap:7px; }
+ #home .hr-mine .hm-card { flex:1; min-height:0; display:flex; flex-direction:column; gap:7px; padding:10px; }
+ #home .hm-hero { grid-template-columns:120px minmax(0,1fr); gap:10px; }
+ #home .hm-hero>canvas { width:120px; height:90px; }
+ #home .hm-stats { gap:5px; }
+ #home .hm-stats>div { padding:5px 8px; }
+ #home .hm-cars { overflow:auto; min-height:0; flex:1; }
+ #home .hr-foot { flex-shrink:0; margin-top:0; gap:6px; font-size:11px; }
+}
+@media(min-width:1000px) and (max-height:780px) {
+ #home .h-view:not([data-view=car]) { bottom:42px; }
+ #home .h-modes h2,#home .h-maps h2 { font-size:26px; }
+ #home .h-modegrid .h-modecard { min-height:70px; padding-top:10px; padding-bottom:10px; }
+ #home .h-modesum { padding:6px 10px; }
+ #home .h-modesum canvas { height:44px; object-fit:contain; }
+ #home .h-modesum .i b { font-size:15px; }
+}
+@media(max-width:999px) {
+ #home .h-mode:not(.sel) .opts { display:none; }
+}
+﻿﻿﻿﻿﻿﻿﻿/* noscroll: 일반 설정은 의미별 분류, 키 배치와 조작법은 넓은 화면을 활용. */
+#home .gm-set-categories { grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap; }
+#home .gm-set-categories .on { border-color:var(--gm-accent); color:var(--gm-accent); background:rgba(255,207,63,.08); }
+#home .gm-set-group[hidden] { display:none; }
+#home .gm-set-help { grid-column:1/-1; margin:0; padding:7px 12px; gap:8px; }
+#home .gm-set-feedback:empty { display:none; }
+#home .gm-setwrap { gap:10px; }
+#home .h-page:has(.gm-setwrap), #home .h-page:has(.gm-controls) { max-width:1440px; gap:10px; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .h-page:has(.gm-setwrap) .scroll, #home .h-page:has(.gm-controls) .scroll { padding:10px 12px; }
+ #home .h-page .gm-settings { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+ #home .gm-set-group { padding:8px 6px; }
+ #home .gm-set-group h3 { padding:0 8px 6px; }
+ #home .gm-set-row { min-height:42px; padding:5px 8px; gap:10px; }
+ #home .gm-set-label b { font-size:13px; }
+ #home .gm-set-label small { font-size:11px; line-height:1.35; }
+ #home .gm-set-ctl { gap:5px; }
+ #home .gm-seg button { padding:5px 9px; font-size:12px; }
+ #home .gm-set-foot { padding:0 4px; }
+ #home .gm-keys-panel { grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+ #home .gm-keys-panel .kb-row { min-height:36px; padding:3px 5px; gap:5px; }
+ #home .kb-slot { min-width:58px; height:30px; padding:0 5px; }
+ #home .kb-slot.alt { min-width:46px; }
+ #home .kb-slots { gap:3px; }
+ #home .kb-note { padding:7px 10px; }
+ #home .gm-pad-panel .pad-settings { grid-column:auto; }
+ #home .gm-controls { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+ #home .gm-controls section { padding:10px 12px; }
+ #home .gm-ctl-row { grid-template-columns:96px minmax(0,1fr); gap:8px; padding:4px 0; }
+ #home .gm-ctl-row b { font-size:13px; }
+ #home .gm-ctl-row small { font-size:11px; line-height:1.35; }
+ #home .gm-keys { gap:2px; }
+ #home .gm-controls .gm-tip { margin:0; grid-column:1/-1; font-size:12px; }
+}
+@media(max-width:999px) {
+ #home .gm-set-categories { gap:4px; }
+ #home .gm-set-categories .gm-btn { min-height:44px; padding:6px 10px; font-size:12px; }
+ #home .h-page .gm-settings { gap:10px; }
+}
+@media(min-width:1000px) and (min-height:600px) {
+ #home .kb-preset-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+ #home .kb-preset { padding:10px; gap:6px; }
+ #home .kb-preset-title { font-size:14px; }
+ #home .kb-preset-desc { min-height:0; font-size:11px; }
+ #home .kb-mini { display:none; }
+ #home .kb-preset-summary { gap:2px 8px; font-size:11px; line-height:1.4; }
+ #home .kb-custom-editor { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+ #home .kb-custom-editor .kb-note, #home .kb-custom-editor .gm-set-foot { grid-column:1/-1; }
+ #home .kb-presets h3 { font-size:15px; }
+ #home .kb-presets>p { margin-bottom:6px; font-size:11px; }
+ #home .kb-preset-help { font-size:11px; }
+}
+#home .ns-group-hidden { display:none!important; }
+#home .gm-section-tabs { grid-column:1/-1; display:flex; gap:6px; flex-wrap:wrap; }
+#home .gm-section-tabs .on { border-color:var(--gm-accent); color:var(--gm-accent); background:rgba(255,207,63,.08); }
+#home .gm-section-tabs .gm-btn { min-height:36px; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .gm-set-row { min-height:34px; padding:4px 8px; }
+ #home .gm-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ #home .gm-controls .gm-section-tabs { grid-column:1/-1; }
+ #home .gm-pad-panel .pad-status { padding:8px 12px; }
+ #home .gm-pad-panel .pad-settings { grid-column:1/-1; }
+ #home .gm-pad-panel .pad-settings .gm-set-group { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+ #home .gm-pad-panel .pad-settings h3 { grid-column:1/-1; }
+ #home .gm-pad-panel .pad-settings .gm-set-row { grid-template-columns:1fr; }
+ #home .gm-pad-panel .pad-settings .gm-set-ctl { justify-content:start; }
+ #home .gm-keys-panel, #home .kb-custom-editor { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:999px) { #home .gm-section-tabs .gm-btn { min-height:44px; padding:6px 10px; font-size:12px; } }
+@media(max-width:999px) {
+ #home .gm-setwrap .gm-set-group { padding:8px 6px; }
+ #home .gm-setwrap .gm-set-row { grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); min-height:44px; gap:6px; padding:5px; }
+ #home .gm-setwrap .gm-set-label b { font-size:12px; }
+ #home .gm-setwrap .gm-set-label small { font-size:11px; line-height:1.3; }
+ #home .gm-setwrap .gm-set-ctl { justify-content:flex-end; min-width:0; }
+ #home .gm-setwrap .gm-set-ctl input[type=range] { width:75px; }
+ #home .gm-setwrap .gm-seg { flex-wrap:wrap; justify-content:flex-end; }
+ #home .gm-setwrap .gm-seg button { min-height:44px; padding:4px 7px; font-size:12px; }
+ #home .gm-setwrap .gm-set-group h3 { padding:0 5px 6px; }
+ #home .gm-setwrap .kb-row { grid-template-columns:1fr; }
+}
+@media(min-width:1000px) and (min-height:600px) {
+ #home .gm-settings > .gm-set-group { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2px 14px; }
+ #home .gm-settings > .gm-set-group > h3 { grid-column:1/-1; }
+ #home .gm-settings > .gm-set-group[hidden] { display:none; }
+ #home .kb-preset-grid { grid-template-columns:repeat(5,minmax(0,1fr)); }
+ #home .gm-keys-panel:has(.kb-custom-editor:not([hidden])) .kb-preset { padding:8px; }
+ #home .gm-keys-panel:has(.kb-custom-editor:not([hidden])) .kb-preset-summary { display:none; }
+ #home .gm-keys-panel:has(.kb-custom-editor:not([hidden])) .kb-preset-desc { font-size:11px; }
+ #home .kb-preset-start { min-height:0; }
+}
+#home .ns-presets-toggle { display:none; grid-column:1/-1; justify-self:start; }
+#home .gm-keys-panel:has(.kb-custom-editor:not([hidden])) .ns-presets-toggle { display:flex; }
+#home .gm-keys-panel:has(.kb-custom-editor:not([hidden])):not(.ns-presets-open) .kb-presets { display:none; }
+#home .gm-keys-panel.ns-presets-open .kb-custom-editor { display:none; }
+@media(min-width:601px) and (max-width:999px) and (max-height:520px) {
+ #home .h-page .gm-settings { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+ #home .gm-setwrap { gap:6px; }
+ #home .gm-set-help { padding:5px 8px; }
+ #home .gm-set-help>span { font-size:11px; }
+ #home .gm-setwrap .gm-set-row { grid-template-columns:minmax(0,1fr) auto; min-height:44px; padding:3px 4px; }
+ #home .gm-setwrap .gm-set-label small { font-size:10px; }
+ #home .gm-setwrap .gm-seg button { padding:3px 5px; }
+ #home .gm-setwrap .gm-set-ctl { max-width:190px; }
+ #home .gm-set-categories .gm-btn, #home .gm-section-tabs .gm-btn { padding:4px 8px; }
+ #home .kb-preset-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+ #home .kb-preset { padding:8px; gap:5px; }
+ #home .kb-mini { display:none; }
+ #home .kb-preset-desc { min-height:0; }
+ #home .gm-keys-panel, #home .kb-custom-editor { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+ #home .gm-controls { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+ #home .gm-ctl-row { grid-template-columns:90px minmax(0,1fr); padding:3px 0; gap:6px; }
+ #home .gm-controls section { padding:8px; }
+ #home .gm-controls .gm-tip { grid-column:1/-1; }
+ #home .gm-controls .gm-ctl-row small { font-size:11px; }
+}
+#home .gm-set-foot:has(.gm-set-help) { align-items:center; flex-wrap:wrap; gap:6px 12px; }
+#home .gm-set-foot>.gm-set-help { flex:1; background:transparent; border:0; padding:0; min-width:0; }
+#home .gm-set-foot:has(.gm-set-help)>span { flex-basis:100%; font-size:11px; order:3; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .kb-custom-editor .kb-row { min-height:28px; padding:2px 5px; }
+ #home .kb-custom-editor .gm-set-label small { font-size:10px; }
+ #home .kb-preset-start:has(button[hidden]) { display:none; }
+}
+@media(min-width:1000px) and (min-height:600px) {
+ #home .h-page .gm-settings { gap:6px; }
+ #home .gm-setwrap { gap:6px; }
+ #home .gm-set-foot>.gm-set-help>span { font-size:11px; }
+}
+/* 같은 설정 패널을 쓰는 Esc 메뉴에서도 묶음 선택이 그대로 동작해요. */
+.gm-setwrap .ns-group-hidden, .gm-controls .ns-group-hidden { display:none!important; }
+.gm-setwrap .ns-presets-toggle { display:none; }
+.gm-setwrap .gm-keys-panel:has(.kb-custom-editor:not([hidden])) .ns-presets-toggle { display:flex; }
+.gm-setwrap .gm-keys-panel:has(.kb-custom-editor:not([hidden])):not(.ns-presets-open) .kb-presets { display:none; }
+.gm-setwrap .gm-keys-panel.ns-presets-open .kb-custom-editor { display:none; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .gm-pad-panel .kb-row { min-height:28px; padding:2px 5px; }
+}
+
+/* noscroll 2차: 낮은 홈은 두 칼럼으로, 내용은 누락 없이 배치. */
+@media(min-width:1000px) and (min-height:600px) and (max-height:800px) {
+ #home .h-main.hx { gap:8px; }
+ #home .gm-btn.hx-hero { min-height:100px; grid-template-columns:118px minmax(0,1fr) auto; }
+ #home .hx-thumb { width:118px; }
+ #home .gm-btn.hx-tile { min-height:54px; padding:8px 12px; }
+ #home .hx-learn { padding:10px 12px; }
+}
+@media(min-width:601px) and (max-width:999px) and (max-height:520px) {
+ #home .h-main.hx { width:100%; max-width:none; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:auto auto 1fr; gap:6px 12px; overflow:visible; }
+ #home .h-main.hx>.hx-hero { grid-column:1; grid-row:1; min-height:76px; }
+ #home .h-main.hx>.hx-steps { grid-column:1; grid-row:2; }
+ #home .h-main.hx>.hx-learn { grid-column:1; grid-row:3; align-self:start; min-height:50px; padding:8px 12px; }
+ #home .h-main.hx>.hx-grid { grid-column:2; grid-row:1/4; align-content:start; gap:6px; }
+ #home .gm-btn.hx-tile { min-height:48px; padding:6px 9px; }
+ #home .hx-tile .t b { font-size:13px; }
+ #home .hx-hero .big { font-size:22px; }
+ #home .gm-btn.hx-hero { grid-template-columns:65px minmax(0,1fr) 38px; padding:6px; gap:6px; }
+ #home .hx-thumb { width:65px; }
+ #home .hx-hero .go { width:36px; height:36px; }
+ #home .hx-chips { gap:3px 8px; }
+}
+
+@media(min-width:1000px) and (max-height:880px) {
+ /* 차·맵 이름은 제목 아래에도 있으므로 중복 그림 요약은 높은 화면에서만. */
+ #home .h-modesum { display:none; }
+}
+/* noscroll 3차 사진 검토: 선택 값은 한 줄, 시즌 버튼·맵 상세는 고정. */
+#home .h-view.on > .sx-season { flex:1; min-height:0; height:auto; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .h-mopt > span:first-child { white-space:nowrap; }
+ #home .h-mopt .v b { min-width:40px; font-size:12px; }
+ #home .h-mopt button { width:22px; }
+ #home .mp-info { gap:6px; padding:10px; }
+ #home .mp-pic canvas { height:clamp(64px,10vh,115px); }
+ #home .mp-head h3 { font-size:21px; }
+ #home .mp-desc { font-size:12px; line-height:1.4; }
+ #home .mp-tags { gap:4px; }
+ #home .mp-top { padding:7px 9px; }
+ #home .hm-hero { flex-shrink:0; grid-template-columns:90px minmax(0,1fr); }
+ #home .hm-hero > canvas { width:90px; height:90px; }
+ #home .hm-main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); align-items:center; gap:4px 8px; }
+ #home .hm-name { grid-column:1/-1; }
+ #home .hm-best { grid-column:1; grid-row:2; }
+ #home .hm-best strong { font-size:26px; }
+ #home .hm-car { grid-column:2; grid-row:2; gap:6px; }
+ #home .hm-car img.big,#home .hm-car .ph.big { width:58px; height:36px; }
+ #home .hm-car b { font-size:12px; }
+ #home .hm-car small { font-size:10px; }
+ #home .hm-go { grid-column:1/-1; justify-self:end; min-height:30px; padding:5px 9px; }
+ #home .hm-stats,#home .hm-secs,#home .hm-lt { flex-shrink:0; }
+}
+#home .h-modes { width:100%; box-sizing:border-box; }
+@media(min-width:1000px) and (min-height:600px) {
+ #home .mp-pic canvas { height:clamp(64px,9vh,108px); }
 }

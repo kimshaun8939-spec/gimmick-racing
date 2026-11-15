@@ -100,3 +100,64 @@ body:has(#pauseMenu.on) .mt-notice { display:none; }
 #home .mt-page :is(.mt-rank,.mt-rewards>span,.mt-section-title>span) { font-size:12px; }
 #home .mt-rewards>span { border:0; background:transparent; padding:2px 0; margin-right:6px; }
 #home .mt-shop-intro { padding-left:0; padding-right:0; }
+
+/* noscroll: 머리와 필터는 고정하고 많은 업적·상품 목록만 넘긴다. */
+@media(min-width:1000px) and (min-height:600px) {
+ #home .mt-page { gap:8px!important; }
+ #home .mt-summary { gap:10px; }
+ #home .mt-completion,#home .mt-wallet { padding:7px 16px; }
+ #home .mt-completion>div { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+ #home .mt-completion small { margin:0; }
+ #home .mt-completion .mt-bar { flex:1; min-width:60px; margin:0; }
+ #home .mt-wallet { display:flex; align-items:center; gap:14px; }
+ #home .mt-completion b,#home .mt-wallet>b { font-size:23px; }
+ #home .mt-content { display:flex; flex-direction:column; overflow:hidden; padding:12px 16px!important; }
+ #home .mt-content>* { flex-shrink:0; }
+ #home .mt-content:has(.mt-checkin) { overflow-y:auto; }
+ #home .mt-ach-grid,#home .mt-shop-grid { flex:1; min-height:0; overflow:auto; padding:2px 5px 4px 2px; align-content:start; grid-auto-rows:max-content; overscroll-behavior:contain; scrollbar-width:thin; }
+ #home .mt-next-card { padding:8px 12px; margin-bottom:8px; }
+ #home .mt-next-card small { margin-top:2px; }
+ #home .mt-content .mt-note { margin:6px 0!important; line-height:1.4!important; }
+ #home .mt-feedback:empty { display:none; }
+ #home .mt-shop-intro { padding:0 0 7px; margin-bottom:7px; }
+ #home .mt-shop-intro h3 { font-size:20px; margin:0 0 3px; }
+ #home .mt-shop-kinds { margin:7px 0; }
+ #home .mt-content:has(.mt-shop-grid) { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:auto auto minmax(0,1fr) auto; gap:8px 12px; }
+ #home .mt-shop-intro { grid-column:1/-1; grid-row:1; margin:0; }
+ #home .mt-shop-intro h3 { display:none; }
+ #home .mt-shop-car { grid-column:1; grid-row:2; }
+ #home .mt-shop-kinds { grid-column:2; grid-row:2; margin:0; align-items:center; }
+ #home .mt-shop-grid { grid-column:1/-1; grid-row:3; }
+ #home .mt-product-art { height:52px; }
+ #home .mt-product-art svg { height:52px; width:120px; }
+ #home .mt-product h4 { margin-top:8px; }
+ #home .mt-product p { margin-bottom:8px; }
+ #home .mt-ledger { grid-column:1; grid-row:4; margin:0; }
+ #home .mt-title-list { grid-column:2; grid-row:4; justify-content:flex-end; align-content:start; }
+ #home .mt-shop-jump:not(:empty) { grid-column:1/-1; grid-row:4; margin:0; }
+ #home .mt-content:has(.mt-shop-jump:not(:empty)) :is(.mt-ledger,.mt-title-list) { grid-row:5; }
+ #home .mt-shop-jump:empty { display:none; }
+ #home .mt-ledger { margin-top:6px; }
+ #home .mt-ach { padding:12px; }
+ #home .mt-ach-top { margin-bottom:6px; }
+ #home .mt-ach p { margin-bottom:10px; }
+ #home .mt-rewards { margin-top:6px; }
+ #home .mt-checkin { padding:10px 14px; gap:14px; margin-bottom:5px; }
+ #home .mt-checkin h3 { margin:0 0 3px; font-size:18px; }
+ #home .mt-checkin .mt-kicker,#home .mt-checkin h3 { display:none; }
+ #home .mt-streak>div { padding:6px 2px; gap:3px; }
+ #home .mt-streak>div>span { display:none; }
+ #home .mt-section-title { margin:5px 0 6px; }
+ #home .mt-goal-section { margin-bottom:4px; }
+ #home .mt-goal { padding:9px 11px; gap:8px; }
+ #home .mt-goal>div>small { display:none; }
+ #home .mt-goal.done>div>small { display:block; }
+ #home .mt-goal h4 { margin:3px 0 6px; }
+ #home .mt-goal .mt-goal-help { line-height:1.35; margin:0 0 6px; }
+ #home .mt-goal .mt-rewards { margin-top:4px; }
+ #home .mt-goal h4 { margin:0 0 3px; }
+ #home .mt-goal .mt-goal-help { margin:0 0 3px; line-height:1.25; }
+ #home .mt-goal .mt-progress-text { margin-bottom:3px; }
+ #home .mt-goal .mt-rewards { margin-top:2px; }
+ #home .mt-goal .mt-rewards>span { padding:0; line-height:1.3; }
+}

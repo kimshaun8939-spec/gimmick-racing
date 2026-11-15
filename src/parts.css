@@ -11,6 +11,51 @@
 
 /* partsqa 2026-11-15: 상점 카드의 상태 줄이 카드 가장자리에 붙던 것 → 제목·설명과 같은 안쪽 여백 */
 .mt-product .mt-shop-state{margin:0 14px 10px}
+
+/* noscroll: 정보는 유지하고 조립 선택·구매를 먼저 한눈에. */
+#home .pu-slots span { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.3; }
+#home .pu-detail > p { display:block; }
+#home .pu-detail > p:empty { display:none; }
+#home .pu-stats > small:last-child { max-height:none; overflow:visible; }
+@media(min-width:901px) and (min-height:521px) {
+ #home .ct-pane[data-pane="parts"] { gap:5px; }
+ #home .pu-slots button,#home .pu-cards button { padding:5px 2px; }
+ #home .pu-detail { padding:7px 9px; }
+ #home .pu-detail .gm-btn { margin-top:5px; }
+ #home .pu-stats { gap:3px 9px; }
+ #home .pu-tools .gm-btn { padding:5px; }
+}
+@media(max-height:520px) and (min-width:600px) {
+ #home .ct-pane[data-pane="parts"] { display:grid; grid-template-columns:minmax(0,1fr); gap:4px; }
+ #home .ct-pane[data-pane="parts"][hidden] { display:none; }
+ #home .pu-head { display:none; } /* 조립 탭 이름·상단 코인 지갑과 같은 정보 */
+ #home .pu-slots { gap:3px; }
+ #home .pu-slots button { min-height:44px; padding:4px 1px; }
+ #home .pu-slots span { font-size:11px; }
+ #home .pu-slots small { font-size:10px; margin-top:2px; }
+ #home .pu-cards button { min-height:44px; padding:4px 2px; }
+ #home .pu-detail { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 6px; padding:6px 8px; }
+ #home .pu-detail > b { font-size:13px; align-self:center; }
+ #home .pu-detail > .gm-btn { grid-column:2; grid-row:1 / span 2; min-height:44px; max-width:150px; margin:0; padding:5px 8px; font-size:11px; white-space:normal; }
+ #home .pu-detail p { grid-column:1; margin:0!important; }
+ #home .pu-trades { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:2px 8px; }
+ #home .pu-detail > small { grid-column:1/-1; margin:0; }
+ #home .pu-tools .gm-btn { min-height:44px; font-size:11px; }
+ #home .pu-stats { grid-template-columns:1fr 1fr; gap:3px 8px; }
+}
+@media(min-width:901px) and (min-height:521px) and (max-height:800px) {
+ #home .pu-detail { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 8px; }
+ #home .pu-detail > b { align-self:center; }
+ #home .pu-detail > .gm-btn { grid-column:2; grid-row:1 / span 2; min-height:36px; max-width:170px; margin:0; padding:5px 9px; white-space:normal; }
+ #home .pu-detail > p { grid-column:1; margin:0!important; }
+ #home .pu-trades, #home .pu-detail > small { grid-column:1/-1; }
+}
+@media(max-width:600px) {
+ #home .pu-detail { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 7px; }
+ #home .pu-detail > .gm-btn { grid-column:2; grid-row:1 / span 2; min-height:44px; max-width:145px; margin:0; padding:5px 8px; white-space:normal; }
+ #home .pu-detail > p { grid-column:1; margin:0!important; }
+ #home .pu-trades, #home .pu-detail > small { grid-column:1/-1; }
+}
 @media(max-width:719px){.mt-product .mt-shop-state{margin:0 10px 8px}}
 /* partsqa: 휴대폰 세로에서 '부품 교체 중' 단추가 일반·가속·배 단추를 덮던 것 → 가운데, 차 이름 줄 위로 */
 @media(max-width:600px){.pu-skip{left:50%;bottom:41%}}
