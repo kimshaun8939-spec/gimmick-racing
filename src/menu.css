@@ -3251,3 +3251,30 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 #home .mp-diff:is(.d1,.d2) { background-color:#080c16c7; background-image:linear-gradient(90deg,#ffcf3f 0 var(--filled),#66758c var(--filled) 3em,#c3d0e6 3em); background-origin:content-box; background-clip:text; -webkit-background-clip:text; color:transparent; letter-spacing:0; }
 #home .mp-diff.d1 { --filled:1em; }
 #home .mp-diff.d2 { --filled:2em; }
+/* qa2fixB: 낮은 결과 화면은 보상을 한 줄로 접고 표에 공간을 줘요. */
+@media (max-height:430px) and (orientation:landscape) {
+ #results .res-dashboard .res-head { padding:6px 14px; gap:4px 12px; }
+ #results .res-dashboard .res-head .online { display:none; }
+ #results .res-dashboard .res-head .badges { position:absolute; top:8px; left:30%; margin:0; }
+ #results .res-dashboard .badges .badge { padding:3px 7px; font-size:10px; }
+ #results .res-dashboard .res-scroll { padding:6px 12px; }
+ #results .res-dashboard .res-grid, #results .res-dashboard.has-rivals .res-grid { grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:8px; }
+ #results .res-dashboard .res-records { grid-column:1; grid-row:1; }
+ #results .res-dashboard .res-rank { grid-column:2; grid-row:1; }
+ #results .res-dashboard .res-rewards { grid-column:1/-1; }
+ #results .res-dashboard .res-panel { padding:7px 9px; }
+ #results .res-dashboard .res-panel h3 { margin-bottom:4px; font-size:12px; }
+ #results .res-dashboard .podium { display:none; }
+ #results .res-dashboard .stand { margin-top:0; }
+ #results .res-dashboard .stand td { padding:4px 5px; font-size:11px; line-height:1.3; }
+ #results .res-dashboard .btns { padding:6px 10px; }
+}
+
+/* qa2fixA */
+.wallet-migration .box{border-color:#8de3d2;max-width:min(460px,calc(100vw - 32px))}.wallet-migration p{line-height:1.8;overflow-wrap:anywhere}.account-notice .btns{justify-content:center}
+/* 받은 선물·레벨 업 카드는 표 다음에 읽고, 결과 버튼은 고정해요. */
+@media (max-height:430px) and (orientation:landscape) {
+ #results .res-dashboard .res-scroll { display:flex; flex-direction:column; }
+ #results .res-dashboard .res-scroll > .res-grid { flex:none; order:0; }
+ #results .res-dashboard .res-scroll > .rw-levelup { flex:none; order:1; }
+}

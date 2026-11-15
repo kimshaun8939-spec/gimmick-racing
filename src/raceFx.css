@@ -158,3 +158,7 @@ body.touch-on #slipDock #draftBox { width: 198px; }
 @media (orientation: portrait) {
   body.touch-on #slipDock { left: max(8px, env(safe-area-inset-left)); right: auto; top: 276px; transform: none; align-items: flex-start; }
 }
+/* qa2fixB: 가로 휴대폰 비행 정보는 미니맵 아래 가장자리에 둬요. */
+@media (orientation:landscape) and (max-height:430px) {
+ body.touch-on #flightInfo { left:auto; right:10px; top:102px; bottom:auto; transform:none; max-width:156px; padding:2px 6px; font-size:10px; text-align:right; }
+}

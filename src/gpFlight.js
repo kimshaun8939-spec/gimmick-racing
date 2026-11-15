@@ -247,6 +247,15 @@ export function createFlightFx(track, parent) {
 body.touch-on #flyGauge{top:auto;bottom:46%;right:auto;left:50%;transform:translateX(-50%) scale(.86);transform-origin:50% 100%}
 body.touch-on #flyGauge.on{transform:translateX(-50%) scale(.86)}
 @media (max-height:520px){#flyGauge{top:30%;width:164px;padding:8px 10px}}
+@media (orientation:landscape) and (max-height:430px){
+body.touch-on #flyGauge,body.touch-on #flyGauge.on{left:auto;right:108px;top:120px;bottom:auto;width:144px;padding:4px 6px;transform:none;transform-origin:100% 0}
+body.touch-on #flyGauge .fg-row{gap:3px;margin-bottom:2px;min-height:12px}
+body.touch-on #flyGauge .fg-chip{font-size:9px;padding:1px 4px}
+body.touch-on #flyGauge .fg-lbl{font-size:9px;line-height:1.1;margin-bottom:2px}
+body.touch-on #flyGauge .fg-bar{height:6px}
+body.touch-on #flyGauge .fg-res{font-size:10px;height:12px;margin-top:2px}
+body.touch-on #flyGauge .fg-res:not(.on){display:none}
+}
 `;
   const gauge = document.createElement('div');
   gauge.id = 'flyGauge';
