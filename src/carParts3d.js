@@ -27,6 +27,37 @@ export function isolatedPart(model,slot,look){
  }
  return out;
 }
+// 차고 전용 복사본. 원본의 위치와 자원은 유지하며, 장면이 끝나면 반드시 dispose.
+export function swapPart(root,slot,look){
+ let body,kit;root.traverse(o=>{if(photoKits.has(o)){body=o;kit=photoKits.get(o);}});
+ const group=new T.Group(),hidden=[],geometries=[];
+ if(!kit)return {group,hide(){},restore(){},dispose(){}};
+ root.updateMatrixWorld(true);
+ let source=slot==='tire'?kit.wheels.find(w=>w.side>0).spin:look?root.getObjectByName('part-'+(slot==='aero'&&look.kind==='splitter'?'splitter':slot)):slot==='aero'?kit.spoiler:slot==='water'?kit.hull:null;
+ const stockEngine=slot==='engine'&&!look&&!['f1','kart'].includes(kit.style);
+ if(stockEngine){const inv=root.matrixWorld.clone().invert(),candidates=[];kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual||!(o.material?.metalness>.4))return;for(let n=o;n;n=n.parent)if(!n.visible)return;o.geometry.computeBoundingBox();const b=o.geometry.boundingBox.clone().applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld)),v=b.getSize(new T.Vector3()),c=b.getCenter(new T.Vector3());if(c.z<-.6&&b.max.y<.7&&Math.abs(c.x)<1&&v.length()>.15&&v.length()<2)candidates.push({o,volume:v.x*v.y*v.z});});source=candidates.sort((a,b)=>b.volume-a.volume)[0]?.o;}
+ // 합쳐진 순정 엔진의 추출 영역은 차 원점 기준이다. 차고 받침 높이를 섞지 않는다.
+ let copy;const inv=root.matrixWorld.clone().invert();
+ if(!source){const parent=root.parent,pos=root.position.clone(),q=root.quaternion.clone(),scale=root.scale.clone();root.removeFromParent();root.position.set(0,0,0);root.quaternion.identity();root.scale.set(1,1,1);root.updateMatrixWorld(true);
+  try{copy=isolatedPart({root,fp:{body}},slot,look);}finally{parent?.add(root);root.position.copy(pos);root.quaternion.copy(q);root.scale.copy(scale);root.updateMatrixWorld(true);}
+ }else if(stockEngine){copy=new T.Group();const c=source.clone(true);c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;copy.add(c);}
+ else copy=isolatedPart({root,fp:{body}},slot,look);
+ if(slot==='tire'){copy=new T.Group();const c=source.clone(true);c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;const hidden=[];c.traverse(o=>{if(o!==c&&!o.visible)hidden.push(o);});hidden.forEach(o=>o.removeFromParent());copy.add(c);}
+ if(source){
+  const matrix=new T.Matrix4().multiplyMatrices(inv,source.matrixWorld);
+  // isolatedPart는 그룹의 원점만 지운다. 메시 내부의 실제 부착 좌표는 보존된다.
+  copy.applyMatrix4(matrix);group.add(copy);hidden.push([source,source.visible]);
+ }else{
+  group.add(copy);
+  // 합쳐진 순정 엔진은 추출된 삼각형만 뺀 임시 geometry로 빈 자리를 만든다.
+  const key=v=>v.toArray().map(n=>n.toFixed(4)).join(','),tri=(a,b,c)=>[key(a),key(b),key(c)].sort().join('|'),remove=new Set();
+  copy.updateMatrixWorld(true);copy.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,i=o.geometry.index;for(let n=0;n<(i?.count||p.count);n+=3){const vs=[0,1,2].map(j=>new T.Vector3().fromBufferAttribute(p,i?i.getX(n+j):n+j).applyMatrix4(o.matrixWorld));remove.add(tri(...vs));}});
+  kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual)return;const g=o.geometry,p=g.attributes.position,i=g.index,indices=[];let removed=false;for(let n=0;n<(i?.count||p.count);n+=3){const ids=[0,1,2].map(j=>i?i.getX(n+j):n+j),vs=ids.map(j=>new T.Vector3().fromBufferAttribute(p,j).applyMatrix4(o.matrixWorld).applyMatrix4(inv));if(remove.has(tri(...vs)))removed=true;else indices.push(...ids);}if(removed){const cut=g.clone();cut.setIndex(indices);geometries.push([o,g,cut]);}});
+ }
+ // 독립 메시가 없는 순정 변속기는 임의의 상자를 만들지 않고 빈 원래 자리로 표시.
+ group.traverse(o=>{if(o.isMesh){const old=o.geometry;o.geometry=old.clone();if(o.userData.photoGeometry)old.dispose();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.castShadow=false;}});
+ return {group,hide(){for(const [o]of hidden)o.visible=false;for(const [o,,g]of geometries)o.geometry=g;},restore(){for(const [o,v]of hidden)o.visible=v;for(const [o,g]of geometries)o.geometry=g;},dispose(){for(const [,,g]of geometries)g.dispose();group.removeFromParent();group.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}};
+}
 // 차 지역 좌표: +x 오른쪽, +y 위, +z 앞. 조립 화면과 부품 사진 공용.
 export const PART_VIEW=Object.freeze({
  engine:{pos:[2.8,1.3,-5.2],look:[0,.4,-1.8],fov:32},
