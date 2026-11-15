@@ -3278,3 +3278,22 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
  #results .res-dashboard .res-scroll > .res-grid { flex:none; order:0; }
  #results .res-dashboard .res-scroll > .rw-levelup { flex:none; order:1; }
 }
+/* qa3fixA: ?? ? ??? ?? ??? ???. */
+#home .h-mode.running .opts { display:none; }
+#home .h-modegrid { grid-auto-rows:max-content; }
+.season-overwrite .btns { flex-wrap:wrap; }
+/* ?? ? ??? ? ? ? ?? ?? ?? ?? ??? ???. */
+@media(min-width:1000px) {
+ #home .h-modegrid > .h-mode.running { order:-1; grid-column:1 / -1; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); align-items:center; }
+ #home .h-mode.running .h-champ { border-top:0; border-left:1px solid var(--gm-line); }
+}
+/* ? ? ? ?? ????????? ?? ???. */
+@media(min-width:821px) {
+ body #lobby .lb-view .lb-room-content { grid-template-rows:auto auto minmax(48px,1fr) auto; }
+ body #lobby .lb-room-content > .lb-mycar { min-height:190px; box-sizing:border-box; }
+}
+@media(min-width:821px) and (min-height:700px) and (max-height:900px) {
+ body #lobby .lb-maps .lb-map canvas { height:44px; aspect-ratio:auto; }
+}
+#lobby .lb-car { flex-shrink:0; min-height:116px; }
+#lobby .lb-car .pic { flex-shrink:0; }

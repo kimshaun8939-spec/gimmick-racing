@@ -1668,6 +1668,13 @@ export async function runHome() {
     if (view !== 'season') return show('season');
     const order = [...seasonMaps];
     if (!order.length) return toast('달릴 맵을 하나 이상 골라 주세요');
+    const current = champState();
+    if (current) {
+      const me = champMod.champStandings(current).find(d => d.isPlayer);
+      const choice = await seasonOverwriteDialog(`진행 중인 시즌(${current.results.length}/${current.maps.length}경기, ${me?.points || 0}점)이 있어요 · 새로 시작하면 지워져요`);
+      if (choice === 'resume') return resumeChamp();
+      if (choice !== 'new') return;
+    }
     const c = carOf(carId);
     let url;
     try {
@@ -2088,15 +2095,17 @@ export async function runHome() {
 
   view === 'main' && views.main.querySelector('.h-start').focus({ preventScroll: true });
   // 레벨 합치기 (2026-11-12): 서버에서 같은 계정 다른 기기 경험치를 받아 온 뒤 레벨·레벨 업 알림
+  // 서버 응답을 기다리지 않고 홈을 처음 그릴 때 안내해요. 0 코인은 조용히 정리해요.
+  const migration = meta.migrationNotice();
+  const migrationNews = migration?.coins > 0
+    ? accountNotice('재화가 3가지 조각으로 바뀌었어요', `예전 피트 코인 ${migration.coins.toLocaleString('ko-KR')}은 정리되고 산 물건은 모두 그대로예요 · 조각은 레이스·업적·목표로 모아요`, 'wallet-migration').then(() => meta.acknowledgeMigration())
+    : Promise.resolve();
+  if (migration && !migration.coins) meta.acknowledgeMigration();
   let newsDone = false;
   const levelNews = async () => {
     if (newsDone) return;
     newsDone = true;
-    const migration = meta.migrationNotice();
-    if (migration) {
-      await accountNotice('재화가 3가지 조각으로 바뀌었어요', `예전 피트 코인 ${migration.coins.toLocaleString('ko-KR')}은 정리되고 산 물건은 모두 그대로예요 · 조각은 레이스·업적·목표로 모아요`, 'wallet-migration');
-      meta.acknowledgeMigration();
-    }
+    await migrationNews;
     applyGate(); // 서버 경험치를 받은 뒤 레벨이 바뀌었을 수 있음
     // 해금 안내 순서: (기존 사용자) '새 안내 n개' 한 번 → 레벨 업 창(+새 기능) → 설정·주소로 부탁한 안내
     if (gate.urlCoach() && gate.coachActive()) { gate.markSeen(); gate.markSeenAll(false); } // ?coach=<id> 시험: 창 없이 그 안내만
@@ -2735,4 +2744,25 @@ function accountNotice(title, text, extraClass = '') {
   const key=e=>{e.stopImmediatePropagation();if(['Enter','NumpadEnter','Escape'].includes(e.code)){e.preventDefault();close();}else if(e.code==='Tab'){e.preventDefault();wrap.querySelector('button').focus();}};
   wrap.querySelector('button').onclick=close;window.addEventListener('keydown',key,true);document.body.append(wrap);wrap.querySelector('button').focus();
  });
+}
+function seasonOverwriteDialog(text) {
+  return new Promise(resolve => {
+    const previous = document.activeElement, wrap = document.createElement('div');
+    wrap.className = 'gm-confirm season-overwrite';
+    wrap.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-labelledby="seasonOverwriteTitle"><h3 id="seasonOverwriteTitle">새 시즌을 시작할까요?</h3><p></p><div class="btns"><button class="gm-btn primary" data-choice="resume">이어 하기</button><button class="gm-btn" data-choice="new">새로 시작</button><button class="gm-btn" data-choice="cancel">취소</button></div></div>';
+    wrap.querySelector('p').textContent = text;
+    const buttons = [...wrap.querySelectorAll('button')];
+    const done = choice => { window.removeEventListener('keydown', key, true); wrap.remove(); previous?.focus?.({preventScroll:true}); resolve(choice); };
+    const key = e => {
+      e.stopImmediatePropagation();
+      if (e.code === 'Escape') { e.preventDefault(); done('cancel'); }
+      else if (['Enter','NumpadEnter'].includes(e.code)) { e.preventDefault(); if (!e.repeat) done(document.activeElement?.dataset.choice || 'resume'); }
+      else if (['Tab','ArrowLeft','ArrowRight'].includes(e.code)) {
+        e.preventDefault(); const delta = e.code === 'ArrowLeft' || (e.code === 'Tab' && e.shiftKey) ? -1 : 1;
+        buttons[(buttons.indexOf(document.activeElement) + delta + buttons.length) % buttons.length].focus();
+      }
+    };
+    wrap.addEventListener('click', e => { const b = e.target.closest('button'); if (b) done(b.dataset.choice); else if (e.target === wrap) done('cancel'); });
+    document.body.append(wrap); window.addEventListener('keydown', key, true); buttons[0].focus();
+  });
 }

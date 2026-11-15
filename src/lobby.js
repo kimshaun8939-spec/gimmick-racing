@@ -307,6 +307,13 @@ export async function openLobby(opts = {}) {
   async function hostSession(code, signal) {
     const players = new Map(); // pid → 선수 정보
     let bots = 0;
+    let rematchLevel = null;
+    if (opts.room && opts.host) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('gimmick.lobbyRematch') || 'null');
+        if (saved?.code === code) { bots = Math.max(0, Math.min(5, Number(saved.bots) || 0)); rematchLevel = saved.botLevel; }
+      } catch {}
+    }
     let mode = 'race'; // 'race' 스피드전 / 'item' 아이템전 (방장이 고름, 마지막 선택 기억)
     try {
       if (localStorage.getItem('gimmick.lobbyMode') === 'item') mode = 'item';
@@ -432,6 +439,7 @@ export async function openLobby(opts = {}) {
         try {
           botLevel = (JSON.parse(localStorage.getItem('gimmick.settings') || '{}') || {}).botLevel || 'normal';
         } catch {}
+        botLevel = rematchLevel || botLevel;
         const msg = { t: 'go', map: mapId, bots, botLevel, mode, players: list, code };
         hub.broadcast(msg);
         launch(msg, true);
@@ -665,6 +673,7 @@ export async function openLobby(opts = {}) {
 
   // ------------------------------------------------------------------ 출발!
   function launch(msg, asHost) {
+    if (asHost) try { sessionStorage.setItem('gimmick.lobbyRematch', JSON.stringify({ code: session.code, bots: msg.bots, botLevel: msg.botLevel })); } catch {}
     const me = (msg.players || []).find((p) => p.pid === pid);
     saveRoomInfo({ code: session.code, host: asHost, pid, hostPid: (msg.players.find((p) => p.host) || {}).pid, players: msg.players, map: msg.map, bots: msg.bots, at: Date.now() });
     const u = new URL(location.href);
