@@ -3128,3 +3128,19 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
  #home .mp-list .h-map .t b { font-size:12px; }
  #home .mp-list .h-map .meta { flex-wrap:wrap; gap:2px 5px; }
 }
+/* flow3: 준비 화면에서 현재 차를 확인하고 차고로 다녀와요. */
+.f3-ride{display:flex;align-items:center;gap:14px;flex-shrink:0;padding:8px 14px;margin:0 0 10px;border:1px solid #496078;border-radius:12px;background:#122236}
+.f3-ride>img,.f3-photo{width:112px;height:60px;object-fit:contain;flex-shrink:0}
+.f3-ride>div{flex:1;min-width:0}.f3-ride strong{display:block;font-size:18px}.f3-ride small{font-size:11px;color:#c4d2df}.f3-chips{display:flex;gap:7px;flex-wrap:wrap}.f3-chips small{background:#263c52;border-radius:4px;padding:1px 5px}.f3-ride.locked{border-color:#e8ac49}
+@media(max-width:600px){.f3-ride{gap:6px;padding:6px;margin-bottom:6px;flex-wrap:wrap}.f3-ride>img,.f3-photo{width:70px;height:42px}.f3-ride strong{font-size:14px}.f3-ride>.gm-btn{font-size:12px;padding:8px}.f3-ride kbd{display:none}}
+@media(max-height:520px){.f3-ride{padding:3px 10px;margin-bottom:4px;gap:8px}.f3-ride>img,.f3-photo{height:32px;width:65px}.f3-ride strong{font-size:13px}.f3-ride>.gm-btn{padding:5px 10px;font-size:12px}.f3-chips{display:inline-flex}.f3-ride>div>small{margin-right:8px}.f3-ride strong{display:inline;margin-right:8px}}
+/* 두 번째 다듬기: 시즌 제목 옆에 차 카드를 두어 맵 구성 공간 확보 */
+.sx-season>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.sx-season>header>.f3-ride{margin:0;min-width:400px;max-width:55%;flex:1}.sx-season>header>div{min-width:0}
+@media(max-width:600px){.sx-season>header{flex-wrap:wrap}.sx-season>header>.f3-ride{min-width:0;max-width:none;flex-basis:100%}.sx-season>header h2{font-size:20px}.sx-season>header p{display:none}}
+@media(max-height:520px){#home .sx-season>header{display:flex}#home .sx-season>header>div{display:none}.sx-season>header>.f3-ride{max-width:none;min-width:0}.f3-ride>div{line-height:1.2}}
+/* 세 번째 다듬기: 시즌 맵 칸은 내용 높이를 확보하고 목록 안에서만 스크롤 */
+@media(min-width:1000px) and (min-height:600px){#home .sx-mapgrid{grid-auto-rows:max-content;align-content:start}#home .sx-map.gm-btn{min-height:92px;flex-shrink:0}#home .sx-note{max-height:100%;overflow:auto}#home .sx-season>header p{margin:4px 0;font-size:12px}}
+/* 차 사진 준비 전 자리도 같은 크기로 유지 */
+.f3-photo{display:flex;align-items:center;justify-content:center;font-size:32px}.f3-ride>img{display:block}#home .h-maps>.head .who{display:none}
+@media(max-height:520px){.f3-photo{font-size:24px}}

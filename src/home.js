@@ -37,7 +37,7 @@ import { touchWanted } from './touch.js';
 export const VERSION = 'v0.9 · 2026.11';
 /** 운전 도움을 켜고 낸 기록 표시 */
 const ASSIST_TAG = '<span class="h-assist" title="운전 도움을 켜고 낸 기록">🛟 도움</span>';
-const STAT_NAMES = [['speed', '최고 속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력'], ['brake', '브레이크'], ['drift', '드리프트'], ['offroad', '오프로드'], ['boat', '배 성능']]; // 부스터는 꺼 둠 (car.json booster.enabled)
+const STAT_NAMES = [['speed', '최고 속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력'], ['brake', '브레이크'], ['drift', '드리프트'], ['offroad', '험한 길'], ['boat', '배 성능']]; // 부스터는 꺼 둠 (car.json booster.enabled)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 /** 차 특기 (cars.json stats의 숨은 값) → 정보 칸 아래 작은 딱지 */
@@ -59,7 +59,7 @@ export async function runHome() {
   } catch (e) {
     console.warn('차 목록 불러오기 실패', e);
   }
-  if (!cars.length) cars = [{ id: 'f1', name: '레드 포뮬러', tag: 'FORMULA', desc: '', stats: {}, look: '#e8463a' }];
+  if (!cars.length) cars = [{ id: 'f1', name: '빨강 레이서', tag: '경주 머신 · 균형형', desc: '', stats: {}, look: '#e8463a' }];
   // 차 등급: listCars()가 class를 주면 그것, 아니면 cars.json에서 직접
   const classes = carClasses.classes;
   for (const c of cars) c.class = c.class || carClasses.classOf[c.id] || null;
@@ -93,8 +93,9 @@ export async function runHome() {
     c.look0 = c.look; // 원래 색
     if (c.look && typeof c.look === 'object') c.look = applyCostume(unlocks.applyPaint(c.look0, c.id), unlocks.isCostumeUnlocked(c.id, unlocks.getCostume(c.id)) ? unlocks.getCostume(c.id) : ''); // 내가 고른 색
   }
-  if (!isOpen(carId)) carId = isOpen(DEFAULT_CAR) ? DEFAULT_CAR : (cars.find((c) => isOpen(c.id)) || cars[0]).id; // 기억해 둔 차가 잠겨 있으면 기본 차
+  // 잠긴 마지막 차는 준비 화면에서 안내해요.
   let garageOnly = params.get('menu') === 'car';
+  let garageReturn = 'main';
   let openCarId = carId; // 마지막으로 고른 '열린' 차 (잠긴 차를 구경하다 나가면 이 차로 돌아옴)
   const carOf = (id) => cars.find((c) => c.id === id) || cars[0];
 
@@ -258,7 +259,7 @@ export async function runHome() {
             <div class="ct-statbox">
               <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button" data-nav>⚖ 비교하기</button></div>
               <div class="h-stats"></div>
-              <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h 옆 한계와 다운포스, 드리프트는 유지 각도·회전·미끄러짐, 오프로드는 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
+              <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h에서 버티는 힘과 차를 누르는 힘, 드리프트는 유지 각도·회전·미끄러짐, 험한 길은 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
             </div>
           </section>
           <section class="ct-pane" data-pane="parts" id="ctPane-parts" role="tabpanel" aria-labelledby="ctTab-parts" hidden></section>
@@ -492,7 +493,7 @@ export async function runHome() {
   /** 차 사진이 준비되면 카드에 끼움 (부드럽게 나타남) */
   function putThumb(id, url) {
     compare.updateThumb(id, url);
-    if (id === carId) setTimeout(heroThumb, 0);
+    if (id === carId) { setTimeout(heroThumb, 0); for (const card of home.querySelectorAll('.f3-ride')) { const ph = card.querySelector('.f3-photo'); if(ph) { const im = new Image(); im.alt=''; ph.replaceWith(im); } card.querySelector('img').src=url; } }
     // 기록 화면(순위표·기록 카드)에서 사진을 기다리던 자리
     for (const ph of views.records.querySelectorAll(`.ph[data-car="${id}"]`)) {
       const im = new Image();
@@ -560,7 +561,7 @@ export async function runHome() {
   };
   function renderStats(c) {
     const info = views.car.querySelector('.h-carinfo');
-    views.car.querySelector('.hm-catalog-home').hidden = !garageOnly;
+    views.car.querySelector('.hm-catalog-home').hidden = false;
     const btn = info.querySelector('.ns-compare');
     btn.textContent = '⚖ 비교하기';
     btn.setAttribute('aria-haspopup', 'dialog');
@@ -624,7 +625,7 @@ export async function runHome() {
   }
   /** 차 정보 칸의 잠금 안내 + 색 고르기 줄 */
   function showGarage(c, open = isOpen(c.id)) {
-    views.car.querySelector('.hm-catalog-home').hidden = !garageOnly;
+    views.car.querySelector('.hm-catalog-home').hidden = false;
     const info = views.car.querySelector('.h-carinfo');
     const note = info.querySelector('.gx-locknote');
     note.hidden = open;
@@ -633,7 +634,9 @@ export async function runHome() {
     pick.classList.toggle('gx-off', !open && !garageOnly);
     pick.disabled = !open && !garageOnly;
     info.querySelector('.btns [data-go]').hidden = garageOnly;
-    pick.textContent = garageOnly ? '홈으로' : open ? (raceMode === 'champ' ? '다음: 시즌 맵 구성 ›' : '다음: 맵 고르기 ›') : `🔒 Lv.${c.unlockLevel}에 열려요`;
+    info.querySelector('.btns [data-go]').dataset.go = garageReturn;
+    info.querySelector('.btns [data-go]').textContent = '‹ 준비 화면으로';
+    pick.textContent = garageOnly ? '홈으로' : open ? '이 차로 타기 · 돌아가기 ›' : `🔒 Lv.${c.unlockLevel}에 열려요`;
     const box = info.querySelector('.gx-paint');
     const canPaint = open && c.look0 && typeof c.look0 === 'object';
     box.hidden = !canPaint;
@@ -702,7 +705,7 @@ export async function runHome() {
   views.map.innerHTML = `
     <div class="h-maps">
       <div class="head"><div><h2>맵 고르기</h2><div class="who"></div></div>
-        <div class="bar"><button class="gm-btn" data-go="car" data-nav>‹ 차 바꾸기 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-act="start" data-nav>출발! <kbd>Enter</kbd></button></div></div>
+        <div class="bar"><button class="gm-btn" data-go="mode" data-nav>‹ 방식 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-act="start" data-nav>출발! <kbd>Enter</kbd></button></div></div>
       <div class="mp-layout">
         <div class="h-panel mp-list"><div class="mp-ltitle">코스 · ${maps.length}개</div><div class="h-mapgrid"></div></div>
         <div class="h-panel mp-info"></div>
@@ -1031,20 +1034,13 @@ export async function runHome() {
 
   // ------------------------------------------------------------------ 화면 바꾸기
   let view = 'main';
-  // 준비 화면은 방식 → 차 → 맵(시즌 구성) 순서로 돌아가요.
-  const backView = () => garageOnly && view === 'car' ? 'main' : ({ mode: 'main', car: 'mode', map: 'car', season: 'car' }[view] || 'main');
+  // 준비 화면은 방식 → 맵(시즌 구성), 차고는 들어온 화면으로 돌아가요.
+  const backView = () => view === 'car' ? garageReturn : ({mode:'main',map:'mode',season:'mode'}[view] || 'main');
   /** 화면 바꾸기. sub: 설정 화면의 탭 ('general' | 'keys') */
   function show(name, focus = true, sub) {
     if (!views[name]) name = 'main';
     if (view === 'car' && name !== 'car') costumePicker.restore();
-    if (name !== 'car' && !isOpen(carId)) {
-      // 잠긴 차로는 못 나감: 맵 고르기로 가려 하면 막고, 다른 화면이면 마지막으로 고른 열린 차로 되돌림
-      if (['map', 'season'].includes(name) && view === 'car') {
-        uiSound('back');
-        return toast(`🔒 ${carOf(carId).name}: 레벨 ${carOf(carId).unlockLevel}에 열려요 (지금 Lv.${myLevel})`);
-      }
-      selectCar(openCarId);
-    }
+    if (view === 'car' && name !== 'car' && !isOpen(carId) && isOpen(openCarId)) selectCar(openCarId);
     if (view !== name) uiSound(name === 'main' ? 'back' : 'select');
     view = name;
     if (name === 'settings') setPanel.showTab(sub || 'general');
@@ -1062,6 +1058,8 @@ export async function runHome() {
     home.classList.toggle('g2-catalog', name === 'car' && !carDetail);
     if (name === 'car') { startThumbs(); showGarage(carOf(carId));partsUI.show(carOf(carId),isOpen(carId));preview.setParts?.(parts.getBuild(carId)); }
     if (name === 'season') renderSeason();
+    if (name === 'map' || name === 'season') { renderRideCard(); startThumbs(); }
+    if (name === 'car') { const back = views.car.querySelector('.hm-catalog-home'); back.hidden = false; back.dataset.go = garageReturn; back.textContent = garageReturn === 'main' ? '‹ 홈으로' : '‹ 준비 화면으로'; }
     refreshFlow();
     if (name === 'academy') renderAcademy();
     if (name === 'meta') metaPage.render();
@@ -1184,7 +1182,7 @@ export async function runHome() {
       const b = e.target.closest('[data-gx]');
       if (!b && e.target !== el) return;
       close();
-      if (b && b.dataset.gx === 'car') {garageOnly = true; show('car');if (hasParts) setCarTab('parts');garageDetail(true);}
+      if (b && b.dataset.gx === 'car') {garageReturn = 'main'; garageOnly = true; show('car');if (hasParts) setCarTab('parts');garageDetail(true);}
     });
     home.appendChild(el);
     setTimeout(() => {
@@ -1206,7 +1204,7 @@ export async function runHome() {
   views.mode.innerHTML = `
     <div class="h-modes">
       <div class="head"><div><h2>레이스 방식</h2><div class="who"></div></div>
-        <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-nav>다음: 차 고르기 › <kbd>Enter</kbd></button></div></div>
+        <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-nav>다음: 맵 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
           <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 드리프트 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
@@ -1274,7 +1272,7 @@ export async function runHome() {
     let lvTip = raceMode === 'race' || raceMode === 'item' || raceMode === 'champ' ? LEVEL_TIP[settings.get('botLevel') || 'normal'] || '' : '';
     views.mode.querySelector('.h-modetip').textContent = [MODE_TIPS[raceMode] || '', lvTip].filter(Boolean).join(' · ');
     views.mode.querySelector('[data-act="nextMode"]').innerHTML = raceMode === 'net'
-      ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>' : '다음: 차 고르기 › <kbd>Enter</kbd>';
+      ? '🌐 방 만들기 · 참가 <kbd>Enter</kbd>' : raceMode === 'champ' ? '다음: 시즌 맵 구성 › <kbd>Enter</kbd>' : '다음: 맵 고르기 › <kbd>Enter</kbd>';
     padHint();
   }
 
@@ -1330,13 +1328,31 @@ export async function runHome() {
       <div class="b"><button class="gm-btn small primary" data-champ="resume" data-nav>▶ 이어 하기</button><button class="gm-btn small" data-champ="quit" data-nav>그만두기</button></div>`;
   }
   function nextMode() {
-    if (raceMode === 'net') return openLobby({ map: mapId, car: carId });
-    garageDetail(false, false);
-    show('car');
+    if (raceMode === 'net') return openLobby({map:mapId,car:carId});
+    show(raceMode === 'champ' ? 'season' : 'map');
+  }
+  function openPrepGarage() {
+    garageReturn = view === 'season' ? 'season' : 'map'; garageOnly = false;
+    garageDetail(false, false); show('car');
   }
   function nextCar() {
-    if (garageOnly) return show('main');
-    show(raceMode === 'champ' ? 'season' : 'map'); // show가 잠긴 차의 진행을 막아요.
+    if (!isOpen(carId) && !garageOnly) return toast('🔒 열린 차를 골라 주세요');
+    show(garageReturn);
+  }
+  function renderRideCard() {
+    const c = carOf(carId), locked = !isOpen(carId);
+    const costume = listCostumes(carId).find(x => x.id === unlocks.getCostume(carId));
+    const chips = (!parts.isStock(parts.getBuild(carId)) ? '<small>🔧 조립</small>' : '') + (costume ? '<small>✦ '+esc(costume.name)+'</small>' : '');
+    for (const name of ['map','season']) {
+      const root = views[name].querySelector(name === 'map' ? '.h-maps' : '.sx-season');
+      if (!root) continue;
+      root.querySelector('.f3-ride')?.remove();
+      const card = document.createElement('aside'); card.className = 'f3-ride' + (locked ? ' locked' : '');
+      const url = thumbUrl(carId);
+      card.innerHTML = (url ? '<img alt="" src="'+esc(url)+'">' : '<span class="f3-photo">🏎️</span>') + '<div><small>지금 탈 차</small><strong>'+esc(c.name)+'</strong><span class="f3-chips"><small>'+esc(c.class || '기본')+' 등급</small>'+chips+(locked ? '<small>🔒 Lv.'+c.unlockLevel+' 필요</small>' : '')+'</span></div><button class="gm-btn '+(locked?'primary':'')+'" data-act="prepGarage" data-nav>차고에서 바꾸기 <kbd>C</kbd></button>';
+      if (name === 'map') root.querySelector('.head').after(card); else root.querySelector('header').append(card);
+      root.querySelectorAll('[data-act="start"]').forEach(btn => btn.disabled = locked || (name === 'season' && !seasonMaps.length));
+    }
   }
   function resumeChamp() {
     const cur = champState();
@@ -1371,8 +1387,9 @@ export async function runHome() {
       (seasonKind === 'random' ? '<div class="sx-random"><b>경기 수</b>' + [3, 5, 7, 9].map(n => '<button class="gm-btn small ' + (seasonCount === n ? 'on' : '') + '" data-nav data-season-count="' + n + '" data-season-key="count-' + n + '" aria-pressed="' + (seasonCount === n) + '">' + n + '경기</button>').join('') + '<button class="gm-btn" data-nav data-season-shuffle data-season-key="shuffle">🎲 다시 섞기</button></div>' : '') +
       '<div class="sx-layout"><div class="sx-order"><h3>달릴 순서 <small>' + seasonMaps.length + '경기 / 최대 9경기</small></h3><ol>' + seasonMaps.map((id, i) => '<li><span class="sx-num">' + (i + 1) + '</span><canvas width="160" height="90" data-season-thumb="' + id + '"></canvas><div><b>' + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></div>' + (seasonKind === 'custom' ? '<div class="sx-move"><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="-1" data-season-key="up-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 앞으로" ' + (i === 0 ? 'disabled' : '') + '>▲</button><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="1" data-season-key="down-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 뒤로" ' + (i === seasonMaps.length - 1 ? 'disabled' : '') + '>▼</button><button class="gm-btn small" data-nav data-season-map="' + id + '" data-season-key="remove-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 빼기">×</button></div>' : '') + '</li>').join('') + '</ol>' + (!seasonMaps.length ? '<p class="sx-empty">오른쪽 맵 칸에서 1~9개를 골라 주세요.</p>' : '') + '</div>' +
       (seasonKind === 'custom' ? '<div class="sx-pool"><h3>맵을 눌러 넣고 빼기</h3><div class="sx-mapgrid">' + pool.map(id => '<button class="gm-btn sx-map ' + (customMaps.includes(id) ? 'on' : '') + '" data-nav data-season-map="' + id + '" data-season-key="map-' + id + '" aria-pressed="' + customMaps.includes(id) + '"><canvas width="240" height="120" data-season-thumb="' + id + '"></canvas><b>' + (customMaps.includes(id) ? '✓ ' : '+ ') + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></button>').join('') + '</div></div>' : '<aside class="sx-note"><b>' + (seasonKind === 'default' ? '익숙한 순서로 한 시즌' : '매번 다른 맵, 새로운 순서') + '</b><p>첫 경기부터 목록 순서대로 달려요. 매 경기 점수를 더해 시즌 우승자를 정해요.</p><p>진행은 자동 저장돼요. 홈의 레이스 방식에서 이어 할 수 있어요.</p></aside>') + '</div></div>' +
-      '<footer><div class="sx-total" role="status"><b>' + seasonMaps.length + '경기 · 총 약 ' + totalKm.toFixed(1) + ' km</b><small>' + (seasonMaps.length ? '예상 주행 시간 약 ' + minutes + '분 · 차와 실력에 따라 달라요' : '맵을 하나 이상 골라 주세요') + '</small></div><div><button class="gm-btn" data-go="car" data-nav>‹ 차 고르기</button><button class="gm-btn primary" data-act="start" data-nav ' + (!seasonMaps.length ? 'disabled' : '') + '>🏁 시즌 출발!</button></div></footer></section>';
+      '<footer><div class="sx-total" role="status"><b>' + seasonMaps.length + '경기 · 총 약 ' + totalKm.toFixed(1) + ' km</b><small>' + (seasonMaps.length ? '예상 주행 시간 약 ' + minutes + '분 · 차와 실력에 따라 달라요' : '맵을 하나 이상 골라 주세요') + '</small></div><div><button class="gm-btn" data-go="mode" data-nav>‹ 방식</button><button class="gm-btn primary" data-act="start" data-nav ' + (!seasonMaps.length ? 'disabled' : '') + '>🏁 시즌 출발!</button></div></footer></section>';
     if (oldFlow) views.season.prepend(oldFlow);
+    renderRideCard();
     views.season.querySelectorAll('[data-season-thumb]').forEach(canvas => { const id = canvas.dataset.seasonThumb; drawTrackThumb(canvas, mapInfo[id].pts, mapOf(id).theme); });
   }
   views.season.addEventListener('click', e => {
@@ -1400,7 +1417,7 @@ export async function runHome() {
   });
   async function champStart() {
     if (!champReady) return toast('🏆 시즌을 불러오는 중이에요. 잠시 뒤 다시 눌러 주세요');
-    if (!isOpen(carId)) return nextCar();
+    if (!isOpen(carId)) { toast('🔒 열린 차로 바꿔 주세요'); return openPrepGarage(); }
     if (view !== 'season') return show('season');
     const order = [...seasonMaps];
     if (!order.length) return toast('달릴 맵을 하나 이상 골라 주세요');
@@ -1471,7 +1488,7 @@ export async function runHome() {
       toast('🚧 이 맵은 아직 준비 중이에요');
       return;
     }
-    if (!isOpen(carId)) return nextCar();
+    if (!isOpen(carId)) { toast('🔒 열린 차로 바꿔 주세요'); return openPrepGarage(); }
     if (mode === 'champ') return view === 'season' ? champStart() : show('season');
     setLast({ map: mapId, car: carId, mode });
     if (mode === 'net') return openLobby({ map: mapId, car: carId });
@@ -1496,7 +1513,7 @@ export async function runHome() {
     settings.set('racingLine', true);
     settings.set('gearbox', 'auto');
     setLast({ map: 'glacier', car: 'f1', mode: 'race' });
-    launch(raceUrl('glacier', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0, guide: 1 }), '첫 레이스 · 빙하 하이웨이', '넓은 코스 · 쉬운 봇 3대');
+    launch(raceUrl('glacier', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0, guide: 1 }), '첫 레이스 · 빙하 고속도로', '넓은 코스 · 쉬운 봇 3대');
   }
   function startTutorial() {
     if (launching) return;
@@ -1536,7 +1553,7 @@ export async function runHome() {
     const b = e.target.closest('[data-go], [data-act]');
     if (!b) return;
     if (b.dataset.go) {
-      if(b.dataset.go === 'car' && b.dataset.carSection) garageOnly = true;
+      if(b.dataset.go === 'car' && b.dataset.carSection) { garageOnly = true; garageReturn = 'main'; }
       if(b.dataset.shopCarId)selectCar(b.dataset.shopCarId);
       show(b.dataset.go);
       // 샵의 코스튬 구경은 성능표 아래를 다시 찾지 않아도 바로 보여 줌.
@@ -1549,7 +1566,8 @@ export async function runHome() {
     }
     const act = b.dataset.act;
     if (act === 'start') view === 'main' ? show('mode') : start();
-    else if (act === 'garage') { garageOnly = true; garageDetail(false, false); show('car'); }
+    else if (act === 'prepGarage') openPrepGarage();
+    else if (act === 'garage') { garageReturn = 'main'; garageOnly = true; garageDetail(false, false); show('car'); }
     else if (act === 'nextMode') nextMode();
     else if (act === 'metaShop' || act === 'metaGoals') { show('meta'); metaPage.showTab(act === 'metaShop' ? 'shop' : 'goals'); }
     else if (act === 'tutorial') startTutorial();
@@ -1607,10 +1625,9 @@ export async function runHome() {
       if (strip) strip.scrollBy({ left: Number(b.dataset.dir) * strip.clientWidth * 0.8, behavior: 'smooth' });
     }
     else if (act === 'recRace') {
-      // 이 맵으로 레이스 준비 (차 고르기부터)
+      // 이 맵으로 바로 레이스 준비
       selectMap(olMap);
-      garageDetail(false, false);
-    show('car');
+      show('map');
     }
     else if (act === 'olCar') {
       olCarOnly = !olCarOnly;
@@ -1692,12 +1709,14 @@ export async function runHome() {
   window.addEventListener('keydown', (e) => {
     if (dialogOpen() || launching || document.getElementById('lobby')) return;
     if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return; // 글자 입력 칸
+    if (e.target?.isContentEditable) return;
     const k = e.code;
+    if (k === 'KeyC' && ['map','season'].includes(view)) { e.preventDefault(); openPrepGarage(); return; }
     const act = document.activeElement;
     const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' }[k];
     if (k === 'Escape' || k === 'Backspace') {
       e.preventDefault();
-      if (view === 'car' && carDetail) garageDetail(false);
+      if (view === 'car' && carDetail && garageReturn === 'main') garageDetail(false);
       else if (view !== 'main') show(backView());
       return;
     }
@@ -1789,14 +1808,14 @@ export async function runHome() {
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else if (['achievements', 'goals', 'shop'].includes(startView)) { show('meta'); metaPage.showTab(startView === 'achievements' ? 'achievements' : startView); }
   else show(['meta', 'car', 'map', 'settings', 'controls', 'records', 'mode', 'academy'].includes(startView) ? startView : startView === 'ranking' ? 'records' : 'main');
-  // 레이스 방식 → 차 → 맵 / 시즌 구성. 지나온 단계로 돌아갈 수 있어요.
+  // 레이스 방식 → 맵 / 시즌 구성. 차고는 별도 왕복 화면이에요.
   function refreshFlow() {
     const lastStep = raceMode === 'champ' ? 'season' : 'map';
-    for (const [v, n] of [['mode', 1], ['car', 2], ['map', 3], ['season', 3]]) {
+    for (const [v, n] of [['mode', 1], ['car', 0], ['map', 2], ['season', 2]]) {
       let f = views[v].querySelector('.hx-flow');
       if (!f) { f = document.createElement('nav'); f.className = 'hx-flow'; f.setAttribute('aria-label', '레이스 준비 단계'); views[v].prepend(f); }
-      f.hidden = v === 'car' && garageOnly;
-      f.innerHTML = [['mode', '레이스 방식'], ['car', '차 고르기'], [lastStep, raceMode === 'champ' ? '시즌 맵 구성' : '맵 고르기']]
+      f.hidden = v === 'car';
+      f.innerHTML = [['mode', '방식'], [lastStep, raceMode === 'champ' ? '시즌 맵 구성' : '맵']]
         .map(([id, t], i) => '<button class="' + (i + 1 === n ? 'on' : i + 1 < n ? 'done' : '') + '" data-go="' + id + '" ' + (i + 1 > n ? 'disabled tabindex="-1"' : 'data-nav') + (i + 1 === n ? ' aria-current="step"' : '') + '><b>' + (i + 1 < n ? '✓' : i + 1) + '</b>' + t + '</button>').join('<i>›</i>') + '<i>›</i><span class="end">🏁 출발</span>';
     }
   }
