@@ -1086,7 +1086,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   const normalBox = new THREE.Box3().setFromPoints(collisionPoints().flatMap(g=>g.points));
   const normalBounds = Object.freeze({front:normalBox.max.z,back:-normalBox.min.z,half:Math.max(Math.abs(normalBox.min.x),Math.abs(normalBox.max.x)),bottom:normalBox.min.y,height:normalBox.max.y-normalBox.min.y});
 
-  const partKit=createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs});
+  const partKit=createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBounds,style:look.style});
   let partExplicit=Object.hasOwn(options,'parts'),partBuild;
   function setParts(hints){partExplicit=true;partKit.setParts(hints);}
   if(partExplicit)partKit.setParts(options.parts);

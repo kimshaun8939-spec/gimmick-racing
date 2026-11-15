@@ -1,14 +1,26 @@
 ﻿import * as T from 'three';
-import {partTireGeometry} from './carBody_wheels.js';
+
 import {batchLocal} from './staticBatch.js';
+// 차 지역 좌표: +x 오른쪽, +y 위, +z 앞. 조립 화면과 부품 사진 공용.
+export const PART_VIEW=Object.freeze({
+ engine:{pos:[2.8,1.3,-5.2],look:[0,.4,-1.8],fov:32},
+ gearbox:{pos:[1.8,.65,-4.8],look:[0,.22,-1.8],fov:28},
+ tire:{pos:[4,.85,1.4],look:[1,.4,1.4],fov:30},
+ aero:{pos:[2.8,3,-5.2],look:[0,1.1,-1.9],fov:34},
+ water:{pos:[5,1.5,-2.4],look:[0,.1,0],fov:42},
+});
 // 순정 날개/앞 범퍼를 차체 좌표가 아닌 해당 그룹의 지역 좌표로 잰다.
 function bounds(group){group.updateMatrixWorld(true);const inv=group.matrixWorld.clone().invert(),b=new T.Box3(),q=new T.Box3();group.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld));b.union(q);});return b;}
-export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs}){
+export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBounds,style}){
  const rear=bounds(spoiler),front=bounds(fWing),nodes=[],resources=new Set(),materials=new Set();
  if(drs){drs.updateMatrix();drs.geometry.computeBoundingBox();rear.copy(drs.geometry.boundingBox).applyMatrix4(drs.matrix);}
  const rearSize=rear.getSize(new T.Vector3()),rearCenter=rear.getCenter(new T.Vector3());
  const mounts={rear:{width:rearSize.x,y:rear.max.y,z:rearCenter.z},front:{width:front.max.x-front.min.x,y:front.min.y,z:front.max.z}};
  let signature='',jet=false;
+ const rearZ=style==='rocket'?-2.51:-normalBounds.back+.09;
+ const rearY=Math.max(.20,Math.min(...A.wheels.map(w=>w[3]))*.65);
+ mounts.engine={width:.76,y:rearY,z:rearZ};mounts.gearbox={width:.48,y:rearY-.11,z:rearZ};
+ const finish=color=>new T.MeshStandardMaterial({color,metalness:.65,roughness:.32});
  function clear(){for(const g of resources)g.dispose();resources.clear();for(const m of materials)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
  // stockcalls: 순정 타이어 띠는 바퀴 묶음(batchLocal) 안에 합쳐져 있어 그림 호출이 늘지 않음.
  //   부품 타이어가 띠를 숨기거나 되돌릴 때만 그 바퀴 묶음을 풀고 다시 묶음 (숨은 띠는 혼자 남아 그려지지 않음).
@@ -20,17 +32,55 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs}){
  function group(parent,name){const g=new T.Group();g.name='part-'+name;g.userData.noBatch=true;g.userData.partVisual=true;parent.add(g);nodes.push(g);return g;}
  function mesh(g,geo,mat,x=0,y=0,z=0){const o=new T.Mesh(geo,mat);o.position.set(x,y,z);o.userData.partVisual=true;o.castShadow=false;g.add(o);return o;}
  const box=(g,w,h,d,mat,x,y,z)=>mesh(g,new T.BoxGeometry(w,h,d),mat,x,y,z);
+ // ????? ?? ???? ???? ?? ? ?? ???.
+ function blockTread(width,r){const g=new T.BufferGeometry(),x=width*.49,z=r*.13,y=.015;g.setAttribute('position',new T.Float32BufferAttribute([-x,0,-z,x,0,-z,x,0,z,-x,0,z,-x,y,-z,x,y,-z,x,y,z,-x,y,z],3));g.setIndex([4,6,5,4,7,6,0,7,4,0,3,7,1,5,6,1,6,2]);g.computeVertexNormals();return g;}
  function setParts(parts={}){
   const next=JSON.stringify(parts||{});if(next===signature)return;signature=next;clear();parts=parts||{};jet=parts.water?.hull==='jet';setWalls(!parts.tire);
   if(parts.tire){const p=parts.tire,mat=new T.MeshStandardMaterial({color:p.sidewall||'#ef3947',roughness:.7});mat.userData.partOwned=true;
-   for(let i=0;i<wheels.length;i++){const w=wheels[i],g=group(w.spin,'tire-'+i);mesh(g,partTireGeometry(w.r,A.wheels[i][4],w.side,p.tread==='knob'),mat);}
+   const rubber=new T.MeshStandardMaterial({color:'#24262b',roughness:.92});
+   for(let i=0;i<wheels.length;i++){const w=wheels[i],width=A.wheels[i][4],g=group(w.spin,'tire-'+i),side=w.side,r=w.r,t=p.tread;
+    mesh(g,new T.RingGeometry(r*(t==='slick'?.84:t==='knob'?.67:.76),r*(t==='slick'?.865:.88),10).rotateY(side*Math.PI/2),mat,side*(width/2+.006),0,0);
+    if(t!=='slick'){
+     if(t==='drift')mesh(g,new T.RingGeometry(r*.70,r*.79,10).rotateY(side*Math.PI/2),M.metal,side*(width/2+.009),0,0);
+     for(let j=0;j<4;j++){const a=j*Math.PI/2;
+      const geo=t==='knob'?blockTread(width,r):new T.PlaneGeometry(width*.88,.025).rotateZ(.48);
+      geo.rotateX(-Math.PI/2).translate(0,r-.002,0).rotateX(a);mesh(g,geo,t==='knob'?rubber:M.dark);
+     }
+    }
+   }
+  }
+  if(parts.engine){
+   const n=parts.engine.no||1,g=group(body,'engine'),metal=finish(n===1?'#779acb':n===2?'#34373d':'#c28b4c');
+   const count=n===1?2:n===2?4:1,r=n===1?.064:n===2?.075:.12;
+   // 범퍼 낮은 중앙: 가속 모드 노즐 및 운전자 머리와 분리.
+   box(g,.76,.12,.18,M.darkMetal,0,rearY,rearZ+.025);
+   for(let i=0;i<count;i++){
+    const x=(i-(count-1)/2)*(n===2?.15:.25);
+    const pipe=(n===2?new T.CylinderGeometry(r,r,.14,4,1,true).rotateY(Math.PI/4):new T.CylinderGeometry(r,r*.88,n===1?.36:.23,8,1,true)).rotateX(Math.PI/2);if(n===1){const a=pipe.attributes.position;for(let j=0;j<a.count;j++)if(a.getZ(j)<-.1)a.setZ(j,a.getZ(j)+a.getX(j)*.5);pipe.computeVertexNormals();}mesh(g,pipe,metal,x,rearY,rearZ-.12);
+    mesh(g,new T.CircleGeometry(r*.80,n===2?4:8).rotateY(Math.PI),M.dark,x,rearY,rearZ-.238);
+   }
+   if(n===3)for(const side of [-1,1]){box(g,.14,.20,.26,metal,side*.40,rearY+.09,rearZ+.04);box(g,.11,.13,.012,M.dark,side*.40,rearY+.09,rearZ-.096);}
+   else for(let i=0;i<(n===1?5:3);i++)box(g,.06,.04,.22,metal,(i-(n===1?2:1))*.12,rearY+.085,rearZ+.04);
+  }
+  if(parts.gearbox){
+   const n=parts.gearbox.no||1,g=group(body,'gearbox'),metal=finish('#454b55'),accent=finish(n===1?'#bf414b':n===2?'#4084c0':'#c5a458');
+   // ? ???? ?? ?? ???. ?? ??? ???? ???.
+   const y=rearY+.10,z=rearZ-.075,w=n===1?.34:n===2?.25:.29,h=n===1?.18:.12,d=n===2?.38:.20;
+   mounts.gearbox={width:w,y,z};
+   box(g,w+.02,h+.02,.12,M.darkMetal,0,y,z+.08);
+   mesh(g,new T.CylinderGeometry(w/2,w*.43,d,6).rotateX(Math.PI/2).scale(1,h/w,1),metal,0,y,z-d/2+.07);
+   for(let j=0;j<1;j++)box(g,w+.012,.015,.024,M.metal,0,y-h*.34+j*h*.34,z-d+.07);
+   box(g,.07,.025,.012,accent,0,y+h*.37,z-d+.05);
+   for(const side of [-1,1])mesh(g,new T.CylinderGeometry(.018,.018,.012,3).rotateX(Math.PI/2),M.metal,side*w*.38,y,z-d+.05);
+   if(n===3){mesh(g,new T.TorusGeometry(.09,.012,3,6),accent,0,y,z-d+.045);for(const side of [-1,1]){const o=box(g,.035,.12,.025,M.metal,side*.19,y,z-.09);o.rotation.z=side*.3;}}
   }
   const p=parts.aero;if(p&&!rear.isEmpty()){
    const isLip=p.kind==='lip',isSplit=p.kind==='splitter',g=group(isSplit?fWing:spoiler,isSplit?'splitter':'aero');
    if(isSplit){const width=Math.min(1.85,mounts.front.width*.92),y=front.min.y+.006,z=front.max.z-.12;box(g,width,.022,.40,M.carbon,0,y,z);}
    else {const w=Math.min(2.05,rearSize.x*.90),z=rearCenter.z,y=rear.max.y;
     // 작은 끝판으로 기존 날개에 직접 연결. 중앙 시야보다 낮게 유지.
-    const gap=isLip?.018:.075;box(g,w,.024,isLip?.10:.18,M.carbon,0,y+gap,z);
+    const gap=isLip?.018:.095;const blade=box(g,w,.024,isLip?.10:.24,isLip?M.metal:M.carbon,0,y+gap,z);blade.rotation.x=isLip?-.12:.18;
+    if(!isLip)for(const side of [-1,1]){const e=box(g,.025,.16,.28,M.carbon,side*(w/2-.012),y+gap+.085,z-.015);e.rotation.x=-.14;}
     for(const s of [-1,1])box(g,.022,gap+.03,.16,M.carbon,s*(w/2-.011),y+gap/2,z);
    }
   }
@@ -39,13 +89,13 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs}){
     // 선체 바닥에 이어지는 삼각 용골: 위 모서리는 기존 V 바닥 안에 고정.
     const pos=[],idx=[];for(const [z,w,d]of [[2.3,.01,.15],[.8,.14,.36],[-2.3,.14,.30]])pos.push(-w,-.14,z,w,-.14,z,0,-d,z);
     for(let i=0;i<2;i++)for(let j=0;j<3;j++){const a=i*3+j,b=i*3+(j+1)%3;idx.push(a,a+3,b,b,a+3,b+3);}idx.push(0,1,2,6,8,7);
-    const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();mesh(g,geo,M.carbon);
+    const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();mesh(g,geo,M.metal);
    }else if(water.hull==='jet')for(const s of [-1,1]){
-    mesh(g,new T.CylinderGeometry(.16,.19,.30,8,1,true).rotateX(Math.PI/2),M.darkMetal,s*.68,.18,-2.78);
-    mesh(g,new T.CircleGeometry(.145,8).rotateY(Math.PI),M.dark,s*.68,.18,-2.94);
-    mesh(g,new T.TorusGeometry(.16,.012,3,8),M.metal,s*.68,.18,-2.935);
+    mesh(g,new T.CylinderGeometry(.16,.19,.30,6,1,true).rotateX(Math.PI/2),M.darkMetal,s*.68,.18,-2.78);
+    mesh(g,new T.CircleGeometry(.145,6).rotateY(Math.PI),M.dark,s*.68,.18,-2.94);
+    mesh(g,new T.TorusGeometry(.16,.012,3,4),M.metal,s*.68,.18,-2.935);
    }else for(const s of [-1,1]){
-    box(g,.34,.045,3.8,M.carbon,s*.99,.035,.1);
+    box(g,.34,.045,3.8,M.metal,s*.99,.035,.1);
     for(const z of [-.25,-1.35])box(g,.46,.035,.18,M.carbon,s*.99,.008,z);
    }
   }
