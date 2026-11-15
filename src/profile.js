@@ -82,6 +82,15 @@ function describe(p) {
   return { ...p, level: lv, title: tier.title, icon: tier.icon, color: tier.color, have: Math.floor(left), need, pct: Math.max(0, Math.min(1, left / need)) };
 }
 
+/** 보상 띠 (rewards1, 2026-11-15): 레벨 lv을 시작하는 누적 XP (Lv1 = 0) */
+export function levelStartXp(lv) {
+  let s = 0;
+  for (let l = 1; l < Math.min(99, Math.max(1, Math.floor(lv) || 1)); l++) s += needFor(l);
+  return s;
+}
+/** 보상 띠: 누적 XP만으로 { level, have, need, pct, title, icon, color } (결과 화면 '이번 판 전' 막대) */
+export const levelOfXp = (xp) => describe({ xp: Math.max(0, Number(xp) || 0) });
+
 /** 완주 한 번의 XP: 기본 60 + 순위 보너스 + 방식 보너스 */
 export function xpFor(d = {}) {
   let xp = 60;

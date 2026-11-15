@@ -55,6 +55,8 @@ export function currentLevel() {
   }
 }
 export const carUnlockLevel = (carId) => carLevels[carId] || 0;
+/** 보상 띠 (rewards1, 2026-11-15, 읽기만): 알고 있는 모든 차 [{ id, name, level }] (level 0 = 처음부터) */
+export const carUnlockList = () => Object.keys(carLevels).map((id) => ({ id, name: carNames[id] || id, level: carLevels[id] || 0 }));
 export const isCarUnlocked = (carId) => currentLevel() >= carUnlockLevel(carId);
 
 export const paintOf = (id) => PAINTS.find((p) => p.id === Number(id)) || PAINTS[0];

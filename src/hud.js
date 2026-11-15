@@ -3,6 +3,7 @@ import { mixState } from './audioMix.js';
 import { touchWanted } from './touch.js';
 import { pad as gamepad, padKbd } from './gamepad.js';
 import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
+import { prepareRewards, rewardBandHtml, levelUpHtml, rewardDetailsHtml, mountRewards } from './rewardBand.js'; // 결과 화면 보상 띠·레벨 업 카드 (rewards1, 2026-11-15)
 // 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
@@ -629,17 +630,22 @@ export function createHud(track) {
           : null;
       const champMe = ch?.table.find(r => r.isPlayer);
       const champBlock = ch ? '<details class="res-detail res-champ"><summary>🏆 시즌 ' + (champMe?.pos || '—') + '위 · ' + (champMe?.points || 0) + '점' + (ch.final ? ' · 최종' : ' · ' + ch.no + '/' + ch.total + '경기') + '</summary>' + champHtml(ch) + '</details>' : '';
+      // 보상 띠 (rewards1): 완주 시간 아래 XP·코인·다음 보상, 레벨이 오르면 스크롤 맨 위에 레벨 업 카드. 못 만들면 예전 칸 그대로
+      let rw = null;
+      try { rw = info.meta ? prepareRewards(info.meta, { carId: route.get('car') || 'f1', room: route.has('room') }) : null; } catch (err) { console.warn('보상 띠', err); }
       el.results.innerHTML = `<div class="res res-dashboard${standHtml || ch ? ' wide has-rivals' : ''}${ch && ch.final ? ' final' : ''}${info.newRace ? ' new-record' : info.newLap ? ' new-lap' : ''}">
         <div class="res-head">
         <div class="res-identity"><div class="res-title"><span class="flag">${info.position === 1 || (ch && ch.final) ? '🏆' : '🏁'}</span><h2>${title}</h2></div><div class="who">${esc(info.map || '')}${info.car ? ' · ' + esc(info.car) : ''} · ${modeName}${bld ? ` <span class="res-build" title="부품 조립: ${esc(bld.summary).replace(/"/g, '&quot;')}" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;margin-left:4px;padding:0 8px;border-radius:999px;font-size:.86em;line-height:1.6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)">🔧 ${esc(bld.label || bld.short)}</span>` : ''}${academy.top() ? licenseChip(academy.top(), 20) : ''}</div></div>
         <div class="res-clock"><small>완주 시간</small><div class="total">${fmtTime(total)}</div></div>
+        ${rw ? rewardBandHtml(rw) : ''}
         <div class="badges">${badges.join('')}</div>
         <div class="online" data-online></div>
         </div>
         <div class="res-scroll">
+        ${rw ? levelUpHtml(rw) : ''}
         <div class="res-grid">
           <section class="res-panel res-records"><h3>주행 기록 <small>${lapTimes.length} LAP</small></h3>${lapHtml}${firstNext}</section>
-          ${info.meta ? '<section class="res-panel res-rewards"><h3>경험치 · 보상</h3>' + metaResultsHtml(info.meta) + '</section>' : ''}
+          ${info.meta ? '<section class="res-panel res-rewards"><h3>' + (rw ? '업적 · 목표' : '경험치 · 보상') + '</h3>' + (rw ? rewardDetailsHtml(info.meta) : metaResultsHtml(info.meta)) + '</section>' : ''}
           ${standHtml || ch ? '<section class="res-panel res-rank"><h3>레이스 결과' + (info.position ? '<small>' + info.position + '위 / ' + (info.standings?.length || '') + '</small>' : '') + '</h3>' + (podRows ? podiumHtml(podRows, ch?.final ? 'season' : '') : '') + standHtml + champBlock + '</section>' : ''}
           ${cornerHtml(info.corners)}
         </div>
@@ -704,6 +710,7 @@ export function createHud(track) {
         }),
       );
       el.results.classList.add('on');
+      if (rw) try { mountRewards(el.results, rw); } catch (err) { console.warn('보상 띠', err); }
       // 완주 보상은 결과 표에서 합계를 보여 줌. 별도의 XP·업적 알림은 겹치지 않게 정리.
       document.getElementById('xpPill')?.remove();
       window.dispatchEvent(new CustomEvent('gimmick:resultsOpen'));
