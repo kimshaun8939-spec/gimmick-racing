@@ -1224,7 +1224,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       // 선외기: 물 위에선 물속으로 내리고(살짝 트림), 땅이나 공중에선 들어 올림
       costumeFx?.update(time, boatP);
       poseBoat(boatP, boatOn, THREE.MathUtils.lerp(1.25, 0.08, waterK));
-      partKit.pose(motors);
+      partKit.pose(motors, accelP);
       // 변신하는 동안 차체가 살짝 들렸다가 "철컥" 내려앉음 (흔들림 없이 한 번)
       if (mode === 'accel' || accelP > 0) clunkT = 1; // 전용 스쿼트/통통 리듬을 사용
       if (clunkT < 1) {

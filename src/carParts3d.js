@@ -188,14 +188,15 @@ function styleLevel(g,lv){
 }
 /** Lv5 칸들 둘레의 불티 Points 하나 (차체 좌표) */
 function levelSparks(body,groups){
- if(!groups.length)return null;body.updateMatrixWorld(true);const inv=body.matrixWorld.clone().invert(),pos=[],seed=[],b=new T.Box3(),q=new T.Box3(),v=new T.Vector3(),s=new T.Vector3();
+ if(!groups.length)return null;body.updateMatrixWorld(true);const inv=body.matrixWorld.clone().invert(),pos=[],seed=[],foldIndices=[],foldGearIndices=[],b=new T.Box3(),q=new T.Box3(),v=new T.Vector3(),s=new T.Vector3();
  let r=1;const rand=()=>{r=(r*16807)%2147483647;return (r-1)/2147483646;};
  for(const g of groups){g.updateMatrixWorld(true);b.makeEmpty();g.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);b.union(q);});if(b.isEmpty())continue;b.applyMatrix4(inv);b.getSize(s);
   const n=Math.round(Math.min(24,9+s.length()*7));
-  for(let i=0;i<n;i++){v.set(b.min.x+rand()*s.x,b.min.y+rand()*s.y*.8,b.min.z+rand()*s.z);pos.push(v.x,v.y,v.z);seed.push(rand(),rand(),rand(),rand());}}
+  for(let i=0;i<n;i++){v.set(b.min.x+rand()*s.x,b.min.y+rand()*s.y*.8,b.min.z+rand()*s.z);if(g.name==='part-engine')foldIndices.push(pos.length/3);if(g.name==='part-gearbox')foldGearIndices.push(pos.length/3);pos.push(v.x,v.y,v.z);seed.push(rand(),rand(),rand(),rand());}}
  if(!pos.length)return null;
  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setAttribute('seed',new T.Float32BufferAttribute(seed,4));geo.computeBoundingSphere();
  const pts=new T.Points(geo,sparkMaterial());pts.name='lv5-sparks';pts.frustumCulled=false;pts.renderOrder=4;pts.userData.noBatch=true;pts.userData.partVisual=true;pts.userData.lvSparks=true;
+ pts.userData.foldIndices=foldIndices;pts.userData.foldGearIndices=foldGearIndices;pts.userData.restPositions=new Float32Array(pos);
  pts.onBeforeRender=()=>{lvTime.value=performance.now()/1000;};
  return pts;
 }
@@ -210,14 +211,14 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
  let top0=spoiler;while(top0.parent)top0=top0.parent;top0.updateMatrixWorld(true);
  const spRel=new T.Matrix4().copy(top0.matrixWorld).invert().multiply(spoiler.matrixWorld),groundY=new T.Vector3(0,0,0).applyMatrix4(spRel.clone().invert()).y;
  const mounts={rear:{width:rearSize.x,y:rear.max.y,z:rearCenter.z},front:{width:front.max.x-front.min.x,y:front.min.y,z:front.max.z}};
- let signature='',jet=false;
+ let signature='',jet=false,engine=null,gearboxNode=null;
  const rearZ=style==='rocket'?-2.51:-normalBounds.back+.09;
  const rearY=Math.max(.20,Math.min(...A.wheels.map(w=>w[3]))*.65);
  mounts.engine={width:.76,y:rearY,z:rearZ};mounts.gearbox={width:.48,y:rearY-.11,z:rearZ};
  const mat=(color,o={})=>new T.MeshStandardMaterial({color,metalness:o.metal??.6,roughness:o.rough??.35,...(o.emissive?{emissive:o.emissive,emissiveIntensity:o.ei??1.4}:{})});
  // 뒷바퀴 안쪽 한계(배기 바깥쪽 끝)와 배기·변속기 중심 높이.
  const inner=Math.min(.64,...A.wheels.filter(w=>!w[2]).map(w=>Math.abs(w[0])-w[4]/2-.04)),lowY=rearY+.03;
- function clear(){for(const g of resources)g.dispose();resources.clear();for(const m of materials)if(!m.userData?.lvShared)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
+ function clear(){engine=gearboxNode=null;for(const g of resources)g.dispose();resources.clear();for(const m of materials)if(!m.userData?.lvShared)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
  // stockcalls: 순정 타이어 띠는 바퀴 묶음(batchLocal) 안에 합쳐져 있어 그림 호출이 늘지 않음.
  //   부품 타이어가 띠를 숨기거나 되돌릴 때만 그 바퀴 묶음을 풀고 다시 묶음 (숨은 띠는 혼자 남아 그려지지 않음).
  //   묶음 여부는 차 전체에서 봄 (띠가 숨어 있는 동안 그 바퀴엔 묶인 것이 하나도 없을 수 있음)
@@ -250,6 +251,7 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
   //   엔진 배기는 뒷범퍼 양쪽 아래, 변속기는 그 사이 가운데 아래 = 서로 겹치지 않고 운전 시야(가운데 위)에서 멂.
   if(parts.engine){
    const e=parts.engine,n=e.no||1,g=group(body,'engine'),y=lowY,z0=rearZ+.02;
+   engine=g;
    const glow=mat('#1a0d08',{metal:.2,rough:.6,emissive:e.glow||'#ff6a2a',ei:1.7}),bracket=mat('#2b2f36',{metal:.7,rough:.4});
    if(n===1){
     // 고회전: 가늘고 긴, 위로 솟은 쌍 파이프 + 그을린 티타늄 끝(보라빛) + 붉은 열기.
@@ -287,8 +289,9 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
   if(parts.gearbox){
    // 변속기: 배기 사이 가운데 아래 6각 하우징. 뒷면 전체가 부품 색(숏 하늘·롱 주황·시퀀셜 빨강), 옆 색 줄.
    const gb=parts.gearbox,n=gb.no||1,g=group(body,'gearbox'),color=gb.color||(n===1?'#4fd1ff':n===2?'#ffb21a':'#ff4f6a');
+   gearboxNode=g;
    const housing=mat('#4a515c',{metal:.75,rough:.32}),accent=mat(color,{metal:.3,rough:.4,emissive:color,ei:.4}),dark=mat('#22262d',{metal:.6,rough:.5});
-   const w=n===2?.34:.38,h=n===2?.25:.32,d=n===1?.3:n===2?.52:.4,y=lowY+(n===2?-.01:.02),z=rearZ+.05,k=h/w,tipR=w/2*.88;
+   const w=n===2?.34:.38,h=n===2?.25:.32,d=n===1?.3:n===2?.52:.4,y=lowY+(n===2?-.01:.02),z=style==='rocket'?-1.55:rearZ+.05,k=h/w,tipR=w/2*.88;
    mounts.gearbox={width:w,y,z};
    box(g,w+.06,h+.04,.1,dark,0,y,z+.02);
    mesh(g,new T.CylinderGeometry(w/2,tipR,d,6).rotateX(Math.PI/2).translate(0,0,-d/2).scale(1,k,1),housing,0,y,z);
@@ -366,5 +369,16 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
   {const fx=levelSparks(body,nodes.filter(g=>lvOf(g)>=5&&!g.name.startsWith('part-water')));if(fx){body.add(fx);nodes.push(fx);resources.add(fx.geometry);}}
   for(const g of nodes){const collect=()=>g.traverse(o=>{if(o.geometry)resources.add(o.geometry);if(o.material&&!o.material.userData.pbrBake&&!Object.values(M).includes(o.material))materials.add(o.material);});collect();g.userData.noBatch=false;batchLocal(g,{pbr:true});collect();g.traverse(o=>{o.userData.noBatch=true;});}
  }
- return {setParts,dispose(){clear();for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors){kitRef.motors=motors;if(jet)for(const m of motors)m.g.visible=false;}};
+ return {setParts,dispose(){clear();for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors,accelP=0){
+  // 노즐 전개 초반에 배기를 안쪽·아래로 수납하고, 역변신 때 같은 경로로 복원한다.
+  const t=Math.max(0,Math.min(1,accelP/.28)),q=t*t*(3-2*t);
+  if(engine)engine.position.set(0,-.04*q,.92*q);
+  // 버기·스콜피온은 배기 받침이 수납될 때 변속기도 낮은 프레임 쪽으로 이동한다.
+  if(gearboxNode&&style==='buggy')gearboxNode.position.z=.65*q;
+  // Lv5 불티도 같은 거리만큼 수납한다. 기존 Points 한 번 그리기를 유지한다.
+  const fx=nodes.find(g=>g.userData.lvSparks);if(fx&&fx.userData.lastFold!==q){fx.userData.lastFold=q;const a=fx.geometry.attributes.position,r=fx.userData.restPositions;
+   for(const i of fx.userData.foldIndices)a.setXYZ(i,r[i*3],r[i*3+1]-.04*q,r[i*3+2]+.92*q);
+   if(style==='buggy')for(const i of fx.userData.foldGearIndices)a.setXYZ(i,r[i*3],r[i*3+1],r[i*3+2]+.65*q);a.needsUpdate=true;
+  }
+  kitRef.motors=motors;if(jet)for(const m of motors)m.g.visible=false;}};
 }
