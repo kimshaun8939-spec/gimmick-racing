@@ -3071,3 +3071,60 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 }
 #home .hm-catalog-home { position:absolute; top:14px; right:18px; z-index:2; font-size:12px; padding:6px 12px; }
 #home .g2-list .h-carlist { position:relative; }
+/* overlapfixA: 메뉴 요소가 서로 차지할 공간을 흐름에서 확보한다. */
+#home .h-logo { flex-shrink:0; }
+#home .h-logo .name { white-space:nowrap; }
+#home .sx-map small { white-space:normal; overflow-wrap:anywhere; text-wrap:balance; }
+#home :is(.sx-kinds small,.mp-desc,.hm-none small,.kb-preset-desc) { text-wrap:pretty; word-break:keep-all; overflow-wrap:anywhere; }
+#home .mp-list .len { white-space:nowrap; flex-shrink:0; }
+#home .hm-catalog-home { position:static; align-self:flex-end; flex-shrink:0; margin:0; }
+@media(max-width:600px){
+ #home .h-top { display:grid; grid-template-columns:minmax(0,1fr); padding:8px 12px; gap:6px; }
+ #home .h-logo { justify-self:start; }
+ #home .h-top .h-icons { display:grid; grid-template-columns:110px minmax(0,1fr) auto; width:100%; gap:6px; }
+ #home .h-icons .mt-wallet-btn { width:110px; max-width:none; min-width:0; box-sizing:border-box; }
+ #home .h-icons .gm-btn.hx-driver { width:100%; max-width:none; min-width:0; padding:6px; }
+ #home .hx-driver .hx-dinfo { display:block; min-width:0; width:100%; }
+ #home .hx-driver .nm { display:block; max-width:100%; }
+ #home .hx-driver .lv { white-space:normal; font-size:10px; }
+ #home .hx-util { padding:2px; gap:0; }
+ #home .hx-util .hx-ico { width:34px; min-width:34px; }
+ #home .h-view { top:128px; }
+ #home .h-view[data-view=mode] { padding-bottom:8px; }
+ #home .h-modes .bar { position:static; margin-top:10px; }
+}
+@media(min-width:601px) and (max-width:999px) and (max-height:520px){
+ #home .h-logo .name { font-size:18px; }
+ #home .h-top { gap:8px; }
+ #home .h-top .h-icons { gap:6px; }
+ #home .h-mopt { flex-wrap:wrap; }
+ #home .h-mopt>span:first-child { white-space:nowrap; }
+ #home .h-mopt .v { margin-left:auto; }
+ #home .h-mopt .v b { white-space:nowrap; min-width:0; }
+ #home .hm-menu .hx-thumb { overflow:visible; }
+}
+/* overlapfixA 2차 사진 검토: 긴 티어 이름도 같은 줄에 유지. */
+@media(max-width:600px){
+ #home .hx-driver .lv { max-width:none; white-space:nowrap; overflow:visible; }
+ #home .h-view { top:138px; }
+}
+@media(min-width:1000px) and (min-height:600px){
+ #home .sx-map small { font-size:11px!important; line-height:1.3; }
+}
+/* overlapfixA: 기본·랜덤 시즌의 아홉 경기를 PC 한 화면에 보여 준다. */
+@media(min-width:1000px) and (min-height:600px){
+ #home .sx-layout:has(.sx-note) { grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); }
+ #home .sx-layout:has(.sx-note) .sx-order ol { grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:4px; }
+ #home .sx-layout:has(.sx-note) .sx-order li { min-width:0; min-height:40px; padding:3px 5px; gap:5px; }
+ #home .sx-layout:has(.sx-note) .sx-order li b { font-size:12px; }
+ #home .sx-layout:has(.sx-note) .sx-order canvas { width:36px; height:26px; }
+ #home .sx-layout:has(.sx-note) .sx-order small { font-size:11px!important; line-height:1.25; }
+}
+@media(min-width:1000px) and (min-height:600px){
+ #home .mp-list .h-mapgrid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+ #home .mp-list .h-map canvas { height:clamp(32px,6vh,60px); width:100%; object-fit:contain; }
+ #home .mp-list .h-map .body { padding:5px 7px; gap:3px; }
+ #home .mp-list .h-map .t { flex-wrap:wrap; gap:2px 5px; }
+ #home .mp-list .h-map .t b { font-size:12px; }
+ #home .mp-list .h-map .meta { flex-wrap:wrap; gap:2px 5px; }
+}

@@ -182,3 +182,8 @@
  #home.g2-fitting .h-carstage #hForms,#home.g2-fitting .g2-stagebar{visibility:hidden}
  #home.g2-fitting .pu-skip{left:50%;top:auto;bottom:16px;z-index:210}
 }
+/* overlapfixA: 작은 부품 카드에서도 장단점을 모두 읽을 수 있게 줄바꿈. */
+@media(max-width:600px) and (min-height:521px){
+ #home .h-car.g2-detail .pu-cards button { min-width:0; }
+ #home .h-car.g2-detail .pu-cardtrade,#home .h-car.g2-detail .pu-cardtrade em { white-space:normal; height:auto; min-height:0; overflow:visible; overflow-wrap:anywhere; word-break:keep-all; text-wrap:pretty; }
+}
