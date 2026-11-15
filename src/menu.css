@@ -3170,3 +3170,26 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 @supports not selector(::-webkit-scrollbar) {
   * { scrollbar-width: thin; scrollbar-color: rgba(255, 186, 73, 0.55) transparent; }
 }
+
+/* ---------------------------------------------------------------- 홈 지갑 = 조각 3종 ⬡ 피트 · ◆ 강화 · ✿ 커스텀 (작업 C, 2026-11-15) */
+#home .h-icons .mt-wallet-btn { width: auto; max-width: none; flex-wrap: nowrap; gap: 8px; padding: 7px 12px; }
+#home .hw-chips { display: flex; align-items: center; gap: 11px; }
+#home .hw-c { display: inline-flex; align-items: center; gap: 4px; font: 850 14px/1.1 "Pretendard", "Malgun Gothic", system-ui, sans-serif; color: #eef3ff; font-variant-numeric: tabular-nums; }
+#home .hw-c i { font-style: normal; font-size: 14px; color: var(--wc); text-shadow: 0 0 8px color-mix(in srgb, var(--wc) 45%, transparent); }
+@media (max-width: 560px) {
+  #home .h-icons .mt-wallet-btn { width: auto; padding: 4px 8px; }
+  #home .hw-chips { flex-direction: column; align-items: flex-start; gap: 1px; }
+  #home .hw-c { font-size: 11px; gap: 3px; }
+  #home .hw-c i { font-size: 11px; }
+}
+@media (max-height: 420px) and (min-width: 561px) {
+  #home .hw-chips { gap: 8px; }
+  #home .hw-c, #home .hw-c i { font-size: 12px; }
+}
+/* 차고: 레벨이 됐는데 안 산 차 = ⬡ 가격 딱지, 색 = ✿ 가격 (작업 C, 2026-11-15) */
+#home .gx-lock.gx-buy { color: #ffb35c; border-color: rgba(255, 159, 46, 0.6); }
+#home .h-carcard.gx-locked:has(.gx-buy) { filter: none; }
+#home .gx-sw.buy i { color: #ff6fb5; }
+#home .gx-locknote .gx-buycar { margin-top: 8px; align-self: flex-start; min-height: 40px; }
+/* 낮거나 좁은 화면: 지갑 칸이 조각 3종으로 꽉 차서 '살 수 있는 수' 딱지는 상점 줄에만 (작업 C) */
+@media (max-height: 420px), (max-width: 560px) { #home .mt-wallet-btn .hm-wallet-badge { display: none; } }

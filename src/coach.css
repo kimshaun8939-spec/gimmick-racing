@@ -1,0 +1,89 @@
+/* 기능 해금 · 코치 마크 (작업 C, 2026-11-15, src/featureGate.js · src/coachMarks.js) */
+
+/* ---------------------------------------------------------------- 코치 마크 (어둡게 + 구멍 + 말풍선) */
+.cm-root { position: fixed; inset: 0; z-index: 85; pointer-events: none; font-family: "Pretendard", "Malgun Gothic", sans-serif; }
+.cm-root[hidden], .cm-root.cm-paused { display: none; }
+.cm-shade { position: fixed; background: rgba(3, 6, 14, 0.74); pointer-events: auto; }
+.cm-cover { position: fixed; pointer-events: auto; background: transparent; cursor: default; }
+.cm-cover[hidden] { display: none; }
+.cm-ring { position: fixed; pointer-events: none; border-radius: 14px; border: 2px solid #ffd24a; box-shadow: 0 0 0 4px rgba(255, 210, 74, 0.22), 0 0 26px rgba(255, 210, 74, 0.55); animation: cmPulse 1.3s ease-in-out infinite; }
+.cm-ring[hidden] { display: none; }
+@keyframes cmPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 210, 74, 0.18), 0 0 18px rgba(255, 210, 74, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(255, 210, 74, 0.08), 0 0 34px rgba(255, 210, 74, 0.7); } }
+
+.cm-bubble { position: fixed; pointer-events: auto; box-sizing: border-box; padding: 14px 16px 13px; border-radius: 16px; color: #f3f6fb;
+  background: linear-gradient(180deg, #1d2a4d, #111a31); border: 1px solid rgba(255, 210, 74, 0.55); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(255, 210, 74, 0.15);
+  animation: cmIn 0.22s ease-out; }
+@keyframes cmIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.cm-bubble .cm-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+.cm-bubble .cm-n { font-size: 12px; font-weight: 800; color: #ffd24a; letter-spacing: 0.02em; }
+.cm-bubble .cm-off { border: 0; background: none; padding: 4px 2px; min-height: 28px; color: #b2bfd4; font: 600 12px inherit; font-family: inherit; text-decoration: underline; cursor: pointer; }
+.cm-bubble .cm-off:hover, .cm-bubble .cm-off:focus-visible { color: #fff; }
+.cm-bubble h4 { margin: 0 0 4px; font-size: 17px; font-weight: 900; line-height: 1.3; }
+.cm-bubble p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: #d6deeb; word-break: keep-all; }
+.cm-bubble .cm-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.cm-bubble .cm-btns .gm-btn { min-height: 40px; }
+.cm-bubble .cm-btns .gm-btn[hidden] { display: none; }
+.cm-bubble kbd { margin-left: 4px; font-size: 11px; opacity: 0.75; }
+.cm-bubble .cm-wait { position: absolute; right: 16px; bottom: -26px; font-size: 12px; color: #b2bfd4; }
+.cm-bubble .cm-wait[hidden] { display: none; }
+.cm-bubble.cm-sheet { border-radius: 18px; padding: 14px 16px 14px; }
+.cm-bubble.cm-sheet .cm-btns .gm-btn { flex: 1; min-height: 44px; }
+.cm-bubble.cm-shake { animation: cmShake 0.36s ease-out; }
+@keyframes cmShake { 0%, 100% { transform: none; } 20% { transform: translateX(-7px); } 45% { transform: translateX(6px); } 70% { transform: translateX(-3px); } }
+@media (max-height: 420px) {
+  .cm-bubble { padding: 10px 13px; }
+  .cm-bubble h4 { font-size: 15px; }
+  .cm-bubble p { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
+  .cm-bubble .cm-btns .gm-btn, .cm-bubble.cm-sheet .cm-btns .gm-btn { min-height: 36px; }
+}
+.cm-root.cm-still .cm-ring, .cm-root.cm-still .cm-bubble { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cm-ring, .cm-bubble, .cm-bubble.cm-shake, .cm-tip, .fg-chip i { animation: none !important; }
+}
+
+/* ---------------------------------------------------------------- 잠긴 기능을 누르면 뜨는 작은 말풍선 */
+.cm-tip { position: fixed; z-index: 86; box-sizing: border-box; padding: 12px 14px; border-radius: 14px; color: #f3f6fb; font-family: "Pretendard", "Malgun Gothic", sans-serif;
+  background: #141f3a; border: 1px solid rgba(255, 255, 255, 0.22); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); animation: cmIn 0.18s ease-out; }
+.cm-tip b { display: block; font-size: 15px; color: #ffd24a; }
+.cm-tip p { margin: 5px 0 10px; font-size: 13px; line-height: 1.45; color: #d6deeb; word-break: keep-all; }
+.cm-tipbtns { display: flex; gap: 8px; justify-content: flex-end; }
+.cm-tipbtns .gm-btn { min-height: 40px; }
+
+/* ---------------------------------------------------------------- 잠금 표시 (홈 줄 · 방식 카드 · 차고 탭) */
+#home .fg-locked { opacity: 0.62; filter: saturate(0.25); }
+#home .fg-locked:hover, #home .fg-locked:focus { opacity: 0.8; }
+#home .fg-locked .fg-orig { display: none !important; }
+#home .fg-lockline { display: block; margin-top: 3px; font-size: 12px; font-weight: 800; color: #ffd866; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+#home .fg-badge { position: absolute; top: 8px; right: 8px; z-index: 2; padding: 2px 7px; border-radius: 999px; font: 900 11px/1.4 "Pretendard", "Malgun Gothic", sans-serif; font-style: normal; color: #ffd866; background: rgba(10, 14, 26, 0.85); border: 1px solid rgba(255, 216, 102, 0.55); pointer-events: none; white-space: nowrap; }
+#home .gm-btn.hx-tile.fg-locked .ic { position: relative; }
+/* 작은 홈 줄: 설명 글자가 숨겨지는 크기에서도 잠금 배지는 보임 */
+#home .h-modecard.fg-locked .fg-lockline { font-size: 13px; }
+#home .h-mode.fg-locked .opts { display: none; }
+#home .ct-tab.fg-locked { opacity: 0.55; }
+#home .ct-tab.fg-locked .ct-badge { display: none; }
+#home .ct-tab .fg-tabtag { flex-shrink: 0; font-style: normal; font-size: 10.5px; font-weight: 900; color: #ffd866; }
+#home .fg-costlock { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; color: #d6deeb; background: rgba(255, 255, 255, 0.05); border: 1px dashed rgba(255, 216, 102, 0.45); }
+#home .fg-costlock b { color: #ffd866; }
+#home .fg-garagelock { font-size: 12px; font-weight: 800; color: #ffd866; }
+
+/* 잠긴 작은 기능은 숨김 (설계 8.2: 비교 · 정렬 · 칭호 고르기 · 조립 프리셋 · 코스튬 상점) */
+#home.fg-off-compare .cp-quick, #home.fg-off-compare [data-act="carCompare"], #home.fg-off-compare .ns-compare, #home.fg-off-compare .cx-sort, #home.fg-off-compare .cx-dense { display: none !important; }
+#home.fg-off-title .mt-title-picker { display: none !important; }
+#home.fg-off-presets .pu-tools [data-preset], #home.fg-off-presets .pu-tools [data-save-preset] { display: none !important; }
+#home.fg-off-custom .mt-costume-box, #home.fg-off-custom [data-shop-kind="costume"], #home.fg-off-custom [data-shop-kind="celebration"] { display: none !important; }
+
+/* ---------------------------------------------------------------- 홈 '🎓 새 안내 n' 칩 */
+#home .fg-chip { align-self: flex-start; flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-top: 8px; padding: 6px 13px; border-radius: 999px; font: 800 13px "Pretendard", "Malgun Gothic", sans-serif; color: #10131f;
+  background: linear-gradient(180deg, #ffe48a, #ffc93a); border: 0; box-shadow: 0 6px 18px rgba(255, 201, 58, 0.3); cursor: pointer; }
+#home .fg-chip[hidden] { display: none; }
+#home .fg-chip i { font-style: normal; animation: fgBob 1.6s ease-in-out infinite; }
+#home .fg-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+@keyframes fgBob { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
+
+/* 새 기능 카드 (레벨 업 창 안 · 따로) */
+.gx-newsbox .fg-feats { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.gx-newsbox .fg-feats li { border-color: rgba(255, 216, 102, 0.45); background: rgba(255, 216, 102, 0.08); }
+.gx-newsbox .fg-feats li small { display: block; margin-top: 1px; font-size: 12px; font-weight: 600; color: #b2bfd4; }
+.gx-newsbox .fg-sub { margin: 2px 0 8px; font-size: 13px; font-weight: 800; color: #ffd866; }
+
+/* 설정 → 안내 줄 모양은 settings.js (게임 안 Esc 메뉴에서도 보이게) */

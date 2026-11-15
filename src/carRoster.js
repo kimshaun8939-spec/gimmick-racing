@@ -118,6 +118,7 @@ export const stockCarConfig = (id) => stockConfig(id);
  *   opts.paint: true = 꼭 입힘, false = 안 입힘
  *   opts.build (부품 조립, 2026-11-15): 'mine' = 이 차에 저장된 내 조립 (가진 부품만), 객체 { 칸: 부품 id } 또는 buildSig 문자열.
  *     주지 않으면 언제나 순정 (봇·친구 고스트·아카데미·튜토리얼). 주면 cfg.partsInfo { build, sig, ... }가 붙음 (parts.js applyBuild)
+ *   강화 단계 (2026-11-15): 'mine'이면 내 단계(gimmick.partLv), 문자열 sig면 그 안의 단계('g15'), 객체면 opts.levels 또는 Lv1
  */
 export async function loadCarConfig(id, opts = {}) {
   const first = !playerLoaded;
@@ -125,7 +126,7 @@ export async function loadCarConfig(id, opts = {}) {
   let cfg = await stockConfig(id);
   if (opts.build) {
     try {
-      cfg = applyBuild(cfg, opts.build === 'mine' ? getBuild(cfg.carId) : opts.build);
+      cfg = opts.build === 'mine' ? applyBuild(cfg, getBuild(cfg.carId), { levels: 'mine' }) : applyBuild(cfg, opts.build, { levels: opts.levels });
     } catch (e) {
       console.warn('부품 조립 적용 실패 → 순정', e);
     }

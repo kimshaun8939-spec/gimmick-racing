@@ -1,6 +1,6 @@
 // 부품 조립 뼈대 (2026-11-15, 부품 조립 1차 ①, 설계 .debug/design/parts-design.md, 약속 .debug/agents/parts-contract.md)
 //   차 = 칸(엔진·변속기·타이어·날개·물 모듈) 조립체. 부품은 장단점만 있는 '옆으로 바꾸기' (data/parts.json)
-//   - 얻는 건 모든 차 공용 (피트 코인 구매 = gimmick.meta owned['part:<id>'], 선물·업적·아카데미 = gimmick.partsExtra gifts)
+//   - 얻는 건 모든 차 공용 (피트 조각 구매 = gimmick.meta owned['part:<id>'], 선물·업적·아카데미 = gimmick.partsExtra gifts)
 //   - 끼우는 건 차마다: localStorage 'gimmick.parts' = { 차 id: { 칸: 부품 id } } (순정 칸은 안 적음)
 //   - 프리셋·선물·알림: localStorage 'gimmick.partsExtra' = { v: 1, gifts: { 부품 id: { at, source } }, presets: { 차 id: [3칸] }, news: [] }
 //   - 성능 적용: applyBuild(cfg, build) = 차 tune을 합친 '뒤' cfg에 비율로 (carRoster.loadCarConfig(id, { build })만 부름)
@@ -37,6 +37,64 @@ function readJSON(key, fallback) {
 }
 function writeJSON(key, v) {
   try { localStorage.setItem(key, JSON.stringify(v)); return true; } catch { return false; }
+}
+
+// ───────── 강화 단계 (작업 A, 2026-11-15, 약속 .debug/agents/upgrade-contract.md) ─────────
+//   저장 'gimmick.partLv' = { v:1, parts: { 부품 id: { lv, fails, tries, last } } } — partUpgrade.js만 씀, 여기는 읽기만
+//   단계는 부품마다 하나(모든 차 공용). Lv1 = 강화 전 값 그대로 (코드도 예전 그대로 지나감)
+export const LV_KEY = 'gimmick.partLv';
+const UPG = () => (isObj(DATA.upgrade) ? DATA.upgrade : null);
+/** 최고 단계 (강화 자료가 없으면 1) */
+export const maxLevel = () => Math.max(1, Math.floor(Number(UPG()?.max) || 1));
+const clampLv = (v) => Math.max(1, Math.min(maxLevel(), Math.floor(Number(v)) || 1));
+/** 별 글자 '★★★☆☆' */
+export const starsOf = (lv) => { const m = maxLevel(), l = clampLv(lv); return '★'.repeat(l) + '☆'.repeat(m - l); };
+let lvRaw, lvCache = {};
+function lvStore() {
+  try {
+    const raw = localStorage.getItem(LV_KEY);
+    if (raw !== lvRaw) { lvRaw = raw; const j = JSON.parse(raw || 'null'); lvCache = isObj(j) && isObj(j.parts) ? j.parts : {}; }
+  } catch { lvCache = {}; }
+  return lvCache;
+}
+/** 내 부품 단계 (없거나 모르는 부품·순정 = 1) */
+export function partLevel(id) {
+  if (!id || id === STOCK || !PART_BY_ID.has(id)) return 1;
+  const r = lvStore()[id];
+  return r ? clampLv(r.lv) : 1;
+}
+/** 내 단계 { 부품 id: lv } (Lv2 이상만) */
+export function myLevels() {
+  const out = {};
+  for (const p of DATA.parts) { const l = partLevel(p.id); if (l > 1) out[p.id] = l; }
+  return out;
+}
+/** 그 단계 배수 { pro, con } (Lv1 = 1, 1) */
+export function lvFactors(lv) {
+  const U = UPG(), i = clampLv(lv) - 1;
+  return { pro: U && Array.isArray(U.pro) ? Number(U.pro[i] ?? 1) : 1, con: U && Array.isArray(U.con) ? Number(U.con[i] ?? 1) : 1 };
+}
+/** 강화 설정 복사본 (partUpgrade.js·검사용) */
+export const upgradeConfig = () => clone(UPG());
+/**
+ * 단계를 어디서 읽나 → (부품 id) => lv
+ *   opts.levels: 'mine' = 내 단계, { id: lv }, false = 모두 Lv1 / 없으면: 문자열 sig 안의 단계 → 조립 객체의 숨은 levels → Lv1
+ */
+function levelSource(build, opts) {
+  const L = opts ? opts.levels : undefined;
+  if (L === false) return () => 1;
+  if (L === 'mine') return partLevel;
+  if (isObj(L)) return (id) => (id in L ? clampLv(L[id]) : 1);
+  if (typeof build === 'string') { const m = parseSigLevels(build); return (id) => m[id] || 1; }
+  if (isObj(build) && isObj(build.levels)) { const m = build.levels; return (id) => (id in m ? clampLv(m[id]) : 1); }
+  return () => 1;
+}
+/** 조립 객체에 숨은(열거 안 되는) levels를 붙임 → JSON·펼치기·Object.entries에는 안 보이고 partLook/buildSig/applyBuild는 읽음 */
+function attachLevels(b, lvOf) {
+  const m = {};
+  for (const id of Object.values(b)) if (id && id !== STOCK && PART_BY_ID.has(id)) m[id] = lvOf(id);
+  try { Object.defineProperty(b, 'levels', { value: m, enumerable: false, writable: true, configurable: true }); } catch {}
+  return b;
 }
 
 // ───────── 칸·부품 목록 ─────────
@@ -111,7 +169,7 @@ export function isOwned(id) {
 }
 /**
  * 부품 상태 { id, owned, levelOk, canBuy, locked, lockReason, altText, altDone, level, price, source }
- *   canBuy = 아직 없고 레벨이 됨 (코인은 따로: meta.shop의 canAfford), locked = 아직 없고 레벨도 안 됨
+ *   canBuy = 아직 없고 레벨이 됨 (조각은 따로: meta.shop의 canAfford), locked = 아직 없고 레벨도 안 됨
  *   opts.level: 테스트용 레벨
  */
 export function partState(id, opts = {}) {
@@ -126,7 +184,7 @@ export function partState(id, opts = {}) {
   const alt = altText(p);
   const source = bought(id) ? 'buy' : gift ? gift.source || 'gift' : ad ? p.alt.type : null;
   let lockReason = '';
-  if (!owned && !levelOk) lockReason = `Lv.${p.level}부터 피트 코인으로 살 수 있어요` + (alt ? ` · 또는 ${alt}` : '');
+  if (!owned && !levelOk) lockReason = `Lv.${p.level}부터 피트 조각으로 살 수 있어요` + (alt ? ` · 또는 ${alt}` : '');
   return { id, owned, levelOk, canBuy: !owned && levelOk, locked: !owned && !levelOk, lockReason, altText: alt, altDone: ad, level: p.level || 0, price: p.price || 0, source };
 }
 /** 가진 부품 id 목록 (순정 제외) */
@@ -229,7 +287,7 @@ export function fitBuild(build) {
 /** 이 차에 지금 끼운 조립 (가진 부품만) { engine, gearbox, tire, aero, water } */
 export function getBuild(carId) {
   const all = readJSON(BUILD_KEY, {});
-  return fitBuild(isObj(all) ? all[carId] : null);
+  return attachLevels(fitBuild(isObj(all) ? all[carId] : null), partLevel); // 숨은 levels = 내 강화 단계
 }
 function saveBuild(carId, b) {
   const all = readJSON(BUILD_KEY, {});
@@ -239,7 +297,7 @@ function saveBuild(carId, b) {
   if (Object.keys(slim).length) store[carId] = slim;
   else delete store[carId];
   const ok = writeJSON(BUILD_KEY, store);
-  const build = normBuild(b);
+  const build = attachLevels(normBuild(b), partLevel);
   emit('gimmick:parts', { carId, build, sig: buildSig(build) });
   return ok;
 }
@@ -253,65 +311,100 @@ export function setPart(carId, slot, partId = STOCK) {
   if (!isOwned(partId)) return { ok: false, message: partState(partId)?.lockReason || '아직 없는 부품이에요' };
   const b = getBuild(carId);
   b[slot] = partId;
+  attachLevels(b, partLevel);
   if (!saveBuild(carId, b)) return { ok: false, message: '저장하지 못했어요' };
   return { ok: true, build: b, sig: buildSig(b) };
 }
 /** 조립 통째로 바꾸기 (없는 부품은 순정으로) → { ok, build, sig } */
 export function setBuild(carId, build) {
   if (!carId) return { ok: false, message: '차를 먼저 골라 주세요' };
-  const b = fitBuild(build);
+  const b = attachLevels(fitBuild(build), partLevel);
   if (!saveBuild(carId, b)) return { ok: false, message: '저장하지 못했어요' };
   return { ok: true, build: b, sig: buildSig(b) };
 }
 export const resetBuild = (carId) => setBuild(carId, null);
 
-/** 조립 표시 문자열: 순정이 아닌 칸만 '글자+번호'를 칸 순서대로 '.'로 이음 (예 'g1.t2'), 모두 순정이면 'stock' */
-export function buildSig(build) {
+/**
+ * 조립 표시 문자열: 순정이 아닌 칸만 '글자+번호(+단계)'를 칸 순서대로 '.'로 이음, 모두 순정이면 'stock'
+ *   단계는 Lv2 이상만 숫자 하나 (예 'g15.t23' = 가속 기어 Lv5·험한 길 Lv3, Lv1만이면 예전 'g1.t2'와 똑같음)
+ *   단계는 opts.levels('mine' | { id: lv } | false) → 문자열 sig 안 → 조립 객체의 숨은 levels → Lv1 (upgrade-contract.md)
+ *   서버·records·ghost·online 검사식 ^[a-z][0-9]{1,2}(\.[a-z][0-9]{1,2}){0,9}$ 그대로 통과 (부품 번호는 1~9)
+ */
+export function buildSig(build, opts) {
+  const lvOf = levelSource(build, opts);
   const b = normBuild(build);
   const bits = [];
   for (const s of DATA.slots) {
     const id = b[s.id];
     if (!id || id === STOCK) continue;
     const p = PART_BY_ID.get(id);
-    if (p) bits.push(s.letter + p.no);
+    if (!p) continue;
+    const lv = p.no < 10 ? lvOf(p.id) : 1;
+    bits.push(s.letter + p.no + (lv > 1 ? String(lv) : ''));
   }
   return bits.length ? bits.join('.') : STOCK;
 }
-/** 'g1.t2' → { gearbox: 'gear_short', tire: 'tire_allterrain', 나머지: 'stock' } (모르는 조각은 무시) */
+/** 단계 없이 부품만 ('g15.t23' → 'g1.t2') — 같은 조립인지 비교할 때 */
+export const partsSig = (build) => buildSig(build, { levels: false });
+/** sig 한 조각 'g15' → { slot, part, lv } | null (한 자리 = 부품 번호, 두 자리 = 부품 번호 + 단계) */
+function parseBit(bit) {
+  const m = /^([a-z])(\d)(\d?)$/.exec(String(bit).trim());
+  if (!m) return null;
+  const s = DATA.slots.find((x) => x.letter === m[1]);
+  const p = s && DATA.parts.find((x) => x.slot === s.id && x.no === Number(m[2]));
+  return p ? { slot: s.id, part: p.id, lv: m[3] ? clampLv(m[3]) : 1 } : null;
+}
+/** 'g1.t2' / 'g15.t23' → { gearbox: 'gear_short', tire: 'tire_allterrain', 나머지: 'stock' } (단계는 버림, 모르는 조각은 무시) */
 export function parseSig(sig) {
   const out = {};
   for (const s of activeSlots()) out[s.id] = STOCK;
   if (typeof sig !== 'string' || !sig || sig === STOCK) return out;
   for (const bit of sig.split('.')) {
-    const m = /^([a-z])(\d+)$/.exec(bit.trim());
-    if (!m) continue;
-    const s = DATA.slots.find((x) => x.letter === m[1]);
-    const p = s && DATA.parts.find((x) => x.slot === s.id && x.no === Number(m[2]));
-    if (p && s.id in out) out[s.id] = p.id;
+    const r = parseBit(bit);
+    if (r && r.slot in out) out[r.slot] = r.part;
   }
   return out;
 }
+/** sig 안의 단계 { 부품 id: lv } (예전 'g1.t2' = 모두 1) */
+export function parseSigLevels(sig) {
+  const out = {};
+  if (typeof sig !== 'string' || !sig || sig === STOCK) return out;
+  const act = new Set(activeSlots().map((s) => s.id));
+  for (const bit of sig.split('.')) {
+    const r = parseBit(bit);
+    if (r && act.has(r.slot)) out[r.part] = r.lv;
+  }
+  return out;
+}
+/** sig → { build (숨은 levels 붙음), levels } */
+export function parseSigFull(sig) {
+  const levels = parseSigLevels(sig);
+  return { build: attachLevels(parseSig(sig), (id) => levels[id] || 1), levels };
+}
 export const isStock = (build) => buildSig(build) === STOCK;
-/** 조립 칩 [{ slot, letter, icon, partId, no, name, short }] (순정 칸은 뺌) — 결과 화면·순위표·고스트 이름표 */
-export function buildChips(build) {
+/** 조립 칩 [{ slot, letter, icon, partId, no, name, short, lv, stars }] (순정 칸은 뺌) — 결과 화면·순위표·고스트 이름표 */
+export function buildChips(build, opts) {
+  const lvOf = levelSource(build, opts);
   const b = normBuild(build);
   return DATA.slots.filter((s) => b[s.id] && b[s.id] !== STOCK).map((s) => {
     const p = PART_BY_ID.get(b[s.id]);
-    return { slot: s.id, letter: s.letter, icon: s.icon, partId: p.id, no: p.no, name: p.name, short: p.short || p.name };
+    const lv = lvOf(p.id);
+    return { slot: s.id, letter: s.letter, icon: s.icon, partId: p.id, no: p.no, name: p.name, short: p.short || p.name, lv, stars: starsOf(lv) };
   });
 }
-/** 사람이 읽는 요약 ('숏 기어 · 소프트 레이싱 타이어' / '순정'), opts.short = 짧은 이름 */
+/** 사람이 읽는 요약 ('가속 기어 · 찰떡 타이어' / '순정'), opts.short = 짧은 이름, opts.stars = Lv2 이상이면 ' ★n' */
 export function buildSummary(build, opts = {}) {
-  const chips = buildChips(build);
-  return chips.length ? chips.map((c) => (opts.short ? c.short : c.name)).join(' · ') : '순정';
+  const chips = buildChips(build, opts);
+  return chips.length ? chips.map((c) => (opts.short ? c.short : c.name) + (opts.stars && c.lv > 1 ? ' ★' + c.lv : '')).join(' · ') : '순정';
 }
-/** 모양 힌트 { 칸: { ...look, partId, no } | null } (④ 부품 모양·⑤ 고스트 모습) */
-export function partLook(build) {
+/** 모양 힌트 { 칸: { ...look, partId, no, lv } | null } (④ 부품 모양·⑤ 고스트 모습, lv = 강화 단계 재질용) */
+export function partLook(build, opts) {
+  const lvOf = levelSource(build, opts);
   const b = normBuild(build);
   const out = {};
   for (const [slot, id] of Object.entries(b)) {
     const p = id !== STOCK && PART_BY_ID.get(id);
-    out[slot] = p ? { ...(clone(p.look) || {}), partId: p.id, no: p.no } : null;
+    out[slot] = p ? { ...(clone(p.look) || {}), partId: p.id, no: p.no, lv: lvOf(p.id) } : null;
   }
   return out;
 }
@@ -323,7 +416,7 @@ export function listPresets(carId) {
   return Array.from({ length: PRESET_COUNT }, (_, i) => {
     const p = Array.isArray(row) ? row[i] : null;
     if (!p || !p.build) return null;
-    const build = fitBuild(p.build);
+    const build = attachLevels(fitBuild(p.build), partLevel);
     return { name: p.name || `프리셋 ${i + 1}`, build, sig: buildSig(build), at: p.at || 0 };
   });
 }
@@ -374,8 +467,8 @@ function setPath(o, path, v) {
   cur[ks[ks.length - 1]] = v;
 }
 const isBlocked = (path) => (DATA.blocked || []).some((b) => path === b || path.startsWith(b + '.'));
-/** 키 한계 { ratio: [lo, hi], abs?: [min, max] } — 정확한 키 → 가장 긴 'x.*' → 기본 ±default */
-export function limitFor(path) {
+/** 강화 전(Lv1) 키 한계: 정확한 키 → 가장 긴 'x.*' → null(= 기본 ±default) */
+function keyLimit(path) {
   const keys = DATA.limits?.keys || {};
   if (keys[path]) return keys[path];
   let best = null, len = -1;
@@ -384,13 +477,31 @@ export function limitFor(path) {
     const pre = k.slice(0, -1);
     if (path.startsWith(pre) && pre.length > len) { best = v; len = pre.length; }
   }
-  if (best) return best;
-  const d = DATA.limits?.default ?? 0.08;
-  return { ratio: [1 - d, 1 + d] };
+  return best;
 }
-function clipNum(path, base, v) {
+/**
+ * 키 한계 { ratio: [lo, hi], abs?: [min, max] } — 정확한 키 → 가장 긴 'x.*' → 기본 ±default
+ *   lv (강화, 기본 1): 그 키를 건드리는 부품 중 가장 높은 단계. 기본 키는 upgrade.capDefault[lv−1], 성격 키 ratio 폭은 × upgrade.capWiden[lv−1], abs는 그대로
+ */
+export function limitFor(path, lv = 1) {
+  const L0 = keyLimit(path);
+  const U = UPG(), l = clampLv(lv);
+  if (l <= 1 || !U) {
+    if (L0) return L0;
+    const d = DATA.limits?.default ?? 0.08;
+    return { ratio: [1 - d, 1 + d] };
+  }
+  if (!L0) {
+    const d = Number(U.capDefault?.[l - 1] ?? DATA.limits?.default ?? 0.08);
+    return { ratio: [1 - d, 1 + d] };
+  }
+  const w = Number(U.capWiden?.[l - 1] ?? 1);
+  const [lo, hi] = L0.ratio || [1, 1];
+  return { ...L0, ratio: [round6(Math.max(0, 1 - (1 - lo) * w)), round6(1 + (hi - 1) * w)] };
+}
+function clipNum(path, base, v, lv = 1) {
   if (!Number.isFinite(v)) return base;
-  const L = limitFor(path);
+  const L = limitFor(path, lv);
   const [lo, hi] = L.ratio || [1, 1];
   let out = v;
   if (base > 0) out = Math.min(base * hi, Math.max(base * lo, out));
@@ -414,32 +525,80 @@ function computeValue(base, ops) {
   return typeof base === 'number' ? one(base, 0) : ops.filter((o) => o.t === 'set').reduce((v, o) => o.v, base);
 }
 
+/** 강화: 키의 '좋은 방향' (+1 클수록 좋음, −1 작을수록 좋음, 0 성격) — 정확한 키 → 가장 긴 'x.*' → 0 */
+export function dirOf(path) {
+  const D = UPG()?.dir || {};
+  if (path in D) return Number(D[path]) || 0;
+  let best = 0, len = -1;
+  for (const [k, v] of Object.entries(D)) {
+    if (!k.endsWith('.*')) continue;
+    const pre = k.slice(0, -1);
+    if (path.startsWith(pre) && pre.length > len) { best = Number(v) || 0; len = pre.length; }
+  }
+  return best;
+}
+/**
+ * 강화: 부품 값 하나를 그 단계로 (편차 × 배수). set·소리(dir 0)는 그대로
+ *   역할 = 부품 up.roles[키] (pro/con/keep) → 없으면 dir과 편차 부호 (같으면 장점 pro, 반대면 단점 con)
+ *   keepPro 키(기어비)는 장점이어도 안 키움
+ */
+function scaleOp(p, t, key, v, F) {
+  if (t === 'set') return v;
+  const U = UPG() || {};
+  const forced = p.up && isObj(p.up.roles) ? p.up.roles[key] : undefined;
+  const dir = dirOf(key);
+  const keepPro = Array.isArray(U.keepPro) && U.keepPro.includes(key);
+  const one = (x) => {
+    if (typeof x !== 'number') return x;
+    const dev = t === 'mul' ? x - 1 : x;
+    if (!dev) return x;
+    const role = forced || (!dir ? 'keep' : Math.sign(dev) === Math.sign(dir) ? 'pro' : 'con');
+    const k = role === 'pro' ? (keepPro ? 1 : F.pro) : role === 'con' ? F.con : 1;
+    if (k === 1) return x;
+    return t === 'mul' ? round6(1 + dev * k) : round6(dev * k);
+  };
+  return Array.isArray(v) ? v.map(one) : one(v);
+}
+
 /**
  * 차 cfg(car.json + 차 tune을 합친 것)에 조립을 적용한 새 cfg (원본은 안 바뀜)
- *   build: { 칸: 부품 id } | buildSig 문자열 | null (= 순정, 값은 그대로)
- *   결과 cfg.partsInfo = { build, sig, parts: [id], applied: [{ path, from, to }], clipped: [path], skipped: [path], blocked: [path], tilt, turbo }
+ *   build: { 칸: 부품 id } | buildSig 문자열('g15.t23'처럼 단계 포함 가능) | null (= 순정, 값은 그대로)
+ *   opts.levels: 'mine' | { 부품 id: lv } | false — 없으면 문자열 sig 안 단계 → 조립 객체의 숨은 levels → Lv1 (upgrade-contract.md)
+ *   결과 cfg.partsInfo = { build(숨은 levels), sig(단계 포함), partsSig(부품만), levels: { id: lv }, maxLv, parts: [id], applied: [{ path, from, to }], clipped, skipped, blocked, tilt, turbo }
  *   가진 부품인지는 여기서 안 봄 (그건 getBuild/fitBuild). 차 tune 값에 대한 비율이라 차 개성은 그대로
+ *   Lv1 부품은 강화 전 계산 그대로 (같은 숫자)
  */
-export function applyBuild(cfg, build) {
+export function applyBuild(cfg, build, opts) {
+  const lvOf = levelSource(build, opts);
   const b = normBuild(build);
   const out = clone(cfg);
-  const info = { build: b, sig: buildSig(b), parts: [], applied: [], clipped: [], skipped: [], blocked: [], tilt: 0, turbo: null };
   const parts = Object.values(b).filter((id) => id !== STOCK).map((id) => PART_BY_ID.get(id)).filter(Boolean);
-  info.parts = parts.map((p) => p.id);
+  const levels = {};
+  for (const p of parts) levels[p.id] = UPG() ? lvOf(p.id) : 1;
+  attachLevels(b, (id) => levels[id] || 1);
+  const maxLv = parts.reduce((m, p) => Math.max(m, levels[p.id]), 1);
+  const info = { build: b, sig: buildSig(b, { levels }), partsSig: buildSig(b, { levels: false }), levels, maxLv, parts: parts.map((p) => p.id), applied: [], clipped: [], skipped: [], blocked: [], tilt: 0, turbo: null };
   const ops = new Map();
-  const push = (path, t, v) => { if (!ops.has(path)) ops.set(path, []); ops.get(path).push({ t, v }); };
+  const push = (path, t, v, lv) => { if (!ops.has(path)) ops.set(path, { lv: 1, list: [] }); const o = ops.get(path); o.list.push({ t, v }); o.lv = Math.max(o.lv, lv); };
   for (const p of parts) {
-    for (const t of ['mul', 'add', 'set']) for (const [k, v] of Object.entries(p[t] || {})) if (!k.startsWith('_')) push(k, t, v);
+    const L = levels[p.id];
+    const F = L > 1 ? lvFactors(L) : null;
+    for (const t of ['mul', 'add', 'set']) for (const [k, v] of Object.entries(p[t] || {})) if (!k.startsWith('_')) push(k, t, F ? scaleOp(p, t, k, v, F) : v, L);
+    // 단계 보너스 (up.bonus.mul: 단계마다 +배수, 예 가속 기어 힘 +0.5%/단계) — Lv1엔 없음
+    if (L > 1 && p.up && isObj(p.up.bonus)) {
+      for (const [k, per] of Object.entries(p.up.bonus.mul || {})) if (!k.startsWith('_') && Number(per)) push(k, 'mul', round6(1 + Number(per) * (L - 1)), L);
+      for (const [k, per] of Object.entries(p.up.bonus.add || {})) if (!k.startsWith('_') && Number(per)) push(k, 'add', round6(Number(per) * (L - 1)), L);
+    }
   }
-  for (const [path, list] of ops) {
+  for (const [path, { list, lv }] of ops) {
     if (isBlocked(path)) { info.blocked.push(path); continue; }
     let base = getPath(out, path);
     if (base === undefined) base = getPath(DATA.defaults || {}, path);
     if (base === undefined || base === null) { info.skipped.push(path); continue; }
     const raw = computeValue(base, list);
     let val;
-    if (Array.isArray(base)) val = raw.map((v, i) => (typeof base[i] === 'number' ? clipNum(path, base[i], v) : v));
-    else if (typeof base === 'number') val = clipNum(path, base, raw);
+    if (Array.isArray(base)) val = raw.map((v, i) => (typeof base[i] === 'number' ? clipNum(path, base[i], v, lv) : v));
+    else if (typeof base === 'number') val = clipNum(path, base, raw, lv);
     else val = raw;
     const rawCmp = JSON.stringify(Array.isArray(raw) ? raw.map((x) => (typeof x === 'number' ? round6(x) : x)) : typeof raw === 'number' ? round6(raw) : raw);
     if (rawCmp !== JSON.stringify(val)) info.clipped.push(path);
@@ -447,23 +606,52 @@ export function applyBuild(cfg, build) {
     info.applied.push({ path, from: clone(base), to: clone(val) });
   }
   // 특수 계산 1: 토크 표 기울이기 — 값 × (1 + k·(rpm/redline − pivot)), 표 모양(행 수·rpm)은 그대로
+  //   강화: 괄호 안 항이 +인 회전 구간은 장점(×pro), −인 구간은 단점(×con), 한계 torqueTilt × capWiden
   const tiltMax = DATA.limits?.torqueTilt ?? 0.3;
   const pivot = DATA.limits?.tiltPivot ?? 0.6;
+  const tilters = parts.filter((p) => Number(p.fx?.torqueTilt));
   const k = Math.max(-tiltMax, Math.min(tiltMax, parts.reduce((s, p) => s + (Number(p.fx?.torqueTilt) || 0), 0)));
   if (k && out.engine && Array.isArray(out.engine.torque) && out.engine.redline > 0) {
     const red = out.engine.redline;
-    out.engine.torque = out.engine.torque.map(([rpm, val]) => [rpm, round6(val * (1 + k * (rpm / red - pivot)))]);
+    const tiltLv = tilters.reduce((m, p) => Math.max(m, levels[p.id]), 1);
+    if (tiltLv <= 1) {
+      out.engine.torque = out.engine.torque.map(([rpm, val]) => [rpm, round6(val * (1 + k * (rpm / red - pivot)))]);
+    } else {
+      const cap = tiltMax * Number(UPG()?.capWiden?.[tiltLv - 1] ?? 1);
+      out.engine.torque = out.engine.torque.map(([rpm, val]) => {
+        const x = rpm / red - pivot;
+        let term = 0;
+        for (const p of tilters) {
+          const raw = Number(p.fx.torqueTilt) * x;
+          const F = lvFactors(levels[p.id]);
+          term += raw * (raw > 0 ? F.pro : F.con);
+        }
+        term = Math.max(-cap * Math.abs(x), Math.min(cap * Math.abs(x), term));
+        return [rpm, round6(val * (1 + term))];
+      });
+    }
     info.tilt = k;
   }
   // 특수 계산 2: 터보 — 없는 차엔 넣고, 있는 차엔 share·lag를 곱함 (max 한계)
+  //   강화: lag(랙)는 단점 → 편차 × con (max.lag도 × con, 있던 차는 순정 랙 아래로 안 내려감), share는 성격(그대로)
   const tp = parts.find((p) => p.fx && p.fx.turbo);
   if (tp && out.engine) {
     const T = tp.fx.turbo, mx = T.max || {};
+    const L = levels[tp.id] || 1;
     const cap = (key, v) => round6(Math.min(mx[key] ?? Infinity, v));
     const had = isObj(out.engine.turbo);
-    out.engine.turbo = had
-      ? { ...out.engine.turbo, share: cap('share', out.engine.turbo.share * (T.haveMul?.share ?? 1)), lag: cap('lag', out.engine.turbo.lag * (T.haveMul?.lag ?? 1)) }
-      : { share: cap('share', T.share), lag: cap('lag', T.lag) };
+    if (L <= 1) {
+      out.engine.turbo = had
+        ? { ...out.engine.turbo, share: cap('share', out.engine.turbo.share * (T.haveMul?.share ?? 1)), lag: cap('lag', out.engine.turbo.lag * (T.haveMul?.lag ?? 1)) }
+        : { share: cap('share', T.share), lag: cap('lag', T.lag) };
+    } else {
+      const C = lvFactors(L).con;
+      const maxLag = (mx.lag ?? Infinity) * C;
+      if (had) {
+        const b0 = out.engine.turbo.lag;
+        out.engine.turbo = { ...out.engine.turbo, share: cap('share', out.engine.turbo.share * (T.haveMul?.share ?? 1)), lag: round6(Math.min(Math.max(b0, maxLag), b0 * (1 + ((T.haveMul?.lag ?? 1) - 1) * C))) };
+      } else out.engine.turbo = { share: cap('share', T.share), lag: round6(Math.min(maxLag, T.lag * C)) };
+    }
     info.turbo = { had, ...out.engine.turbo };
   }
   out.partsInfo = info;

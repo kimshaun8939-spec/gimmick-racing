@@ -1,6 +1,7 @@
 // 로딩 중 숨은 물체·차원/품질별 셰이더와 GPU 자원을 준비 (launchqa7).
 // extra: 나중에 생기는 효과의 본보기를 잠깐 추가할 수 있음. ?prewarm=0이면 main에서 생략.
 import * as THREE from 'three';
+import { levelWarmObjects } from './carParts3d.js';
 
 export async function prewarm(renderer, scene, camera, extra = [], options = {}) {
   const t0 = performance.now(), added = [], shown = [], culled = [], lightOff = [], shadowLights = [];
@@ -20,6 +21,9 @@ export async function prewarm(renderer, scene, camera, extra = [], options = {})
   }
   const scissorTest = renderer.getScissorTest(), box = renderer.getScissor(new THREE.Vector4());
   let compileMs = 0, renderMs = 0, variants = 0;
+  // upgradeD1: 강화 단계 부품 재질·Lv5 불티 셰이더 (그 차가 이번 판에 없어도 고스트·다음 판에 처음 보일 때 멈칫 없게)
+  const lvWarm = levelWarmObjects();
+  extra = [...extra, lvWarm];
   for (const o of extra) if (o && !o.parent) { scene.add(o); added.push(o); }
   scene.traverse(o => {
     if (!o.isLight) return;
@@ -76,6 +80,7 @@ export async function prewarm(renderer, scene, camera, extra = [], options = {})
     for (const o of culled) o.frustumCulled = true;
     for (const light of lightOff) light.visible = true;
     for (const o of added) scene.remove(o);
+    lvWarm.userData.dispose?.();
     renderer.setScissor(box);
     renderer.setScissorTest(scissorTest);
   }

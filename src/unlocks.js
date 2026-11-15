@@ -3,9 +3,13 @@
 //   - 색: 아래 PAINTS (0 = 원래 색). 고른 색은 localStorage `gimmick.paint` { 차 id: 색 id }
 //   - 레벨은 profile.js (완주하면 XP). 잠금은 홈 화면 차 고르기에서만 막음 (게임 주소 ?car= 는 안 막음, 봇은 잠긴 차도 탐)
 //   약속(다른 파일이 쓰는 이름): isCarUnlocked(carId) → true/false, carUnlockLevel(carId) → 필요한 레벨 (없으면 0)
+// 재화 개편 (upgradeB, 2026-11-15, .debug/agents/wallet-contract.md): 차 = 시작 5대 + 레벨이 되면 피트 조각으로 삼 (metaCatalog CAR_SHOP),
+//   색 = 원래·빨강·파랑 무료 + 레벨이 되면 커스텀 조각으로 삼. 가진 것 = gimmick.meta owned (meta.js가 씀, 여기는 읽기만 → meta.js를 안 불러옴)
+//   gimmick.meta에 wv:2가 아직 없으면(옮기기 전) 예전 규칙으로 판단 → 옮긴 뒤와 결과가 같음
 import { profile } from './profile.js';
 import { listCostumes } from './carCostumes.js';
 import { academy, licenseMeta } from './academyStore.js'; // 드라이빙 아카데미 라이선스 색 (2026-11-12)
+import { START_CARS, CAR_SHOP, carShopPrice } from './metaCatalog.js';
 
 const PAINT_KEY = 'gimmick.paint';
 const SEEN_KEY = 'gimmick.seenLevel';
@@ -33,12 +37,14 @@ export const PAINTS = [
 // 차마다 필요한 레벨 (cars.json에서 읽음). 못 읽으면 모두 열림
 let carLevels = {};
 let carNames = {};
+let carInfos = {};
 /** 차 목록을 알려 줌 (carRoster.js도 불러 줌) */
 export function registerCars(cars) {
   for (const c of cars || []) {
     if (!c || !c.id) continue;
     carLevels[c.id] = Math.max(0, Number(c.unlockLevel) || 0);
     carNames[c.id] = c.name || c.id;
+    carInfos[c.id] = { id: c.id, name: c.name || c.id, class: c.class || '', tag: c.tag || '', desc: c.desc || '' };
   }
 }
 try {
@@ -46,6 +52,8 @@ try {
   if (res.ok) registerCars((await res.json()).cars);
 } catch {}
 
+/** 차 이름·등급·태그 (상점 카드용, 모르면 null) */
+export const carInfo = (carId) => (carInfos[carId] ? { ...carInfos[carId] } : null);
 /** 지금 내 레벨 */
 export function currentLevel() {
   try {
@@ -54,17 +62,70 @@ export function currentLevel() {
     return 1;
   }
 }
-export const carUnlockLevel = (carId) => carLevels[carId] || 0;
-/** 보상 띠 (rewards1, 2026-11-15, 읽기만): 알고 있는 모든 차 [{ id, name, level }] (level 0 = 처음부터) */
-export const carUnlockList = () => Object.keys(carLevels).map((id) => ({ id, name: carNames[id] || id, level: carLevels[id] || 0 }));
-export const isCarUnlocked = (carId) => currentLevel() >= carUnlockLevel(carId);
+// ── 가진 것 읽기 (gimmick.meta, 읽기만) ──
+function metaRaw() {
+  try {
+    const j = JSON.parse(localStorage.getItem('gimmick.meta') || 'null');
+    return j && typeof j === 'object' ? j : null;
+  } catch {
+    return null;
+  }
+}
+/** 재화 개편 뒤 저장(wv 2)인가 */
+const walletReady = (m = metaRaw()) => !!(m && m.wv === 2);
+/** 예전에 놀았던 저장이 있나 (옮길 때 열린 차·색을 그대로 줌): gimmick.meta가 있거나 경험치·기록이 있음 */
+export function isLegacySave() {
+  if (metaRaw()) return true;
+  try {
+    const p = JSON.parse(localStorage.getItem('gimmick.profile') || 'null');
+    if (p && Number(p.xp) > 0) return true;
+  } catch {}
+  try {
+    const r = JSON.parse(localStorage.getItem('gimmick.records') || 'null');
+    if (r && typeof r === 'object' && Object.keys(r).length) return true;
+  } catch {}
+  return false;
+}
+/** 예전 규칙 레벨 (cars.json unlockLevel, 예전 15대 = 0) */
+export const carLegacyLevel = (carId) => carLevels[carId] || 0;
+/** 예전 규칙으로 열린 차인가 (옮기기 전 / 옮기는 순간) */
+export const carLegacyOpen = (carId, level = currentLevel()) => level >= carLegacyLevel(carId);
+/** 차를 사는 데 필요한 레벨 (시작 차 = 0, 표에 없는 차 = cars.json unlockLevel) */
+export const carUnlockLevel = (carId) => (START_CARS.includes(carId) ? 0 : CAR_SHOP[carId] ? CAR_SHOP[carId].level : carLevels[carId] || 0);
+/** 차 값 (피트 조각, 시작 차·모르는 차 = 0) */
+export const carPrice = (carId) => (START_CARS.includes(carId) ? 0 : carShopPrice(carId));
+export const isStartCar = (carId) => START_CARS.includes(carId);
+/** 가진 차인가: 시작 5대 · 산 차 · 옮길 때 받은 차 (표에 없는 차는 예전 규칙) */
+export function isCarOwned(carId) {
+  if (START_CARS.includes(carId)) return true;
+  const m = metaRaw();
+  if (walletReady(m)) return !!(m.owned && m.owned['car:' + carId]) || (!CAR_SHOP[carId] && carLegacyOpen(carId));
+  // 옮기기 전: 예전 저장이면 예전 규칙, 새로 온 사람이면 시작 5대만
+  if (isLegacySave()) return carLegacyOpen(carId);
+  return !CAR_SHOP[carId] && carLegacyOpen(carId);
+}
+/** 아직 없고 레벨이 돼서 살 수 있음 */
+export const canBuyCar = (carId, level = currentLevel()) => !isCarOwned(carId) && !!CAR_SHOP[carId] && level >= carUnlockLevel(carId);
+/** 보상 띠 (rewards1, 2026-11-15, 읽기만): 알고 있는 모든 차 [{ id, name, level, price, owned }] (level 0 = 처음부터) */
+export const carUnlockList = () => Object.keys(carLevels).map((id) => ({ id, name: carNames[id] || id, level: carUnlockLevel(id), price: carPrice(id), owned: isCarOwned(id) }));
+/** 차 고르기에서 탈 수 있나 = 가진 차 (재화 개편: 레벨만으로는 안 열림, 피트 조각으로 삼) */
+export const isCarUnlocked = (carId) => isCarOwned(carId);
 
 export const paintOf = (id) => PAINTS.find((p) => p.id === Number(id)) || PAINTS[0];
-export const isPaintUnlocked = (id) => {
+/** 쓸 수 있는 색 (= 가진 색): 원래·빨강·파랑 무료, 라이선스 색은 시험, 나머지는 커스텀 조각으로 산 색 (옮기기 전이면 예전 규칙: 레벨이 됐거나 미리 산 색) */
+export const isPaintUnlocked = (id, level) => {
   const p = paintOf(id);
   if (p.license) return academy.hasLicense(p.license);
-  try { if (JSON.parse(localStorage.getItem('gimmick.meta') || '{}').owned?.['paint:' + p.id]) return true; } catch {} // night-meta: 일반 색 코인 선구매 (라이선스 색 제외)
-  return currentLevel() >= p.level;
+  if (!p.level) return true;
+  const m = metaRaw();
+  if (m && m.owned && m.owned['paint:' + p.id]) return true;
+  if (walletReady(m)) return false;
+  return (Number.isFinite(level) ? level : currentLevel()) >= p.level;
+};
+/** 아직 없고 레벨이 돼서 커스텀 조각으로 살 수 있는 색 */
+export const canBuyPaint = (id, level = currentLevel()) => {
+  const p = paintOf(id);
+  return !!p.level && !p.license && !isPaintUnlocked(p.id, level) && level >= p.level;
 };
 /** 잠긴 색 안내 글자 ('Lv.5' / 'C 라이선스') */
 export const paintLockText = (id) => {
@@ -101,18 +162,18 @@ export function applyPaint(look, carId, paintId) {
   return { ...base, body: p.body, accent: p.accent, trim: p.trim, rim: p.trim, helmet: p.accent, wall: null, numberBg: p.nb, numberFg: p.nf };
 }
 
-/** from < 레벨 ≤ to 사이에 열리는 것 { cars: [이름], paints: [이름] } */
+/** from < 레벨 ≤ to 사이에 열리는 것(차·색은 '살 수 있음'이 됨) { cars: [이름], paints: [이름] } */
 export function unlockedBetween(from, to) {
   const cars = Object.keys(carLevels)
-    .filter((id) => carLevels[id] > from && carLevels[id] <= to)
-    .sort((a, b) => carLevels[a] - carLevels[b])
+    .filter((id) => carUnlockLevel(id) > from && carUnlockLevel(id) <= to)
+    .sort((a, b) => carUnlockLevel(a) - carUnlockLevel(b))
     .map((id) => carNames[id]);
   const paints = PAINTS.filter((p) => !p.license && p.level > from && p.level <= to).map((p) => p.name);
   return { cars, paints };
 }
 /** 다음에 열리는 것 (없으면 null) { level, text } */
 export function nextUnlock(level = currentLevel()) {
-  const lv = [...Object.values(carLevels), ...PAINTS.filter((p) => !p.license).map((p) => p.level)].filter((v) => v > level).sort((a, b) => a - b)[0];
+  const lv = [...Object.keys(carLevels).map(carUnlockLevel), ...PAINTS.filter((p) => !p.license).map((p) => p.level)].filter((v) => v > level).sort((a, b) => a - b)[0];
   if (!lv) return null;
   const u = unlockedBetween(lv - 1, lv);
   const names = [...u.cars.map((n) => `🚗 ${n}`), ...u.paints.map((n) => `🎨 ${n}`)];

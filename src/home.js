@@ -26,13 +26,17 @@ import { createCarCompare } from './carCompare.js';
 import { applyCostume, listCostumes } from './carCostumes.js';
 import { meta, bootMeta } from './meta.js';
 import { createMetaPage, createCostumePicker } from './metaUI.js';
-import { paintPrice } from './metaCatalog.js';
+import { paintPrice, CURRENCIES, CURRENCY_IDS } from './metaCatalog.js';
+import { wallet as walletNow, buyCar } from './meta.js'; // 조각 3종 지갑 · 차 사기 (작업 B API, .debug/agents/wallet-contract.md)
 import { createPartsUI } from './partsUI.js';
 import * as parts from './parts.js';
 import { PART_VIEW } from './partThumbs.js';
 import { createGarageLift } from './garageLift.js';
 import { nextRewards, rewardsBetween } from './rewardPath.js';
 import { touchWanted } from './touch.js';
+import { go as wheelGo } from './wheelTransition.js'; // 게임으로 갈 때 바퀴 화면 전환 (관제탑 부탁 2026-11-15)
+import * as gate from './featureGate.js'; // 레벨별 기능 해금 (작업 C, 2026-11-15)
+import { createCoach, lockTip, closeLockTip } from './coachMarks.js'; // 해금 안내 (코치 마크)
 
 export const VERSION = 'v0.9 · 2026.11';
 /** 운전 도움을 켜고 낸 기록 표시 */
@@ -134,6 +138,12 @@ export async function runHome() {
   let mapId = maps.find((m) => m.id === last.map) ? last.map : maps[0].id;
   const mapOf = (id) => maps.find((m) => m.id === id) || maps[0];
   let raceMode = RACE_MODES.some((m) => m.id === last.mode) ? last.mode : 'race';
+  // 레벨별 기능 해금 (설계 8장): 홈 화면에서만 잠금. 게임 주소·초대 링크는 그대로 됨
+  const gateInfo = gate.initGate();
+  const G = (id) => gate.isOpen(id);
+  const modeOpen = (id) => G(gate.MODE_FEATURE[id] || 'play');
+  if (!G('garage') && isOpen(DEFAULT_CAR)) carId = DEFAULT_CAR; // Lv1: 레드 포뮬러로 (차고가 열리면 고름)
+  if (!modeOpen(raceMode)) raceMode = 'race'; // Lv1: 봇 레이스만 (방식 화면 건너뜀)
 
   // ------------------------------------------------------------------ 화면 틀
   const home = document.createElement('div');
@@ -145,7 +155,7 @@ export async function runHome() {
     <div class="h-top">
       <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">트랜스폼 <em>레이서</em></div><div class="sub">TRANSFORM RACER</div></div></div>
       <div class="h-icons">
-        <button class="mt-wallet-btn" data-act="metaShop" data-nav title="피트 코인과 피트 샵" aria-label="피트 코인과 피트 샵"><i>⬡</i><span class="mt-wallet-count"></span><small>PIT COIN</small></button>
+        <button class="mt-wallet-btn" data-act="metaShop" data-gate="shop" data-coach="home.wallet" data-nav title="조각 3종 · 상점" aria-label="내 조각 · 상점 열기"><span class="hw-chips">${CURRENCY_IDS.map((k) => `<span class="hw-c hw-${k}" style="--wc:${CURRENCIES[k].color}" title="${CURRENCIES[k].name} · ${CURRENCIES[k].use || ''}"><i>${CURRENCIES[k].icon}</i><b data-wallet="${k}">0</b></span>`).join('')}</span></button>
         <button class="gm-btn hx-driver h-name" data-act="name" data-nav title="이름 바꾸기 (레이스·순위표에 보여요)">
           <span class="hx-lic"></span><span class="hx-aclic"></span>
           <span class="hx-dinfo"><b class="nm"></b><small class="lv"></small><span class="hx-xp"><i></i></span><small class="st"></small></span>
@@ -173,6 +183,18 @@ export async function runHome() {
   document.body.appendChild(home);
   const $ = (sel) => home.querySelector(sel);
   const views = Object.fromEntries([...home.querySelectorAll('.h-view')].map((v) => [v.dataset.view, v]));
+  // 해금 안내 (코치 마크): 홈 위에서만. 레벨 업 창·이름 창·확인 창·출발 중에는 기다림
+  const coach = createCoach({
+    toast: (t) => toast(t),
+    goMain: () => {
+      try { compare.close(); } catch {}
+      if (view !== 'main') show('main', false);
+      if (carDetail) garageDetail(false, false);
+    },
+    blocked: () => !!home.querySelector('.gx-news') || launching || home.classList.contains('nf-active') || dialogOpen() || !!document.querySelector('.nf'),
+    onEnd: () => refreshCoachChip(),
+    onStart: () => refreshCoachChip(),
+  });
 
   // 속도 줄무늬 몇 개 (CSS 애니메이션)
   const streaks = $('.h-streaks');
@@ -200,13 +222,14 @@ export async function runHome() {
   views.main.innerHTML = `
     <div class="h-main hx hm-menu">
       <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b></div>
-      <button class="gm-btn primary h-start hx-hero" data-act="start" data-nav>
+      <button class="fg-chip" data-act="coachChip" data-coach="home.coachChip" data-nav hidden><i>🎓</i><span>새 안내</span></button>
+      <button class="gm-btn primary h-start hx-hero" data-act="start" data-coach="home.play" data-nav>
         <span class="hx-thumb"><img alt="" draggable="false" hidden><span class="ph">🏎️</span></span>
         <span class="hx-htxt"><span class="big">플레이</span><span class="sel"></span>
           <span class="hx-chips"><i data-c="map"></i><i data-c="car"></i><i data-c="mode"></i></span></span>
         <span class="go">▶</span>
       </button>
-<div class="h-menu hx-grid hm-list"><button class="gm-btn h-item hx-tile hm-garage" data-act="garage" data-nav><span class="ic">🚗</span><span class="t"><b>차고</b><small>차 구경 · 조립 · 꾸미기</small></span></button><button class="gm-btn h-item hx-tile hm-rewards" data-go="meta" data-nav><span class="ic">✦</span><span class="t"><b>업적과 목표</b><small>나의 드라이버 여정</small></span></button><button class="gm-btn h-item hx-tile hm-shop" data-act="metaShop" data-nav><span class="ic">⬡</span><span class="t"><b>상점</b><small>피트 코인으로 부품과 꾸미기</small></span></button><button class="gm-btn h-item hx-tile " data-go="academy" data-nav><span class="ic">🎓</span><span class="t"><b>아카데미</b><small>튜토리얼 · 코너 연습 · 라이선스</small></span></button><button class="gm-btn h-item hx-tile " data-go="records" data-nav><span class="ic">🏆</span><span class="t"><b>기록과 순위</b><small>내 최고 기록 · 세계 순위</small></span></button><button class="gm-btn h-item hx-tile " data-act="multi" data-nav><span class="ic">🌐</span><span class="t"><b>온라인</b><small>방 코드로 친구와 함께</small></span></button></div>
+<div class="h-menu hx-grid hm-list"><button class="gm-btn h-item hx-tile hm-garage" data-act="garage" data-gate="garage" data-coach="home.garage" data-nav><span class="ic">🚗</span><span class="t"><b>차고</b><small>차 구경 · 조립 · 꾸미기</small></span></button><button class="gm-btn h-item hx-tile hm-rewards" data-go="meta" data-gate="goals" data-coach="home.goals" data-nav><span class="ic">✦</span><span class="t"><b>업적과 목표</b><small>나의 드라이버 여정</small></span></button><button class="gm-btn h-item hx-tile hm-shop" data-act="metaShop" data-gate="shop" data-coach="home.shop" data-nav><span class="ic">⬡</span><span class="t"><b>상점</b><small>차 · 부품 · 꾸미기</small></span></button><button class="gm-btn h-item hx-tile " data-go="academy" data-coach="home.academy" data-nav><span class="ic">🎓</span><span class="t"><b>아카데미</b><small>튜토리얼 · 코너 연습 · 라이선스</small></span></button><button class="gm-btn h-item hx-tile " data-go="records" data-gate="records" data-coach="home.records" data-nav><span class="ic">🏆</span><span class="t"><b>기록과 순위</b><small>내 최고 기록 · 세계 순위</small></span></button><button class="gm-btn h-item hx-tile " data-act="multi" data-gate="online" data-coach="home.online" data-nav><span class="ic">🌐</span><span class="t"><b>온라인</b><small>방 코드로 친구와 함께</small></span></button></div>
     </div>
     <div class="h-cartag"><div class="tg"></div><div class="n"></div></div>`;
 
@@ -226,7 +249,7 @@ export async function runHome() {
           <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
           <button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
         <div class="list"></div></div>
-      <div class="h-carstage"><div class="g2-stagebar"><button class="gm-btn" data-act="carList" data-nav>‹ 차 목록</button><button class="gm-btn" data-act="carCompare" data-nav>⚖ 비교</button><button class="gm-btn" data-act="carFront" data-nav>정면으로</button></div>
+      <div class="h-carstage"><div class="g2-stagebar"><button class="gm-btn" data-act="carList" data-nav>‹ 차 목록</button><button class="gm-btn" data-act="carCompare" data-coach="garage.compareDetail" data-nav>⚖ 비교</button><button class="gm-btn" data-act="carFront" data-nav>정면으로</button></div>
         <div class="h-drag">↔ 끌어서 돌려 보기</div>
         
         <div class="gm-seg" id="hForms" title="자동 변신 모습 미리 보기">
@@ -241,7 +264,7 @@ export async function runHome() {
           <h2></h2>
         </div>
         <div class="ct-tabs" role="tablist" aria-label="차 정보" title="키보드 [ ] · 패드 LT / RT 로도 바꿀 수 있어요">
-          ${CAR_TAB_DEFS.map((t) => `<button type="button" role="tab" class="ct-tab ct-${t.id}" data-ct="${t.id}" id="ctTab-${t.id}" aria-controls="ctPane-${t.id}" data-nav><span>${t.label}</span><b class="ct-badge"></b></button>`).join('')}
+          ${CAR_TAB_DEFS.map((t) => `<button type="button" role="tab" class="ct-tab ct-${t.id}" data-ct="${t.id}" data-coach="garage.tab.${t.id}"${t.id === 'parts' ? ' data-gate="parts"' : ''} id="ctTab-${t.id}" aria-controls="ctPane-${t.id}" data-nav><span>${t.label}</span><b class="ct-badge"></b></button>`).join('')}
         </div>
         <div class="ct-body">
           <section class="ct-pane" data-pane="info" id="ctPane-info" role="tabpanel" aria-labelledby="ctTab-info">
@@ -265,8 +288,8 @@ export async function runHome() {
           <section class="ct-pane" data-pane="parts" id="ctPane-parts" role="tabpanel" aria-labelledby="ctTab-parts" hidden></section>
           <section class="ct-pane" data-pane="custom" id="ctPane-custom" role="tabpanel" aria-labelledby="ctTab-custom" hidden>
             <div class="ct-locknote" hidden></div>
-            <div class="gx-paint"><div class="gx-ptitle">색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
-            <div class="mt-costume-box"></div>
+            <div class="gx-paint" data-coach="garage.paint"><div class="gx-ptitle">색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
+            <div class="mt-costume-box" data-coach="garage.costumes"></div><div class="fg-costlock" hidden></div>
           </section>
         </div>
         <div class="btns"><button class="gm-btn" data-go="mode" data-nav>‹ 레이스 방식</button><button class="gm-btn primary" data-act="pickCar" data-nav>다음: 맵 고르기 ›</button></div>
@@ -296,6 +319,7 @@ export async function runHome() {
   const carInfoEl = views.car.querySelector('.h-carinfo');
   function setCarTab(id, { focus = false, sound = false, save = true } = {}) {
     if (!CAR_TABS.includes(id)) id = 'info';
+    if (id === 'parts' && !G('parts')) id = 'info'; // 부품 조립은 Lv3부터 (탭은 잠금 표시)
     const changed = id !== carTab;
     carTab = id;
     carInfoEl.dataset.tab = id;
@@ -316,8 +340,9 @@ export async function runHome() {
     if (focus) carInfoEl.querySelector(`.ct-tab[data-ct="${id}"]`)?.focus({ preventScroll: true });
   }
   function stepCarTab(dir, focus = false) {
-    const i = CAR_TABS.indexOf(carTab);
-    setCarTab(CAR_TABS[(i + dir + CAR_TABS.length) % CAR_TABS.length], { focus, sound: true });
+    const tabs = CAR_TABS.filter((t) => t !== 'parts' || G('parts'));
+    const i = tabs.indexOf(carTab);
+    setCarTab(tabs[(i + dir + tabs.length) % tabs.length], { focus, sound: true });
   }
   carInfoEl.addEventListener('click', (e) => {
     const t = e.target.closest('.ct-tab, [data-ctgo]');
@@ -444,7 +469,9 @@ export async function runHome() {
         const url = thumbUrl(c.id);
         const [en, ko] = splitTag(c.tag);
         const locked = !isOpen(c.id);
-        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? `<span class="gx-lock" title="레벨 ${c.unlockLevel}에 열려요 · 눌러서 미리 보기">🔒 Lv.${c.unlockLevel}</span>` : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? `레벨 ${c.unlockLevel}에 열려요` : ko || en)}</small></span>`;
+        const st = carState(c.id); // 레벨이 됐는데 안 산 차 = ⬡ 가격 딱지, 아직이면 🔒 Lv.n
+        const priceT = st.price.toLocaleString('ko-KR');
+        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? (st.buy ? `<span class="gx-lock gx-buy" title="⬡ ${priceT} 피트 조각으로 살 수 있어요 · 눌러서 보기">⬡ ${priceT}</span>` : `<span class="gx-lock" title="레벨 ${st.level}부터 살 수 있어요 · 눌러서 미리 보기">🔒 Lv.${st.level}</span>`) : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? (st.buy ? `⬡ ${priceT} 구매` : `Lv.${st.level}부터`) : ko || en)}</small></span>`;
         btn.classList.toggle('gx-locked', locked);
         btn.classList.toggle('sel', c.id === carId);
         btn.addEventListener('click', () => { selectCar(c.id, true); garageDetail(true); });
@@ -459,6 +486,7 @@ export async function runHome() {
         tile.append(btn, quick); carList.appendChild(tile);
       }
     }
+    markCoachCar();
     const filtered = cx.find || cx.open;
     views.car.querySelector('.h-title .cnt').textContent = filtered || classFilter !== 'all' ? `${shown} / ${cars.length}대` : `${cars.length}대`;
     if (!shown) {
@@ -467,6 +495,15 @@ export async function runHome() {
       e.textContent = cx.find ? `'${cx.find}'에 맞는 차가 없어요` : '이 등급에는 차가 없어요';
       carList.appendChild(e);
     }
+  }
+  /** 안내 이름표: 지금 고른 차 카드 = garage.card, 그 옆 ⚖ = garage.compare */
+  function markCoachCar() {
+    for (const el of carList.querySelectorAll('[data-coach]')) el.removeAttribute('data-coach');
+    const card = carList.querySelector('.h-carcard.sel') || carList.querySelector('.h-carcard');
+    if (!card) return;
+    card.dataset.coach = 'garage.card';
+    const q = card.parentElement && card.parentElement.querySelector('.cp-quick');
+    if (q) q.dataset.coach = 'garage.compare';
   }
   // 화면에 보이는 순서 그대로 (전체 탭은 C→B→A 묶음 순서라 cars.json 순서와 다름) → ←→가 바로 옆 카드로
   const visibleCars = () => {
@@ -582,6 +619,7 @@ export async function runHome() {
     const c = carOf(id);
     if (sound) uiSound('move');
     views.car.querySelectorAll('.h-carcard').forEach((b) => b.classList.toggle('sel', b.dataset.car === id));
+    markCoachCar();
     const info = views.car.querySelector('.h-carinfo');
     info.querySelector('.tg').textContent = c.tag || '';
     const k = classOfId(c.class);
@@ -623,20 +661,51 @@ export async function runHome() {
     partsUI.show(c, open);
     preview.setParts?.(parts.getBuild(c.id));
   }
+  /** 차 상태 (재화 개편): owned 가짐 / buy 레벨이 돼서 ⬡로 살 수 있음 (short = 모자란 조각) / 아니면 level까지 잠김 */
+  function carState(id) {
+    const owned = isOpen(id), level = unlocks.carUnlockLevel(id), price = unlocks.carPrice(id);
+    const buy = !owned && unlocks.canBuyCar(id, myLevel);
+    const have = walletNow().pit || 0;
+    return { owned, buy, level, price, have, short: buy ? Math.max(0, price - have) : 0 };
+  }
+  /** [⬡ n 으로 사기]: 확인 창 → meta.buyCar → 열리면 토스트·목록·사진 다시 */
+  async function buyCarFlow(id = carId) {
+    const c = carOf(id), st = carState(id);
+    if (st.owned) return true;
+    if (!st.buy) { uiSound('back'); toast(`🔒 ${c.name}은(는) 레벨 ${st.level}부터 살 수 있어요 (지금 Lv.${myLevel})`); return false; }
+    if (st.short) { uiSound('back'); toast(`⬡ ${st.short.toLocaleString('ko-KR')} 피트 조각이 부족해요 · 레이스·목표·아카데미에서 모아요`); return false; }
+    if (!(await confirmDialog(`${c.name} 사기`, `⬡ ${st.price.toLocaleString('ko-KR')} 피트 조각으로 살까요? (지금 ⬡ ${st.have.toLocaleString('ko-KR')})`, '사기'))) return false;
+    const r = buyCar(id);
+    if (!r || !r.ok) { toast((r && r.message) || '차를 사지 못했어요'); return false; }
+    uiSound('select');
+    toast(`🚗 ${c.name}을(를) 샀어요! 이제 탈 수 있어요`);
+    openCarId = id;
+    setLast({ car: id });
+    renderCarList();
+    selectCar(id);
+    showGarage(c, true);
+    partsUI.show(c, true);
+    refreshMetaHome();
+    return true;
+  }
   /** 차 정보 칸의 잠금 안내 + 색 고르기 줄 */
   function showGarage(c, open = isOpen(c.id)) {
     views.car.querySelector('.hm-catalog-home').hidden = false;
     const info = views.car.querySelector('.h-carinfo');
     const note = info.querySelector('.gx-locknote');
     note.hidden = open;
-    if (!open) note.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열려요</b><span>👀 디자인 미리 보기 중 · 끌어서 돌려 보고 아래 버튼으로 변신 모습도 볼 수 있어요</span><span>지금 Lv.${myLevel} · 레이스를 완주하면 경험치가 올라요</span>`;
+    // 재화 개편 (작업 B): 차 = 레벨 + ⬡ 피트 조각. 레벨이 됐는데 안 산 차 = [⬡ n 으로 사기], 아직이면 🔒 Lv.n
+    const st = carState(c.id);
+    if (!open) note.innerHTML = st.buy
+      ? `<b>⬡ ${st.price.toLocaleString('ko-KR')} 으로 살 수 있어요</b><span>👀 디자인 미리 보기 중 · 끌어서 돌려 보고 변신 모습도 볼 수 있어요</span><button class="gm-btn primary gx-buycar" data-act="buyCar" data-nav>${st.short ? `⬡ ${st.short.toLocaleString('ko-KR')} 부족 · 가격 ${st.price.toLocaleString('ko-KR')}` : `⬡ ${st.price.toLocaleString('ko-KR')} 으로 사기`}</button>`
+      : `<b>🔒 레벨 ${st.level}에 살 수 있어요</b><span>👀 디자인 미리 보기 중 · 끌어서 돌려 보고 아래 버튼으로 변신 모습도 볼 수 있어요</span><span>지금 Lv.${myLevel} · 레벨 ${st.level}이 되면 ⬡ ${st.price.toLocaleString('ko-KR')} 피트 조각으로 사요</span>`;
     const pick = info.querySelector('[data-act="pickCar"]');
-    pick.classList.toggle('gx-off', !open && !garageOnly);
-    pick.disabled = !open && !garageOnly;
+    pick.classList.toggle('gx-off', !open && !garageOnly && !st.buy);
+    pick.disabled = !open && !garageOnly && !st.buy;
     info.querySelector('.btns [data-go]').hidden = garageOnly;
     info.querySelector('.btns [data-go]').dataset.go = garageReturn;
     info.querySelector('.btns [data-go]').textContent = '‹ 준비 화면으로';
-    pick.textContent = garageOnly ? '홈으로' : open ? '이 차로 타기 · 돌아가기 ›' : `🔒 Lv.${c.unlockLevel}에 열려요`;
+    pick.textContent = garageOnly ? '홈으로' : open ? '이 차로 타기 · 돌아가기 ›' : st.buy ? `⬡ ${st.price.toLocaleString('ko-KR')} 으로 사기` : `🔒 Lv.${st.level}에 살 수 있어요`;
     const box = info.querySelector('.gx-paint');
     const canPaint = open && c.look0 && typeof c.look0 === 'object';
     box.hidden = !canPaint;
@@ -645,20 +714,25 @@ export async function runHome() {
       box.querySelector('.gx-ptitle small').textContent = unlocks.paintOf(cur).name;
       box.querySelector('.gx-swatches').innerHTML = unlocks.PAINTS.map((p) => {
         const ok = unlocks.isPaintUnlocked(p.id);
+        const buy = !ok && unlocks.canBuyPaint(p.id, myLevel); // 레벨이 된 색 = ✿ 커스텀 조각으로 삼
         const body = p.body || c.look0.body || '#e8463a', acc = p.accent || c.look0.accent || '#f3f4f6';
-        return `<button type="button" data-nav class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : p.license ? ` · 드라이빙 아카데미 ${esc(unlocks.paintLockText(p.id))}로 열려요` : ` · 레벨 ${p.level}에 열려요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>${p.license ? '🎓' : '🔒'}</i><small>${p.license ? esc(p.license) : `Lv.${p.level}`}</small>`}</button>`;
+        return `<button type="button" data-nav class="gx-sw${p.id === cur ? ' on' : ''}${ok ? '' : ' lock'}${buy ? ' buy' : ''}" data-paint="${p.id}" style="--pb:${esc(body)};--pa:${esc(acc)}" title="${esc(p.name)}${ok ? '' : p.license ? ` · 드라이빙 아카데미 ${esc(unlocks.paintLockText(p.id))}로 열려요` : buy ? ` · ✿ ${paintPrice(p)} 커스텀 조각으로 사요` : ` · 레벨 ${p.level}에 살 수 있어요`}" aria-label="${esc(p.name)}">${ok ? '' : `<i>${p.license ? '🎓' : buy ? '✿' : '🔒'}</i><small>${p.license ? esc(p.license) : buy ? paintPrice(p) : `Lv.${p.level}`}</small>`}</button>`;
       }).join('');
     }
     costumePicker.show(c);
     // 커스텀 탭: 처음부터 무엇이 있는지 보이게 (탭 딱지 + 소개 탭 바로 가기 글)
     const nCos = listCostumes(c.id).length;
     const nPaint = unlocks.PAINTS.length;
-    info.querySelector('.ct-tab.ct-custom .ct-badge').textContent = nCos ? `✦${nCos}` : `${nPaint}색`;
+    const cosOpen = G('custom'); // 코스튬은 Lv4부터 (색은 차고와 같이 Lv2)
+    const cosLock = info.querySelector('.fg-costlock');
+    cosLock.hidden = cosOpen || !nCos;
+    if (!cosOpen) cosLock.innerHTML = `<b>${gate.lockText('custom')}</b> · 코스튬 ${nCos}개로 차를 꾸밀 수 있어요`;
+    info.querySelector('.ct-tab.ct-custom .ct-badge').textContent = nCos && cosOpen ? `✦${nCos}` : `${nPaint}색`;
     info.querySelector('.ct-tab.ct-custom').title = `커스텀 · 코스튬 ${nCos}개 · 색 ${nPaint}가지`;
     info.querySelector('.ct-jcustom').textContent = nCos ? `코스튬 ${nCos}개 · 색 ${nPaint}가지` : `색 ${nPaint}가지`;
     const cl = info.querySelector('.ct-locknote');
     cl.hidden = open;
-    if (!open) cl.innerHTML = `<b>🔒 레벨 ${c.unlockLevel}에 열리는 차</b><span>코스튬은 지금도 눌러서 미리 볼 수 있어요 · 색은 차가 열리면 바꿀 수 있어요</span>`;
+    if (!open) cl.innerHTML = `<b>${st.buy ? `⬡ ${st.price.toLocaleString('ko-KR')} 으로 살 수 있는 차` : `🔒 레벨 ${st.level}에 살 수 있는 차`}</b><span>코스튬은 지금도 눌러서 미리 볼 수 있어요 · 색은 차를 사면 바꿀 수 있어요</span>`;
     const nx = unlocks.nextUnlock(myLevel);
     const line = info.querySelector('.gx-nextline');
     line.hidden = !nx || !open; // 잠긴 차는 위 안내가 대신 말해 줌
@@ -669,12 +743,17 @@ export async function runHome() {
     const c = carOf(carId);
     const p = unlocks.paintOf(pid);
     if (!unlocks.isPaintUnlocked(p.id)) {
-      if (!p.license && paintPrice(p) && await confirmDialog(p.name + ' 미리 열기', '레벨 ' + p.level + '에서는 무료로 열려요. 지금 ⬡ ' + paintPrice(p) + ' 피트 코인으로 모든 차에 미리 쓸까요?', '미리 열기')) {
+      // 색 = ✿ 커스텀 조각으로 삼 (작업 B 재화 개편). 레벨이 안 됐거나 라이선스 색이면 안내만
+      if (unlocks.canBuyPaint(p.id, myLevel)) {
+        const price = paintPrice(p), have = walletNow().custom || 0;
+        if (have < price) { uiSound('back'); return toast(`✿ ${(price - have).toLocaleString('ko-KR')} 커스텀 조각이 부족해요 · '${p.name}' 가격 ✿ ${price}`); }
+        if (!(await confirmDialog(`'${p.name}' 색 사기`, `✿ ${price} 커스텀 조각으로 사면 모든 차에 쓸 수 있어요. (지금 ✿ ${have.toLocaleString('ko-KR')})`, '사기'))) return;
         const r = meta.buy('paint', p);
         if (!r.ok) return toast(r.message);
+        toast(`🎨 '${p.name}' 색을 샀어요`);
       } else {
-      uiSound('back');
-      return toast(p.license ? `🎓 '${p.name}' 색은 드라이빙 아카데미 ${unlocks.paintLockText(p.id)} 시험에 붙으면 열려요` : `🔒 '${p.name}' 색은 레벨 ${p.level}에 열려요 (지금 Lv.${myLevel})`);
+        uiSound('back');
+        return toast(p.license ? `🎓 '${p.name}' 색은 드라이빙 아카데미 ${unlocks.paintLockText(p.id)} 시험에 붙으면 열려요` : `🔒 '${p.name}' 색은 레벨 ${p.level}부터 ✿ ${paintPrice(p)} 커스텀 조각으로 살 수 있어요 (지금 Lv.${myLevel})`);
       }
     }
     unlocks.setPaint(c.id, p.id);
@@ -767,9 +846,9 @@ export async function runHome() {
         <span><small>내 맵 최고</small><b class="${best ? '' : 'none'}">${best ? fmtTime(best.race) + (bestRec && bestRec.raceAssist ? ' 🛟' : '') : '없음'}</b>${best ? `<em>${esc(carOf(best.car).name)}</em>` : ''}</span></div>
       <p class="mp-desc">${esc(m.desc || '')}</p>
       <div class="mp-tags">${(m.tags || []).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
-      ${online.enabled && !info.free ? '<div class="mp-online"><div class="mp-ot">🌐 온라인 1~3등</div><div class="mp-olist"><span class="none">불러오는 중…</span></div></div>' : ''}`;
+      ${online.enabled && G('ranking') && !info.free ? '<div class="mp-online"><div class="mp-ot">🌐 온라인 1~3등</div><div class="mp-olist"><span class="none">불러오는 중…</span></div></div>' : ''}`;
     drawTrackThumb(mapInfoBox.querySelector('canvas'), info.pts, m.theme);
-    if (online.enabled && !info.free) fillMapTop(m.id);
+    if (online.enabled && G('ranking') && !info.free) fillMapTop(m.id);
   }
   async function fillMapTop(id) {
     let rows = olTop.get(id);
@@ -802,7 +881,7 @@ export async function runHome() {
   // ------------------------------------------------------------------ 설정 · 조작법 · 기록
   const page = (title, inner) => `<div class="h-page"><div class="head"><h2>${title}</h2><button class="gm-btn" data-go="main" data-nav>‹ 뒤로 <kbd>Esc</kbd></button></div><div class="h-panel scroll"></div></div>`;
   views.settings.innerHTML = page('설정');
-  const setPanel = createSettingsPanel();
+  const setPanel = createSettingsPanel({ optionLock: (key, v) => (key === 'botLevel' && gate.BOT_LEVEL_FEATURE[v] && !G(gate.BOT_LEVEL_FEATURE[v]) ? gate.lockText(gate.BOT_LEVEL_FEATURE[v], true) : null) });
   views.settings.querySelector('.scroll').appendChild(setPanel.el);
   views.controls.innerHTML = page('조작법');
   views.controls.querySelector('.scroll').appendChild(createControlsPage({ onEditKeys: () => show('settings', true, 'keys') }));
@@ -836,9 +915,9 @@ export async function runHome() {
       .join('');
     const box = views.records.querySelector('.scroll');
     box.innerHTML = `<div class="hr-mapbar"><button class="gm-btn hr-arr" data-act="recScroll" data-dir="-1" aria-label="이전 맵들">‹</button><div class="hr-maps">${chips}</div><button class="gm-btn hr-arr" data-act="recScroll" data-dir="1" aria-label="다음 맵들">›</button></div>
-      <div class="hr-grid${online.enabled ? '' : ' solo'}">
-        ${online.enabled ? '<section class="hr-col hr-left"><div class="h-online"></div></section>' : ''}
-        <section class="hr-col hr-right"><div class="hr-mine"></div></section></div>`;
+      <div class="hr-grid${online.enabled && G('ranking') ? '' : ' solo'}">
+        ${online.enabled && G('ranking') ? '<section class="hr-col hr-left"><div class="h-online" data-coach="records.board"></div></section>' : ''}
+        <section class="hr-col hr-right"><div class="hr-mine" data-coach="records.mine"></div></section></div>`;
     for (const cv of box.querySelectorAll('.hr-mchip canvas')) {
       const m = mapOf(cv.dataset.map);
       try {
@@ -972,7 +1051,7 @@ export async function runHome() {
           return `<li class="${cls}" style="--i:${i}">${rank}
             <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${r.license ? licenseChip(r.license, 18) : mine && academy.top() ? licenseChip(academy.top(), 18) : ''}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}${r.stock === false ? ' ' + buildTag(r.build) : ''}</small></span></span>
             <span class="ol-time"><strong>${fmtTime(r.total)}</strong>${r.assist ? ASSIST_TAG : ''}<small>${i === 0 ? (r.best_lap && lapsN > 1 ? `최고 랩 ${fmtTime(r.best_lap)}` : '1위') : `+${(r.total - first).toFixed(3)}`}</small></span>
-            <span class="ol-acts">${r.ghostOk === false ? '<span class="ol-noghost" title="이 사람의 서버 고스트는 조립 주행이라 순정만 보기에서는 같이 달릴 수 없어요">👻✕</span>' : `<button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)} 고스트와 같이 달리기" title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button>`}${r.stock === false ? `<button class="gm-btn small ol-copy" data-act="olCopyBuild" data-car="${esc(r.car)}" data-build="${esc(r.build)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)}의 조립 따라 하기" title="이 조립을 내 ${esc((c && c.id === r.car && c.name) || r.car)}에 끼우기 (가진 부품만, 없는 부품은 순정)">🔧<span> 따라 하기</span></button>` : ''}</span></li>`;
+            <span class="ol-acts">${r.ghostOk === false ? '<span class="ol-noghost" title="이 사람의 서버 고스트는 조립 주행이라 순정만 보기에서는 같이 달릴 수 없어요">👻✕</span>' : `<button class="gm-btn small ol-ghost" data-act="olGhost" data-coach="records.ghost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)} 고스트와 같이 달리기" title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button>`}${r.stock === false ? `<button class="gm-btn small ol-copy" data-act="olCopyBuild" data-car="${esc(r.car)}" data-build="${esc(r.build)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)}의 조립 따라 하기" title="이 조립을 내 ${esc((c && c.id === r.car && c.name) || r.car)}에 끼우기 (가진 부품만, 없는 부품은 순정)">🔧<span> 따라 하기</span></button>` : ''}</span></li>`;
         })
         .join('')}</ol>`;
     } catch (err) {
@@ -1035,7 +1114,9 @@ export async function runHome() {
   // ------------------------------------------------------------------ 화면 바꾸기
   let view = 'main';
   // 준비 화면은 방식 → 맵(시즌 구성), 차고는 들어온 화면으로 돌아가요.
-  const backView = () => view === 'car' ? garageReturn : ({mode:'main',map:'mode',season:'mode'}[view] || 'main');
+  const backView = () => view === 'car' ? garageReturn : ({mode:'main',map:G('time') ? 'mode' : 'main',season:'mode'}[view] || 'main');
+  /** 플레이: 방식 화면부터 (Lv1은 방식이 봇 레이스 하나라 맵 고르기로 바로) */
+  const playView = () => (G('time') ? 'mode' : 'map');
   /** 화면 바꾸기. sub: 설정 화면의 탭 ('general' | 'keys') */
   function show(name, focus = true, sub) {
     if (!views[name]) name = 'main';
@@ -1119,12 +1200,14 @@ export async function runHome() {
   /** 드라이버 카드: 티어 아이콘 · 레벨 · XP 막대 · 레이스/우승 수 */
   function refreshMetaHome() {
     const s = meta.get();
-    const count = home.querySelector('.mt-wallet-count'); if (count) count.textContent = s.coins.toLocaleString('ko-KR');
+    const wl = walletNow(); // 조각 3종 (⬡ 피트 · ◆ 강화 · ✿ 커스텀)
+    for (const b of home.querySelectorAll('[data-wallet]')) b.textContent = (wl[b.dataset.wallet] || 0).toLocaleString('ko-KR');
+    home.querySelector('.mt-wallet-btn').setAttribute('aria-label', '내 조각 ' + CURRENCY_IDS.map((k) => CURRENCIES[k].name + ' ' + (wl[k] || 0)).join(', ') + ' · 상점 열기');
     const products = meta.shop({carId});
     const available = products.filter(p => p.canBuy && p.canAfford && !p.owned);
-    const pc = available.filter(p => p.kind === 'part').length, cc = available.length - pc;
-    const badge = [pc ? '🔧' + pc : '', cc ? '✦' + cc : ''].filter(Boolean).join(' ');
-    views.main.querySelector('.hm-shop small').textContent = available.length ? '지금 살 수 있어요 · ' + badge : '부품 · 코스튬 · 색 · 세리머니';
+    const pc = available.filter(p => p.kind === 'part').length, carN = available.filter(p => p.kind === 'car').length, cc = available.length - pc - carN;
+    const badge = [carN ? '🚗' + carN : '', pc ? '🔧' + pc : '', cc ? '✦' + cc : ''].filter(Boolean).join(' ');
+    views.main.querySelector('.hm-shop small').textContent = available.length ? '지금 살 수 있어요 · ' + badge : '차 · 부품 · 코스튬 · 색 · 세리머니';
     const wallet = home.querySelector('.mt-wallet-btn');
     let wb = wallet.querySelector('.hm-wallet-badge');
     if (!wb) { wb = document.createElement('span'); wb.className = 'hm-wallet-badge'; wallet.append(wb); }
@@ -1135,6 +1218,9 @@ export async function runHome() {
     const next = nextRewards({carId,n:1})[0];
     views.main.querySelector('.hm-rewards small').textContent = next ? '다음 보상 Lv.' + next.level + ' · ' + next.name + ' · ' + meta.achievements().length + '개 업적' : meta.achievements().length + '개 업적 · 일일·주간 목표';
   }
+  // 해금 잠금 표시는 refreshMetaHome이 홈 줄 글자를 다시 쓸 때마다 (show()도 이걸 부름)
+  const refreshMetaHome0 = refreshMetaHome;
+  refreshMetaHome = function () { refreshMetaHome0(); applyGate(); };
   window.addEventListener('gimmick:meta', () => { refreshMetaHome(); showDriver(); });
   window.addEventListener('gimmick:parts', () => requestAnimationFrame(refreshMetaHome));
   window.addEventListener('gimmick:metaError', e => toast(e.detail.message));
@@ -1163,34 +1249,147 @@ export async function runHome() {
       n = unlocks.takeLevelNews();
     } catch {}
     const partNews=parts.takeNews();
-    if (!n && !partNews.length) return;
-    const giftOnly = !n;
+    // 새로 열린 기능 (작업 C): 같은 창 위쪽에 '🎉 새 기능이 열렸어요' + [보러 가기] = 코치 마크 안내
+    if (gate.gateActive() && !gate.coachActive()) gate.markSeen(); // 안내를 꺼 둔 사람은 조용히 본 것으로
+    const feats = gate.coachActive() && !gateInfo.legacy ? gate.newlyOpened() : [];
+    if (!n && !partNews.length && !feats.length) return false;
+    const featOnly = !n && !partNews.length;
+    const giftOnly = !n && !featOnly;
     n ||= {from:profile.get().level,to:profile.get().level,cars:[],paints:[]};
     const available=parts.partsBetween(n.from,n.to);
-    const items = rewardsBetween(n.from,n.to,{carId}).map(x=>'<li><i>'+esc(x.icon)+'</i>'+esc(x.name)+(x.how==='coin'?' · 구매 가능':'')+'</li>');
+    const items = featOnly ? [] : rewardsBetween(n.from,n.to,{carId}).map(x=>'<li><i>'+esc(x.icon)+'</i>'+esc(x.name)+(x.how==='coin'?' · 구매 가능':'')+'</li>');
     items.push(...partNews.map(x=>'<li><i>🎁</i>'+esc(x.name)+'</li>'));
-    const hasParts = available.length > 0 || partNews.length > 0;
+    const hasParts = (available.length > 0 || partNews.length > 0) && G('parts');
     const nx = nextRewards({carId,level:n.to,n:1})[0];
+    const firstCoach = feats.map((f) => f.coach).find((id) => id && !gate.WAITING_COACHES.has(id) && !gate.coachStatus(id));
+    const coachFeat = firstCoach && feats.find((f) => f.coach === firstCoach);
     const el = document.createElement('div');
-    el.className = 'gx-news';
-    el.innerHTML = `<div class="gx-newsbox"><div class="gx-burst">🎉</div><h3>${giftOnly ? '새 부품을 받았어요' : `Lv.${n.to} 달성!`}</h3>
-      ${items.length ? `<p>새로 열렸어요</p><ul>${items.join('')}</ul>` : '<p>계속 달리면 새 차와 색이 열려요</p>'}
-      ${nx ? `<div class="gx-nx">다음 보상 · Lv.${nx.level} ${esc(nx.name)}</div>` : ''}
-      <div class="gx-newsbtns">${items.length ? `<button class="gm-btn primary" data-gx="car">${hasParts ? '차고에서 끼우기' : '차고 보러 가기'}</button>` : ''}<button class="gm-btn" data-gx="ok">확인</button></div></div>`;
-    const close = () => el.remove();
+    el.className = 'gx-news' + (feats.length ? ' fg-news' : '');
+    el.innerHTML = `<div class="gx-newsbox" role="dialog" aria-modal="true"><div class="gx-burst">🎉</div><h3>${featOnly ? '새 기능이 열렸어요!' : giftOnly ? '새 부품을 받았어요' : `Lv.${n.to} 달성!`}</h3>
+      ${feats.length ? `${featOnly ? '' : '<p class="fg-sub">🎉 새 기능이 열렸어요</p>'}<ul class="fg-feats">${feats.map((f) => `<li><i>${esc(f.icon)}</i><span>${esc(f.name)}<small>${esc(f.desc)}</small></span></li>`).join('')}</ul>` : ''}
+      ${items.length ? `<p>새로 열렸어요</p><ul>${items.join('')}</ul>` : featOnly ? '' : '<p>계속 달리면 새 차와 색이 열려요</p>'}
+      ${nx && !featOnly ? `<div class="gx-nx">다음 보상 · Lv.${nx.level} ${esc(nx.name)}</div>` : ''}
+      <div class="gx-newsbtns">${coachFeat ? `<button class="gm-btn primary" data-gx="coach">🎓 ${esc(coachFeat.name)} 보러 가기</button>` : ''}${items.length && G('garage') ? `<button class="gm-btn${coachFeat ? '' : ' primary'}" data-gx="car">${hasParts ? '차고에서 끼우기' : '차고 보러 가기'}</button>` : ''}<button class="gm-btn" data-gx="ok">${coachFeat ? '나중에' : '확인'}</button></div></div>`;
+    const close = () => {
+      if (!el.isConnected) return;
+      el.remove();
+      if (feats.length) gate.markSeen(feats.map((f) => f.id));
+      refreshCoachChip();
+    };
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-gx]');
       if (!b && e.target !== el) return;
       close();
+      if (b && b.dataset.gx === 'coach') coach.run(firstCoach);
       if (b && b.dataset.gx === 'car') {garageReturn = 'main'; garageOnly = true; show('car');if (hasParts) setCarTab('parts');garageDetail(true);}
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); views.main.querySelector('.h-start')?.focus({ preventScroll: true }); }
     });
     home.appendChild(el);
     setTimeout(() => {
       const b = el.querySelector('.gm-btn');
       if (b) b.focus({ preventScroll: true });
     }, 50);
-    setTimeout(close, 20000);
+    if (!feats.length) setTimeout(close, 20000); // 새 기능 창은 저절로 안 닫힘 (누르기 전까지 기다림)
+    return true;
   }
+  // ------------------------------------------------------------------ 기능 해금 (작업 C, 설계 8장)
+  /** 잠금 표시: #home.fg-off-<기능> (작은 기능 숨김) + data-gate 요소에 흐림·🔒 Lv.n · 약 m판 뒤 */
+  function applyGate() {
+    for (const f of gate.FEATURES) home.classList.toggle('fg-off-' + f.id, !G(f.id));
+    for (const el of home.querySelectorAll('[data-gate]')) {
+      const id = el.dataset.gate, lock = !G(id);
+      el.classList.toggle('fg-locked', lock);
+      const box = el.closest('.h-mode');
+      if (box) box.classList.toggle('fg-locked', lock);
+      if (lock) el.setAttribute('aria-description', `${gate.lockText(id)} · ${gate.featureOf(id)?.name || ''}`);
+      else el.removeAttribute('aria-description');
+      if (el.classList.contains('ct-tab')) {
+        let tag = el.querySelector('.fg-tabtag');
+        if (lock && !tag) { tag = document.createElement('i'); tag.className = 'fg-tabtag'; el.appendChild(tag); }
+        if (tag) { tag.hidden = !lock; tag.textContent = lock ? gate.lockText(id, true) : ''; }
+        continue;
+      }
+      const small = el.querySelector(':scope > .t > small, :scope > small');
+      if (!small) continue;
+      small.classList.toggle('fg-orig', lock);
+      let line = el.querySelector('.fg-lockline');
+      if (lock && !line) { line = document.createElement('i'); line.className = 'fg-lockline'; small.after(line); }
+      if (line) { line.hidden = !lock; line.textContent = lock ? gate.lockText(id) : ''; }
+    }
+    // 맵 고르기 뒤로 가기: Lv1은 방식 화면이 없어 홈으로
+    const back = views.map.querySelector('.h-maps .head .bar [data-go]');
+    if (back) {
+      back.dataset.go = G('time') ? 'mode' : 'main';
+      back.innerHTML = G('time') ? '‹ 방식 <kbd>Backspace</kbd>' : '‹ 홈으로 <kbd>Backspace</kbd>';
+    }
+    refreshCoachChip();
+  }
+  /** 봇 실력이 아직 잠긴 단계면 열린 가장 높은 단계로 (레이스 출발 때) */
+  function clampBotLevel() {
+    const v = settings.get('botLevel');
+    if (gate.BOT_LEVEL_FEATURE[v] && !G(gate.BOT_LEVEL_FEATURE[v])) settings.set('botLevel', G('botHard') ? 'hard' : 'normal');
+  }
+  /** 홈 '🎓 새 안내 n' 칩 (열렸는데 아직 안 본 안내) */
+  function refreshCoachChip() {
+    const chip = views.main.querySelector('.fg-chip');
+    if (!chip) return;
+    const list = gate.coachActive() ? gate.pendingCoaches() : [];
+    chip.hidden = !list.length || !!coach.running;
+    chip.querySelector('span').textContent = `새 안내 ${list.length} · ${list[0] ? list[0].name : ''}`;
+    chip.title = list.map((c) => c.name).join(' · ');
+  }
+  /** 잠긴 것을 누르면 이동 대신 작은 말풍선 */
+  const GO_GATE = { records: 'records', meta: 'goals', academy: 'academy' };
+  function gateOfClick(b) {
+    if (b.dataset.gate) return b.dataset.gate;
+    if (b.dataset.go === 'car') return b.dataset.carSection === 'parts' ? 'parts' : b.dataset.carSection === 'costume' ? 'custom' : 'garage';
+    return GO_GATE[b.dataset.go] || null;
+  }
+  home.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-gate], [data-go]');
+    if (!b || !home.contains(b)) return;
+    const id = gateOfClick(b);
+    if (!id || G(id)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    uiSound('back');
+    lockTip(b, id, { host: home, onRace: () => show(playView()) });
+  }, true);
+  /** 기존 사용자 (처음 본 레벨이 이미 3 이상): 한 번만 '새 안내가 n개 있어요 · 보기 / 모두 건너뛰기' */
+  function showLegacyCard() {
+    const n = gate.pendingCoaches().length;
+    if (!n) { gate.markSeenAll(false); return false; }
+    const el = document.createElement('div');
+    el.className = 'gx-news fg-news';
+    el.innerHTML = `<div class="gx-newsbox" role="dialog" aria-modal="true"><div class="gx-burst">🎓</div><h3>새 안내가 ${n}개 있어요</h3>
+      <p>차고 · 부품 조립 · 상점 같은 기능을 버튼을 짚어 가며 알려 줘요. 이미 아는 기능은 건너뛰어도 돼요.</p>
+      <div class="gx-newsbtns"><button class="gm-btn primary" data-fg="see">보기</button><button class="gm-btn" data-fg="skip">모두 건너뛰기</button></div></div>`;
+    const done = (see) => {
+      el.remove();
+      gate.markSeenAll(!see);
+      refreshCoachChip();
+      if (see) { show('settings', false); setPanel.showPage('coach'); setTimeout(() => views.settings.querySelector('[data-coach-replay]:not([disabled])')?.focus({ preventScroll: true }), 120); }
+    };
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-fg]');
+      if (b) done(b.dataset.fg === 'see');
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
+    });
+    home.appendChild(el);
+    setTimeout(() => el.querySelector('.gm-btn')?.focus({ preventScroll: true }), 50);
+    return true;
+  }
+  // 설정 → 안내 → '다시 보기'
+  window.addEventListener('gimmick:coachReplay', (e) => {
+    const id = e.detail && e.detail.id;
+    if (!id) return;
+    gate.takeReplay();
+    setTimeout(() => coach.run(id), 0);
+  });
   /** 소리 버튼 그림 (설정의 '소리 끄기'와 같은 값) */
   function showMute() {
     const b = $('[data-act="mute"]');
@@ -1204,10 +1403,10 @@ export async function runHome() {
   views.mode.innerHTML = `
     <div class="h-modes">
       <div class="head"><div><h2>레이스 방식</h2><div class="who"></div></div>
-        <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-nav>다음: 맵 고르기 › <kbd>Enter</kbd></button></div></div>
+        <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-coach="mode.next" data-nav>다음: 맵 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
-          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}"><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 드리프트 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
+          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}" data-coach="mode.${m.id}"${m.id !== 'race' ? ` data-gate="${gate.MODE_FEATURE[m.id] || 'play'}"` : ''}><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 드리프트 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
           <div class="opts"></div></div>`,
       ).join('')}</div>
       <div class="h-modetip"></div>
@@ -1216,7 +1415,7 @@ export async function runHome() {
         <div class="i"><small>맵</small><b data-s="mt"></b><span data-s="mm"></span></div>
         <div class="i"><small>차</small><b data-s="ct"></b><span data-s="cm"></span></div>
         <div class="i"><small>내 최고 기록 (이 차)</small><b data-s="rb"></b><span data-s="rm"></span></div>
-        <div class="b"><button class="gm-btn small" data-go="map" data-nav>🗺️ 맵</button><button class="gm-btn small" data-go="car" data-nav>🏎️ 차</button></div>
+        <div class="b"><button class="gm-btn small" data-go="map" data-nav>🗺️ 맵</button><button class="gm-btn small" data-go="car" data-gate="garage" data-nav>🏎️ 차</button></div>
       </div>
     </div>`;
   // 방식마다 고를 수 있는 것 (설정 값을 바로 바꿈: 홈 설정·Esc 메뉴 설정과 같은 값)
@@ -1332,11 +1531,12 @@ export async function runHome() {
     show(raceMode === 'champ' ? 'season' : 'map');
   }
   function openPrepGarage() {
+    if (!G('garage')) { const b = views[view]?.querySelector('[data-act="prepGarage"]'); if (b) lockTip(b, 'garage', { host: home }); return; }
     garageReturn = view === 'season' ? 'season' : 'map'; garageOnly = false;
     garageDetail(false, false); show('car');
   }
   function nextCar() {
-    if (!isOpen(carId) && !garageOnly) return toast('🔒 열린 차를 골라 주세요');
+    if (!isOpen(carId) && !garageOnly) { if (carState(carId).buy) buyCarFlow(carId).then((ok) => ok && show(garageReturn)); else toast('🔒 가진 차를 골라 주세요'); return; }
     show(garageReturn);
   }
   function renderRideCard() {
@@ -1349,7 +1549,8 @@ export async function runHome() {
       root.querySelector('.f3-ride')?.remove();
       const card = document.createElement('aside'); card.className = 'f3-ride' + (locked ? ' locked' : '');
       const url = thumbUrl(carId);
-      card.innerHTML = (url ? '<img alt="" src="'+esc(url)+'">' : '<span class="f3-photo">🏎️</span>') + '<div><small>지금 탈 차</small><strong>'+esc(c.name)+'</strong><span class="f3-chips"><small>'+esc(c.class || '기본')+' 등급</small>'+chips+(locked ? '<small>🔒 Lv.'+c.unlockLevel+' 필요</small>' : '')+'</span></div><button class="gm-btn '+(locked?'primary':'')+'" data-act="prepGarage" data-nav>차고에서 바꾸기 <kbd>C</kbd></button>';
+      card.innerHTML = (url ? '<img alt="" src="'+esc(url)+'">' : '<span class="f3-photo">🏎️</span>') + '<div><small>지금 탈 차</small><strong>'+esc(c.name)+'</strong><span class="f3-chips"><small>'+esc(c.class || '기본')+' 등급</small>'+chips+(locked ? (carState(carId).buy ? '<small>⬡ '+carState(carId).price.toLocaleString('ko-KR')+' 으로 사야 해요</small>' : '<small>🔒 Lv.'+carState(carId).level+' 필요</small>') : '')+'</span></div><button class="gm-btn '+(locked?'primary':'')+'" data-act="prepGarage" data-gate="garage" data-coach="map.garageBtn" data-nav>'+(G('garage') ? '차고에서 바꾸기 <kbd>C</kbd>' : '<span class="fg-garagelock">'+gate.lockText('garage', true)+'</span> 차고')+'</button>';
+      card.dataset.coach = 'map.ride';
       if (name === 'map') { const bar = root.querySelector('.bar'); const go = bar?.querySelector('[data-act="start"]'); if (go) go.before(card); else root.querySelector('.head').after(card); } else root.querySelector('header').append(card);
       root.querySelectorAll('[data-act="start"]').forEach(btn => btn.disabled = locked || (name === 'season' && !seasonMaps.length));
     }
@@ -1382,7 +1583,7 @@ export async function runHome() {
     };
     const oldFlow = views.season.querySelector('.hx-flow');
     views.season.innerHTML = '<section class="sx-season h-panel"><header><div><h2>🏆 시즌 맵 구성</h2><p>맵을 고르고 여러 경기를 이어 달려요 · ' + esc(carOf(carId).name) + '</p></div></header>' +
-      '<div class="sx-scroll"><div class="sx-kinds" role="group" aria-label="시즌 구성 방식">' + [['default', '기본 시즌', '기존 9개 맵 순서 그대로'], ['random', '🎲 랜덤', '겹치지 않게 무작위로'], ['custom', '직접 고르기', '넣고 빼고 순서도 자유롭게']].map(([id, title, desc]) => '<button class="gm-btn ' + (seasonKind === id ? 'on' : '') + '" data-nav data-season-kind="' + id + '" data-season-key="kind-' + id + '" aria-pressed="' + (seasonKind === id) + '"><b>' + title + '</b><small>' + desc + '</small></button>').join('') + '</div>' +
+      '<div class="sx-scroll"><div class="sx-kinds" data-coach="season.kinds" role="group" aria-label="시즌 구성 방식">' + [['default', '기본 시즌', '기존 9개 맵 순서 그대로'], ['random', '🎲 랜덤', '겹치지 않게 무작위로'], ['custom', '직접 고르기', '넣고 빼고 순서도 자유롭게']].map(([id, title, desc]) => '<button class="gm-btn ' + (seasonKind === id ? 'on' : '') + '" data-nav data-season-kind="' + id + '" data-season-key="kind-' + id + '" aria-pressed="' + (seasonKind === id) + '"><b>' + title + '</b><small>' + desc + '</small></button>').join('') + '</div>' +
       '<div class="sx-presets"><span>추천 묶음</span><button class="gm-btn small" data-nav data-season-preset="easy" data-season-key="easy">짧은 시즌 3경기 · 쉬움 위주</button><button class="gm-btn small" data-nav data-season-preset="tour" data-season-key="tour">변신 여행 3경기 · 바다·달·우주</button></div>' +
       (seasonKind === 'random' ? '<div class="sx-random"><b>경기 수</b>' + [3, 5, 7, 9].map(n => '<button class="gm-btn small ' + (seasonCount === n ? 'on' : '') + '" data-nav data-season-count="' + n + '" data-season-key="count-' + n + '" aria-pressed="' + (seasonCount === n) + '">' + n + '경기</button>').join('') + '<button class="gm-btn" data-nav data-season-shuffle data-season-key="shuffle">🎲 다시 섞기</button></div>' : '') +
       '<div class="sx-layout"><div class="sx-order"><h3>달릴 순서 <small>' + seasonMaps.length + '경기 / 최대 9경기</small></h3><ol>' + seasonMaps.map((id, i) => '<li><span class="sx-num">' + (i + 1) + '</span><canvas width="160" height="90" data-season-thumb="' + id + '"></canvas><div><b>' + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></div>' + (seasonKind === 'custom' ? '<div class="sx-move"><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="-1" data-season-key="up-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 앞으로" ' + (i === 0 ? 'disabled' : '') + '>▲</button><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="1" data-season-key="down-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 뒤로" ' + (i === seasonMaps.length - 1 ? 'disabled' : '') + '>▼</button><button class="gm-btn small" data-nav data-season-map="' + id + '" data-season-key="remove-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 빼기">×</button></div>' : '') + '</li>').join('') + '</ol>' + (!seasonMaps.length ? '<p class="sx-empty">오른쪽 맵 칸에서 1~9개를 골라 주세요.</p>' : '') + '</div>' +
@@ -1417,7 +1618,7 @@ export async function runHome() {
   });
   async function champStart() {
     if (!champReady) return toast('🏆 시즌을 불러오는 중이에요. 잠시 뒤 다시 눌러 주세요');
-    if (!isOpen(carId)) { toast('🔒 열린 차로 바꿔 주세요'); return openPrepGarage(); }
+    if (!isOpen(carId)) { toast('🔒 가진 차로 바꿔 주세요'); return openPrepGarage(); }
     if (view !== 'season') return show('season');
     const order = [...seasonMaps];
     if (!order.length) return toast('달릴 맵을 하나 이상 골라 주세요');
@@ -1472,6 +1673,7 @@ export async function runHome() {
   });
   function pickMode(id, sound = false) {
     if (raceMode === id) return;
+    if (!modeOpen(id)) return; // 잠긴 방식 (누르면 잠금 말풍선은 click 잡기에서)
     raceMode = id;
     if (sound) uiSound('move');
     setLast({ mode: id });
@@ -1488,7 +1690,9 @@ export async function runHome() {
       toast('🚧 이 맵은 아직 준비 중이에요');
       return;
     }
-    if (!isOpen(carId)) { toast('🔒 열린 차로 바꿔 주세요'); return openPrepGarage(); }
+    if (!isOpen(carId)) { toast('🔒 가진 차로 바꿔 주세요'); return openPrepGarage(); }
+    if (!modeOpen(mode)) mode = 'race'; // 잠긴 방식이 남아 있으면 봇 레이스로
+    clampBotLevel();
     if (mode === 'champ') return view === 'season' ? champStart() : show('season');
     setLast({ map: mapId, car: carId, mode });
     if (mode === 'net') return openLobby({ map: mapId, car: carId });
@@ -1496,9 +1700,8 @@ export async function runHome() {
     uiSound('select');
     const m = mapOf(mapId), c = carOf(carId), rm = RACE_MODES.find((x) => x.id === mode);
     $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">${esc(m.title)}</div><div class="car">${esc(c.name)}</div><div class="mode">${rm ? `${rm.icon} ${esc(rm.name)}` : ''}</div>`;
-    $('.h-launch').classList.add('on');
     const extra = mode === 'race' || mode === 'time' || mode === 'item' ? { mode } : {};
-    setTimeout(() => (location.href = raceUrl(mapId, carId, extra)), 380);
+    wheelGo(raceUrl(mapId, carId, extra), { title: m.title, sub: c.name });
   }
   /** 다른 주소로 출발 (챔피언십 등): 출발 화면을 보여 주고 이동 */
   function launch(url, title, sub = '') {
@@ -1506,8 +1709,7 @@ export async function runHome() {
     launching = true;
     uiSound('select');
     $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">${esc(title)}</div><div class="car">${esc(sub)}</div>`;
-    $('.h-launch').classList.add('on');
-    setTimeout(() => (location.href = url), 380);
+    wheelGo(url, { title, sub });
   }
   function firstRace() {
     settings.set('racingLine', true);
@@ -1523,8 +1725,7 @@ export async function runHome() {
       localStorage.setItem(TUT_KEY, localStorage.getItem(TUT_KEY) || 'asked');
     } catch {}
     $('#hLaunch').innerHTML = `<div class="logo">트랜스폼 레이서</div><div class="map">🎓 튜토리얼</div><div class="car">구름섬 그랑프리 · ${esc(carOf(carId).name)}</div>`;
-    $('.h-launch').classList.add('on');
-    setTimeout(() => (location.href = tutorialUrl(carId, { quick: 1, intro: 0, bots: 0 })), 380);
+    wheelGo(tutorialUrl(carId, { quick: 1, intro: 0, bots: 0 }), { title: '튜토리얼', sub: carOf(carId).name });
   }
   /** 멀티플레이 대기실 (net 담당이 만드는 lobby.js). 없거나 실패하면 알림만 */
   function openLobby(opts) {
@@ -1565,7 +1766,8 @@ export async function runHome() {
       return;
     }
     const act = b.dataset.act;
-    if (act === 'start') view === 'main' ? show('mode') : start();
+    if (act === 'start') view === 'main' ? show(playView()) : start();
+    else if (act === 'coachChip') { closeLockTip(); coach.queue(); }
     else if (act === 'prepGarage') openPrepGarage();
     else if (act === 'garage') { garageReturn = 'main'; garageOnly = true; garageDetail(false, false); show('car'); }
     else if (act === 'nextMode') nextMode();
@@ -1599,6 +1801,7 @@ export async function runHome() {
     else if (act === 'carCompare') compare.open(carId);
     else if (act === 'carFront') preview.resetView();
     else if (act === 'pickCar') nextCar();
+    else if (act === 'buyCar') buyCarFlow(carId);
     else if (act === 'editKeys') show('settings', true, 'keys');
     else if (act === 'name') {
       const r = await welcomeDialog({ first: false });
@@ -1647,6 +1850,8 @@ export async function runHome() {
       else if (r.same) toast(`🔧 ${nick}의 조립을 내 ${cn}에 끼웠어요`);
       else if (r.sig === 'stock') toast(`🔧 아직 가진 부품이 없어 ${cn}은(는) 순정이에요 · 필요한 부품: ${r.missing.map((m) => m.name).join(', ')}`);
       else toast(`🔧 가진 부품만 끼웠어요 · 없는 부품(순정 칸): ${r.missing.map((m) => m.name).join(', ')}`);
+      // 강화 단계는 내 것 그대로 (online.copyBuildFrom levels = 단계가 다른 칸)
+      if (r.ok && r.levels && r.levels.length) setTimeout(() => toast(`★ 강화 단계는 따라 할 수 없어요 · ${r.levels.map((x) => `${x.short || x.name} 내 ★${x.myLv} / 그 사람 ★${x.wantLv}`).join(', ')}`), 2700);
     }
     else if (act === 'olGhost') {
       const nick = b.dataset.nick, car = b.dataset.car, map = olMap, pid = b.dataset.pid;
@@ -1712,6 +1917,7 @@ export async function runHome() {
     if (e.target?.isContentEditable) return;
     const k = e.code;
     if (k === 'KeyC' && ['map','season'].includes(view)) { e.preventDefault(); openPrepGarage(); return; }
+    if (coach.running) return; // 안내 중에는 coachMarks가 키를 받음
     const act = document.activeElement;
     const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' }[k];
     if (k === 'Escape' || k === 'Backspace') {
@@ -1791,7 +1997,7 @@ export async function runHome() {
       }
       if (!act || act === document.body) {
         e.preventDefault();
-        if (view === 'main') show('mode');
+        if (view === 'main') show(playView());
         else if (view === 'mode') nextMode();
       }
     }
@@ -1803,7 +2009,12 @@ export async function runHome() {
   selectCar(carId);
   selectMap(mapId);
   refreshModes();
-  const startView = params.get('menu');
+  // ?menu=로 잠긴 화면을 열면 홈으로 (Lv1의 ?menu=mode = 방식이 하나라 맵 고르기로)
+  const menuParam = params.get('menu');
+  const MENU_GATE = { car: 'garage', records: 'records', ranking: 'records', meta: 'goals', achievements: 'goals', goals: 'goals', shop: 'shop' };
+  const menuLocked = !!(menuParam && MENU_GATE[menuParam] && !G(MENU_GATE[menuParam]));
+  const startView = menuLocked ? 'main' : menuParam === 'mode' && !G('time') ? 'map' : menuParam;
+  if (menuLocked) setTimeout(() => toast(`${gate.lockText(MENU_GATE[menuParam])} · ${gate.featureOf(MENU_GATE[menuParam]).name}은(는) 레이스를 달리면 열려요`), 300);
   if (startView === 'car' && (params.has('carTab') || params.has('car'))) garageDetail(true, false);
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else if (['achievements', 'goals', 'shop'].includes(startView)) { show('meta'); metaPage.showTab(startView === 'achievements' ? 'achievements' : startView); }
@@ -1811,11 +2022,13 @@ export async function runHome() {
   // 레이스 방식 → 맵 / 시즌 구성. 차고는 별도 왕복 화면이에요.
   function refreshFlow() {
     const lastStep = raceMode === 'champ' ? 'season' : 'map';
-    for (const [v, n] of [['mode', 1], ['car', 0], ['map', 2], ['season', 2]]) {
+    const withMode = G('time'); // Lv1은 방식 단계 없이 맵 → 출발
+    for (const [v, n0] of [['mode', 1], ['car', 0], ['map', 2], ['season', 2]]) {
+      const n = withMode || !n0 ? n0 : n0 - 1;
       let f = views[v].querySelector('.hx-flow');
       if (!f) { f = document.createElement('nav'); f.className = 'hx-flow'; f.setAttribute('aria-label', '레이스 준비 단계'); views[v].prepend(f); }
       f.hidden = v === 'car';
-      f.innerHTML = [['mode', '방식'], [lastStep, raceMode === 'champ' ? '시즌 맵 구성' : '맵']]
+      f.innerHTML = [...(withMode ? [['mode', '방식']] : []), [lastStep, raceMode === 'champ' ? '시즌 맵 구성' : '맵']]
         .map(([id, t], i) => '<button class="' + (i + 1 === n ? 'on' : i + 1 < n ? 'done' : '') + '" data-go="' + id + '" ' + (i + 1 > n ? 'disabled tabindex="-1"' : 'data-nav') + (i + 1 === n ? ' aria-current="step"' : '') + '><b>' + (i + 1 < n ? '✓' : i + 1) + '</b>' + t + '</button>').join('<i>›</i>') + '<i>›</i><span class="end">🏁 출발</span>';
     }
   }
@@ -1827,7 +2040,14 @@ export async function runHome() {
   const levelNews = () => {
     if (newsDone) return;
     newsDone = true;
-    showLevelNews();
+    applyGate(); // 서버 경험치를 받은 뒤 레벨이 바뀌었을 수 있음
+    // 해금 안내 순서: (기존 사용자) '새 안내 n개' 한 번 → 레벨 업 창(+새 기능) → 설정·주소로 부탁한 안내
+    if (gate.urlCoach() && gate.coachActive()) { gate.markSeen(); gate.markSeenAll(false); } // ?coach=<id> 시험: 창 없이 그 안내만
+    else if (gateInfo.legacy && gate.coachActive()) showLegacyCard();
+    else showLevelNews();
+    const want = gate.coachActive() ? gate.urlCoach() || gate.takeReplay() : null;
+    if (want && !params.get('join')) setTimeout(() => coach.run(want), 0); // 창이 떠 있으면 닫힐 때까지 기다림
+    refreshCoachChip();
   };
   online
     .syncXp()
@@ -1896,7 +2116,7 @@ export async function runHome() {
   }
   padHint();
   pad.onConnect(padHint);
-  window.home = { show, selectCar, selectMap, start, startTutorial, openLobby, preview, welcome: welcomeDialog, champ: champStart, get mode() { return raceMode; }, get view() { return view; }, get carId() { return carId; }, get mapId() { return mapId; } };
+  window.home = { show, selectCar, selectMap, start, startTutorial, openLobby, preview, coach, gate, applyGate, welcome: welcomeDialog, champ: champStart, get mode() { return raceMode; }, get view() { return view; }, get carId() { return carId; }, get mapId() { return mapId; } };
 }
 
 /** 3D 차 미리보기 (턴테이블 위에서 빙글빙글, 마우스로 끌어서 돌리기) */
@@ -2117,7 +2337,7 @@ function createPreview(home) {
   // 마우스·터치로 수동 회전, 손을 떼면 정지
   let angle = -0.6, dragging = false, lastX = 0, lastY=0, pitch=.27, zoom=1;
   home.addEventListener('pointerdown', (e) => {
-    if(lift.active || e.target.closest('button,input,select,.h-carinfo,.h-carlist,.h-top'))return;
+    if(lift.active || e.target.closest('button,input,select,.h-carinfo,.h-carlist,.h-top,[data-nav],.h-page,.gx-news'))return; // 설정 줄 같은 버튼 아닌 칸도 눌리게 (예전엔 홈이 포인터를 잡아 click이 #home에서 났음)
     const stage=home.querySelector('.g2-detail .h-carstage')?.getBoundingClientRect();
     if(viewName==='car' && (!stage || e.clientX<stage.left || e.clientX>stage.right || e.clientY<stage.top || e.clientY>stage.bottom))return;
     dragging = true;lastY=e.clientY;

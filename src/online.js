@@ -477,7 +477,11 @@ export const online = {
     const missing = P.buildChips(want).filter((c) => fit[c.slot] !== c.partId).map((c) => ({ slot: c.slot, partId: c.partId, name: c.name, short: c.short }));
     const r = P.setBuild(carId, fit);
     if (!r || !r.ok) return { ok: false, sig: STOCK_SIG, wanted, same: false, missing, message: (r && r.message) || '저장하지 못했어요' };
-    return { ok: true, sig: r.sig, wanted, same: r.sig === wanted, missing };
+    // 강화 단계 (2026-11-15): 부품만 따라 하고 단계는 내 것 → same은 부품 기준, levels = 단계가 다른 칸 (화면 토스트용)
+    const pSig = (x) => (P.partsSig ? P.partsSig(x) : P.buildSig(x));
+    const wantLv = P.parseSigLevels ? P.parseSigLevels(wanted) : {};
+    const levels = P.buildChips ? P.buildChips(r.build).map((c) => ({ slot: c.slot, partId: c.partId, name: c.name, short: c.short, wantLv: wantLv[c.partId] || 1, myLv: c.lv || 1 })).filter((x) => x.wantLv !== x.myLv) : [];
+    return { ok: true, sig: r.sig, wanted, same: pSig(r.build) === pSig(want), missing, levels };
   },
   /** 다른 사람(또는 나)의 고스트 (예전 v 2 JSON 문자열 또는 v 3을 푼 v 2 객체, 없으면 null). 👻 같이 달리기를 누를 때만 받음 */
   async ghost(map, car, playerId) {

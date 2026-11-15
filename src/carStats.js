@@ -5,7 +5,7 @@
 //   부품의 토크 기울이기·터보 랙처럼 간단한 식에 안 보이는 것은 '자세한 식'(D)으로 순정 대비 비율을 재서 곱함
 //   주의: 예상 값이지 실제 랩 기록이 아님 (실제는 .debug/parts_balance.js)
 import { listCars, stockCarConfig } from './carRoster.js';
-import { applyBuild, normBuild, buildSig } from './parts.js';
+import { applyBuild } from './parts.js';
 
 /** 능력치 8개 [키, 이름, 단위 설명] — 홈 차 고르기 막대와 같은 키 */
 export const STAT_KEYS = [
@@ -203,11 +203,13 @@ export function statsFromConfigs(stock, built, ranges) {
  * 한 차 + 조립의 능력치 (조립 화면용)
  *   → { carId, build, sig, stock: { score100, metrics, raw }, built: { ... }, diff: { score100: { 키: +n }, metrics: { 키: +n }, pct: { 키: 원래 값 대비 % } } }
  *   build: { 칸: 부품 id } | buildSig | null. 가진 부품인지는 안 봄 (미리 보기 가능)
+ *   opts.levels (강화, 2026-11-15): 'mine' | { 부품 id: lv } | false — 없으면 sig 안 단계 → 조립 객체의 숨은 levels(getBuild) → Lv1 (upgrade-contract.md)
+ *     {...build}로 펼친 객체는 숨은 levels가 사라지므로 내 단계를 보려면 { levels: 'mine' }
  */
-export async function buildStats(carId, build) {
+export async function buildStats(carId, build, opts) {
   const [stock, ranges] = await Promise.all([stockOf(carId), statRanges()]);
-  const b = normBuild(build);
-  const built = applyBuild(stock, b);
+  const built = applyBuild(stock, build, opts);
+  const b = built.partsInfo.build;
   const s = statsFromConfigs(stock, stock, ranges);
   const r = statsFromConfigs(stock, built, ranges);
   const diff = { score100: {}, metrics: {}, pct: {} };
@@ -216,7 +218,7 @@ export async function buildStats(carId, build) {
     diff.pct[k] = s.raw[k] ? +((r.raw[k] / s.raw[k] - 1) * 100).toFixed(1) : 0;
   }
   for (const [k] of METRIC_KEYS) diff.metrics[k] = +((r.metrics[k] ?? 0) - (s.metrics[k] ?? 0)).toFixed(2);
-  return { carId: stock.carId, build: b, sig: buildSig(b), stock: s, built: r, diff, partsInfo: built.partsInfo };
+  return { carId: stock.carId, build: b, sig: built.partsInfo.sig, levels: built.partsInfo.levels, stock: s, built: r, diff, partsInfo: built.partsInfo };
 }
 /** 순정 능력치만 (buildStats(carId, null).stock과 같음) */
 export async function stockStats(carId) {

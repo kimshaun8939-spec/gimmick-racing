@@ -2,11 +2,11 @@
 import * as T from 'three';
 import {createCarModel} from './carModel.js';
 import {listCars} from './carRoster.js';
-import {partOf,partLook} from './parts.js';
+import {partOf,partLook,partLevel} from './parts.js';
 export {PART_VIEW} from './carParts3d.js';
 import {PART_VIEW,isolatedPart} from './carParts3d.js';
 
-const VERSION=10,STORE='gimmick.partThumbs',mem=new Map();
+const VERSION=11,STORE='gimmick.partThumbs',mem=new Map();
 let studio,queue=Promise.resolve(),source;
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0).toString(36);};
 async function sourceHash(){
@@ -40,20 +40,22 @@ const fake=()=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0
  * size는 가로 폭, 세로는 2/3. {width,height}도 가능. 순정은 'stock' + slot 옵션.
  * 동시 요청은 차례로 처리하며 실패는 reject. UI 연결은 호출하는 쪽에서 담당.
  */
-export function partThumb(partId,{carId='f1',size=400,slot='engine'}={}){
+export function partThumb(partId,{carId='f1',size=400,slot='engine',lv}={}){
+ // upgradeD1: lv = 강화 단계 모양 (없으면 내 단계). 캐시 키에 들어감
+ lv=Math.max(1,Math.min(5,Math.floor(Number(lv??(partOf(partId)?partLevel(partId):1)))||1));
  const job=queue.then(async()=>{
   const p=partOf(partId);if(!p&&partId!=='stock')throw new Error('알 수 없는 부품: '+partId);
   slot=p?.slot||slot;if(!PART_VIEW[slot])throw new Error('알 수 없는 부품 칸: '+slot);
   const cars=await listCars(),car=cars.find(c=>c.id===carId);if(!car)throw new Error('알 수 없는 차: '+carId);
   const width=Math.max(64,Math.min(1024,Math.round(typeof size==='number'?size:size.width)||400)),height=Math.max(64,Math.min(1024,Math.round(typeof size==='number'?size*2/3:size.height)||267));
-  const key=hash(JSON.stringify([VERSION,partId,carId,slot,width,height,await sourceHash(),car.look,p?.look]));
+  const key=hash(JSON.stringify([VERSION,partId,carId,slot,width,height,await sourceHash(),car.look,p?.look,lv]));
   if(mem.has(key))return mem.get(key);
   try{const old=JSON.parse(localStorage.getItem(STORE)||'{}');if(old[key]){mem.set(key,old[key]);return old[key];}}catch{}
   const st=await getStudio();
   if(st.carId!==carId){st.model?.dispose();st.model=createCarModel(car.look);st.carId=carId;}
   // bigparts: 부품은 순정 위에 덧붙는 장치. 순정 카드는 교체 장면과 같은 범위(= 덧붙는 것 없음)로 표시, 타이어만 순정 바퀴 그림.
   if(!p&&slot!=='tire'){const url=stockIcon(slot,width,height);mem.set(key,url);return url;}
-  const m=st.model;m.setParts(partLook(p?{[slot]:partId}:{}));
+  const m=st.model;m.setParts(partLook(p?{[slot]:partId}:{},{levels:p?{[partId]:lv}:false}));
   try{
    const f=fake();if(slot==='water'){f.mode='boat';f.surface='water';}m.sync(f,2,0);m.root.updateMatrixWorld(true);
    const product=isolatedPart(m,slot,p?.look);st.scene.add(product);st.product=product;

@@ -1,7 +1,7 @@
 // 결과 화면 '보상 띠' + '레벨 업 카드' (rewards1, 2026-11-15, 점검 .debug/agents/rewards-review.md 제안 A·C)
 //   보상 띠 (완주 시간 바로 아래 한 줄, 휴대폰도 첫 화면 안):
 //     [Lv·티어 + XP 막대(이번 판 전 = 진한 색, 이번 판 증가분 = 밝은 색, 차오름) + '+n XP' · 다음 레벨까지 n XP (약 n판)]
-//     [피트 코인 +n · 보유] [다음 보상 그림 카드 (rewardPath.nextRewardLevel)]
+//     [이번 판 조각 세 칩 ⬡ +n · ◆ +n · ✿ +n (아래 보유) (upgradeD2: summary gain·wallet)] [다음 보상 그림 카드 (rewardPath.nextRewardLevel)]
 //   레벨 업 카드 (결과 화면 스크롤 맨 위): 'Lv.n 달성 — 새로 열렸어요' + 그림 타일 최대 4개(+n개 더) + 받은 선물 부품 한 줄
 //     타일 = 바로 가기 (부품 → 차고 조립 탭, 코스튬·색 → 커스텀 탭, 차 → 그 차) = 홈 주소 ?menu=car&car=..&carTab=..
 //     이 카드를 보여 주면 홈 레벨 업 창이 같은 소식을 또 띄우지 않게 'gimmick.seenLevel'을 지금 레벨로 (unlocks.takeLevelNews가 읽는 값),
@@ -12,8 +12,8 @@
 import { levelOfXp } from './profile.js';
 import { nextRewardLevel, nextRewards, rewardsBetween, racesToLevel } from './rewardPath.js';
 import { takeNews } from './parts.js';
-import { ACHIEVEMENTS } from './metaCatalog.js';
-import { amount } from './metaUI.js';
+import { ACHIEVEMENTS, CURRENCIES } from './metaCatalog.js';
+import { amount, currencyIcon, rewardChipsHtml, linesHtml, money, CUR_KINDS } from './metaUI.js';
 import { ensureMetaStyle } from './meta.js';
 import { setLast } from './gameData.js';
 
@@ -63,11 +63,14 @@ function artHtml(it) {
   return `<span class="rw-thumb" data-rw-thumb="${esc(thumb)}" data-rw-car="${esc(it.carId || it.id)}" data-rw-costume="${esc(it.kind === 'costume' ? it.id : '')}"><span class="rw-emoji">${it.kind === 'car' ? '🚗' : '✦'}</span></span>`;
 }
 const KIND_LABEL = { car: '새 차', part: '부품', paint: '색', costume: '코스튬', tier: '티어' };
-function subText(it) {
-  if (it.kind === 'part') return `${it.slotName} · ${it.how === 'gift' ? '선물' : '⬡ ' + n(it.price)}`;
-  if (it.kind === 'costume') return `${it.carName} · ⬡ ${n(it.price)}`;
-  if (it.kind === 'car') return '바로 탈 수 있어요';
-  if (it.kind === 'paint') return '모든 차에 칠하기';
+/** 가격 글: 아이콘 + 숫자 (재화 3종, upgradeD2) */
+const priceTxt = (it) => (it.price > 0 ? `${currencyIcon(it.currency || (it.kind === 'part' || it.kind === 'car' ? 'pit' : 'custom'), 12)} ${n(it.price)}` : '');
+/** 타일 아래 작은 줄 (HTML) */
+function subHtml(it) {
+  if (it.kind === 'part') return `${esc(it.slotName)} · ${it.how === 'gift' ? '선물' : priceTxt(it)}`;
+  if (it.kind === 'costume') return `${esc(it.carName)} · ${priceTxt(it)}`;
+  if (it.kind === 'car') return it.state === 'owned' ? '내 차' : `${priceTxt(it)}으로 살 수 있어요`;
+  if (it.kind === 'paint') return it.state === 'owned' ? '모든 차에 칠하기' : `${priceTxt(it)} · 모든 차에 칠하기`;
   return '등급 이름';
 }
 
@@ -99,7 +102,12 @@ export function prepareRewards(meta, opts = {}) {
     unlocked = rewardsBetween(newsFrom, after.level, { carId, level: after.level });
     try { if ((Number(localStorage.getItem('gimmick.seenLevel')) || 1) < after.level) localStorage.setItem('gimmick.seenLevel', String(after.level)); } catch {}
   }
-  return { carId, room: !!opts.room, after, before, gained, coins: num(meta.coins), balance: num(meta.balance), levelUp, tierUp: levelUp && before.title !== after.title, newsFrom, max, toNext, next, toReward, mineNext, gifts, unlocked };
+  // 재화 3종 (upgradeD2): 이번 판 얻은 양 gain · 보유 wallet (예전 summary면 피트만), 레벨 업 보너스 = 'Lv' 줄들의 합
+  const gain = { pit: 0, up: 0, custom: 0, ...(meta.gain || { pit: num(meta.coins) }) };
+  const wallet = { pit: 0, up: 0, custom: 0, ...(meta.wallet || { pit: num(meta.balance) }) };
+  const lvBonus = { pit: 0, up: 0, custom: 0 };
+  for (const l of meta.lines || []) if (/^레벨 업/.test(l.reason || '')) for (const k of CUR_KINDS) lvBonus[k] += num(l[k]);
+  return { carId, room: !!opts.room, after, before, gained, coins: num(meta.coins), balance: num(meta.balance), gain, wallet, lvBonus, levelUp, tierUp: levelUp && before.title !== after.title, newsFrom, max, toNext, next, toReward, mineNext, gifts, unlocked };
 }
 
 // ───────── 보상 띠 ─────────
@@ -118,7 +126,9 @@ export function rewardBandHtml(m) {
     <div class="rw-bar" role="progressbar" aria-label="다음 레벨 경험치" aria-valuemin="0" aria-valuemax="${a.need}" aria-valuenow="${Math.min(a.have, a.need)}">
       <i class="rw-old" style="width:${bp}%"></i><i class="rw-new" style="left:${bp}%;width:${Math.max(0, ap - bp)}%"></i></div>
     <small class="rw-left">${left}</small></div>`;
-  const coin = `<div class="rw-coin"><span class="rw-coin-ico" aria-hidden="true">⬡</span><div><b>+<span data-rw-count="${m.coins}">${n(m.coins)}</span></b><small>피트 코인 · 보유 ${n(m.balance)}</small></div></div>`;
+  // 세 조각 칩: 이번 판 +n (숫자가 올라감) · 아래 보유
+  const chip = (k) => { const c = CURRENCIES[k], g = num(m.gain[k]); return `<span class="rw-c rw-c-${k}${g ? '' : ' zero'}" style="--cur:${c.color}" title="${esc(c.name + ' · ' + c.use)}" aria-label="${esc(c.name)} +${n(g)}개, 보유 ${n(m.wallet[k])}개">${currencyIcon(k, 24)}<span class="rw-cv"><b>+<span data-rw-count="${g}">${n(g)}</span></b><small><i class="rw-cn">${esc(c.short)} </i><i class="rw-hold">보유 </i>${n(m.wallet[k])}</small></span></span>`; };
+  const coin = `<div class="rw-coin rw-cur"><small class="rw-curhead">이번 판 조각 <em>· 보유</em></small><div class="rw-curs">${CUR_KINDS.map(chip).join('')}</div></div>`;
   let next;
   if (m.next) {
     const main = pickNext(m.next.items);
@@ -132,7 +142,7 @@ export function rewardBandHtml(m) {
       <div class="rw-art rw-k-${main.kind}">${artHtml(main)}</div>
       <div class="rw-ntext"><small>다음 보상 · <b>Lv.${m.next.level}</b>${when ? ` · ${when}` : ''}</small><b class="rw-nname">${main.kind === 'costume' && !main.mine ? esc(main.carName) + ' · ' : ''}${esc(main.name)}</b><span>${esc(KIND_LABEL[main.kind])}${main.kind === 'part' ? ' · ' + esc(main.slotName) : ''}${more ? ' · + ' + esc(more) : ''}${esc(mineTxt)}</span></div></div>`;
   } else {
-    next = `<div class="rw-next rw-done"><div class="rw-art"><span class="rw-emoji">🏁</span></div><div class="rw-ntext"><small>다음 보상</small><b class="rw-nname">모든 레벨 보상 달성</b><span>피트 샵에서 코인으로 꾸며 보세요</span></div></div>`;
+    next = `<div class="rw-next rw-done"><div class="rw-art"><span class="rw-emoji">🏁</span></div><div class="rw-ntext"><small>다음 보상</small><b class="rw-nname">모든 레벨 보상 달성</b><span>피트 샵에서 조각으로 차·부품·꾸미기를 사 보세요</span></div></div>`;
   }
   return `<section class="rw-band${m.levelUp ? ' lvup' : ''}${m.max ? ' max' : ''}" data-rw-band aria-label="이번 판 보상">${xp}${coin}${next}</section>`;
 }
@@ -151,7 +161,7 @@ function goUrl(it, carId) {
 }
 function tile(it, m) {
   const url = m.room ? '' : goUrl(it, m.carId);
-  const inner = `<span class="rw-tart rw-k-${it.kind}">${artHtml(it)}</span><span class="rw-tkind">${esc(KIND_LABEL[it.kind])}</span><b>${esc(it.name)}</b><small>${esc(subText(it))}</small>${url ? '<span class="rw-tgo">바로 가기 ›</span>' : ''}`;
+  const inner = `<span class="rw-tart rw-k-${it.kind}">${artHtml(it)}</span><span class="rw-tkind">${esc(KIND_LABEL[it.kind])}</span><b>${esc(it.name)}</b><small>${subHtml(it)}</small>${url ? '<span class="rw-tgo">바로 가기 ›</span>' : ''}`;
   return url ? `<button type="button" class="rw-tile" data-rw-go="${esc(url)}">${inner}</button>` : `<div class="rw-tile">${inner}</div>`;
 }
 /** 타일 순서: 내 차·공용 (차·부품·색·내 코스튬) → 다른 차 코스튬. 티어는 머리에 */
@@ -170,7 +180,7 @@ export function levelUpHtml(m) {
   const shown = tiles.slice(0, 4), more = tiles.slice(4);
   const nextTxt = m.next ? `다음 보상 Lv.${m.next.level}` : '';
   return `<section class="rw-levelup" aria-label="레벨 업">
-    <header><span class="rw-burst" aria-hidden="true">🎉</span><div><b>Lv.${m.after.level} 달성</b><small>${tiles.length ? '새로 열렸어요' : '이번 레벨엔 새 보상이 없어요' + (nextTxt ? ' · ' + nextTxt : '')}</small></div>${tier ? `<span class="rw-tierup" style="--tc:${esc(tier.color)}">${esc(tier.icon)} ${esc(tier.name)} 승급</span>` : ''}</header>
+    <header><span class="rw-burst" aria-hidden="true">🎉</span><div><b>Lv.${m.after.level} 달성</b><small>${tiles.length ? '새로 열렸어요' : '이번 레벨엔 새 보상이 없어요' + (nextTxt ? ' · ' + nextTxt : '')}</small></div>${CUR_KINDS.some((k) => m.lvBonus[k] > 0) ? `<span class="rw-lvbonus"><small>레벨 업 보너스</small>${rewardChipsHtml(m.lvBonus, { size: 15 })}</span>` : ''}${tier ? `<span class="rw-tierup" style="--tc:${esc(tier.color)}">${esc(tier.icon)} ${esc(tier.name)} 승급</span>` : ''}</header>
     ${shown.length ? `<div class="rw-tiles" style="--n:${shown.length}">${shown.map((x) => tile(x, m)).join('')}</div>` : ''}
     ${more.length ? `<details class="rw-more"><summary>+ ${more.length}개 더 보기</summary><div class="rw-tiles small" style="--n:4">${more.map((x) => tile(x, m)).join('')}</div></details>` : ''}
     ${gifts}</section>`;
@@ -180,7 +190,7 @@ export function levelUpHtml(m) {
 export function rewardDetailsHtml(r) {
   if (!r) return '';
   const achieved = (r.achievements || []).map((id) => ACHIEVEMENTS.find((a) => a.id === id)).filter(Boolean).sort((a, b) => b.tier - a.tier);
-  const row = (a) => '<span>' + ['', '🥉', '🥈', '🥇'][a.tier] + ' ' + esc(a.name) + ' <b>⬡ ' + a.coins + ' · +' + a.xp + ' XP</b></span>';
+  const row = (a) => '<span class="rw-arow">' + ['', '🥉', '🥈', '🥇'][a.tier] + ' <span class="rw-an">' + esc(a.name) + '</span> <b class="mt-cur-row">' + rewardChipsHtml(a.reward || { pit: a.coins }, { size: 13 }) + ' +' + a.xp + ' XP</b></span>';
   const bar = (v, g, label) => '<div class="mt-bar" role="progressbar" aria-label="' + esc(label) + '" aria-valuemin="0" aria-valuemax="' + g + '" aria-valuenow="' + Math.min(g, Math.floor(v)) + '"><i style="width:' + Math.min(100, (100 * v) / g) + '%"></i></div>';
   const goals = r.goals || [], progress = r.progress || [];
   const top = achieved.length
@@ -190,7 +200,7 @@ export function rewardDetailsHtml(r) {
   return '<section class="mt-result rw-detail">' + top +
     (goals.length ? '<p class="mt-result-goals">✓ ' + goals.map((g) => esc(g.name)).join(' · ') + '</p>' : '') +
     (r.title ? '<div class="mt-result-title">✦ ' + esc(r.title) + '</div>' : '') + prog +
-    '<details class="res-detail"><summary>보상 내역</summary><div class="mt-result-breakdown">피트 코인: 완주 ⬡ ' + n(r.base) + ' · 순위 ⬡ ' + n(r.place) + ' · 업적·목표 ⬡ ' + n(num(r.coins) - num(r.base) - num(r.place)) + '<br>XP: 완주 +' + n(r.raceXp) + ' · 업적·목표 +' + n(r.xp) + '</div></details>' +
+    '<details class="res-detail"><summary>보상 내역 <span class="mt-cur-row">' + rewardChipsHtml(r.gain || { pit: r.coins }, { size: 13 }) + '</span></summary><div class="mt-result-breakdown">' + linesHtml(r) + '<div class="mt-line"><span>XP</span><span>완주 +' + n(r.raceXp) + ' · 업적·목표 +' + n(r.xp) + '</span></div></div></details>' +
     '<a class="mt-result-link" href="?menu=achievements">업적 · 피트 샵 →</a></section>';
 }
 

@@ -226,8 +226,89 @@ function overlapLayoutCss() {
   #home .gm-set-foot>.gm-btn { align-self:flex-start; }
  }
  .gm-ctl-row small { word-break:keep-all; text-wrap:pretty; }
+ .gm-seg button.fg-optlock { opacity:.55; }
+ .fg-set .fg-replayhead { margin:14px 0 4px; }
+ .fg-set .fg-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; margin:6px 0 4px; }
+ .fg-set .fg-item { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:44px; padding:6px 8px 6px 12px; border-radius:12px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
+ .fg-set .fg-item span { min-width:0; font-size:13.5px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+ .fg-set .fg-item small { display:block; font-size:11.5px; font-weight:600; color:#b2bfd4; }
+ .fg-set .fg-item .gm-btn { flex-shrink:0; min-height:36px; }
+ .fg-set .fg-note { margin:6px 0 0; font-size:12.5px; color:#b2bfd4; }
  `;
  document.head.appendChild(st);
+}
+
+/**
+ * 설정 → 안내 (기능 해금 코치 마크, 작업 C 2026-11-15): '안내 모두 끄기' + '안내 다시 보기' 목록.
+ *   featureGate.js는 나중에 불러옴 (게임 안 설정도 가볍게). 다시 보기 = 홈이면 바로 (이벤트 'gimmick:coachReplay'), 게임 중이면 홈에 돌아갈 때.
+ */
+function createCoachSettings(root, opts) {
+  const sec = document.createElement('section');
+  sec.className = 'gm-set-group fg-set';
+  sec.dataset.settingGroup = '안내';
+  sec.dataset.coach = 'settings.coach';
+  sec.innerHTML = `<h3>안내</h3>
+    <div class="gm-set-row" tabindex="0" data-nav data-coach-off><div class="gm-set-label"><b>안내 모두 끄기</b><small>새 기능이 열릴 때 화면을 어둡게 하고 버튼을 짚어 주는 안내를 안 띄워요</small></div><div class="gm-set-ctl"><button class="gm-switch" tabindex="-1" aria-label="안내 모두 끄기"><i></i></button></div></div>
+    <div class="gm-set-label fg-replayhead"><b>안내 다시 보기</b><small>레벨이 되어 열린 기능의 안내를 골라 다시 봐요</small></div>
+    <div class="fg-list" role="list"></div><p class="fg-note"></p>`;
+  root.appendChild(sec);
+  let gate = null, alive = true;
+  const list = sec.querySelector('.fg-list'), note = sec.querySelector('.fg-note');
+  const sw = sec.querySelector('.gm-switch');
+  function render() {
+    if (!gate || !alive) return;
+    sw.classList.toggle('on', gate.coachOff());
+    const st = gate.gateState().coach || {};
+    list.innerHTML = gate.COACHES.map((c) => {
+      const open = gate.isOpen(c.feature), wait = gate.WAITING_COACHES.has(c.id);
+      const s = st[c.id] === 'done' ? '본 안내' : st[c.id] === 'skipped' ? '건너뜀' : '아직 안 봄';
+      return `<div class="fg-item" role="listitem"><span>${c.icon} ${c.name}<small>Lv.${c.level} · ${open ? (wait ? '화면 준비 중' : s) : '아직 잠김'}</small></span><button class="gm-btn small" data-nav data-coach-replay="${c.id}" ${open && !wait ? '' : 'disabled'}>${open ? (wait ? '준비 중' : '다시 보기') : `🔒 Lv.${c.level}`}</button></div>`;
+    }).join('');
+    note.textContent = gate.gateActive() ? `지금 Lv.${gate.gateLevel()} · 레벨이 오르면 새 기능과 안내가 하나씩 열려요` : '지금은 모든 기능이 열려 있어요 (시험 주소)';
+  }
+  sec.addEventListener('click', (e) => {
+    if (!gate) return;
+    const b = e.target.closest('[data-coach-replay]');
+    if (b && !b.disabled) {
+      gate.requestReplay(b.dataset.coachReplay);
+      uiSound('select');
+      if (opts.inGame) note.textContent = '홈 화면으로 돌아가면 이 안내가 시작돼요';
+      try {
+        window.dispatchEvent(new CustomEvent('gimmick:coachReplay', { detail: { id: b.dataset.coachReplay } }));
+      } catch {}
+      render();
+    }
+  });
+  // 줄 아무 데나 누르면 켬/끔 (누르는 사이 초점이 옮겨지며 click이 #home에서 나서 pointerup으로)
+  sec.querySelector('[data-coach-off]').addEventListener('pointerup', (e) => {
+    if (!gate || e.button > 0) return;
+    gate.setCoachOff(!gate.coachOff());
+    uiSound('toggle');
+    render();
+  });
+  sec.querySelector('[data-coach-off]').addEventListener('keydown', (e) => {
+    if ((e.code === 'Enter' || e.code === 'Space' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') && gate) {
+      e.preventDefault();
+      e.stopPropagation();
+      gate.setCoachOff(!gate.coachOff());
+      uiSound('toggle');
+      render();
+    }
+  });
+  const onGate = () => render();
+  window.addEventListener('gimmick:gate', onGate);
+  import('./featureGate.js')
+    .then((m) => {
+      gate = m;
+      render();
+    })
+    .catch(() => (sec.hidden = true));
+  return {
+    destroy() {
+      alive = false;
+      window.removeEventListener('gimmick:gate', onGate);
+    },
+  };
 }
 
 export function createSettingsPanel(opts = {}) {
@@ -252,6 +333,7 @@ export function createSettingsPanel(opts = {}) {
     ['drive', '운전·도움', ['주행', '조향 · 운전 도움']],
     ['race', '레이스·표시', ['레이스', '표시']],
     ['touch', '터치', ['터치 (휴대폰)']],
+    ['coach', '안내', ['안내']], // 기능 해금 안내 (작업 C, 2026-11-15)
   ];
   const categories = document.createElement('div');
   categories.className = 'gm-set-categories';
@@ -267,6 +349,8 @@ export function createSettingsPanel(opts = {}) {
   }
   categories.addEventListener('click', e => { const b = e.target.closest('[data-setting-page]'); if(b) { showSettingPage(b.dataset.settingPage); uiSound('toggle'); } });
   const feedback = text => { help.querySelector('output').textContent = text; };
+  // 레벨로 잠긴 값 (홈만: 봇 '어려움'·'마스터', featureGate). 돌려주는 값 = '🔒 Lv.4' 같은 글 또는 null
+  const optLock = (key, v) => { try { return opts.optionLock ? opts.optionLock(key, v) : null; } catch { return null; } };
   help.querySelector('button').addEventListener('click', () => {
     for (const [key, value] of Object.entries({gearbox:'auto',racingLine:true,steerSens:1,steerRamp:'smooth',brakeAssist:'light',steerAssist:'light',tcs:true})) settings.set(key, value);
     feedback('초보 추천 적용: 자동 변속 · 라인 켬 · 부드러운 조향 · 약한 브레이크/조향 도움 · 헛바퀴 방지 켬');
@@ -341,6 +425,8 @@ export function createSettingsPanel(opts = {}) {
       ctl.innerHTML = `<div class="gm-seg">${d.options.map(([v, l], i) => `<button tabindex="-1" data-i="${i}">${l}</button>`).join('')}</div>`;
       ctl.querySelectorAll('button').forEach((b) =>
         b.addEventListener('click', () => {
+          const lock = optLock(d.key, d.options[+b.dataset.i][0]);
+          if (lock) return feedback(`${d.label} '${d.options[+b.dataset.i][1]}': ${lock}에 열려요`);
           settings.set(d.key, d.options[+b.dataset.i][0]);
           uiSound('toggle');
         }),
@@ -349,6 +435,7 @@ export function createSettingsPanel(opts = {}) {
     groupEl.appendChild(row);
     rows.push({ d, row, ctl });
   }
+  const coachBox = createCoachSettings(root, opts);
   const foot = document.createElement('div');
   foot.className = 'gm-set-foot';
   foot.innerHTML = `<span>바꾸면 바로 저장돼요 · 초기화는 일반·패드 설정에 적용 (조작키·패드 버튼 배치는 각 탭에서)</span><button class="gm-btn small" data-nav tabindex="0">기본값으로 되돌리기</button>`;
@@ -382,7 +469,15 @@ export function createSettingsPanel(opts = {}) {
       } else if (d.type === 'toggle') {
         ctl.querySelector('button').classList.toggle('on', !!v);
       } else {
-        ctl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', d.options[+b.dataset.i][0] === v));
+        ctl.querySelectorAll('button').forEach((b) => {
+          b.classList.toggle('on', d.options[+b.dataset.i][0] === v);
+          if (!opts.optionLock) return;
+          const lock = optLock(d.key, d.options[+b.dataset.i][0]);
+          b.classList.toggle('fg-optlock', !!lock);
+          b.title = lock ? `${lock}에 열려요` : '';
+          const l = d.options[+b.dataset.i][1];
+          b.textContent = lock ? `🔒 ${l}` : l;
+        });
       }
     }
   }
@@ -398,7 +493,9 @@ export function createSettingsPanel(opts = {}) {
     else if (d.type === 'toggle') settings.set(key, !v);
     else {
       const i = d.options.findIndex((o) => o[0] === v);
-      const j = Math.max(0, Math.min(d.options.length - 1, (i < 0 ? 0 : i) + dir));
+      let j = Math.max(0, Math.min(d.options.length - 1, (i < 0 ? 0 : i) + dir));
+      while (j !== i && j >= 0 && optLock(key, d.options[j][0])) j -= dir; // 잠긴 값은 건너뜀 (레벨 해금)
+      if (j < 0 || j >= d.options.length) return;
       settings.set(key, d.options[j][0]);
     }
     uiSound('toggle');
@@ -414,11 +511,17 @@ export function createSettingsPanel(opts = {}) {
     adjust,
     refresh,
     showTab,
+    /** 일반 설정 안 분류 ('media' | 'drive' | 'race' | 'touch' | 'coach') */
+    showPage(id) {
+      showTab('general');
+      showSettingPage(id);
+    },
     get tab() {
       return tab;
     },
     destroy() {
       off();
+      coachBox.destroy();
       offKeys();
       offPad();
       keyPanel.destroy();

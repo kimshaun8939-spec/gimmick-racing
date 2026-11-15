@@ -74,6 +74,7 @@
       "level": 10, "price": 400,
       "mul": { "engine.power": 1.02, "maxSpeed": 0.98, "engine.engineBrake": 1.2, "sound.fBase": 0.9, "sound.sub": 1.2 },
       "fx": { "torqueTilt": -0.25 },
+      "up": { "roles": { "engine.engineBrake": "pro" }, "_roles": "설명이 '떼면 잘 줄어 브레이크 짧음' = 장점" },
       "look": { "exhaust": "big", "exhaustColor": "#3a3d44", "glow": "#ff8a2a", "garage": "v8" }
     },
     {
@@ -94,6 +95,7 @@
       "shines": { "maps": ["volcano", "foundry"], "text": ["코너가 많은 맵"] },
       "level": 1, "price": 150, "alt": { "type": "tutorial", "gift": true },
       "mul": { "gears": 0.93, "maxSpeed": 0.97 },
+      "up": { "bonus": { "mul": { "engine.power": 0.005 } }, "_bonus": "기어비 장점은 안 키움(keepPro) → 대신 단계마다 힘 +0.5% (Lv5 +2%)" },
       "look": { "garage": "short", "color": "#4fd1ff" }
     },
     {
@@ -112,6 +114,7 @@
       "shines": { "maps": ["neon", "moon"], "text": ["수동 변속 쓰는 사람"] },
       "level": 12, "price": 450, "alt": { "type": "license", "id": "B" },
       "mul": { "engine.shiftTime": 0.55, "engine.downShiftTime": 0.6, "engine.perfectShiftKick": 1.5, "engine.engineBrake": 1.4, "tire.liftOff": 1.15 },
+      "up": { "roles": { "engine.engineBrake": "con" }, "_roles": "설명이 '떼면 확 줄어듦' = 단점" },
       "look": { "garage": "seq", "color": "#ff4f6a" }
     },
     {
@@ -198,6 +201,32 @@
       "look": { "hull": "jet", "nozzles": 2, "motor": false }
     }
   ],
+  "_upgrade": "부품 강화 (작업 A, 2026-11-15, 설계 .debug/design/upgrade-design.md §1·§2, 약속 .debug/agents/upgrade-contract.md). 단계는 부품마다 하나(모든 차 공용), 살 때 Lv1. 값 = 순정에서 벗어난 양(편차) × 배수: mul 1+(m−1)×배수, add a×배수, set·소리(sound.*)는 안 바뀜. 장점/단점은 dir(+1 클수록 좋음, −1 작을수록 좋음, 0 성격)과 편차 부호로 자동, 부품 up.roles로 예외(pro/con/keep). keepPro 키는 장점일 때 안 키움(기어비: 더 짧게 하면 변속이 늘어 느려짐). up.bonus = 단계마다(Lv−1) 더하는 배수(mul: 0.005 = Lv당 +0.5%). 상한: 그 키를 건드리는 부품 중 가장 높은 단계 기준 capDefault(속도 키 ±), 성격 키 ratio 폭·토크 기울이기 한계 × capWiden. abs·blocked는 그대로. Lv1은 지금 값과 똑같음. 확률 chance + 실패마다 pity (그 단계 실패 수), ceiling번 실패하면 다음은 100%. 비용 cost = 강화 조각 (index 0 = Lv1→2)",
+  "upgrade": {
+    "max": 5,
+    "pro": [1, 1.1, 1.2, 1.3, 1.4],
+    "con": [1, 0.75, 0.5, 0.3, 0.1],
+    "capDefault": [0.08, 0.085, 0.09, 0.095, 0.10],
+    "capWiden": [1, 1.1, 1.2, 1.3, 1.4],
+    "cost": [30, 60, 100, 150],
+    "chance": [1, 0.8, 0.6, 0.4],
+    "pity": [0, 0.10, 0.12, 0.15],
+    "ceiling": [0, 2, 4, 4],
+    "currency": "up",
+    "keepPro": ["gears"],
+    "dir": {
+      "engine.power": 1, "maxSpeed": 1, "engine.perfectShiftKick": 1,
+      "tire.lateral": 1, "tire.traction": 1, "tire.brakeGrip": 1, "tire.rearGrip": 1, "tire.yawResponse": 1,
+      "steerLat": 1, "steerLatDownforce": 1, "aero.downforce": 1,
+      "offroad.gripFactor": 1, "offroad.maxSpeedFactor": 1, "drift.holdAngle": 1, "drift.exitKeep": 1,
+      "modes.boat.thrust": 1, "modes.boat.maxSpeed": 1, "modes.boat.turnRate": 1, "modes.boat.carve.turn": 1, "modes.boat.carve.exitKeep": 1,
+      "modes.boat.swell.launch": 1, "modes.boat.currentGain": 1, "modes.boat.surge.thrust": 1, "modes.boat.landSpeedFactor": 1, "modes.boat.landPowerFactor": 1,
+      "gears": -1, "engine.shiftTime": -1, "engine.downShiftTime": -1, "tire.liftOff": -1,
+      "offroad.drag": -1, "kerb.gripLoss": -1, "kerb.jitter": -1, "drift.grip": -1, "drift.holdDrag": -1, "aero.drag": -1,
+      "modes.boat.drag": -1, "modes.boat.carve.drag": -1, "modes.boat.swell.noseLoss": -1,
+      "engine.engineBrake": 0, "camera.topKmh": 0, "engine.turbo.share": 0, "sound.*": 0
+    }
+  },
   "_box": "부품 상자: 부품 기능이 생기기 전부터 레벨이 높은 사람에게 처음 조립 화면을 열 때 한 번만, 이미 레벨이 된 부품(Lv2 이상) 수 × perPart 코인 (meta.claimPartsBox)",
   "box": { "perPart": 100, "minLevel": 2 }
 }

@@ -6,16 +6,19 @@
 // 쓰는 법:
 //   rewardPath({ carId })            → [{ level, kind, id, key, name, icon, color?, carId?, carName?, slot?, slotName?, price, how, alt, mine, state }]
 //       kind = 'tier' | 'car' | 'part' | 'paint' | 'costume'
-//       how  = 'level'(레벨이 되면 저절로) | 'coin'(레벨이 되면 피트 코인으로 구매) | 'gift'(선물로 받음)
+//       how  = 'level'(레벨이 되면 저절로) | 'coin'(레벨이 되면 조각으로 구매) | 'gift'(선물로 받음)   ← 예전 값 그대로 (화면 호환)
+//       currency = 'pit'(피트 조각: 차·부품) | 'custom'(커스텀 조각: 색·코스튬) | null (upgradeB, 2026-11-15)
+//       via  = 설계의 how: 'pit' | 'custom' | 'gift' | 'level' (upgradeB)
+//       차 = 시작 5대를 뺀 16대, 레벨이 되면 피트 조각으로 삼 (state open), 색 = 레벨이 되면 커스텀 조각으로 삼
 //       alt  = 다른 길 글 ('업적 「…」 달성', '아카데미 「…」 금' …) 또는 ''
 //       mine = 모든 차 공용이거나 지금 고른 차 것 (다른 차 코스튬만 false)
-//       state = 'owned'(가짐·열림) | 'open'(레벨은 됨, 코인으로 살 수 있음) | 'locked'(레벨이 아직)
+//       state = 'owned'(가짐·열림) | 'open'(레벨은 됨, 조각으로 살 수 있음) | 'locked'(레벨이 아직)
 //   rewardsAt(level, { carId })      → 그 레벨에 열리는 것들 (같은 순서)
 //   nextRewards({ carId, n, level, mine }) → 지금 레벨보다 높은 것 n개 (mine:true = 다른 차 코스튬 빼고)
 //   nextRewardLevel({ carId, level }) → { level, items } 다음에 무언가 열리는 레벨 (없으면 null)
 //   racesToLevel(level, { xp, avg }) → { xp: 남은 XP, races: 약 n판, avg: 한 판 평균 XP, guess: 기록이 없어 130으로 가정했나 }
 import { profile, levelStartXp } from './profile.js';
-import { PAINTS, carUnlockList, paintLockText } from './unlocks.js';
+import { PAINTS, carUnlockList, paintLockText, isPaintUnlocked } from './unlocks.js';
 import { partsData, partState, altText } from './parts.js';
 import { listCostumes } from './carCostumes.js';
 import { ACHIEVEMENTS, costumePrice, paintPrice, partPrice } from './metaCatalog.js';
@@ -42,18 +45,18 @@ export function rewardPath(opts = {}) {
   // 티어 (Lv1 루키는 시작이라 뺌)
   for (const t of profile.tiers()) {
     if (t.lv <= 1) continue;
-    out.push({ level: t.lv, kind: 'tier', id: 'tier-' + t.lv, key: 'tier:' + t.lv, name: t.title, icon: t.icon, color: t.color, price: 0, how: 'level', alt: '', mine: true, state: L >= t.lv ? 'owned' : 'locked' });
+    out.push({ level: t.lv, kind: 'tier', id: 'tier-' + t.lv, key: 'tier:' + t.lv, name: t.title, icon: t.icon, color: t.color, price: 0, how: 'level', currency: null, via: 'level', alt: '', mine: true, state: L >= t.lv ? 'owned' : 'locked' });
   }
-  // 차
+  // 차 (시작 5대 빼고: 레벨이 되면 피트 조각으로 삼)
   for (const c of cars) {
     if (!(c.level > 0)) continue;
-    out.push({ level: c.level, kind: 'car', id: c.id, key: 'car:' + c.id, carId: c.id, carName: c.name, name: c.name, icon: '🚗', price: 0, how: 'level', alt: '', mine: true, state: L >= c.level ? 'owned' : 'locked' });
+    out.push({ level: c.level, kind: 'car', id: c.id, key: 'car:' + c.id, carId: c.id, carName: c.name, name: c.name, icon: '🚗', price: c.price || 0, how: 'coin', currency: 'pit', via: 'pit', alt: '', mine: true, state: c.owned ? 'owned' : L >= c.level ? 'open' : 'locked' });
   }
-  // 색 (라이선스 색은 레벨과 무관 → 뺌)
+  // 색 (라이선스 색은 레벨과 무관 → 뺌, 레벨이 되면 커스텀 조각으로 삼)
   for (const p of PAINTS) {
     if (p.license || !(p.level > 0)) continue;
-    const bought = !!owned['paint:' + p.id];
-    out.push({ level: p.level, kind: 'paint', id: p.id, key: 'paint:' + p.id, name: p.name, icon: '🎨', color: p.body, accent: p.accent, price: paintPrice(p), how: 'level', alt: '', lockText: paintLockText(p.id), mine: true, state: L >= p.level || bought ? 'owned' : 'locked' });
+    const has = !!owned['paint:' + p.id] || isPaintUnlocked(p.id, L);
+    out.push({ level: p.level, kind: 'paint', id: p.id, key: 'paint:' + p.id, name: p.name, icon: '🎨', color: p.body, accent: p.accent, price: paintPrice(p), how: 'coin', currency: 'custom', via: 'custom', alt: '', lockText: paintLockText(p.id), mine: true, state: has ? 'owned' : L >= p.level ? 'open' : 'locked' });
   }
   // 부품
   const data = partsData();
@@ -62,14 +65,14 @@ export function rewardPath(opts = {}) {
     const st = partState(p.id, { level: L }) || {};
     const s = slotOf[p.slot] || {};
     const gift = !!(p.alt && p.alt.gift);
-    out.push({ level: p.level || 0, kind: 'part', id: p.id, key: 'part:' + p.id, name: p.name, short: p.short || p.name, icon: p.icon || s.icon || '🔧', slot: p.slot, slotName: s.name || p.slot, slotIcon: s.icon || '🔧', price: partPrice(p), how: gift ? 'gift' : 'coin', alt: altText(p), mine: true, state: st.owned ? 'owned' : st.levelOk ? 'open' : 'locked' });
+    out.push({ level: p.level || 0, kind: 'part', id: p.id, key: 'part:' + p.id, name: p.name, short: p.short || p.name, icon: p.icon || s.icon || '🔧', slot: p.slot, slotName: s.name || p.slot, slotIcon: s.icon || '🔧', price: partPrice(p), how: gift ? 'gift' : 'coin', currency: 'pit', via: gift ? 'gift' : 'pit', alt: altText(p), mine: true, state: st.owned ? 'owned' : st.levelOk ? 'open' : 'locked' });
   }
   // 코스튬 (모든 차, 지금 고른 차 것이 mine)
   for (const c of cars) {
     for (const k of listCostumes(c.id)) {
       const ach = ACHIEVEMENTS.find((a) => a.costume === k.id);
       const has = !!owned['costume:' + k.id];
-      out.push({ level: k.unlockLevel || 0, kind: 'costume', id: k.id, key: 'costume:' + k.id, carId: c.id, carName: c.name, name: k.name, desc: k.desc || '', icon: '✦', color: k.look && k.look.body, price: costumePrice(k), how: 'coin', alt: ach ? `업적 「${ach.name}」 달성` : '', mine: c.id === carId, state: has ? 'owned' : L >= (k.unlockLevel || 0) ? 'open' : 'locked' });
+      out.push({ level: k.unlockLevel || 0, kind: 'costume', id: k.id, key: 'costume:' + k.id, carId: c.id, carName: c.name, name: k.name, desc: k.desc || '', icon: '✦', color: k.look && k.look.body, price: costumePrice(k), how: 'coin', currency: 'custom', via: 'custom', alt: ach ? `업적 「${ach.name}」 달성` : '', mine: c.id === carId, state: has ? 'owned' : L >= (k.unlockLevel || 0) ? 'open' : 'locked' });
     }
   }
   return sortPath(out);

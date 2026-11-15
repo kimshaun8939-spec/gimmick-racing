@@ -28,7 +28,7 @@ export function createGarageLift(table){
   if(!partPoseReady(holder.children[0],s.slot)&&performance.now()-s.at<1600){s.wait=true;return;}
   if(s.wait)s.at=performance.now();s.ready=true;s.holder=holder;
   const live=holder.children[0];s.out=swapPart(live,s.slot,partOf(s.before[s.slot])?.look,partOf(s.after[s.slot])?.look);
-  s.donor=createCarModel(s.car.look);s.donor.setParts(partLook(s.after));s.donor.sync(fake(s.slot==='water'?'boat':'normal'),2,0);s.donor.root.updateMatrixWorld(true);
+  s.donor=createCarModel(s.car.look);s.donor.setParts(partLook(s.after,{levels:'mine'})); // upgradeD1: 펼친 조립은 숨은 단계가 없어 내 강화 단계로s.donor.sync(fake(s.slot==='water'?'boat':'normal'),2,0);s.donor.root.updateMatrixWorld(true);
   s.incoming=swapPart(s.donor.root,s.slot,partOf(s.after[s.slot])?.look,partOf(s.before[s.slot])?.look);
   s.root=new T.Group();holder.add(s.root);s.root.add(s.out.group,s.incoming.group);s.incoming.group.visible=false;
   holder.updateMatrixWorld(true);const inv=holder.matrixWorld.clone().invert();

@@ -20,6 +20,7 @@ import { LESSONS, LICENSES, academy, lessonMeta, licenseMeta, scoreRows, medalFo
 import { academyArt, licenseBadge } from './academyArt.js';
 import { profile } from './profile.js';
 import { meta as pitMeta } from './meta.js';
+import { rewardChipsHtml } from './metaUI.js'; // 재화 3종 칩 (upgradeD2)
 import { paintOf } from './unlocks.js';
 
 const EX_KEY = 'gimmick.academy.exam';
@@ -412,7 +413,7 @@ export function startAcademy(game) {
 
   // ------------------------------------------------------------------ 성적표
   function showReport() {
-    const rewardBefore = { xp: profile.get().xp, coins: pitMeta.get().coins };
+    const rewardBefore = { xp: profile.get().xp, wallet: pitMeta.wallet() };
     let res;
     try {
       res = judge.result();
@@ -486,8 +487,11 @@ export function startAcademy(game) {
     return hints[lessonId + ':' + r.id] || r.text;
   }
   function rewardSummary(before) {
-    const xp = Math.max(0,profile.get().xp-before.xp), coins = Math.max(0,pitMeta.get().coins-before.coins);
-    return xp || coins ? '<div class="ac-save">이번 보상 합계 · <b>+'+xp+' XP</b> · ⬡ +'+coins+' 피트 코인<small style="display:block;margin-top:4px">레슨·업적·목표 보상 포함 · XP는 레벨, 코인은 꾸미기에 써요</small></div>' : '';
+    // 재화 3종 (upgradeD2): 이 화면 전후 지갑 차이 = 레슨·라이선스·업적·목표에서 받은 조각
+    const w = pitMeta.wallet(), b = before.wallet || {}, got = {};
+    for (const k of ['pit', 'up', 'custom']) got[k] = Math.max(0, (w[k] || 0) - (b[k] || 0));
+    const xp = Math.max(0,profile.get().xp-before.xp), chips = rewardChipsHtml(got, { size: 15 });
+    return xp || chips ? '<div class="ac-save">이번 보상 합계 · <b>+'+xp+' XP</b>'+(chips?' · <span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;vertical-align:middle">'+chips+'</span>':'')+'<small style="display:block;margin-top:4px">레슨·업적·목표 보상 포함 · XP는 레벨, ⬡ 차·부품 · ◆ 강화 · ✿ 꾸미기에 써요</small></div>' : '';
   }
   function quietRewards() {
     document.getElementById('xpPill')?.remove();
@@ -520,7 +524,7 @@ export function startAcademy(game) {
 
   // ------------------------------------------------------------------ 시험 결과
   async function showExamFinal() {
-    const rewardBefore = { xp: profile.get().xp, coins: pitMeta.get().coins };
+    const rewardBefore = { xp: profile.get().xp, wallet: pitMeta.wallet() };
     const m = lic();
     const res = m.tasks.map((t, j) => exam.results[j] || { task: t, pts: 0, medal: 0 });
     const pass = res.every((r) => r.medal >= m.need);

@@ -5,7 +5,8 @@
 //   방장이 "출발"을 누르면 모두 ?map=..&car=..&room=CODE&host=1|0&name=..&mode=race 로 이동 → netRace.js가 이어받음
 // 연결 방식 설명은 net.js 위쪽 주석 참고
 import { createHub, joinHub, probePeer, racePeerId, lobbyPeerId, makeCode, normCode, validCode, myPid, getNick, setNick, randomNick, cleanNick, saveRoomInfo, inviteUrl, loadPeerLib, NET_VERSION } from './net.js';
-import { isCarUnlocked, carUnlockLevel } from './unlocks.js'; // 잠긴 차는 못 고름 (🔒 Lv.N)
+import { isCarUnlocked, carUnlockLevel, carPrice, canBuyCar } from './unlocks.js'; // 안 가진 차는 못 고름 (upgradeD2: 가진 차 기준, 🔒 Lv.N · ⬡ 가격)
+import { currencyIcon } from './metaUI.js'; // 재화 아이콘 SVG (색이 안에 있음)
 import { loadCarThumbs, thumbUrl } from './carThumbs.js'; // 차 고르기 칸의 진짜 차 사진 (홈 화면과 같은 사진, 저장돼 있으면 바로)
 import { loadMaps, loadRoster, sampleOutline, drawTrackThumb, getLast, setLast } from './gameData.js';
 
@@ -97,13 +98,13 @@ export async function openLobby(opts = {}) {
         <div class="ic">🏁</div>
         <h3>방 만들기</h3>
         <p>방 코드가 생겨요. 초대 링크를 친구에게 보내면 바로 들어와요.</p>
-        <button class="gm-btn primary" data-act="create">방 만들기 <kbd>Enter</kbd></button>
+        <button class="gm-btn primary" data-act="create" data-coach="lobby.create">방 만들기 <kbd>Enter</kbd></button>
       </section>
       <section class="lb-card lb-big join">
         <div class="ic">🔑</div>
         <h3>코드로 참가</h3>
         <p>친구에게 받은 4자리 방 코드를 넣으세요.</p>
-        <div class="lb-code-in"><input id="lbCode" maxlength="6" placeholder="K7Q2" autocomplete="off" spellcheck="false"><button class="gm-btn" data-act="join">참가</button></div>
+        <div class="lb-code-in"><input id="lbCode" maxlength="6" placeholder="K7Q2" autocomplete="off" spellcheck="false"><button class="gm-btn" data-act="join" data-coach="lobby.join">참가</button></div>
       </section>
       <p class="lb-err" id="lbErr"></p>
       <p class="lb-note">같은 와이파이가 아니어도 인터넷만 되면 연결돼요. 회사·학교 네트워크에서는 막힐 수도 있어요.</p>
@@ -124,7 +125,12 @@ export async function openLobby(opts = {}) {
     const url = thumbUrl(id);
     return url ? `<img src="${url}" alt="" draggable="false" data-pic="${esc(id)}">` : `<span class="ph" data-pic="${esc(id)}"></span>`;
   };
-  // 잠긴 차 (unlocks.js): 흐리게 + "🔒 Lv.N", 눌러도 안 골라짐
+  // 안 가진 차 (unlocks.js isCarUnlocked = isCarOwned): 흐리게 + "🔒 Lv.N · ⬡ 가격"(레벨 전) 또는 "🔒 ⬡ 가격"(살 수 있음), 눌러도 안 골라짐
+  const lockInfo = (id) => {
+    let lv = 0, price = 0, buy = false;
+    try { lv = carUnlockLevel(id) || 0; price = carPrice(id) || 0; buy = canBuyCar(id); } catch {}
+    return { lv, price, buy, tip: buy ? `피트 조각 ${price.toLocaleString('ko-KR')}개로 상점·차고에서 살 수 있어요` : lv ? `레벨 ${lv}부터 피트 조각 ${price.toLocaleString('ko-KR')}개로 살 수 있어요` : '아직 없는 차예요' };
+  };
   const unlocked = (id) => {
     try {
       return isCarUnlocked(id) !== false;
@@ -149,8 +155,9 @@ export async function openLobby(opts = {}) {
         const k = classOf(c.class);
         const tag = String(c.tag || '').split('·').pop().trim();
         if (!unlocked(c.id)) {
-          const lv = lockLv(c.id);
-          return `<button class="lb-car locked" data-lockcar="${esc(c.id)}" aria-disabled="true" title="${lv ? `레벨 ${lv}부터 탈 수 있어요` : '아직 잠겨 있어요'}" style="--cc:${esc((k && k.color) || '#ffcf3f')};opacity:.5;cursor:not-allowed"><span class="pic" style="filter:grayscale(1) brightness(.6)">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}</span><b>${esc(c.name)}</b><small style="color:#ffd27a">🔒 ${lv ? 'Lv.' + lv : '잠김'}</small></button>`;
+          const L = lockInfo(c.id);
+          const price = L.price ? `${currencyIcon('pit', 12)} ${L.price.toLocaleString('ko-KR')}` : '';
+          return `<button class="lb-car locked" data-lockcar="${esc(c.id)}" aria-disabled="true" title="${esc(L.tip)}" aria-label="${esc(c.name + ' · ' + L.tip)}" style="--cc:${esc((k && k.color) || '#ffcf3f')};opacity:${L.buy ? '.72' : '.5'};cursor:not-allowed"><span class="pic" style="filter:grayscale(1) brightness(.6)">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}</span><b>${esc(c.name)}</b><small style="color:${L.buy ? '#ffc98a' : '#ffd27a'};display:inline-flex;align-items:center;gap:3px;white-space:nowrap">🔒 ${L.buy ? price || '잠김' : L.lv ? 'Lv.' + L.lv + (price ? ' · ' + price : '') : '잠김'}</small></button>`;
         }
         return `<button class="lb-car${c.id === carId ? ' on' : ''}" data-car="${esc(c.id)}" title="${esc(c.desc || c.tag || '')}" style="--cc:${esc((k && k.color) || '#ffcf3f')}"><span class="pic">${picHtml(c.id)}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span></span><b>${esc(c.name)}</b><small>${esc(tag)}</small></button>`;
       })
@@ -177,8 +184,7 @@ export async function openLobby(opts = {}) {
   el.addEventListener('click', (e) => {
     const lockedChip = e.target.closest('[data-lockcar]');
     if (lockedChip) {
-      const lv = lockLv(lockedChip.dataset.lockcar);
-      toastIn(lv ? `🔒 레벨 ${lv}부터 탈 수 있어요` : '🔒 아직 잠긴 차예요');
+      toastIn('🔒 ' + lockInfo(lockedChip.dataset.lockcar).tip);
       return;
     }
     const chip = e.target.closest('[data-car]');

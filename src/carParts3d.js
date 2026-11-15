@@ -68,6 +68,137 @@ export const PART_VIEW=Object.freeze({
  aero:{pos:[2.8,3,-5.2],look:[0,1.1,-1.9],fov:34},
  water:{pos:[5,1.5,-2.4],look:[0,.1,0],fov:42},
 });
+// ───────── 부품 강화 단계 모양 (upgradeD1, 2026-11-15, 설계 .debug/design/upgrade-design.md 5.1·5.2) ─────────
+//   Lv2 하늘색 쌍줄무늬 → Lv3 + 민트 빛 테두리 → Lv4 카본 무늬 + 보라 빛 → Lv5 금 크롬 + 시선 따라 도는 무지개 빛 + 2초 숨 쉬는 빛 + 금빛 불티.
+//   새 삼각형 없음: 단계가 있는 부품 칸은 그 칸 메시 전부가 공용 재질 하나(levelMaterial)를 씀 → 칸 그룹이 예전처럼 한 묶음 = 그림 호출 그대로.
+//   색·거칠기·금속·빛·역할(본체/빛/어두운 것)·단계는 꼭짓점 속성(lvCol·lvRM·lvEm)에 적고 무늬는 셰이더가 부품 좌표로 그림 (텍스처 없음).
+//   Lv5만 차 한 대에 불티 Points 1개(+1 그림 호출). 시간 값은 공용 uniform(불티가 그려질 때 갱신) — 재질 값은 안 바뀌므로 묶음이 안 풀림.
+//   재질은 페이지에 하나(모든 차·차고·사진 공용, userData.live·lvShared = 버리지 않음). clone해도 셰이더 유지(고스트·교체 장면 복사본).
+export const LV_ACCENT={2:'#4fd1ff',3:'#5dffc8',4:'#a77bff',5:'#ffd34a'};
+const lvTime={value:0};
+let lvMat=null,sparkMat=null;
+const LV_VERT_HEAD='attribute vec3 lvCol;\nattribute vec3 lvRM;\nattribute vec4 lvEm;\nvarying vec3 vLvCol;\nvarying vec3 vLvRM;\nvarying vec4 vLvEm;\nvarying vec3 vLvPos;\n';
+const LV_FRAG_HEAD='uniform float uLvTime;\nvarying vec3 vLvCol;\nvarying vec3 vLvRM;\nvarying vec4 vLvEm;\nvarying vec3 vLvPos;\n'+
+ 'float lvBand(float t,float c,float w){float f=fract(t),a=fwidth(t)*1.2+1e-4;return 1.0-smoothstep(w-a,w+a,abs(f-c));}\n';
+// 무늬·색 (color_fragment 뒤): lvL 단계, lvRole 0 본체·1 빛나는 곳·2 어두운 판(Lv4~ 카본)·3 고무(그대로), lvStripe 줄무늬
+const LV_COLOR=`
+float lvL=vLvEm.w, lvRole=vLvRM.z;
+vec3 lvP=vLvPos;
+vec3 lvBase=vLvCol;
+float lvRough=vLvRM.x, lvMetal=vLvRM.y;
+float lvT=dot(lvP,vec3(.62,.85,1.05))*2.4;
+float lvStripe=(lvL>1.5&&lvRole<.5)?clamp(lvBand(lvT,.10,.06)+lvBand(lvT,.25,.032),0.,1.):0.;
+vec3 lvAcc=lvL<3.5?vec3(.31,.82,1.):lvL<4.5?vec3(.66,.48,1.):vec3(1.,.93,.62);
+if(lvL>3.5&&lvRole>1.5&&lvRole<2.5){
+ vec2 lvUV=vec2(lvP.x+lvP.z*.72,lvP.y+lvP.z*.41)*42.;vec2 lvC=floor(lvUV);
+ float lvTw=mod(lvC.x+lvC.y,4.)<2.?1.:0.;float lvSh=.7+.3*fract(lvUV.x+lvUV.y);
+ lvBase=(lvL>4.5?mix(vec3(.035,.03,.022),vec3(.15,.12,.07),lvTw):mix(vec3(.03,.032,.04),vec3(.11,.115,.135),lvTw))*lvSh*1.3;
+ lvRough=.24;lvMetal=lvL>4.5?.5:.35;
+}
+lvBase=mix(lvBase,lvAcc*(lvL>4.5?1.:.85),lvStripe*(lvL>4.5?.4:.9));
+lvRough=mix(lvRough,.22,lvStripe);
+diffuseColor.rgb*=lvBase;
+`;
+const LV_EMIT=`
+#include <emissivemap_fragment>
+{
+ vec3 lvN=normalize(normal), lvV=normalize(vViewPosition);
+ float lvFres=pow(1.-clamp(abs(dot(lvN,lvV)),0.,1.),3.2);
+ float lvPulse=.72+.28*sin(uLvTime*3.14159);
+ totalEmissiveRadiance=vLvEm.rgb*(lvL>4.5?lvPulse*1.35:1.);
+ totalEmissiveRadiance+=lvAcc*lvStripe*(lvL<2.5?.32:lvL<3.5?.4:.55);
+ if(lvL>2.5&&lvL<3.5)totalEmissiveRadiance+=vec3(.36,1.,.78)*lvFres*.6;
+ if(lvL>3.5&&lvL<4.5)totalEmissiveRadiance+=vec3(.66,.48,1.)*lvFres*.95;
+ if(lvL>4.5){vec3 lvRain=.5+.5*cos(6.2832*(lvFres*.85+dot(lvP,vec3(.9,.55,.7))+uLvTime*.11+vec3(0.,.33,.67)));
+  totalEmissiveRadiance+=(lvRain*.75+vec3(.35,.25,.05))*lvFres*(.85+.35*lvPulse);}
+}
+`;
+function patchLevelShader(sh){
+ sh.uniforms.uLvTime=lvTime;
+ sh.vertexShader=LV_VERT_HEAD+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvLvCol=lvCol;vLvRM=lvRM;vLvEm=lvEm;vLvPos=position;');
+ sh.fragmentShader=LV_FRAG_HEAD+sh.fragmentShader
+  .replace('#include <color_fragment>','#include <color_fragment>\n'+LV_COLOR)
+  .replace('#include <roughnessmap_fragment>','float roughnessFactor=lvRough;')
+  .replace('#include <metalnessmap_fragment>','float metalnessFactor=lvMetal;')
+  .replace('#include <emissivemap_fragment>',LV_EMIT);
+}
+const keepShaderClone=m=>{m.clone=function(){const c=T.MeshStandardMaterial.prototype.clone.call(this);c.onBeforeCompile=this.onBeforeCompile;c.customProgramCacheKey=this.customProgramCacheKey;return keepShaderClone(c);};return m;};
+/** 강화 단계 부품 공용 재질 (한 페이지에 하나) */
+export function levelMaterial(){
+ if(lvMat)return lvMat;
+ lvMat=new T.MeshStandardMaterial({color:'#ffffff',roughness:.4,metalness:.5});
+ lvMat.name='partLevel';lvMat.userData={live:true,lvShared:true};
+ lvMat.onBeforeCompile=patchLevelShader;lvMat.customProgramCacheKey=()=>'partLevel1';
+ return keepShaderClone(lvMat);
+}
+/** Lv5 금빛 불티 재질 (Points, 공용) */
+export function sparkMaterial(){
+ if(sparkMat)return sparkMat;
+ sparkMat=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,uniforms:{uLvTime:lvTime,uScale:{value:420}},
+  vertexShader:'uniform float uLvTime;uniform float uScale;attribute vec4 seed;varying float vA;varying float vH;\nvoid main(){float k=fract(uLvTime*(.32+seed.y*.3)+seed.x);vec3 p=position;p.y+=k*(.32+seed.z*.3);p.x+=sin(k*6.2832+seed.w*9.)*.05;p.z+=cos(k*6.2832+seed.w*7.)*.05;vA=sin(k*3.14159)*(.6+.4*seed.z);vH=seed.w;vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp((.026+.022*seed.y)*uScale/max(.3,-mv.z),1.,14.);}',
+  fragmentShader:'varying float vA;varying float vH;\nvoid main(){vec2 d=gl_PointCoord-.5;float r=length(d);if(r>.5)discard;float c=pow(1.-r*2.,1.6);vec3 col=mix(vec3(1.,.82,.32),vec3(1.,.97,.8),c);col=mix(col,.6+.4*cos(6.2832*(vH+vec3(0.,.33,.67))),.22);gl_FragColor=vec4(col*vA*c*1.6,1.);}'});
+ sparkMat.name='partLevelSparks';sparkMat.userData={live:true,lvShared:true};
+ return sparkMat;
+}
+/** 미리 데우기용 본보기 (prewarm·차고): 단계 재질 메시 + 불티. 쓰고 나면 g.userData.dispose() */
+export function levelWarmObjects(){
+ const g=new T.Group();g.name='partLevelWarm';
+ const geo=new T.BoxGeometry(.01,.01,.01),n=geo.attributes.position.count;
+ geo.setAttribute('lvCol',new T.Float32BufferAttribute(new Float32Array(n*3).fill(1),3));
+ geo.setAttribute('lvRM',new T.Float32BufferAttribute(new Float32Array(n*3).fill(.5),3));
+ const em=new Float32Array(n*4);for(let i=0;i<n;i++)em[i*4+3]=5;geo.setAttribute('lvEm',new T.Float32BufferAttribute(em,4));
+ const m=new T.Mesh(geo,levelMaterial());m.userData.lvWarm=true;m.frustumCulled=false;g.add(m);
+ const pg=new T.BufferGeometry();pg.setAttribute('position',new T.Float32BufferAttribute([0,0,0],3));pg.setAttribute('seed',new T.Float32BufferAttribute([0,0,0,0],4));
+ const pts=new T.Points(pg,sparkMaterial());pts.frustumCulled=false;g.add(pts);
+ g.userData.dispose=()=>{geo.dispose();pg.dispose();g.removeFromParent();};
+ return g;
+}
+/** 차고 렌더러에서 단계 셰이더를 미리 만들어 둠 (첫 강화 때 멈칫 없게). 한 렌더러에 한 번 */
+const warmed=new WeakSet();
+export async function warmLevelShaders(renderer,scene,camera){
+ if(!renderer||!scene||!camera||warmed.has(renderer))return false;warmed.add(renderer);
+ const g=levelWarmObjects();scene.add(g);
+ try{if(renderer.compileAsync)await renderer.compileAsync(scene,camera);else renderer.compile(scene,camera);}catch{}finally{g.userData.dispose();}
+ return true;
+}
+const LV_GOLD=new T.Color('#c98410'),LV_GOLDGLOW=new T.Color('#3a2402');
+/** 칸 그룹 하나를 단계 모양으로: 메시마다 꼭짓점 속성 + 공용 재질 (묶기 전에 부름) */
+function styleLevel(g,lv){
+ if(!(lv>1))return;const mat=levelMaterial(),acc=new T.Color(LV_ACCENT[Math.min(5,lv)]);
+ g.traverse(o=>{
+  if(!o.isMesh||!o.material||Array.isArray(o.material)||o.material===mat)return;const m=o.material,geo=o.geometry,n=geo.attributes.position.count;
+  const ei=m.emissiveIntensity??1,emL=m.emissive?(m.emissive.r+m.emissive.g+m.emissive.b)*ei/3:0;
+  const c=new T.Color().copy(m.color||LV_GOLD),lum=c.r*.3+c.g*.59+c.b*.11;
+  let rough=m.roughness??.4,metal=m.metalness??.5,role=emL>.05?1:rough>.85?3:lum<.035&&metal<.75?2:0; // 3 = 고무(그대로)
+  const e=new T.Color(0,0,0);if(m.emissive)e.copy(m.emissive).multiplyScalar(ei);
+  if(role===1){ // 빛나는 곳: 단계 색으로 물들고 더 밝게
+   e.lerp((lv>=5?new T.Color('#ff9f1c'):acc.clone()).multiplyScalar(Math.min(.9,Math.max(.25,emL))),lv>=5?.75:lv>=4?.55:lv>=3?.45:.25).multiplyScalar(1+.08*(lv-1));
+   if(lv>=5){c.copy(LV_GOLD).lerp(new T.Color('#ffd25a'),.35);metal=.7;rough=.3;e.add(LV_GOLDGLOW).add(LV_GOLDGLOW);}
+  }else if(role===0){
+   if(lv>=5){c.copy(LV_GOLD).lerp(m.color||LV_GOLD,.1);metal=.85;rough=.32;e.add(LV_GOLDGLOW);}
+   else if(lv>=4){if(lum<.12)role=2;else{c.multiplyScalar(.6).lerp(new T.Color('#2a2f3a'),.3);metal=Math.min(.9,metal+.1);rough=Math.max(.16,rough*.7);}}
+   else if(lv>=3){rough=Math.max(.14,rough*.8);metal=Math.min(.95,metal+.05);}
+   else rough=Math.max(.16,rough*.9);
+  }
+  const col=new Float32Array(n*3),rm=new Float32Array(n*3),em=new Float32Array(n*4);
+  for(let i=0;i<n;i++){col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;rm[i*3]=rough;rm[i*3+1]=metal;rm[i*3+2]=role;em[i*4]=e.r;em[i*4+1]=e.g;em[i*4+2]=e.b;em[i*4+3]=lv;}
+  geo.setAttribute('lvCol',new T.BufferAttribute(col,3));geo.setAttribute('lvRM',new T.BufferAttribute(rm,3));geo.setAttribute('lvEm',new T.BufferAttribute(em,4));
+  o.material=mat;
+ });
+}
+/** Lv5 칸들 둘레의 불티 Points 하나 (차체 좌표) */
+function levelSparks(body,groups){
+ if(!groups.length)return null;body.updateMatrixWorld(true);const inv=body.matrixWorld.clone().invert(),pos=[],seed=[],b=new T.Box3(),q=new T.Box3(),v=new T.Vector3(),s=new T.Vector3();
+ let r=1;const rand=()=>{r=(r*16807)%2147483647;return (r-1)/2147483646;};
+ for(const g of groups){g.updateMatrixWorld(true);b.makeEmpty();g.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);b.union(q);});if(b.isEmpty())continue;b.applyMatrix4(inv);b.getSize(s);
+  const n=Math.round(Math.min(24,9+s.length()*7));
+  for(let i=0;i<n;i++){v.set(b.min.x+rand()*s.x,b.min.y+rand()*s.y*.8,b.min.z+rand()*s.z);pos.push(v.x,v.y,v.z);seed.push(rand(),rand(),rand(),rand());}}
+ if(!pos.length)return null;
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setAttribute('seed',new T.Float32BufferAttribute(seed,4));geo.computeBoundingSphere();
+ const pts=new T.Points(geo,sparkMaterial());pts.name='lv5-sparks';pts.frustumCulled=false;pts.renderOrder=4;pts.userData.noBatch=true;pts.userData.partVisual=true;pts.userData.lvSparks=true;
+ pts.onBeforeRender=()=>{lvTime.value=performance.now()/1000;};
+ return pts;
+}
 // 순정 날개/앞 범퍼를 차체 좌표가 아닌 해당 그룹의 지역 좌표로 잰다.
 function bounds(group){group.updateMatrixWorld(true);const inv=group.matrixWorld.clone().invert(),b=new T.Box3(),q=new T.Box3();group.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld));b.union(q);});return b;}
 export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBounds,style}){
@@ -86,7 +217,7 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
  const mat=(color,o={})=>new T.MeshStandardMaterial({color,metalness:o.metal??.6,roughness:o.rough??.35,...(o.emissive?{emissive:o.emissive,emissiveIntensity:o.ei??1.4}:{})});
  // 뒷바퀴 안쪽 한계(배기 바깥쪽 끝)와 배기·변속기 중심 높이.
  const inner=Math.min(.64,...A.wheels.filter(w=>!w[2]).map(w=>Math.abs(w[0])-w[4]/2-.04)),lowY=rearY+.03;
- function clear(){for(const g of resources)g.dispose();resources.clear();for(const m of materials)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
+ function clear(){for(const g of resources)g.dispose();resources.clear();for(const m of materials)if(!m.userData?.lvShared)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
  // stockcalls: 순정 타이어 띠는 바퀴 묶음(batchLocal) 안에 합쳐져 있어 그림 호출이 늘지 않음.
  //   부품 타이어가 띠를 숨기거나 되돌릴 때만 그 바퀴 묶음을 풀고 다시 묶음 (숨은 띠는 혼자 남아 그려지지 않음).
  //   묶음 여부는 차 전체에서 봄 (띠가 숨어 있는 동안 그 바퀴엔 묶인 것이 하나도 없을 수 있음)
@@ -229,6 +360,10 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
    }
   }
   // 교체 그룹 안에서 먼저 PBR로 합치고 바깥 묶음으로부터 보호한다.
+  // upgradeD1: 칸마다 강화 단계 모양 (묶기 전), Lv5 칸이 있으면 불티 하나
+  const lvOf=g=>{const n=g.name.slice(5),slot=n.startsWith('tire')?'tire':n==='splitter'?'aero':n;return Math.max(1,Math.min(5,Math.floor(Number(parts[slot]?.lv)||1)));};
+  for(const g of [...nodes])styleLevel(g,lvOf(g));
+  {const fx=levelSparks(body,nodes.filter(g=>lvOf(g)>=5&&!g.name.startsWith('part-water')));if(fx){body.add(fx);nodes.push(fx);resources.add(fx.geometry);}}
   for(const g of nodes){const collect=()=>g.traverse(o=>{if(o.geometry)resources.add(o.geometry);if(o.material&&!o.material.userData.pbrBake&&!Object.values(M).includes(o.material))materials.add(o.material);});collect();g.userData.noBatch=false;batchLocal(g,{pbr:true});collect();g.traverse(o=>{o.userData.noBatch=true;});}
  }
  return {setParts,dispose(){clear();for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors){kitRef.motors=motors;if(jet)for(const m of motors)m.g.visible=false;}};
