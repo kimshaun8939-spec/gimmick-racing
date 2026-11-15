@@ -53,7 +53,7 @@ async function loadJSON(url) {
 // 맵 선택: 주소 뒤에 ?map=gp(그랑프리) / ?map=sea(바닷가). 게임 안에서는 홈·Esc 메뉴에서 바꿈 (M 키는 2026-11-13에 없앰)
 // (사용자 요청 2026-11-09: 연습 코스 main·운동장 stadium·테스트 맵 test는 없앰 → 데이터는 .debug/removed-maps/에 보관)
 // 새 맵 3개 (2026-11-10 밤샘 작업): neon 네온 시티 / moon 달 중력 기지 / jungle 정글 유적 (차원 이동)
-const MAPS = { glacier: 'data/glacier.json', sea: 'data/sea.json', jungle: 'data/jungle.json', neon: 'data/neon.json', mirage: 'data/mirage.json', foundry: 'data/foundry.json', moon: 'data/moon.json', gp: 'data/grandprix.json', volcano: 'data/volcano.json' };
+const MAPS = { starter: 'data/starter.json', glacier: 'data/glacier.json', sea: 'data/sea.json', jungle: 'data/jungle.json', neon: 'data/neon.json', mirage: 'data/mirage.json', foundry: 'data/foundry.json', moon: 'data/moon.json', gp: 'data/grandprix.json', volcano: 'data/volcano.json' };
 const MAP_ORDER = Object.keys(MAPS);
 const params = new URLSearchParams(location.search);
 const mapParam = params.get('map');
@@ -114,7 +114,9 @@ const MAP_TIPS = {
   glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '긴 직선 끝 첫 코너에서는 빨간 라인을 보고 미리 브레이크!', '길이 넓어도 코너 앞에서는 감속하세요. 눈밭은 미끄럽고 느려요'],
 };
 const tipList = MAP_TIPS[mapName] || LOAD_TIPS;
-ld('ldTip', '💡 ' + (params.get('rookie') === '1' && mapName === 'glacier'
+ld('ldTip', '💡 ' + (params.get('rookie') === '1' && mapName === 'starter'
+  ? '한 바퀴에 변신을 다 해 봐요: 직선에서 가속 모드, 물길에서 배, 활주로에서 비행기!'
+  : params.get('rookie') === '1' && mapName === 'glacier'
   ? '첫 직선에서 150 km/h를 넘기면 가속 모드로 변신해요. 코너에서는 빨간 라인을 보고 브레이크!'
   : tipList[Math.floor(Math.random() * tipList.length)]));
 // 차: ?car=<id> (없으면 기본 차 = 테스트가 늘 같은 차로 돌게). 차 목록·성능은 carRoster.js
@@ -283,7 +285,7 @@ function indexTrackNearest(track) {
   };
 }
 // 이 표본은 맵 생성 뒤 움직이지 않음. 다른/추가 트랙은 원래 탐색을 유지.
-if (params.get('nearestindex') !== '0' && ['gp', 'sea', 'neon', 'moon', 'jungle', 'volcano', 'glacier', 'foundry', 'mirage'].includes(mapName)) indexTrackNearest(track);
+if (params.get('nearestindex') !== '0' && ['starter', 'gp', 'sea', 'neon', 'moon', 'jungle', 'volcano', 'glacier', 'foundry', 'mirage'].includes(mapName)) indexTrackNearest(track);
 
 // 차는 땅 찾기 레이를 삼각형 격자로 빠르게 하는 트랙을 씀 (fastTrack.js, 결과는 원래와 똑같음. ?fastray=0 이면 원래 방식)
 const car = new Car(carCfg, params.get('fastray') === '0' ? track : fastTrack(track));

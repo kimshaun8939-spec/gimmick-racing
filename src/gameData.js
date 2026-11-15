@@ -10,6 +10,28 @@ async function loadJSON(url) {
 // 맵 목록 (maps.json이 없거나 깨져도 게임은 되도록 기본값)
 const FALLBACK_MAPS = [
   {
+    "id": "starter",
+    "file": "data/starter.json",
+    "title": "변신 연습장",
+    "subtitle": "한 바퀴에 가속 · 배 · 비행 · 점프를 다!",
+    "desc": "처음 오신 분을 위한 짧고 넓은 코스. 출발 직선에서 가속 모드로 변신하고, 석호 물길에 들어가면 배, 활주로에서 날아올라 고리 두 개를 지나 착륙장에 내려요. 작은 점프대와 무지개 아치가 있는 기운 마지막 코너까지. 날기 싫으면 옆 땅길로 가도 돼요. 1.7 km · 2바퀴.",
+    "tags": [
+      "🔰 첫 레이스",
+      "⚡ 가속 변신",
+      "🚤 배 변신",
+      "✈️ 비행 변신",
+      "🦘 작은 점프",
+      "🎡 놀이공원"
+    ],
+    "theme": [
+      "#3fa9ff",
+      "#0c3a66",
+      "#ffd23f"
+    ],
+    "difficulty": 1,
+    "length": 1686
+  },
+  {
     "id": "glacier",
     "file": "data/glacier.json",
     "title": "빙하 고속도로",
@@ -195,7 +217,7 @@ const FALLBACK_MAPS = [
 ];
 // 누락된 카드도 같은 난이도 순서로 복구.
 const EXTRA_MAPS = FALLBACK_MAPS.map(m => ({ ...m, extra: true }));
-const MAP_ORDER = ["glacier","sea","jungle","neon","mirage","foundry","moon","gp","volcano"];
+const MAP_ORDER = ["starter","glacier","sea","jungle","neon","mirage","foundry","moon","gp","volcano"];
 let mapsPromise = null;
 export function loadMaps() {
   if (!mapsPromise)

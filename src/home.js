@@ -1645,7 +1645,7 @@ export async function runHome() {
     else if (b.hasAttribute('data-season-shuffle')) shuffleSeason();
     else if (b.dataset.seasonPreset) {
       seasonKind = 'custom';
-      customMaps = (b.dataset.seasonPreset === 'easy' ? ['glacier', 'sea', 'jungle'] : ['sea', 'moon', 'gp']).filter(id => seasonPool().includes(id));
+      customMaps = (b.dataset.seasonPreset === 'easy' ? ['starter', 'glacier', 'sea'] : ['sea', 'moon', 'gp']).filter(id => seasonPool().includes(id));
     } else if (b.dataset.seasonMap) {
       const id = b.dataset.seasonMap;
       customMaps = customMaps.includes(id) ? customMaps.filter(m => m !== id) : [...customMaps, id].slice(0, 9);
@@ -1757,8 +1757,8 @@ export async function runHome() {
   function firstRace() {
     settings.set('racingLine', true);
     settings.set('gearbox', 'auto');
-    setLast({ map: 'glacier', car: 'f1', mode: 'race' });
-    launch(raceUrl('glacier', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0, guide: 1 }), '첫 레이스 · 빙하 고속도로', '넓은 코스 · 쉬운 봇 3대');
+    setLast({ map: 'starter', car: 'f1', mode: 'race' });
+    launch(raceUrl('starter', 'f1', { mode: 'race', bots: 3, botLevel: 'easy', rookie: 1, intro: 0, guide: 1 }), '첫 레이스 · 변신 연습장', '한 바퀴에 배·비행·점프 · 쉬운 봇 3대');
   }
   function startTutorial() {
     if (launching) return;
@@ -2133,7 +2133,7 @@ export async function runHome() {
         showName();
         if (choice === 'tutorial') launch(tutorialUrl('f1', { quick: 1, intro: 0, bots: 0 }), '운전 감각 익히기', '출발 · 라인 색 · 자동 변신');
         else if (choice === 'race') firstRace();
-        else { selectMap('glacier'); selectCar('f1'); views.main.querySelector('.h-start').focus({ preventScroll: true }); }
+        else { selectMap('starter'); selectCar('f1'); views.main.querySelector('.h-start').focus({ preventScroll: true }); }
       });
     }
   }
@@ -2640,7 +2640,7 @@ function firstDriveDialog(onMode) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'nf';
-    wrap.innerHTML = '<section class="nf-copy" role="dialog" aria-modal="true" aria-labelledby="nfTitle"><div class="nf-brand">🏁 TRANSFORM RACER <span>WELCOME, DRIVER</span></div><div class="nf-step nf-intro"><span class="nf-kicker">상상 밖의 레이스가 시작돼요</span><h1 id="nfTitle">달리고, 변신하고,<br><em>날아올라!</em></h1><p>한 대의 차로 땅 · 물 · 하늘까지.<br>운전만 하세요. 변신은 차가 알아서 해요.</p><div class="nf-route"><span>🚗 도로</span><i>→</i><span>🚤 바다</span><i>→</i><span>✈️ 하늘</span></div><h2>튜토리얼부터 해 볼까요?</h2><button class="gm-btn primary nf-choice" data-nf="tutorial"><b>운전 감각 익히기 <small>추천</small></b><span>약 3~5분 · 출발, 브레이크, 변신 맛보기</span><i>→</i></button><button class="gm-btn nf-choice" data-nf="race"><b>바로 첫 레이스</b><span>넓은 빙하 코스 · 쉬운 봇 3대와 출발</span><i>→</i></button><button class="nf-text" data-nf="home">홈부터 둘러보기</button></div><div class="nf-step nf-setup" hidden><span class="nf-kicker">출발 준비 · 마지막 한 단계</span><h2>어떻게 달릴까요?</h2><div class="nf-setup-fields"><label class="nf-label">레이스에서 쓸 이름<input maxlength="12" autocomplete="off" spellcheck="false" aria-label="레이스에서 쓸 이름"></label><small class="nf-note">지금은 별명만! 계정은 나중에 홈의 이름 버튼에서 만들 수 있어요.</small><label class="nf-label nf-keyboard-label">편한 조작키 배치<select aria-label="조작키 배치"></select></label><div class="nf-keys"></div><p class="nf-note nf-touch">휴대폰은 화면 버튼, 게임패드는 연결 후 버튼을 누르면 돼요.</p><div class="nf-ready"><b>처음엔 이것만 기억하세요</b><span>🟢 가속 → 🔴 브레이크 → 🟢 다시 가속</span><span>핸들은 짧게 톡톡 · 길을 벗어나면 복귀</span></div></div><div class="nf-actions"><button class="gm-btn" data-nf="back">‹ 이전</button><button class="gm-btn primary" data-nf="go">출발하기 →</button></div></div><div class="nf-progress"><b class="on">1 게임 소개</b><i></i><b>2 출발 준비</b></div></section><div class="nf-showcase" aria-hidden="true"><div class="nf-orbit"></div><span class="nf-form">🚗 도로에서는 자동차</span><small>한 대의 차, 네 가지 모습</small></div>';
+    wrap.innerHTML = '<section class="nf-copy" role="dialog" aria-modal="true" aria-labelledby="nfTitle"><div class="nf-brand">🏁 TRANSFORM RACER <span>WELCOME, DRIVER</span></div><div class="nf-step nf-intro"><span class="nf-kicker">상상 밖의 레이스가 시작돼요</span><h1 id="nfTitle">달리고, 변신하고,<br><em>날아올라!</em></h1><p>한 대의 차로 땅 · 물 · 하늘까지.<br>운전만 하세요. 변신은 차가 알아서 해요.</p><div class="nf-route"><span>🚗 도로</span><i>→</i><span>🚤 바다</span><i>→</i><span>✈️ 하늘</span></div><h2>튜토리얼부터 해 볼까요?</h2><button class="gm-btn primary nf-choice" data-nf="tutorial"><b>운전 감각 익히기 <small>추천</small></b><span>약 3~5분 · 출발, 브레이크, 변신 맛보기</span><i>→</i></button><button class="gm-btn nf-choice" data-nf="race"><b>바로 첫 레이스</b><span>짧은 변신 연습장 · 쉬운 봇 3대와 출발</span><i>→</i></button><button class="nf-text" data-nf="home">홈부터 둘러보기</button></div><div class="nf-step nf-setup" hidden><span class="nf-kicker">출발 준비 · 마지막 한 단계</span><h2>어떻게 달릴까요?</h2><div class="nf-setup-fields"><label class="nf-label">레이스에서 쓸 이름<input maxlength="12" autocomplete="off" spellcheck="false" aria-label="레이스에서 쓸 이름"></label><small class="nf-note">지금은 별명만! 계정은 나중에 홈의 이름 버튼에서 만들 수 있어요.</small><label class="nf-label nf-keyboard-label">편한 조작키 배치<select aria-label="조작키 배치"></select></label><div class="nf-keys"></div><p class="nf-note nf-touch">휴대폰은 화면 버튼, 게임패드는 연결 후 버튼을 누르면 돼요.</p><div class="nf-ready"><b>처음엔 이것만 기억하세요</b><span>🟢 가속 → 🔴 브레이크 → 🟢 다시 가속</span><span>핸들은 짧게 톡톡 · 길을 벗어나면 복귀</span></div></div><div class="nf-actions"><button class="gm-btn" data-nf="back">‹ 이전</button><button class="gm-btn primary" data-nf="go">출발하기 →</button></div></div><div class="nf-progress"><b class="on">1 게임 소개</b><i></i><b>2 출발 준비</b></div></section><div class="nf-showcase" aria-hidden="true"><div class="nf-orbit"></div><span class="nf-form">🚗 도로에서는 자동차</span><small>한 대의 차, 네 가지 모습</small></div>';
     const touchMode = touchWanted();
     wrap.classList.toggle('nf-on-touch', touchMode);
     if (touchMode) {

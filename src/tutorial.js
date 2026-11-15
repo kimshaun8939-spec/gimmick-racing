@@ -687,12 +687,12 @@ export function startTutorial(game) {
     const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'forms', 'accel', 'fly', 'respawn', 'menu', 'modes', 'done']);
     for (let i = STEPS.length - 1; i >= 0; i--) if (!keep.has(STEPS[i].id)) STEPS.splice(i, 1);
     const intro = STEPS.find((x) => x.id === 'welcome');
-    if (intro) intro.card = () => '<p>딱 필요한 것만, <b>약 3~5분</b> 함께 달려 봐요.</p><div class="nq-roadmap"><span>① 불이 꺼지면 출발</span><span>② 핸들은 짧게 톡톡</span><span>③ 빨강은 브레이크</span><span>④ 차가 알아서 변신!</span></div><p class="tut-tip">막히면 건너뛰어도 괜찮아요. 레이스는 시험이 아니에요. 마치면 넓은 빙하 코스에서 쉬운 봇 3대와 첫 레이스!</p>';
+    if (intro) intro.card = () => '<p>딱 필요한 것만, <b>약 3~5분</b> 함께 달려 봐요.</p><div class="nq-roadmap"><span>① 불이 꺼지면 출발</span><span>② 핸들은 짧게 톡톡</span><span>③ 빨강은 브레이크</span><span>④ 차가 알아서 변신!</span></div><p class="tut-tip">막히면 건너뛰어도 괜찮아요. 레이스는 시험이 아니에요. 마치면 짧은 변신 연습장에서 쉬운 봇 3대와 첫 레이스!</p>';
     const endStep = STEPS.find((x) => x.id === 'done');
     if (endStep) {
       endStep.title = '이제 출발할 준비 끝!';
       endStep.go = '첫 레이스 시작';
-      endStep.card = () => '<div class="nq-finish">🏁<b>다음 목적지: 빙하 고속도로</b><span>넓은 도로 · 쉬운 봇 3대 · 레이싱 라인 켬</span></div><p>순위보다 <b>코너를 하나씩 완성하는 재미</b>부터! 초록이면 가속, 빨강이면 브레이크. 변신은 자동이에요.</p><div class="tut-choices"><button class="gm-btn" data-goto="academy">🎓 아카데미 둘러보기</button><button class="gm-btn" data-goto="home">홈으로</button></div>';
+      endStep.card = () => '<div class="nq-finish">🏁<b>다음 목적지: 변신 연습장</b><span>한 바퀴에 배·비행·점프 · 쉬운 봇 3대 · 레이싱 라인 켬</span></div><p>순위보다 <b>코너를 하나씩 완성하는 재미</b>부터! 초록이면 가속, 빨강이면 브레이크. 변신은 자동이에요.</p><div class="tut-choices"><button class="gm-btn" data-goto="academy">🎓 아카데미 둘러보기</button><button class="gm-btn" data-goto="home">홈으로</button></div>';
     }
   }
 
@@ -1056,11 +1056,11 @@ export function startTutorial(game) {
       } catch {}
     }
     if (where === 'race') { settings.set('racingLine', true); settings.set('gearbox', 'auto'); }
-    setLast({ map: where === 'race' ? 'glacier' : 'gp', car: where === 'race' ? 'f1' : carId });
+    setLast({ map: where === 'race' ? 'starter' : 'gp', car: where === 'race' ? 'f1' : carId });
     const url =
       where === 'boat' ? raceUrl('sea', carId, { tutorial: 'boat', tret: STEPS[cur + 1] ? STEPS[cur + 1].id : 'accel' })
       : where === 'gp' ? raceUrl('gp', carId, { tutorial: 1, tstep: params.get('tret') || 'accel' })
-      : where === 'race' || where === 'time' ? raceUrl(where === 'race' ? 'glacier' : 'gp', where === 'race' ? 'f1' : carId, { mode: where, botLevel: where === 'race' ? 'easy' : null, bots: where === 'race' ? 3 : 0, rookie: where === 'race' ? 1 : null, intro: 0 })
+      : where === 'race' || where === 'time' ? raceUrl(where === 'race' ? 'starter' : 'gp', where === 'race' ? 'f1' : carId, { mode: where, botLevel: where === 'race' ? 'easy' : null, bots: where === 'race' ? 3 : 0, rookie: where === 'race' ? 1 : null, intro: 0 })
       : where === 'free' ? raceUrl('gp', carId)
       : where === 'academy' ? homeUrl('academy') // 드라이빙 아카데미 (2026-11-12)
       : homeUrl();
