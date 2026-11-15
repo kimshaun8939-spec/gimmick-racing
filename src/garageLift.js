@@ -1,6 +1,6 @@
 ﻿import * as T from 'three';
 import {createCarModel} from './carModel.js';
-import {PART_VIEW,swapPart} from './carParts3d.js';
+import {PART_VIEW,swapPart,partPoseReady} from './carParts3d.js';
 import {partLook,partOf,slotOf} from './parts.js';
 import {createPartSfx} from './partFx.js';
 // partsUI가 기존 replacePart 콜백에 전달하는 일회성 장면 정보.
@@ -23,21 +23,29 @@ export function createGarageLift(table){
   }
  }
  function setup(holder){
-  const s=state;if(!s||s.ready||!holder)return;s.ready=true;s.holder=holder;
-  const live=holder.children[0];s.out=swapPart(live,s.slot,partOf(s.before[s.slot])?.look);
+  const s=state;if(!s||s.ready||!holder)return;
+  // bigparts: 물 모듈은 배 변신이 끝날 때까지(최대 1.6초) 기다렸다가 시작 = 선외기·선체 장치를 실제 크기로 복사.
+  if(!partPoseReady(holder.children[0],s.slot)&&performance.now()-s.at<1600){s.wait=true;return;}
+  if(s.wait)s.at=performance.now();s.ready=true;s.holder=holder;
+  const live=holder.children[0];s.out=swapPart(live,s.slot,partOf(s.before[s.slot])?.look,partOf(s.after[s.slot])?.look);
   s.donor=createCarModel(s.car.look);s.donor.setParts(partLook(s.after));s.donor.sync(fake(s.slot==='water'?'boat':'normal'),2,0);s.donor.root.updateMatrixWorld(true);
-  s.incoming=swapPart(s.donor.root,s.slot,partOf(s.after[s.slot])?.look);
+  s.incoming=swapPart(s.donor.root,s.slot,partOf(s.after[s.slot])?.look,partOf(s.before[s.slot])?.look);
   s.root=new T.Group();holder.add(s.root);s.root.add(s.out.group,s.incoming.group);s.incoming.group.visible=false;
   holder.updateMatrixWorld(true);const inv=holder.matrixWorld.clone().invert();
   const b=new T.Box3().setFromObject(s.out.group).applyMatrix4(inv),next=new T.Box3().setFromObject(s.incoming.group).applyMatrix4(inv);
-  if(b.isEmpty())b.copy(next);
+  // bigparts: 빼는 것과 넣는 것의 자리를 함께 봄 (예: 뒤 날개 판 → 앞 스플리터).
+  if(b.isEmpty())b.copy(next);else if(!next.isEmpty())b.union(next);
   s.center=b.isEmpty()?new T.Vector3(...PART_VIEW[s.slot].look):b.getCenter(new T.Vector3());
   s.extent=b.isEmpty()?new T.Vector3(.4,.2,.3):b.getSize(new T.Vector3());s.out.group.visible=false;
-  let hasMesh=false;s.out.group.traverse(o=>{if(o.isMesh)hasMesh=true;});s.integrated=!hasMesh;
-  const shape=hasMesh?s.out.group:s.incoming.group;s.outline=new T.Group();s.root.add(s.outline);
-  shape.updateMatrixWorld(true);const local=s.root.matrixWorld.clone().invert();
-  shape.traverse(o=>{if(!o.isMesh)return;const e=new T.LineSegments(new T.EdgesGeometry(o.geometry,24),new T.LineBasicMaterial({color:0x87ffe3,transparent:true,opacity:.9,depthTest:false}));e.applyMatrix4(new T.Matrix4().multiplyMatrices(local,o.matrixWorld));e.renderOrder=100;s.outline.add(e);});
-  s.scan=s.outline.clone(true);s.scan.traverse(o=>{if(o.isLineSegments){o.geometry=o.geometry.clone();o.material=o.material.clone();}});s.root.add(s.scan);s.scan.visible=false;
+  // bigparts: 순정 칸은 움직일 메시가 없음(none) = 순정 부분은 제자리 그대로, 덧붙는 부품만 빠지고 들어옴.
+  s.integrated=!!s.out.none;s.toStock=!!s.incoming.none;
+  s.outline=new T.Group();s.root.add(s.outline);
+  s.root.updateMatrixWorld(true);const local=s.root.matrixWorld.clone().invert();
+  const edges=(shape,into)=>shape.traverse(o=>{if(!o.isMesh)return;const e=new T.LineSegments(new T.EdgesGeometry(o.geometry,24),new T.LineBasicMaterial({color:0x87ffe3,transparent:true,opacity:.9,depthTest:false}));e.applyMatrix4(new T.Matrix4().multiplyMatrices(local,o.matrixWorld));e.renderOrder=100;into.add(e);});
+  // 윤곽 = 빼는 자리 + 넣는 자리(타이어는 같은 바퀴라 한 번), 장착 빛 = 결과로 남는 쪽만.
+  edges(s.out.group,s.outline);if(s.slot!=='tire'||s.integrated)edges(s.incoming.group,s.outline);
+  const after=new T.Group();edges(s.toStock?s.out.group:s.incoming.group,after);
+  s.scan=after;s.root.add(s.scan);s.scan.visible=false;
  }
  function render(renderer,scene,camera){
   const s=state;if(!s?.ready)return;s.previousRender?.call(scene,renderer,scene,camera);
@@ -76,9 +84,10 @@ export function createGarageLift(table){
    s.scan.visible=p>=.82&&p<.96;
    s.scan.traverse(o=>{if(!o.isLineSegments)return;const count=o.geometry.attributes.position.count,trace=ease((p-.82)/.14);o.geometry.setDrawRange(0,Math.floor(count*trace/2)*2);o.material.color.setHex(0xe0fff5);o.material.opacity=1-trace*.6;});
    if(p>=(s.reduced?.5:.82))apply(s);
-   const phase=s.reduced?(s.applied?'✓ 장착 완료':'교체 위치'):p<.22?'교체 위치':p<.51?'① 기존 부품 빼기':p<.72?'② 새 부품 가져오기':p<.82?'③ 자리에 맞추기':'✓ 장착 완료';
+   const phase=s.reduced?(s.applied?'✓ 장착 완료':'교체 위치'):p<.22?'교체 위치':p<.51?(s.integrated?'① 순정 부분은 그대로':'① 기존 부품 빼기'):p<.72?(s.toStock?'② 순정으로 되돌리기':'② 새 부품 가져오기'):p<.82?(s.toStock?'③ 자리 정리':'③ 자리에 맞추기'):(s.toStock?'✓ 순정 복귀':'✓ 장착 완료');
    s.label.replaceChildren();const title=document.createElement('b');title.textContent='🔧 '+(slotOf(s.slot)?.name||'부품')+' 교체 · '+phase;s.label.append(title);
-   for(const [cls,text]of [['pu-swap-old',(s.integrated?'기존  ':'빼기  ')+partName(s.before[s.slot],s.slot)+(s.integrated?' · 차체 일체형':'')],['pu-swap-new',(s.applied?'장착!  ':'넣기  ')+partName(s.after[s.slot],s.slot)]]){const line=document.createElement('span');line.className=cls;line.textContent=text;s.label.append(line);}
+   const keep=s.slot==='gearbox'?' · 차체 일체형, 그대로':' · 그대로 둠';
+   for(const [cls,text]of [['pu-swap-old',(s.integrated?'기존  ':'빼기  ')+partName(s.before[s.slot],s.slot)+(s.integrated?keep:'')+(s.out.motors?' · 순정 선외기 2개':'')],['pu-swap-new',s.toStock?(s.applied?'완료  ':'되돌리기  ')+partName(s.after[s.slot],s.slot)+' · 추가 부품 없음':(s.applied?'장착!  ':'넣기  ')+partName(s.after[s.slot],s.slot)+(s.incoming.motors?' · 순정 선외기 2개 다시':'')]]){const line=document.createElement('span');line.className=cls;line.textContent=text;s.label.append(line);}
    if(p>=1)finish();
   }
  };

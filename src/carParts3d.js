@@ -28,35 +28,37 @@ export function isolatedPart(model,slot,look){
  return out;
 }
 // 차고 전용 복사본. 원본의 위치와 자원은 유지하며, 장면이 끝나면 반드시 dispose.
-export function swapPart(root,slot,look){
+// bigparts (2026-11-15): 부품은 순정 위에 '덧붙는' 장치라(엔진 배기·변속기 하우징·날개 판·선체 장치),
+//   교체 장면에서 움직이는 범위 = 실제로 차에서 생기거나 없어지는 그 부품 그룹(part-<칸>)만.
+//   순정 칸은 움직일 메시가 없음(빈 group, none=true) → 순정 날개·배기·선체는 그대로 제자리.
+//   타이어만 예외: 부품 타이어가 순정 옆면 띠를 바꾸므로 바퀴 하나 전체가 빠지고 들어옴(양쪽 같은 범위).
+//   물 모듈의 워터젯은 순정 선외기 2개를 숨기므로(pose), 워터젯이 되는 쪽/풀리는 쪽에서는 선외기도 같이 빠지고 들어옴.
+//   other = 반대편(바뀌기 전/후) 부품 look.
+export function swapPart(root,slot,look,other){
  let body,kit;root.traverse(o=>{if(photoKits.has(o)){body=o;kit=photoKits.get(o);}});
- const group=new T.Group(),hidden=[],geometries=[];
- if(!kit)return {group,hide(){},restore(){},dispose(){}};
+ const group=new T.Group(),hidden=[];
+ const empty={group,none:true,hide(){},restore(){},dispose(){group.removeFromParent();}};
+ if(!kit)return empty;
  root.updateMatrixWorld(true);
- let source=slot==='tire'?kit.wheels.find(w=>w.side>0).spin:look?root.getObjectByName('part-'+(slot==='aero'&&look.kind==='splitter'?'splitter':slot)):slot==='aero'?kit.spoiler:slot==='water'?kit.hull:null;
- const stockEngine=slot==='engine'&&!look&&!['f1','kart'].includes(kit.style);
- if(stockEngine){const inv=root.matrixWorld.clone().invert(),candidates=[];kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual||!(o.material?.metalness>.4))return;for(let n=o;n;n=n.parent)if(!n.visible)return;o.geometry.computeBoundingBox();const b=o.geometry.boundingBox.clone().applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld)),v=b.getSize(new T.Vector3()),c=b.getCenter(new T.Vector3());if(c.z<-.6&&b.max.y<.7&&Math.abs(c.x)<1&&v.length()>.15&&v.length()<2)candidates.push({o,volume:v.x*v.y*v.z});});source=candidates.sort((a,b)=>b.volume-a.volume)[0]?.o;}
- // 합쳐진 순정 엔진의 추출 영역은 차 원점 기준이다. 차고 받침 높이를 섞지 않는다.
- let copy;const inv=root.matrixWorld.clone().invert();
- if(!source){const parent=root.parent,pos=root.position.clone(),q=root.quaternion.clone(),scale=root.scale.clone();root.removeFromParent();root.position.set(0,0,0);root.quaternion.identity();root.scale.set(1,1,1);root.updateMatrixWorld(true);
-  try{copy=isolatedPart({root,fp:{body}},slot,look);}finally{parent?.add(root);root.position.copy(pos);root.quaternion.copy(q);root.scale.copy(scale);root.updateMatrixWorld(true);}
- }else if(stockEngine){copy=new T.Group();const c=source.clone(true);c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;copy.add(c);}
- else copy=isolatedPart({root,fp:{body}},slot,look);
- if(slot==='tire'){copy=new T.Group();const c=source.clone(true);c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;const hidden=[];c.traverse(o=>{if(o!==c&&!o.visible)hidden.push(o);});hidden.forEach(o=>o.removeFromParent());copy.add(c);}
- if(source){
-  const matrix=new T.Matrix4().multiplyMatrices(inv,source.matrixWorld);
-  // isolatedPart는 그룹의 원점만 지운다. 메시 내부의 실제 부착 좌표는 보존된다.
-  copy.applyMatrix4(matrix);group.add(copy);hidden.push([source,source.visible]);
- }else{
-  group.add(copy);
-  // 합쳐진 순정 엔진은 추출된 삼각형만 뺀 임시 geometry로 빈 자리를 만든다.
-  const key=v=>v.toArray().map(n=>n.toFixed(4)).join(','),tri=(a,b,c)=>[key(a),key(b),key(c)].sort().join('|'),remove=new Set();
-  copy.updateMatrixWorld(true);copy.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,i=o.geometry.index;for(let n=0;n<(i?.count||p.count);n+=3){const vs=[0,1,2].map(j=>new T.Vector3().fromBufferAttribute(p,i?i.getX(n+j):n+j).applyMatrix4(o.matrixWorld));remove.add(tri(...vs));}});
-  kit.body.traverse(o=>{if(!o.isMesh||o.userData.partVisual)return;const g=o.geometry,p=g.attributes.position,i=g.index,indices=[];let removed=false;for(let n=0;n<(i?.count||p.count);n+=3){const ids=[0,1,2].map(j=>i?i.getX(n+j):n+j),vs=ids.map(j=>new T.Vector3().fromBufferAttribute(p,j).applyMatrix4(o.matrixWorld).applyMatrix4(inv));if(remove.has(tri(...vs)))removed=true;else indices.push(...ids);}if(removed){const cut=g.clone();cut.setIndex(indices);geometries.push([o,g,cut]);}});
+ const sources=[];
+ if(slot==='tire'){const w=kit.wheels.find(w=>w.side>0)?.spin;if(w)sources.push(w);}
+ else if(look){const o=root.getObjectByName('part-'+(slot==='aero'&&look.kind==='splitter'?'splitter':slot));if(o)sources.push(o);}
+ let motors=false;if(slot==='water'&&look?.hull!=='jet'&&other?.hull==='jet')for(const m of kit.motors||[])if(m.g.visible){sources.push(m.g);motors=true;}
+ if(!sources.length)return empty;
+ const inv=root.matrixWorld.clone().invert();
+ for(const source of sources){
+  const c=source.clone(true),drop=[];
+  c.traverse(o=>{if(o!==c&&(!o.visible||Math.max(o.scale.x,o.scale.y,o.scale.z)<.01))drop.push(o);});drop.forEach(o=>o.removeFromParent());
+  c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;
+  const copy=new T.Group();copy.add(c);copy.applyMatrix4(new T.Matrix4().multiplyMatrices(inv,source.matrixWorld));group.add(copy);hidden.push([source,source.visible]);
  }
- // 독립 메시가 없는 순정 변속기는 임의의 상자를 만들지 않고 빈 원래 자리로 표시.
- group.traverse(o=>{if(o.isMesh){const old=o.geometry;o.geometry=old.clone();if(o.userData.photoGeometry)old.dispose();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.castShadow=false;}});
- return {group,hide(){for(const [o]of hidden)o.visible=false;for(const [o,,g]of geometries)o.geometry=g;},restore(){for(const [o,v]of hidden)o.visible=v;for(const [o,g]of geometries)o.geometry=g;},dispose(){for(const [,,g]of geometries)g.dispose();group.removeFromParent();group.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}};
+ group.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.castShadow=false;}});
+ return {group,none:false,motors,hide(){for(const [o]of hidden)o.visible=false;},restore(){for(const [o,v]of hidden)o.visible=v;},dispose(){group.removeFromParent();group.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}};
+}
+// 교체 장면을 시작해도 되는지: 물 모듈은 배 변신(선체·선외기)이 다 끝난 뒤에 실제 모양을 복사해야 같은 범위·크기.
+export function partPoseReady(root,slot){
+ if(slot!=='water')return true;let kit;root?.traverse(o=>{if(photoKits.has(o))kit=photoKits.get(o);});if(!kit)return true;
+ return kit.hull.visible&&kit.hull.scale.y>=kit.hullY*.98&&kit.motors.every(m=>m.g.scale.x>=.98);
 }
 // 차 지역 좌표: +x 오른쪽, +y 위, +z 앞. 조립 화면과 부품 사진 공용.
 export const PART_VIEW=Object.freeze({
@@ -69,16 +71,21 @@ export const PART_VIEW=Object.freeze({
 // 순정 날개/앞 범퍼를 차체 좌표가 아닌 해당 그룹의 지역 좌표로 잰다.
 function bounds(group){group.updateMatrixWorld(true);const inv=group.matrixWorld.clone().invert(),b=new T.Box3(),q=new T.Box3();group.traverse(o=>{if(!o.isMesh)return;o.geometry.computeBoundingBox();q.copy(o.geometry.boundingBox).applyMatrix4(new T.Matrix4().multiplyMatrices(inv,o.matrixWorld));b.union(q);});return b;}
 export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBounds,style}){
- photoKits.set(body,{body,spoiler,hull,wheels,style});
+ const kitRef={body,spoiler,hull,wheels,style,motors:[],hullY:A.hull?.[1]||1};photoKits.set(body,kitRef);
  const rear=bounds(spoiler),front=bounds(fWing),nodes=[],resources=new Set(),materials=new Set();
  if(drs){drs.updateMatrix();drs.geometry.computeBoundingBox();rear.copy(drs.geometry.boundingBox).applyMatrix4(drs.matrix);}
  const rearSize=rear.getSize(new T.Vector3()),rearCenter=rear.getCenter(new T.Vector3());
+ // 날개 그룹 좌표에서 땅 높이(차 원점 y=0): 큰 끝판이 땅에 닿지 않게.
+ let top0=spoiler;while(top0.parent)top0=top0.parent;top0.updateMatrixWorld(true);
+ const spRel=new T.Matrix4().copy(top0.matrixWorld).invert().multiply(spoiler.matrixWorld),groundY=new T.Vector3(0,0,0).applyMatrix4(spRel.clone().invert()).y;
  const mounts={rear:{width:rearSize.x,y:rear.max.y,z:rearCenter.z},front:{width:front.max.x-front.min.x,y:front.min.y,z:front.max.z}};
  let signature='',jet=false;
  const rearZ=style==='rocket'?-2.51:-normalBounds.back+.09;
  const rearY=Math.max(.20,Math.min(...A.wheels.map(w=>w[3]))*.65);
  mounts.engine={width:.76,y:rearY,z:rearZ};mounts.gearbox={width:.48,y:rearY-.11,z:rearZ};
- const finish=color=>new T.MeshStandardMaterial({color,metalness:.65,roughness:.32});
+ const mat=(color,o={})=>new T.MeshStandardMaterial({color,metalness:o.metal??.6,roughness:o.rough??.35,...(o.emissive?{emissive:o.emissive,emissiveIntensity:o.ei??1.4}:{})});
+ // 뒷바퀴 안쪽 한계(배기 바깥쪽 끝)와 배기·변속기 중심 높이.
+ const inner=Math.min(.64,...A.wheels.filter(w=>!w[2]).map(w=>Math.abs(w[0])-w[4]/2-.04)),lowY=rearY+.03;
  function clear(){for(const g of resources)g.dispose();resources.clear();for(const m of materials)m.dispose();materials.clear();for(const g of nodes){g.removeFromParent();}nodes.length=0;}
  // stockcalls: 순정 타이어 띠는 바퀴 묶음(batchLocal) 안에 합쳐져 있어 그림 호출이 늘지 않음.
  //   부품 타이어가 띠를 숨기거나 되돌릴 때만 그 바퀴 묶음을 풀고 다시 묶음 (숨은 띠는 혼자 남아 그려지지 않음).
@@ -107,58 +114,122 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
     }
    }
   }
+  // bigparts (2026-11-15, 사용자 "작은 부품이 많아 뭐가 바뀌었는지 모름"): 엔진·변속기·날개·물 모듈을
+  //   멀리서도(기본 추격·차고 3D) 보이게 굵고 크게, 차체와 다른 색. 칸마다 삼각형 예산(엔진·변속기·날개·물 각 120 아래) 안.
+  //   엔진 배기는 뒷범퍼 양쪽 아래, 변속기는 그 사이 가운데 아래 = 서로 겹치지 않고 운전 시야(가운데 위)에서 멂.
   if(parts.engine){
-   const n=parts.engine.no||1,g=group(body,'engine'),metal=finish(n===1?'#779acb':n===2?'#34373d':'#c28b4c');
-   const count=n===1?2:n===2?4:1,r=n===1?.064:n===2?.075:.12;
-   // 범퍼 낮은 중앙: 가속 모드 노즐 및 운전자 머리와 분리.
-   box(g,.76,.12,.18,M.darkMetal,0,rearY,rearZ+.025);
-   for(let i=0;i<count;i++){
-    const x=(i-(count-1)/2)*(n===2?.15:.25);
-    const pipe=(n===2?new T.CylinderGeometry(r,r,.14,4,1,true).rotateY(Math.PI/4):new T.CylinderGeometry(r,r*.88,n===1?.36:.23,8,1,true)).rotateX(Math.PI/2);if(n===1){const a=pipe.attributes.position;for(let j=0;j<a.count;j++)if(a.getZ(j)<-.1)a.setZ(j,a.getZ(j)+a.getX(j)*.5);pipe.computeVertexNormals();}mesh(g,pipe,metal,x,rearY,rearZ-.12);
-    mesh(g,new T.CircleGeometry(r*.80,n===2?4:8).rotateY(Math.PI),M.dark,x,rearY,rearZ-.238);
+   const e=parts.engine,n=e.no||1,g=group(body,'engine'),y=lowY,z0=rearZ+.02;
+   const glow=mat('#1a0d08',{metal:.2,rough:.6,emissive:e.glow||'#ff6a2a',ei:1.7}),bracket=mat('#2b2f36',{metal:.7,rough:.4});
+   if(n===1){
+    // 고회전: 가늘고 긴, 위로 솟은 쌍 파이프 + 그을린 티타늄 끝(보라빛) + 붉은 열기.
+    const pipe=mat(e.exhaustColor||'#c9d2dc',{metal:.92,rough:.16}),tip=mat('#7b67d8',{metal:.85,rough:.24});
+    const r=.1,len=.5,xs=inner-r-.04,tilt=.2,at=(geo,dz)=>geo.translate(0,0,dz).rotateX(tilt);
+    for(const s of [-1,1]){
+     box(g,.26,.22,.14,bracket,s*xs,y,z0+.03);
+     mesh(g,at(new T.CylinderGeometry(r,r,len,8,1,true).rotateX(Math.PI/2),-len/2),pipe,s*xs,y,z0);
+     mesh(g,at(new T.CylinderGeometry(r*1.2,r*1.2,.17,8,1,true).rotateX(Math.PI/2),-len+.07),tip,s*xs,y,z0);
+     mesh(g,at(new T.CircleGeometry(r*1.02,8).rotateY(Math.PI),-len+.03),glow,s*xs,y,z0);
+    }
+   }else if(n===2){
+    // 저회전 토크: 굵은 사각 파이프 양쪽 2개씩 + 위를 덮는 두꺼운 열 차단판.
+    const pipe=mat('#aeb6c1',{metal:.85,rough:.3}),shield=mat(e.exhaustColor||'#3a3d44',{metal:.55,rough:.45});
+    const r=.118,len=.34,step=.19,xo=inner-r*.71-.03;
+    for(const s of [-1,1]){
+     box(g,.44,.24,.14,bracket,s*(xo-step/2),y,z0+.03);
+     for(const k of [0,1]){const x=s*(xo-k*step);
+      mesh(g,new T.CylinderGeometry(r,r,len,4,1,true).rotateY(Math.PI/4).rotateX(Math.PI/2).translate(0,0,-len/2),pipe,x,y,z0);
+      mesh(g,new T.CircleGeometry(r*.84,4).rotateZ(Math.PI/4).rotateY(Math.PI).translate(0,0,-len+.03),glow,x,y,z0);}
+     box(g,.44,.05,.32,shield,s*(xo-step/2),y+r*.71+.035,z0-.14);
+    }
+   }else{
+    // 터보: 아주 굵은 원형 청동 파이프 + 나팔처럼 벌어진 끝.
+    const pipe=mat(e.exhaustColor||'#8a5a2e',{metal:.8,rough:.3}),lip=mat('#e0aa5c',{metal:.9,rough:.2});
+    const r=.14,len=.34,xs=inner-r*1.32-.03;
+    for(const s of [-1,1]){
+     box(g,.3,.3,.14,bracket,s*xs,y,z0+.03);
+     mesh(g,new T.CylinderGeometry(r,r,len,8,1,true).rotateX(Math.PI/2).translate(0,0,-len/2),pipe,s*xs,y,z0);
+     mesh(g,new T.CylinderGeometry(r,r*1.32,.13,8,1,true).rotateX(Math.PI/2).translate(0,0,-len-.055),lip,s*xs,y,z0);
+     mesh(g,new T.CircleGeometry(r*.96,8).rotateY(Math.PI).translate(0,0,-len+.02),glow,s*xs,y,z0);
+    }
    }
-   if(n===3)for(const side of [-1,1]){box(g,.14,.20,.26,metal,side*.40,rearY+.09,rearZ+.04);box(g,.11,.13,.012,M.dark,side*.40,rearY+.09,rearZ-.096);}
-   else for(let i=0;i<(n===1?5:3);i++)box(g,.06,.04,.22,metal,(i-(n===1?2:1))*.12,rearY+.085,rearZ+.04);
   }
   if(parts.gearbox){
-   const n=parts.gearbox.no||1,g=group(body,'gearbox'),metal=finish('#454b55'),accent=finish(n===1?'#bf414b':n===2?'#4084c0':'#c5a458');
-   // ? ???? ?? ?? ???. ?? ??? ???? ???.
-   const y=rearY+.10,z=rearZ-.075,w=n===1?.34:n===2?.25:.29,h=n===1?.18:.12,d=n===2?.38:.20;
+   // 변속기: 배기 사이 가운데 아래 6각 하우징. 뒷면 전체가 부품 색(숏 하늘·롱 주황·시퀀셜 빨강), 옆 색 줄.
+   const gb=parts.gearbox,n=gb.no||1,g=group(body,'gearbox'),color=gb.color||(n===1?'#4fd1ff':n===2?'#ffb21a':'#ff4f6a');
+   const housing=mat('#4a515c',{metal:.75,rough:.32}),accent=mat(color,{metal:.3,rough:.4,emissive:color,ei:.4}),dark=mat('#22262d',{metal:.6,rough:.5});
+   const w=n===2?.34:.38,h=n===2?.25:.32,d=n===1?.3:n===2?.52:.4,y=lowY+(n===2?-.01:.02),z=rearZ+.05,k=h/w,tipR=w/2*.88;
    mounts.gearbox={width:w,y,z};
-   box(g,w+.02,h+.02,.12,M.darkMetal,0,y,z+.08);
-   mesh(g,new T.CylinderGeometry(w/2,w*.43,d,6).rotateX(Math.PI/2).scale(1,h/w,1),metal,0,y,z-d/2+.07);
-   for(let j=0;j<1;j++)box(g,w+.012,.015,.024,M.metal,0,y-h*.34+j*h*.34,z-d+.07);
-   box(g,.07,.025,.012,accent,0,y+h*.37,z-d+.05);
-   for(const side of [-1,1])mesh(g,new T.CylinderGeometry(.018,.018,.012,3).rotateX(Math.PI/2),M.metal,side*w*.38,y,z-d+.05);
-   if(n===3){mesh(g,new T.TorusGeometry(.09,.012,3,6),accent,0,y,z-d+.045);for(const side of [-1,1]){const o=box(g,.035,.12,.025,M.metal,side*.19,y,z-.09);o.rotation.z=side*.3;}}
+   box(g,w+.06,h+.04,.1,dark,0,y,z+.02);
+   mesh(g,new T.CylinderGeometry(w/2,tipR,d,6).rotateX(Math.PI/2).translate(0,0,-d/2).scale(1,k,1),housing,0,y,z);
+   mesh(g,new T.CircleGeometry(tipR*.97,6).rotateY(Math.PI).scale(1,k,1),accent,0,y,z-d-.006);
+   for(const s of [-1,1])box(g,.03,h*.42,d*.86,accent,s*(w/2*.93+.012),y,z-d/2);
+   if(n===1)for(let i=0;i<3;i++)box(g,w*.78,.045,.035,dark,0,y+h/2*.92+.02,z-d*(.22+i*.28));
+   else if(n===2)box(g,.07,.05,d*.9,accent,0,y+h/2*.9+.02,z-d/2);
+   else{
+    const gold=mat('#e6c25a',{metal:.95,rough:.18});
+    mesh(g,new T.RingGeometry(tipR*.5,tipR*.78,6).rotateY(Math.PI).scale(1,k,1),gold,0,y,z-d-.012);
+    mesh(g,new T.CylinderGeometry(.055,.055,.14,6,1,true).rotateX(Math.PI/2),gold,0,y,z-d-.07);
+    for(const s of [-1,1]){const o=box(g,.04,.2,.035,gold,s*(w/2+.03),y,z-d+.08);o.rotation.z=s*.32;}
+   }
   }
   const p=parts.aero;if(p&&!rear.isEmpty()){
    const isLip=p.kind==='lip',isSplit=p.kind==='splitter',g=group(isSplit?fWing:spoiler,isSplit?'splitter':'aero');
-   if(isSplit){const width=Math.min(1.85,mounts.front.width*.92),y=front.min.y+.006,z=front.max.z-.12;box(g,width,.022,.40,M.carbon,0,y,z);}
-   else {const w=Math.min(2.05,rearSize.x*.90),z=rearCenter.z,y=rear.max.y;
-    // 작은 끝판으로 기존 날개에 직접 연결. 중앙 시야보다 낮게 유지.
-    const gap=isLip?.018:.095;const blade=box(g,w,.024,isLip?.10:.24,isLip?M.metal:M.carbon,0,y+gap,z);blade.rotation.x=isLip?-.12:.18;
-    if(!isLip)for(const side of [-1,1]){const e=box(g,.025,.16,.28,M.carbon,side*(w/2-.012),y+gap+.085,z-.015);e.rotation.x=-.14;}
-    for(const s of [-1,1])box(g,.022,gap+.03,.16,M.carbon,s*(w/2-.011),y+gap/2,z);
+   if(isSplit){
+    // 앞 스플리터: 앞으로 크게 튀어나온 카본 판 + 주황 앞날 + 옆 울타리.
+    // 좁고 긴 앞날개(로켓 등)는 운전석에서 보이는 거리라 앞으로 덜 나오게.
+    const fw=A.wheels.filter(w=>w[2]),narrow=mounts.front.width<1.3,width=Math.min(2.15,mounts.front.width*1.02,narrow?2*(Math.min(...fw.map(w=>Math.abs(w[0])-w[4]/2))-.06):9),y=front.min.y+.008,z=front.max.z+(narrow?-.12:.06);
+    const carbon=mat(p.color||'#20242b',{metal:.4,rough:.35}),edge=mat('#ff6b1f',{metal:.3,rough:.4,emissive:'#ff6b1f',ei:.35});
+    box(g,width,.032,.66,carbon,0,y,z);box(g,width,.05,.06,edge,0,y+.01,z+.33);
+    for(const s of [-1,1])box(g,.035,.1,.56,carbon,s*(width/2-.02),y+.06,z-.02);
+   }else{
+    // 낮은 날개(카트 뒤 범퍼 등)는 뒷바퀴 사이 폭까지만 = 끝판이 바퀴에 안 닿게.
+    const rw=A.wheels.filter(w=>!w[2]),low=y0=>y0-groundY<2*Math.max(...rw.map(w=>w[3]))+.2;
+    const w=Math.min(2.1,rearSize.x,low(rear.max.y)?2*(Math.min(...rw.map(w=>Math.abs(w[0])-w[4]/2))-.06)-.1:9),z=rearCenter.z,y=rear.max.y,dz=rearSize.z;
+    if(isLip){
+     // 로우 드래그: 날개 뒤로 길게 이어지는 은색 판 + 은색 끝 캡. 위로는 거의 안 솟음(시야).
+     const silver=mat(p.color||'#cfd8e3',{metal:.88,rough:.18});
+     const blade=box(g,w,.036,.32,silver,0,y-.012,z-dz/2-.1);blade.rotation.x=-.08;
+     for(const s of [-1,1])box(g,.045,.13,.46,silver,s*(w/2+.012),y-.05,z-dz/2+.02);
+    }else{
+     // 하이 다운포스: 뒤쪽 큰 두 번째 판 + 아주 큰 끝판(주황 줄) + 거니 플랩. 위로는 8 cm만 = 추격 시점 가운데 위를 덜 가림.
+     const carbon=mat(p.color||'#1b1e24',{metal:.45,rough:.3}),stripe=mat('#ff7a1a',{metal:.3,rough:.4,emissive:'#ff7a1a',ei:.4});
+     // 높은 날개(지붕·GT)는 두 번째 판을 아래쪽 뒤로 = 추격 카메라에서 가운데 위로 솟아 보이지 않게.
+     const hi=y-groundY>1.2,by=hi?y-.11:y-.005;
+     const blade=box(g,w,.045,.36,carbon,0,by,z-dz/2-.1);blade.rotation.x=.26;
+     const top=hi?y+.01:y+.08,eh=Math.max(.2,Math.min(.56,top-groundY-.16)),ed=Math.max(.62,dz+.44);
+     for(const s of [-1,1]){box(g,.04,eh,ed,carbon,s*(w/2+.024),top-eh/2,z-.14);box(g,.05,.07,ed,stripe,s*(w/2+.028),top-.03,z-.14);}
+     box(g,w,.04,.04,stripe,0,by+.067,z-dz/2-.27);
+    }
    }
   }
   const water=parts.water;if(water){const g=group(hull,'water');
    if(water.hull==='deepv'){
-    // 선체 바닥에 이어지는 삼각 용골: 위 모서리는 기존 V 바닥 안에 고정.
-    const pos=[],idx=[];for(const [z,w,d]of [[2.3,.01,.15],[.8,.14,.36],[-2.3,.14,.30]])pos.push(-w,-.14,z,w,-.14,z,0,-d,z);
+    // 딥V: 아래로 깊은 금속 용골 + 양옆 아래로 꺾인 보라 카빙 핀 + 고물 세움 핀.
+    const fin=mat('#9a5cff',{metal:.4,rough:.35,emissive:'#9a5cff',ei:.22}),steel=mat('#c8ced8',{metal:.85,rough:.25});
+    const pos=[],idx=[];for(const [z,w,d]of [[2.3,.01,.16],[.8,.15,.5],[-2.3,.15,.42]])pos.push(-w,-.14,z,w,-.14,z,0,-d,z);
     for(let i=0;i<2;i++)for(let j=0;j<3;j++){const a=i*3+j,b=i*3+(j+1)%3;idx.push(a,a+3,b,b,a+3,b+3);}idx.push(0,1,2,6,8,7);
-    const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();mesh(g,geo,M.metal);
-   }else if(water.hull==='jet')for(const s of [-1,1]){
-    mesh(g,new T.CylinderGeometry(.16,.19,.30,6,1,true).rotateX(Math.PI/2),M.darkMetal,s*.68,.18,-2.78);
-    mesh(g,new T.CircleGeometry(.145,6).rotateY(Math.PI),M.dark,s*.68,.18,-2.94);
-    mesh(g,new T.TorusGeometry(.16,.012,3,4),M.metal,s*.68,.18,-2.935);
-   }else for(const s of [-1,1]){
-    box(g,.34,.045,3.8,M.metal,s*.99,.035,.1);
-    for(const z of [-.25,-1.35])box(g,.46,.035,.18,M.carbon,s*.99,.008,z);
+    const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(pos,3));geo.setIndex(idx);geo.computeVertexNormals();mesh(g,geo,steel);
+    for(const s of [-1,1]){const f=box(g,.32,.045,3.6,fin,s*1.22,.2,.1);f.rotation.z=-s*.35;box(g,.045,.3,.55,fin,s*1.06,.36,-2.15);}
+   }else if(water.hull==='jet'){
+    // 워터젯: 굵은 쌍 노즐(파란 분사 빛) + 갑판 위 주황 흡기 혹.
+    const pod=mat('#ff8a1f',{metal:.45,rough:.35}),dark=mat('#23272e',{metal:.7,rough:.35}),jet=mat('#0c1b22',{metal:.2,rough:.6,emissive:'#4fe0ff',ei:1.5});
+    for(const s of [-1,1]){
+     mesh(g,new T.CylinderGeometry(.24,.2,.5,8,1,true).rotateX(Math.PI/2),dark,s*.68,.18,-2.9);
+     mesh(g,new T.RingGeometry(.12,.205,8).rotateY(Math.PI),pod,s*.68,.18,-3.152);
+     mesh(g,new T.CircleGeometry(.125,8).rotateY(Math.PI),jet,s*.68,.18,-3.14);
+     box(g,.36,.14,.9,pod,s*.66,.62,-2.05);
+    }
+   }else{
+    // 플레이닝: 선체 바깥 넓은 하늘색 스폰슨(앞이 비스듬) + 연결대 + 물 끊는 계단.
+    const c=mat('#29c6ff',{metal:.35,rough:.35,emissive:'#29c6ff',ei:.15}),d=mat('#262b33',{metal:.5,rough:.5});
+    for(const s of [-1,1]){
+     const geo=new T.BoxGeometry(.34,.16,4.3),a=geo.attributes.position;for(let i=0;i<a.count;i++)if(a.getZ(i)>0&&a.getY(i)<0)a.setZ(i,a.getZ(i)-.45);geo.computeVertexNormals();
+     mesh(g,geo,c,s*1.34,.16,.05);box(g,.4,.12,.7,d,s*1.17,.22,-.35);box(g,.36,.04,.14,d,s*1.34,.25,-.95);
+    }
    }
   }
   // 교체 그룹 안에서 먼저 PBR로 합치고 바깥 묶음으로부터 보호한다.
   for(const g of nodes){const collect=()=>g.traverse(o=>{if(o.geometry)resources.add(o.geometry);if(o.material&&!o.material.userData.pbrBake&&!Object.values(M).includes(o.material))materials.add(o.material);});collect();g.userData.noBatch=false;batchLocal(g,{pbr:true});collect();g.traverse(o=>{o.userData.noBatch=true;});}
  }
- return {setParts,dispose(){clear();for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors){if(jet)for(const m of motors)m.g.visible=false;}};
+ return {setParts,dispose(){clear();for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors){kitRef.motors=motors;if(jet)for(const m of motors)m.g.visible=false;}};
 }
