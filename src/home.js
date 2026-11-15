@@ -1350,7 +1350,7 @@ export async function runHome() {
       const card = document.createElement('aside'); card.className = 'f3-ride' + (locked ? ' locked' : '');
       const url = thumbUrl(carId);
       card.innerHTML = (url ? '<img alt="" src="'+esc(url)+'">' : '<span class="f3-photo">🏎️</span>') + '<div><small>지금 탈 차</small><strong>'+esc(c.name)+'</strong><span class="f3-chips"><small>'+esc(c.class || '기본')+' 등급</small>'+chips+(locked ? '<small>🔒 Lv.'+c.unlockLevel+' 필요</small>' : '')+'</span></div><button class="gm-btn '+(locked?'primary':'')+'" data-act="prepGarage" data-nav>차고에서 바꾸기 <kbd>C</kbd></button>';
-      if (name === 'map') root.querySelector('.head').after(card); else root.querySelector('header').append(card);
+      if (name === 'map') { const bar = root.querySelector('.bar'); const go = bar?.querySelector('[data-act="start"]'); if (go) go.before(card); else root.querySelector('.head').after(card); } else root.querySelector('header').append(card);
       root.querySelectorAll('[data-act="start"]').forEach(btn => btn.disabled = locked || (name === 'season' && !seasonMaps.length));
     }
   }
