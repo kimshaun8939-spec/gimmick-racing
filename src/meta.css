@@ -297,3 +297,133 @@ body:has(#pauseMenu.on) .mt-notice { display:none; }
 }
 
 @media(max-height:560px) and (min-width:720px){#home .mt-page .head{height:auto!important;min-height:44px!important;flex:0 0 auto!important;}#home .mt-page .head>.gm-btn{min-height:38px!important;height:38px!important;}}
+/* 보상 길 전용 도로·그림 카드와 화면 크기별 배치를 정의합니다. */
+#home .mt-content[data-tab="path"]{display:flex;overflow:hidden;padding:0!important;min-height:0;background:#0b1423}
+.rr-road{flex:1;min-width:0;min-height:0;display:grid;grid-template-rows:minmax(160px, .85fr) auto minmax(180px,1.25fr) auto;gap:0;color:#edf5ff;background:radial-gradient(ellipse at 20% 0,#22464f88,transparent 60%),#0b1423;overflow:hidden}
+.rr-road *{box-sizing:border-box}
+.rr-hero{display:grid;grid-template-columns:27% minmax(0,1fr) 230px;gap:24px;padding:20px 28px;min-height:0;border-bottom:1px solid #a7d4dd22;background:linear-gradient(110deg,#4be8c60c,transparent 70%)}
+.rr-feature{position:relative;min-width:0;min-height:0;border-radius:16px;background:radial-gradient(ellipse,#d7bb492b,transparent 70%)}
+.rr-art{display:flex;align-items:center;justify-content:center;width:100%;min-height:0;height:100%;overflow:hidden}
+.rr-art img,.rr-art svg{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 9px 9px #0008)}
+.rr-badge{font-size:clamp(50px,6vw,92px);filter:drop-shadow(0 0 22px #f9ca6370)}
+.rr-fallback{font-size:60px}
+.rr-intro{display:flex;flex-direction:column;justify-content:center;min-width:0;gap:7px}
+.rr-eyebrow{color:#80e8d7;font-size:11px;font-weight:800;letter-spacing:.16em}
+#home .rr-intro h3{font-size:clamp(21px,2.2vw,32px);line-height:1.3;margin:0;word-break:keep-all}
+#home .rr-intro p{font-size:12px;margin:0;color:#b0c2d5}
+.rr-distance{display:flex;align-items:center;gap:16px;margin-top:8px}
+.rr-distance b{font-size:27px;color:#ffe29c}
+.rr-distance span{font-size:13px;color:#c9d9e5}
+.rr-estimate{font-size:10px;color:#8fa5b9;line-height:1.5}
+.rr-driver{display:grid;grid-template-columns:74px minmax(0,1fr);align-content:center;align-items:center;gap:7px 10px;padding-left:22px;border-left:1px solid #b6d5e222;min-width:0}
+.rr-you{width:74px;height:60px;display:flex;align-items:center;justify-content:center;font-size:36px}
+.rr-you img,.rr-car-pin img{width:100%;height:100%;object-fit:contain}
+.rr-driver>div>small{display:block;font-size:10px;color:#82e4d0;margin-bottom:4px}
+.rr-driver b{font-size:23px;display:block;white-space:nowrap}
+.rr-driver em{display:block;font-size:11px;font-style:normal;color:#adbed3;margin-top:2px}
+.rr-driver>.mt-bar,.rr-driver>small,.rr-driver>button{grid-column:1/-1}
+.rr-driver>.mt-bar{height:6px;margin:0}
+.rr-driver>small{font-size:10px;color:#a3b6ca}
+#home .rr-driver>button{margin-top:3px;font-size:11px;min-height:30px;padding:6px 12px;justify-self:start}
+.rr-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 25px 4px}
+.rr-toolbar>div:first-child{display:flex;align-items:center;gap:14px;min-width:0}
+.rr-toolbar b{font-size:17px;white-space:nowrap}
+.rr-toolbar small{font-size:11px;color:#8da6bb}
+.rr-nav{display:flex;gap:9px;align-items:center;flex-shrink:0}
+.rr-nav span{font-size:10px;color:#a8bdce}
+#home .rr-nav button{padding:3px 13px;min-height:28px;font-size:16px}
+.rr-viewport{overflow-x:auto;overflow-y:hidden;min-height:0;min-width:0;position:relative;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:thin;scrollbar-color:#489c99 #152334;outline-offset:-3px}
+.rr-track{display:flex;width:max-content;height:100%;padding:0 22px 12px;position:relative;gap:18px;isolation:isolate}
+.rr-asphalt{position:absolute;left:140px;right:140px;top:34px;height:29px;border-top:1px solid #6a819342;border-bottom:1px solid #6a819342;background:repeating-linear-gradient(90deg,transparent 0 22px,#9eb5c444 22px 42px,transparent 42px 64px) center/100% 2px no-repeat,#253344;z-index:-1;overflow:hidden;pointer-events:none}
+.rr-asphalt i{display:block;width:var(--rr-fill);height:100%;background:linear-gradient(90deg,#3ac9aa66,#65f2d7aa);border-right:3px solid #c4fff5;box-shadow:0 0 18px #50ffdd;transform-origin:left;animation:rrFill .8s ease-out both}
+.rr-level{width:236px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}
+.rr-station{height:96px;position:relative;flex-shrink:0;display:flex;align-items:center;flex-direction:column;padding-top:30px;gap:6px}
+.rr-node{display:flex;justify-content:center;align-items:center;border:2px solid #647789;border-radius:50%;background:#182538;width:36px;height:36px;font-size:13px;font-weight:800;color:#a3bbce;box-shadow:0 0 0 5px #0c1624}
+.passed .rr-node{border-color:#69e8cf;background:#16473f;color:#9cffe8;box-shadow:0 0 0 5px #0c1624,0 0 17px #38d9b54a}
+.current .rr-node{background:#90ffe5;color:#0b3e36;border-color:#cbfff3}
+.rr-station>b{font-size:9px;letter-spacing:.1em;color:#879fb4}
+.current .rr-station>b{color:#8dffe3}
+.rr-car-pin{position:absolute;width:80px;height:42px;left:calc(50% - 40px);top:-4px;font-size:27px;text-align:center;filter:drop-shadow(0 0 8px #79ffcc66)}
+.milestone .rr-node{border-color:#edc56b;animation:rrPulse 3s ease-in-out infinite}
+.rr-rewards{display:flex;flex-direction:column;gap:10px;overflow:auto;min-height:0;padding:4px 4px 10px;scrollbar-width:thin;scrollbar-color:#3c5363 transparent;touch-action:pan-y}
+.rr-card{--rr-tint:#8cdcca;position:relative;flex-shrink:0;display:grid;grid-template-rows:auto minmax(80px,1fr) auto auto;text-align:left;width:100%;height:205px;min-height:0;border:1px solid color-mix(in srgb,var(--rr-tint) 45%,#182639);border-radius:12px;background:radial-gradient(ellipse at 50% 40%,color-mix(in srgb,var(--rr-tint) 12%,transparent),transparent 80%),#142031;color:#e9f3ff;padding:11px 12px;cursor:pointer;transition:transform .18s,box-shadow .18s;overflow:hidden;font-family:inherit}
+.rr-card.kind-car,.rr-card.kind-tier{--rr-tint:#f3cc77;background-color:#262535}
+.rr-card.kind-costume{--rr-tint:#c59efa}.rr-card.kind-paint{--rr-tint:#81b7ff}
+.rr-card.owned{opacity:.67}
+.rr-card.open,.rr-card.upcoming{border-color:var(--rr-tint);box-shadow:inset 0 0 22px color-mix(in srgb,var(--rr-tint) 8%,transparent),0 0 12px color-mix(in srgb,var(--rr-tint) 15%,transparent)}
+.rr-card.upcoming::after{content:'';position:absolute;inset:-60%;pointer-events:none;background:linear-gradient(115deg,transparent 38%,#fff1 50%,transparent 62%);animation:rrSweep 5s ease-in-out infinite}
+.rr-card:hover,.rr-card:focus-visible{transform:translateY(-3px);box-shadow:0 5px 17px #0008;border-color:#ebfff8;outline:2px solid #a8ffdf55;outline-offset:-2px;opacity:1}
+.rr-card-top{display:flex;justify-content:space-between;gap:6px;align-items:center;z-index:1}
+.rr-card-top small{font-size:9px;letter-spacing:.1em;color:var(--rr-tint)}
+.rr-card-top em{font-size:9px;font-style:normal;color:#a9bdce;white-space:nowrap}
+.rr-card>b{font-size:14px;line-height:1.4;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rr-card-detail{color:#8fa9bf;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+.rr-card .rr-badge{font-size:64px}.rr-card .rr-fallback{font-size:47px}
+.rr-card.distant .rr-art{filter:grayscale(1) brightness(.25);opacity:.7}
+.rr-swatch{display:block;width:72%;height:62%;max-height:100px;border-radius:22px 8px;background:linear-gradient(135deg,#fff9,transparent 35%),linear-gradient(155deg,var(--paint) 65%,var(--accent) 66%);transform:skewX(-12deg);box-shadow:0 10px 20px #0006,inset 0 0 0 1px #fff4}
+.rr-rest{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:1px dashed #70869938;border-radius:12px;min-height:180px;color:#7f9db2}.rr-rest>span{font-size:45px;color:#436875}.rr-rest b{font-size:13px}.rr-rest small{font-size:10px}
+.rr-foot{display:flex;justify-content:space-between;gap:20px;padding:9px 25px;background:#0b1423;border-top:1px solid #8db6c11a;font-size:11px;min-height:38px;align-items:center}
+.rr-detail{min-width:0;color:#a7c1d1;line-height:1.6;word-break:keep-all}.rr-detail b{color:#e3f8ef}.rr-foot>small{font-size:9px;white-space:nowrap;color:#7893ab}
+@keyframes rrFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes rrSweep{0%,45%{transform:translateX(-70%)}80%,100%{transform:translateX(70%)}}
+@keyframes rrPulse{50%{box-shadow:0 0 0 5px #0c1624,0 0 20px #f7d78566}}
+.rr-still *,.rr-still *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media(prefers-reduced-motion:reduce){.rr-road *,.rr-road *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(max-width:1100px){.rr-hero{grid-template-columns:23% minmax(0,1fr) 180px;gap:15px;padding:16px}.rr-driver{padding-left:12px;grid-template-columns:55px 1fr}.rr-you{width:55px}.rr-distance{gap:10px}.rr-distance b{font-size:22px}}
+@media(max-width:600px){.rr-road{grid-template-rows:230px auto minmax(190px,1fr) auto}.rr-hero{grid-template-columns:100px minmax(0,1fr);grid-template-rows:1fr auto;gap:9px;padding:12px}.rr-feature{grid-row:1}.rr-intro{gap:5px}#home .rr-intro h3{font-size:19px}#home .rr-intro p{font-size:10px}.rr-eyebrow{font-size:8px;letter-spacing:.07em}.rr-distance{display:block;margin-top:0}.rr-distance b{font-size:22px}.rr-distance span{display:block;font-size:10px;margin-top:3px}.rr-estimate{font-size:8px}.rr-driver{grid-column:1/-1;border-left:0;border-top:1px solid #b6d5e222;padding:6px 0 0;grid-template-columns:50px 1fr 90px;gap:4px 8px}.rr-you{width:50px;height:35px;grid-row:1/3}.rr-driver>div{grid-column:2;grid-row:1}.rr-driver>div>small{font-size:8px;margin:0}.rr-driver b{font-size:16px}.rr-driver em{display:inline;font-size:9px}.rr-driver>.mt-bar{grid-column:2;grid-row:2}.rr-driver>small{grid-column:3;grid-row:2;font-size:8px}#home .rr-driver>button{grid-column:3;grid-row:1;font-size:9px;min-height:27px;margin:0;padding:4px}.rr-toolbar{padding:9px 12px 0}.rr-toolbar>div:first-child{gap:0;display:block}.rr-toolbar b{font-size:14px}.rr-toolbar small{display:none}.rr-nav span{display:none}.rr-level{width:220px}.rr-card{height:210px}.rr-foot{padding:8px 12px;min-height:45px;font-size:10px}.rr-foot>small{display:none}.rr-badge{font-size:65px}.rr-track{padding-left:10px;padding-right:10px}}
+@media(max-height:560px) and (min-width:601px){.rr-road{grid-template-columns:240px minmax(0,1fr);grid-template-rows:28px minmax(0,1fr) 30px}.rr-hero{grid-column:1;grid-row:1/-1;display:grid;grid-template-columns:76px 1fr;grid-template-rows:1fr 66px;padding:9px;gap:5px;border-bottom:0;border-right:1px solid #95c1d22a}.rr-feature{grid-column:1;grid-row:1}.rr-intro{gap:3px}#home .rr-intro h3{font-size:15px}#home .rr-intro p{font-size:9px}.rr-eyebrow{font-size:7px;letter-spacing:.03em}.rr-distance{display:block;margin:0}.rr-distance b{font-size:18px}.rr-distance span{display:block;font-size:9px}.rr-estimate{font-size:8px}.rr-driver{grid-column:1/-1;display:grid;grid-template-columns:42px 1fr auto;border-left:0;border-top:1px solid #fff2;padding:5px 0 0;gap:3px 5px}.rr-you{width:42px;height:34px;grid-row:1/3}.rr-driver b{font-size:16px}.rr-driver em{display:inline;font-size:8px}.rr-driver>div>small{font-size:8px;margin:0}.rr-driver>.mt-bar{grid-column:2;grid-row:2}.rr-driver>small{grid-column:3;grid-row:2;font-size:8px}#home .rr-driver>button{grid-column:3;grid-row:1;min-height:23px;font-size:8px;padding:3px 5px;margin:0}.rr-toolbar{grid-column:2;grid-row:1;padding:2px 10px}.rr-toolbar b{font-size:12px}.rr-toolbar small,.rr-nav span{display:none}#home .rr-nav button{font-size:12px;min-height:22px;padding:0 9px}.rr-viewport{grid-column:2;grid-row:2}.rr-foot{grid-column:2;grid-row:3;font-size:8px;min-height:0;padding:3px 10px}.rr-foot>small{display:none}.rr-station{height:59px;padding-top:7px;gap:2px}.rr-node{width:27px;height:27px;font-size:10px}.rr-car-pin{width:48px;height:26px;left:calc(50% - 24px);top:-10px}.current .rr-node{opacity:.8}.rr-station>b{font-size:7px}.rr-asphalt{top:13px;height:19px;left:100px;right:100px}.rr-level{width:172px}.rr-track{gap:12px;padding:0 10px 5px}.rr-card{height:140px;grid-template-rows:auto minmax(45px,1fr) auto auto;padding:7px}.rr-card>b{font-size:11px}.rr-card-top small,.rr-card-top em,.rr-card-detail{font-size:8px}.rr-card .rr-badge{font-size:38px}.rr-rewards{padding:3px;gap:6px}.rr-rest{min-height:115px}.rr-rest>span{font-size:26px}.rr-badge{font-size:48px}}
+/* 1차 사진 점검: 카드 이름이 잘리지 않도록 도로 높이를 확보합니다. */
+.rr-road{grid-template-rows:minmax(155px,.65fr) 43px minmax(250px,1.35fr) auto}
+.rr-hero{padding-top:12px;padding-bottom:12px}
+.rr-card{height:178px;grid-template-rows:auto minmax(50px,1fr) auto auto}
+@media(max-width:600px){.rr-road{grid-template-rows:190px 40px minmax(175px,1fr) 40px}.rr-hero{padding:9px;gap:5px;grid-template-columns:94px minmax(0,1fr)}.rr-intro{gap:3px}#home .rr-intro h3{font-size:17px}.rr-estimate{line-height:1.4}.rr-driver{grid-template-rows:28px 6px}.rr-driver>div>small{display:none}.rr-driver>small{font-size:7px}.rr-you{height:32px}.rr-driver em{font-size:8px}.rr-station{height:66px;padding-top:7px;gap:3px}.rr-asphalt{top:13px;height:27px}.rr-car-pin{top:-11px;height:24px;width:56px;left:calc(50% - 28px)}.rr-node{width:31px;height:31px}.rr-station>b{font-size:8px}.rr-card{height:153px;padding:9px;grid-template-rows:auto minmax(50px,1fr) auto auto}.rr-card>b{font-size:12px}.rr-card-detail{font-size:9px}.rr-toolbar{padding-top:4px}.rr-foot{font-size:9px;min-height:40px}.rr-rest{min-height:145px}}
+@media(max-height:560px) and (min-width:601px){.rr-road{grid-template-columns:235px minmax(0,1fr);grid-template-rows:26px minmax(0,1fr) 26px}.rr-hero{padding:7px;grid-template-rows:minmax(0,1fr) 48px;grid-template-columns:64px minmax(0,1fr)}.rr-driver{grid-template-rows:25px 6px;gap:2px 4px}.rr-driver>div>small{display:none}.rr-driver em{font-size:7px}.rr-driver>small{font-size:7px}.rr-estimate{display:none}.rr-card{height:112px;grid-template-rows:auto minmax(30px,1fr) auto auto;padding:5px 7px}.rr-station{height:48px}.rr-station>b{font-size:7px}.rr-track{padding-bottom:3px}.rr-rewards{padding-top:3px}.rr-card>b{font-size:10px}.rr-card-detail{font-size:8px}.rr-toolbar{padding-top:0}.rr-foot{min-height:26px;font-size:8px}.rr-car-pin{top:-12px}.rr-card .rr-badge{font-size:29px}}
+/* 2차 사진 점검: 남은 높이에 카드 한 장 전체를 맞춰 그림과 이름을 함께 보여 줍니다. */
+.rr-viewport,.rr-rewards{touch-action:auto}
+.rr-road{grid-template-rows:minmax(0,.65fr) 40px minmax(0,1.35fr) 38px}
+.rr-intro,.rr-driver{min-height:0}
+.rr-rewards{container-type:size}
+.rr-card{height:100cqh;min-height:100cqh;grid-template-rows:auto minmax(0,1fr) auto auto}
+.rr-station{height:80px;padding-top:22px}
+.rr-asphalt{top:26px}
+.rr-car-pin{top:-5px;height:33px}
+@media(max-width:600px){.rr-road{grid-template-rows:165px 36px minmax(0,1fr) 38px}.rr-hero{grid-template-rows:minmax(0,1fr) 40px}.rr-station{height:62px;padding-top:10px}.rr-asphalt{top:14px}.rr-car-pin{top:-10px;height:25px}.rr-driver{padding-top:5px;grid-template-rows:23px 6px}.rr-you{height:30px}.rr-driver em{font-size:8px}.rr-driver>small{font-size:7px}.rr-foot{min-height:0}.rr-card{padding:8px}.rr-card .rr-badge{font-size:42px}#home .rr-intro h3{font-size:16px}.rr-intro{gap:2px}.rr-distance b{font-size:20px}.rr-estimate{font-size:7px}.rr-driver>div>small{display:none}}
+@media(max-height:560px) and (min-width:601px){.rr-road{grid-template-columns:235px minmax(0,1fr);grid-template-rows:26px minmax(0,1fr) 26px}.rr-station{height:43px;padding-top:7px}.rr-asphalt{top:12px}.rr-car-pin{top:-12px;height:22px}.rr-card{padding:5px 7px}.rr-driver{grid-template-rows:23px 6px}.rr-hero{grid-template-rows:minmax(0,1fr) 43px}.rr-intro{overflow:hidden}.rr-foot{overflow:hidden}}
+/* 공통 메뉴의 최소 글자·터치 버튼 크기보다 보상 길 배치를 우선합니다. */
+#home .rr-road .rr-car-pin{left:calc(50% + 24px);top:22px;width:55px;height:32px;font-size:22px}
+#home .rr-road .rr-fallback{font-size:42px}
+#home .rr-road .rr-intro{gap:4px}
+#home .rr-road .rr-estimate{font-size:10px!important;line-height:1.4!important}
+#home .rr-road .rr-intro p{font-size:11px!important}
+#home .rr-road .rr-driver>small{font-size:10px!important;line-height:1.2!important}
+#home .rr-road .rr-distance{margin-top:3px}
+@media(max-width:600px){
+ #home .rr-road .rr-nav button{height:30px;min-height:30px!important;padding:2px 12px!important;font-size:14px!important}
+ #home .rr-road .rr-driver>button{height:25px;min-height:25px!important;padding:3px 5px!important;font-size:9px!important;line-height:1.2}
+ #home .rr-road .rr-driver>small{font-size:8px!important;line-height:1!important;white-space:nowrap}
+ #home .rr-road .rr-estimate{font-size:8px!important;line-height:1.3!important;text-wrap:balance}
+ #home .rr-road .rr-intro p{font-size:9px!important;line-height:1.3!important}
+ #home .rr-road .rr-intro{gap:3px}
+ #home .rr-road .rr-car-pin{top:8px;left:calc(50% + 24px);width:46px;height:27px}
+ #home .rr-road .rr-driver{grid-template-columns:45px minmax(0,1fr) 88px}
+}
+@media(max-height:560px) and (min-width:601px){
+ #home .rr-road .rr-nav button{height:22px;min-height:22px!important;padding:0 9px!important;font-size:12px!important}
+ #home .rr-road .rr-driver>button{height:24px;min-height:24px!important;padding:2px 4px!important;font-size:8px!important;line-height:1.1}
+ #home .rr-road .rr-driver>small{font-size:7px!important;line-height:1!important;white-space:nowrap}
+ #home .rr-road .rr-intro p{font-size:9px!important;line-height:1.3!important}
+ #home .rr-road .rr-car-pin{top:4px;left:calc(50% + 20px);width:40px;height:25px}
+ #home .rr-road .rr-fallback{font-size:36px}
+ #home .rr-road .rr-hero{overflow:hidden}
+}
+@media(min-width:601px) and (min-height:561px) and (max-height:780px){#home .rr-road .rr-hero{padding-top:8px;padding-bottom:8px}#home .rr-road .rr-intro h3{font-size:24px}#home .rr-road .rr-distance b{font-size:22px}#home .rr-road .rr-estimate{font-size:9px!important}#home .rr-road .rr-driver{gap:4px 8px}#home .rr-road .rr-driver>button{min-height:27px;padding:4px 10px}}
+.rr-rewards{flex:1}
+#home .rr-road .rr-hero{align-items:stretch}
+#home .rr-road .rr-intro h3{line-height:1.2}
+#home .rr-road .rr-intro{justify-content:center}
+#home .rr-road .rr-eyebrow{line-height:1.2}
+@media(min-width:601px) and (min-height:561px){.rr-road{grid-template-rows:minmax(160px,.8fr) 40px minmax(0,1.2fr) 38px}#home .rr-road .rr-intro h3{font-size:26px}#home .rr-road .rr-driver>button{height:28px;min-height:28px!important;padding:4px 9px!important}}
+#home .rr-road .rr-card .rr-badge{font-size:clamp(22px,35cqh,64px);line-height:1}
+#home .rr-road .rr-card .rr-fallback{font-size:clamp(18px,30cqh,42px);line-height:1}
+#home .rr-road .rr-intro p{text-wrap:balance}
+@media(max-width:600px){.rr-road{grid-template-rows:180px 36px minmax(0,1fr) 38px}#home .rr-road .rr-eyebrow{font-size:9px!important}#home .rr-road .rr-estimate{font-size:8px!important}#home .rr-road .rr-intro{gap:3px}}
