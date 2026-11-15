@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { buildStarterTrack } from './starterTrack.js';
 import { buildStarterScenery } from './starterScenery.js';
 import { buildStarterProps } from './starterProps.js';
+import { batchStatic } from './staticBatch.js';
 
 /** 풍경이 없을 때 쓰는 가장 단순한 풍경: 맑은 하늘색·안개·빛 (glacierMap과 같은 모양으로 돌려줌) */
 function basicScenery(track, scene) {
@@ -26,7 +27,14 @@ function basicScenery(track, scene) {
   };
 }
 
-export const buildTrack = (data, scene) => buildStarterTrack(data, scene);
+export function buildTrack(data, scene) {
+  const track = buildStarterTrack(data, scene);
+  if (new URLSearchParams(location.search).get('batch') !== '0') {
+    // 원래 도로·레이·충돌 배열은 그대로 두고 보이는 정지 메시만 넓은 칸으로 합친다.
+    batchStatic([track.group], { cellFor: () => 480 });
+  }
+  return track;
+}
 export function buildScenery(track, scene) {
   if (new URLSearchParams(location.search).get('stscenery') === '0') return basicScenery(track, scene);
   try {

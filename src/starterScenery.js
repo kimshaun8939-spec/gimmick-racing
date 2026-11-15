@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 import * as A from './gpAssets.js';
 import { createFlora } from './gpSky.js';
+import { batchLocal } from './staticBatch.js';
 
 const TAU = Math.PI * 2;
 const CAR_R = 1.3;
@@ -122,7 +123,24 @@ export function buildStarterScenery(track, scene) {
     parent.add(obj);
     return obj;
   };
-  const anim = (r) => r && r.update && animators.push((t, dt, car) => r.update(t, dt, car));
+  const moving = new Set();
+  const anim = (r) => {
+    if (!r || !r.update) return;
+    if (r.obj) {
+      // 모델 전체 대신 실제로 회전·이동하는 부분만 분리한다.
+      // 깃대·풍차 몸통·등대 본체는 다른 정지 장식과 함께 묶을 수 있다.
+      const poses = [];
+      r.obj.traverse((o) => poses.push({ o, p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone(), v: o.visible }));
+      r.update(0, 0, null);
+      const first = poses.map(({ o }) => [o.position.clone(), o.quaternion.clone(), o.scale.clone()]);
+      r.update(1, 0, null);
+      poses.forEach(({ o, p, q, s, v }, i) => {
+        if (!o.position.equals(first[i][0]) || !o.quaternion.equals(first[i][1]) || !o.scale.equals(first[i][2])) moving.add(o);
+        o.position.copy(p); o.quaternion.copy(q); o.scale.copy(s); o.visible = v;
+      });
+    }
+    animators.push((t, dt, car) => r.update(t, dt, car));
+  };
   const atT = (t, l, h = 0) => {
     const s = track.sampleAt(t);
     return { s, p: track.surf(s, l, h, new THREE.Vector3()), yaw: heading(s) };
@@ -328,7 +346,14 @@ export function buildStarterScenery(track, scene) {
     const mat = new THREE.MeshLambertMaterial({ map: tex });
     const back = new THREE.MeshLambertMaterial({ color: '#d9dde5' });
     const grp = new THREE.Group();
-    const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.25), [back, back, back, back, mat, back]);
+    // 상자의 앞면만 별도 재질, 나머지 다섯 면은 한 번에 그린다.
+    const boardGeo = new THREE.BoxGeometry(w, h, 0.25);
+    const srcIndex = boardGeo.index.array;
+    boardGeo.setIndex([...srcIndex.slice(0, 24), ...srcIndex.slice(30, 36), ...srcIndex.slice(24, 30)]);
+    boardGeo.clearGroups();
+    boardGeo.addGroup(0, 30, 0);
+    boardGeo.addGroup(30, 6, 1);
+    const board = new THREE.Mesh(boardGeo, [back, mat]);
     board.castShadow = true;
     const POLE = 3.2;
     board.position.y = POLE + h / 2;
@@ -467,14 +492,19 @@ export function buildStarterScenery(track, scene) {
     const boats = [];
     const hullMat = new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true });
     const mastMat = new THREE.MeshLambertMaterial({ color: '#8a6a4a' });
+    const boatInstances = [
+      new THREE.InstancedMesh(hullGeo, hullMat, 6),
+      new THREE.InstancedMesh(mastGeo, mastMat, 6),
+      new THREE.InstancedMesh(sailGeo, new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }), 6),
+    ];
+    for (const im of boatInstances) {
+      im.name = 'starterBoats';
+      im.frustumCulled = false; // 작은 배 여섯 척이 석호 안에서만 움직임
+      group.add(im);
+    }
     for (let k = 0; k < 6; k++) {
       const g = new THREE.Group();
-      g.name = 'starterBoat';
-      g.add(new THREE.Mesh(hullGeo, hullMat));
-      g.add(new THREE.Mesh(mastGeo, mastMat));
-      const sail = new THREE.Mesh(sailGeo, new THREE.MeshLambertMaterial({ color: ['#ff5f5f', '#ffd23f', '#3fa9ff', '#ffffff', '#ff8fd0', '#5fdc8f'][k], side: THREE.DoubleSide }));
-      g.add(sail);
-      group.add(g);
+      boatInstances[2].setColorAt(k, new THREE.Color(['#ff5f5f', '#ffd23f', '#3fa9ff', '#ffffff', '#ff8fd0', '#5fdc8f'][k]));
       boats.push({ g, r: R(25, bay.r - 30), ph: R(0, TAU), sp: R(0.04, 0.08) * (k % 2 ? 1 : -1), bob: R(0, TAU) });
     }
     animators.push((time) => {
@@ -482,7 +512,10 @@ export function buildStarterScenery(track, scene) {
         const a = b.ph + time * b.sp;
         b.g.position.set(bay.x + Math.cos(a) * b.r, Math.sin(time * 1.4 + b.bob) * 0.15, bay.z + Math.sin(a) * b.r);
         b.g.rotation.set(Math.sin(time * 1.1 + b.bob) * 0.04, -a + (b.sp > 0 ? 0 : Math.PI), Math.sin(time * 0.9 + b.bob) * 0.08 + 0.12 * Math.sign(b.sp));
+        b.g.updateMatrix();
+        for (const im of boatInstances) im.setMatrixAt(boats.indexOf(b), b.g.matrix);
       }
+      for (const im of boatInstances) im.instanceMatrix.needsUpdate = true;
     });
     // 해변: 만 둘레 모래사장에 파라솔·비치 타월 (인스턴스)
     const umb = [];
@@ -1057,9 +1090,48 @@ export function buildStarterScenery(track, scene) {
     }
   });
 
+  // 움직이는 모델은 자기 좌표 안에서 먼저 묶는다. 세계 좌표 묶음에 섞이면
+  // 첫 움직임마다 큰 묶음이 풀려 그림 호출과 로딩 때 만든 버퍼가 늘어난다.
+  const movingNames = new Set(['starterWindsock', 'starterBalloon', 'starterAirship', 'starterFerris', 'starterCarousel']);
   group.traverse((o) => {
+    if (movingNames.has(o.name)) moving.add(o);
+    if (o.userData.keep) o.userData.noBatch = true; // 깃발처럼 정점을 바꾸는 부품
     if (o.isInstancedMesh && o.name && o.name.startsWith('starter')) o.userData.noBatch = true; // 움직이는 인스턴스 (부표·불빛·관람차 칸)는 묶지 않음 (나무 flora:*는 staticBatch가 400 m 칸으로 나눔)
   });
+  const batching = new URLSearchParams(location.search).get('batch') !== '0';
+  if (batching) {
+    for (const root of moving) {
+      const parents = [];
+      root.traverse((o) => { if (!o.isMesh && !o.userData.keep) parents.push(o); });
+      for (const parent of parents.reverse()) batchLocal(parent, { pbr: true });
+      root.userData.noBatch = true;
+    }
+    // 짧은 연습장은 먼 장식도 함께 보이므로 120 m 대신 320 m 칸을 쓴다.
+    // 충돌 원본은 유지하고, 그림 메시만 합친다.
+    group.updateMatrixWorld(true);
+    const cells = new Map(), candidates = [];
+    group.traverse((o) => {
+      if (!o.isMesh || o.isInstancedMesh || o.name || Array.isArray(o.material) || o.material.transparent || o.material.isShaderMaterial) return;
+      for (let p = o; p && p !== group; p = p.parent) if (p.userData.noBatch || p.userData.keep || !p.visible) return;
+      candidates.push(o);
+    });
+    for (const o of candidates) {
+      const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld);
+      const key = `${Math.floor(p.x / 320)},${Math.floor(p.z / 320)}`;
+      let cell = cells.get(key);
+      if (!cell) { cell = new THREE.Group(); cell.name = 'starterStatic'; cells.set(key, cell); group.add(cell); }
+      // 셀은 원점에 있으므로 이미 계산한 세계 행렬을 그대로 쓴다.
+      // attach()로 조상 행렬을 메시마다 다시 계산하지 않는다.
+      const matrix = o.matrixWorld.clone();
+      cell.add(o);
+      matrix.decompose(o.position, o.quaternion, o.scale);
+    }
+    for (const cell of cells.values()) {
+      batchLocal(cell, { pbr: true });
+      cell.userData.noBatch = true;
+    }
+    stats.staticCells = cells.size;
+  }
   const buildMs = Math.round(performance.now() - t0);
   return {
     colliders: allColliders,
