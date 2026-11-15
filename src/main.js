@@ -9,6 +9,7 @@ import { initCarLighting } from './carLighting.js';
 import { createKeyboardInput, emptyControls } from './input.js';
 import { keybinds } from './keybinds.js';
 import { COURSE_TIPS, showCourseGuide } from './courseGuide.js';
+import { withAssistIntro } from './assistIntro.js'; // 첫 레이스 출발 전 '주행 도움이 켜져 있어요' 카드 (2026-11-15)
 import { createHud } from './hud.js';
 import { batchStatic, batchLocal } from './staticBatch.js';
 import { prewarm } from './prewarm.js'; // 불러올 때 셰이더·모양 미리 올리기 (렉 줄이기 2)
@@ -351,7 +352,7 @@ const raceSys = await createRaceSystem({
 // 기록 비교 전에 이 맵에서 확정할 수 있는 옛 그리드 기록만 표시.
 if (!FREE) records.classifyLegacy(mapName, track, trackData.laps);
 const sectors = createSectors({ mapName, carId });
-// 아이템전: 상자·아이템·드리프트 게이지 (만들다 실패해도 레이스는 그대로 됨)
+// 아이템전: 상자·아이템 (만들다 실패해도 레이스는 그대로 됨)
 let items = null;
 if (ITEM && !FREE) {
   try {
@@ -824,13 +825,6 @@ function handleEvents() {
     if (e === 'barricadeBlocked') hud.toast('💥 100 km/h 이상으로 들이받으면 부서져요');
     if (e === 'perfectShift') hud.shiftFlash();
     if (e === 'overRev') hud.toast('회전수가 너무 높아서 기어를 내릴 수 없어요');
-    // 드리프트 탈출 (cars: car.lastDriftInfo = { quality 0~1, gain m/s, hold 초 ... })
-    if (e === 'driftExit') {
-      const di = car.lastDriftInfo || {};
-      const kmh = Math.round((di.gain || 0) * 3.6);
-      hud.toast(`${(di.quality || 0) > 0.8 ? '완벽한 ' : ''}드리프트 탈출!${kmh > 0 ? ` +${kmh} km/h` : ''}`);
-    }
-    if (e === 'driftSpin') hud.toast('스핀! 반대로 꺾어서 각도를 잡아요');
     if (e === 'perfectLaunch') {
       hud.big('완벽한 출발!', 0.9);
       hud.flash('#7dff6a', 0.5);
@@ -1287,9 +1281,10 @@ if (params.get('prewarm') !== '0') {
 
 // 출발 전 설명 뒤에도 준비된 코스가 보이도록 첫 장면을 한 번 그려요.
 renderer.render(scene, camera);
-const courseGuide = showCourseGuide({ map: mapName, title: mapTitle, mode: ITEM ? 'item' : MODE, championship: !!CHAMP, params,
+// 첫 레이스(rookie=1)면 주행 도움 카드 → 닫히면 코스 첫 안내. 둘 중 하나라도 열려 있으면 courseGuide.open = true (출발 신호 멈춤)
+const courseGuide = withAssistIntro(params, () => showCourseGuide({ map: mapName, title: mapTitle, mode: ITEM ? 'item' : MODE, championship: !!CHAMP, params,
   onClose() { input.clear(); last = performance.now(); acc = 0; }, onHome: () => goHome(),
-});
+}), () => { input.clear(); last = performance.now(); acc = 0; if (race.phase === 'countdown') race.assist = assistOn(); });
 
 function frame(now, manual = false) {
   // 프레임 제한 (설정): 너무 이르면 이번 화면은 건너뜀
@@ -1519,11 +1514,6 @@ function frame(now, manual = false) {
     record: myRecord() && myRecord().race, // 내 최고 기록 (완주 시간 = 모든 바퀴 합, 설정 ghost 기준)
     recordNote: recordNote(myRecord()),
     speed: Math.abs(car.forwardSpeed) * 3.6,
-    driftTime: car.drifting ? car.driftTime : 0,
-    driftLevel: car.driftLevel,
-    driftAngle: car.driftAngle || 0,
-    driftHold: car.driftHold || 0,
-    drifting: car.drifting,
     cfg: carCfg,
     wrongWay: race.wrongWay > 60,
     carPos: car.pos,

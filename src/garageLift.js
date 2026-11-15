@@ -7,7 +7,7 @@ import {createPartSfx} from './partFx.js';
 let pending;
 export function prepareGarageSwap(context){pending=context;}
 const ease=x=>{x=T.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
-const fake=mode=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode,sink:0,forwardSpeed:0,thr:0,grounded:true,surface:mode==='boat'?'water':'road',drifting:false,driftDir:0,driftLevel:0,steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
+const fake=mode=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode,sink:0,forwardSpeed:0,thr:0,grounded:true,surface:mode==='boat'?'water':'road',steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
 const partName=(id,slot)=>partOf(id)?.name||'순정 '+(slotOf(slot)?.name||'부품');
 export function createGarageLift(table){
  const sfx=createPartSfx();let state=null;

@@ -66,7 +66,7 @@ export function fakeCar() {
   return {
     pos: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), fwd: new THREE.Vector3(0, 0, 1), vel: new THREE.Vector3(),
     mode: 'normal', form: null, sink: 0, forwardSpeed: 0, speed: 0, thr: 0, brk: 0, flying: false, grounded: true, surface: 'ground',
-    drifting: false, driftDir: 0, driftLevel: 0, steerVisual: 0, load: 0, boostTime: 0,
+    steerVisual: 0, load: 0, boostTime: 0,
   };
 }
 

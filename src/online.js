@@ -12,6 +12,7 @@
 //   테스트: window.__onlineFake = (fn, body) => 결과 로 서버 대신 가짜 응답을 쓸 수 있음
 import { ONLINE_URL, ONLINE_KEY } from './onlineConfig.js';
 import { packVerified, unpackGhost } from './ghostPack.js';
+import * as cloudSave from './cloudSave.js'; // 계정 클라우드 저장 (2026-11-15, 서버 .debug/supabase_v6_save.sql)
 
 // 부품 조립 (2026-11-15, 부품 조립 1차 ⑤, 서버 SQL .debug/supabase_v5_parts.sql):
 //   - 올릴 때 조립 표시 문자열(build sig, 예 'g1.t2' / 'stock')을 같이 보냄 (gr_submit p_build)
@@ -157,6 +158,7 @@ async function call(path, opts = {}) {
   const tm = setTimeout(() => ctl.abort(), TIMEOUT);
   try {
     const res = await fetch(`${ONLINE_URL.replace(/\/+$/, '')}/rest/v1/${path}`, { ...opts, headers: { ...headers(), ...(opts.headers || {}) }, signal: ctl.signal });
+    if (opts.keepalive) return null; // 페이지를 닫는 중 (계정 저장): 결과는 안 봄
     const txt = await res.text();
     const data = txt ? JSON.parse(txt) : null;
     if (!res.ok) throw Object.assign(new Error((data && (data.message || data.hint)) || `서버 오류 ${res.status}`), { code: data && data.code, details: data && data.details, hint: data && data.hint, status: res.status });
@@ -165,10 +167,10 @@ async function call(path, opts = {}) {
     clearTimeout(tm);
   }
 }
-async function rpc(fn, body) {
+async function rpc(fn, body, opts = {}) {
   const f = fake();
   if (f) return f(fn, body);
-  return call(`rpc/${fn}`, { method: 'POST', body: JSON.stringify(body) });
+  return call(`rpc/${fn}`, { method: 'POST', body: JSON.stringify(body), ...(opts.keepalive ? { keepalive: true } : {}) });
 }
 async function select(table, query) {
   const f = fake();
@@ -251,8 +253,13 @@ export const online = {
     if (!nick) throw Object.assign(new Error('이름을 넣어 주세요'), { reason: 'bad' });
     if (!/^[0-9]{4}$/.test(pin)) throw Object.assign(new Error('비밀번호는 숫자 4자리예요'), { reason: 'bad' });
     const cur = readId();
+    // 계정 저장: 다른 이름으로 바꿔 들어가면 지금 진행을 지금 계정에 먼저 저장 (못 하면 여기서 멈춤 = 진행을 잃지 않음)
+    const prep = await cloudSave.beforeLogin(cur, nick);
     const secret = randomSecret();
-    const r = await rpc('gr_login', { p_nick: nick, p_pin: pin, p_secret: secret, p_id: cur ? cur.id : null, p_cur: cur ? cur.secret : null });
+    // 비밀번호로 지킨 계정에서 다른 이름을 넣으면 = 다른 계정으로 들어가기 (없는 이름이면 새 계정). 예전처럼 지금 계정 이름을 바꾸지 않음
+    //   (이름만 바꾸기는 비밀번호를 비우고 rename). 비밀번호 없는 예전 계정은 예전처럼 넘겨서 서버가 합치거나 이름을 붙임
+    const other = !!(cur && cur.claimed && !sameName(cur.nick, nick));
+    const r = await rpc('gr_login', { p_nick: nick, p_pin: pin, p_secret: secret, p_id: cur && !other ? cur.id : null, p_cur: cur && !other ? cur.secret : null });
     if (!r || !r.ok) {
       const reason = (r && r.reason) || 'bad';
       const msg = reason === 'pin' ? '이미 있는 이름이에요 · 비밀번호가 달라요'
@@ -265,8 +272,13 @@ export const online = {
     try {
       localStorage.setItem(NICK_KEY, r.nick);
     } catch {}
+    // 계정 저장 받기: 같은 계정·처음 연결이면 합치고, 다른 계정에서 바꿔 들어왔으면 이 계정 진행으로 바꿈
+    let cloud = {};
+    try {
+      cloud = (await cloudSave.afterLogin({ id: r.id, secret, nick: r.nick, claimed: true }, prep)) || {};
+    } catch {}
     await this.syncXp();
-    return { nick: r.nick, created: !!r.created, merged: r.merged || 0, claimed: !!r.claimed };
+    return { nick: r.nick, created: !!r.created, merged: r.merged || 0, claimed: !!r.claimed, cloud, reload: !!cloud.reload, switched: !!cloud.switched };
   },
   /**
    * 레벨 합치기: 이 기기 경험치를 서버에 올리고 같은 계정 다른 기기들의 합을 받아 둠 → { others, total, devices } 또는 null
@@ -274,12 +286,23 @@ export const online = {
    */
   async syncXp() {
     const m = readId();
-    const p = localProfile();
+    const p = localProfile() || { xp: 0, races: 0, wins: 0, podiums: 0 }; // 로그아웃·계정 바꾸기 뒤 아직 프로필이 없으면 0부터
     const dev = deviceId();
-    if (!m || !p || !dev || !this.enabled) return null;
+    if (!m || !dev || !this.enabled) return null;
     try {
       const r = await rpc('gr_xp', { p_id: m.id, p_secret: m.secret, p_device: dev, p_xp: p.xp, p_races: p.races, p_wins: p.wins, p_podiums: p.podiums });
       if (!r || !r.others) return null;
+      // 이 기기 몫 = 합 − 다른 기기들. 로그아웃·계정 바꾸기로 이 기기 경험치를 비웠으면 서버에 남은 이 기기 몫으로 되돌림
+      try {
+        if (r.total) {
+          const row = { xp: (+r.total.xp || 0) - (+r.others.xp || 0), races: (+r.total.races || 0) - (+r.others.races || 0), wins: (+r.total.wins || 0) - (+r.others.wins || 0), podiums: (+r.total.podiums || 0) - (+r.others.podiums || 0) };
+          const raw = JSON.parse(localStorage.getItem('gimmick.profile') || 'null') || { xp: 0, races: 0, wins: 0, podiums: 0, seeded: true };
+          const boost = Math.max(0, Number(raw._adminBoost?.xp) || 0);
+          if (row.xp > p.xp || row.races > p.races) {
+            localStorage.setItem('gimmick.profile', JSON.stringify({ ...raw, xp: Math.max(p.xp, row.xp) + boost, races: Math.max(p.races, row.races), wins: Math.max(p.wins, row.wins), podiums: Math.max(p.podiums, row.podiums), seeded: true }));
+          }
+        }
+      } catch {}
       try {
         localStorage.setItem(NET_KEY, JSON.stringify({ id: m.id, ...r.others, devices: r.devices || 1, at: Date.now() }));
       } catch {}
@@ -516,7 +539,37 @@ export const online = {
   forget() {
     writeId(null);
   },
+  /**
+   * 로그아웃 (2026-11-15): 지금 진행을 계정에 저장 → 성공하면 이 기기를 처음 상태로(기기 설정은 남김)
+   *   → { ok: true } (부른 쪽이 홈을 새로 엶) | { ok: false, message } (저장 실패 = 아무것도 안 지움)
+   */
+  async logout() {
+    const r = await cloudSave.logout();
+    if (r.ok) clearBoardCache();
+    return r;
+  },
+  /** 계정 저장 상태 { on, linked, missing, version, at, pending } */
+  cloudStatus() {
+    return cloudSave.status();
+  },
+  /** 지금 바로 계정 저장 올리기 */
+  cloudPush() {
+    return cloudSave.pushNow();
+  },
 };
+
+cloudSave.attach({
+  rpc,
+  readId,
+  enabled: () => online.enabled,
+  syncXp: () => online.syncXp(),
+  clearId: () => {
+    writeId(null);
+    try {
+      sessionStorage.removeItem('gimmick.olStatusAt');
+    } catch {}
+  },
+});
 
 // 완주해서 경험치를 받으면(profile.js 'gimmick:xp') 계정 경험치도 올림
 if (typeof window !== 'undefined' && !window.__gimmickXpSync) {

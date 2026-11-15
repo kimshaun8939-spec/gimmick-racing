@@ -59,7 +59,7 @@ export function lineDriver(game, o = {}) {
     return [x, z];
   };
   return () => {
-    const c = { throttle: 1, brake: 0, steer: 0, drift: false, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
+    const c = { throttle: 1, brake: 0, steer: 0, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
     const i0 = (car.trackInfo ? car.trackInfo.index : tr.nearest(car.pos).index) % N;
     const v = Math.max(3, Math.abs(car.speed));
     // 아카데미(슬립스트림·DRS): 라인에서 옆으로 o.offset m (함수면 매 프레임 물어봄, + = 오른쪽)
@@ -228,7 +228,8 @@ export function createCoachUI(root) {
   el.innerHTML = `
     <div class="td-vig"></div>
     <div class="td-top"><span class="td-badge"></span><div class="td-strip"></div><div class="td-slow"></div></div>
-    <div class="td-cap"><div class="td-t"></div><div class="td-s"></div></div>
+    <div class="td-cap"><div class="td-t"></div><div class="td-s"></div><div class="td-go"></div></div>
+    <div class="td-pz">⏸ 멈춤 <small></small></div>
     <div class="td-keys">
       <div class="td-key" data-k="throttle"><b></b><i></i><small></small></div>
       <div class="td-key" data-k="left"><b></b><i></i><small></small></div>
@@ -290,10 +291,10 @@ export function createCoachUI(root) {
       cap.classList.add('pop');
       capT = performance.now();
     },
-    slow(ts) {
+    slow(ts, label) {
       const s = $('.td-slow');
-      const on = ts < 0.95;
-      s.textContent = on ? `🐢 슬로 모션 ${ts < 0.14 ? '· 잠깐 멈춤' : `${ts.toFixed(2).replace(/0$/, '')}×`}` : '';
+      const on = !!label || ts < 0.95;
+      s.textContent = label || (on ? `🐢 슬로 모션 ${ts < 0.14 ? '· 잠깐 멈춤' : `${ts.toFixed(2).replace(/0$/, '')}×`}` : '');
       s.classList.toggle('on', on);
       $('.td-vig').style.opacity = on ? String(clamp((1 - ts) * 0.9, 0, 0.8)) : '0';
     },
@@ -330,31 +331,187 @@ export function createCoachUI(root) {
     buttons(html) {
       $('.td-btns').innerHTML = html;
     },
+    /** 핵심 순간에서 멈춤: 자막 아래 '▶ 계속' (state = null | { ready, label }) — 읽을 시간이 지나면 은은하게 깜빡임 */
+    hold(state) {
+      const g = $('.td-go');
+      const key = state ? `${state.label}|${state.ready ? 1 : 0}` : '';
+      if (g.dataset.k === key) return;
+      g.dataset.k = key;
+      g.innerHTML = state ? `<button class="gm-btn td-gobtn${state.ready ? ' ready' : ''}" data-t="demoGo">${state.label}</button>` : '';
+      $('.td-cap').classList.toggle('held', !!state);
+      el.classList.toggle('held', !!state);
+    },
+    /** 사용자가 멈춘 상태 표시 */
+    pauseMark(on, how = '') {
+      const z = $('.td-pz');
+      z.classList.toggle('on', !!on);
+      if (on) z.querySelector('small').innerHTML = how;
+    },
+    /** 시범 버튼 글자 맞추기 (멈춤 ↔ 계속, 천천히 ↔ 보통) */
+    demoState(o) {
+      const pb = el.querySelector('.td-btns [data-t="demoPause"]');
+      if (pb) {
+        const h = `${o.paused ? '▶ 계속' : '⏸ 멈춤'}${o.pauseKey ? ` <kbd>${o.pauseKey}</kbd>` : ''}`;
+        if (pb.innerHTML !== h) pb.innerHTML = h;
+      }
+      const sb = el.querySelector('.td-btns [data-t="demoSpeed"]');
+      if (sb) {
+        const h = o.speed === 'normal' ? '🏁 보통 속도' : '🐢 천천히';
+        if (sb.textContent !== h) sb.textContent = h;
+        sb.title = o.speed === 'normal' ? '누르면 천천히(핵심 순간에서 멈춤)' : '누르면 보통 속도(멈추지 않음)';
+        sb.classList.toggle('on', o.speed !== 'normal');
+      }
+    },
   };
   return ui;
+}
+
+// ------------------------------------------------------------------ 시범 속도 (자막 읽을 시간)
+// 사용자 요청 2026-11-15 "시범 주행 자막이 너무 빨리 지나가서 한 번 보고는 이해가 안 됨" (내용은 그대로, 속도·흐름만)
+//   'slow'(기본) = 자막마다 읽을 시간(2.5초 + 글자당 0.09초)만큼 시범을 늦추고, 핵심 순간(pulse가 있는 순간)에서는
+//                  시범을 멈춘 채 자막·키 그림을 보여 준 뒤 Enter·클릭·터치·패드 A로 계속 (자동으로 안 넘어감)
+//   'normal'      = 예전 흐름(핵심 순간만 짧게 슬로) + 짧은 읽기 시간
+//   기억: localStorage gimmick.academyDemoSpeed (아카데미·튜토리얼 같이 씀)
+export const DEMO_SPEED_KEY = 'gimmick.academyDemoSpeed';
+export function demoSpeed() {
+  try {
+    return localStorage.getItem(DEMO_SPEED_KEY) === 'normal' ? 'normal' : 'slow';
+  } catch {
+    return 'slow';
+  }
+}
+export function setDemoSpeed(v) {
+  try {
+    localStorage.setItem(DEMO_SPEED_KEY, v === 'normal' ? 'normal' : 'slow');
+  } catch {}
+}
+const READ = {
+  slow: { base: 2.5, per: 0.09, max: 7.5, minTs: 0.12, unknownTs: 0.5 },
+  normal: { base: 1.4, per: 0.045, max: 4, minTs: 0.3, unknownTs: 0.8 },
+};
+const plainText = (h) => String(h || '').replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ');
+/** 이 자막을 읽는 데 필요한 실제 시간 (초) */
+export function readSec(title, sub, speed = 'slow') {
+  const R = READ[speed] || READ.slow;
+  const n = (plainText(title) + plainText(sub)).replace(/\s/g, '').length;
+  return clamp(R.base + R.per * n, R.base, R.max);
+}
+const keyStr = (c) => {
+  const k = keysOf(c);
+  return ['throttle', 'brake', 'left', 'right'].filter((id) => k[id]).join(',');
+};
+const keysOf = (c) => (c ? { throttle: c.throttle > 0.15, brake: c.brake > 0.12, left: c.steer < -0.2, right: c.steer > 0.2 } : {});
+const padA = () => esc(pad.label('climb') || 'A');
+/** '계속' 버튼 글자 (지금 조작 장치에 맞게) */
+function contLabel() {
+  if (onTouch()) return '▶ 계속 <small>터치</small>';
+  if (pad.usingPad()) return `▶ 계속 <kbd>${padA()}</kbd>`;
+  return '▶ 계속 <kbd>Enter</kbd>';
+}
+/** 시범 버튼 (멈춤 · 처음부터 · 속도) — 호스트(아카데미·튜토리얼)가 자기 버튼을 뒤에 붙임 */
+export function demoButtonsHtml(restartKey = 'R') {
+  const pk = onTouch() ? '' : pad.usingPad() ? `<kbd>${padA()}</kbd>` : '<kbd>Space</kbd>';
+  const rk = onTouch() ? '' : `<kbd>${esc(restartKey)}</kbd>`;
+  return `<button class="gm-btn small" data-t="demoPause">⏸ 멈춤 ${pk}</button><button class="gm-btn small" data-t="demoAgain">↺ 처음부터 ${rk}</button><button class="gm-btn small td-spdbtn" data-t="demoSpeed">🐢 천천히</button>`;
 }
 
 // ------------------------------------------------------------------ 시범 주행 진행
 /**
  * 매 프레임 update(realDt) → 'done'이면 끝
  *   차 위치(물리 거리)로 순간을 고르고, 순간마다 슬로 모션 배수로 부드럽게 바꿈
+ *   + 자막이 읽을 시간만큼 머물게 시범을 늦춤, 'slow'면 핵심 순간에서 멈춤(game.paused)
+ *   API: start · stop · update · toggle(멈춤/계속) · resume · speed(get/set) · held · paused · readSec · log · summaryHtml()
  */
-export function createDemo(game, P, ui, place) {
+export function createDemo(game, P, ui, place, o = {}) {
   const car = game.car;
+  let speed = o.speed || demoSpeed();
   let ts = 1, cur = null, pulseT = 0, age = 0, endT = 0;
+  let capAge = 0, need = 0, held = false, heldAge = 0, userPaused = false, frozen = false, pending = null;
+  const holdDone = new Set();
+  let log = [], entry = null;
   const drive = P.driver ? P.driver() : lineDriver(game); // 아카데미: 레슨마다 다른 운전사 (봇 운전사 등)
-  let lastCtl = null;
-  return {
+  let lastCtl = null, lastT = -1;
+  const override = () => {
+    // 운전사는 게임 시간 1/60초마다 한 번만 새로 계산 (슬로 모션·멈춤 중에 화면 프레임마다 부르면
+    //   봇 운전사(비행 시범 등)가 '1/60초 지났다'고 세어 게임 시간보다 빨리 판단했음)
+    const rt = game.race && game.race.time;
+    if (lastCtl && typeof rt === 'number' && rt >= lastT && rt - lastT < 1 / 60 - 1e-6) return lastCtl;
+    if (typeof rt === 'number') lastT = rt;
+    const c = drive();
+    if (P.demoCtl) P.demoCtl(c, cur, car); // 아카데미: 순간마다 조작 바꾸기 (리프트오프 = W 떼기, 트레일 = 브레이크 남기기 등)
+    else if (cur && cur.id === 'brake' && P.brakeKind === 'brake' && car.speed > P.vMin + 1) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
+    else if (cur && cur.id === 'brake' && P.brakeKind !== 'brake') c.brake = 0; // 브레이크가 필요 없는 코너는 W만 떼기 (운전사가 리프트 계획대로)
+    return (lastCtl = c);
+  };
+  /** 물리를 멈춤/풂 (화면은 마지막 장면 그대로, 코치 화면은 계속 움직임) */
+  function freeze(on) {
+    if (on === frozen) return;
+    frozen = on;
+    game.paused = on;
+    if (!on && game.input && game.input.clear) game.input.clear();
+  }
+  const isKey = (mo) => (mo.key != null ? !!mo.key : !!mo.pulse);
+  function syncUi() {
+    ui.hold(held ? { ready: heldAge >= need, label: contLabel() } : null);
+    ui.pauseMark(userPaused && !held, onTouch() ? '▶ 계속을 눌러요' : pad.usingPad() ? `${padA()}로 계속` : 'Space · P로 계속');
+    ui.demoState({ paused: userPaused || held, speed, pauseKey: onTouch() ? '' : pad.usingPad() ? padA() : 'Space' });
+  }
+  function enter(mo) {
+    cur = mo;
+    pulseT = 0; // 이 순간에 들어온 뒤 지난 실제 시간 (pulse 슬로 모션용)
+    capAge = 0;
+    const [t, s] = momentText(P, mo.id) || ['', ''];
+    need = t ? readSec(t, s, speed) : 0;
+    ui.caption(t, s, mo.id);
+    ui.strip(mo.id, P.strip);
+    entry = null;
+    if (t) {
+      entry = log.find((x) => x.id === mo.id) || null; // 같은 순간이 다시 오면(비행 등) 요점은 처음 것 하나만
+      if (!entry) log.push((entry = { id: mo.id, title: t, sub: s, on: { throttle: 0, brake: 0, left: 0, right: 0 }, tot: 0, snap: null }));
+    }
+    // 핵심 순간: 멈추고 읽게 (천천히일 때, 이 시범에서 순간마다 한 번)
+    //   글자가 뜨는 순간엔 아직 앞 순간의 키(예: 브레이크 순간인데 W)가 눌려 있을 수 있어서,
+    //   이 순간의 키로 바뀌는 때(또는 실제 시간 0.6초 뒤)에 멈춤 → 멈춘 화면의 키 그림 = 이 순간에 누르는 키
+    pending = null;
+    if (speed === 'slow' && t && isKey(mo) && !holdDone.has(mo.id) && age > 0.3) {
+      holdDone.add(mo.id);
+      pending = { keys: keyStr(lastCtl), t: 0 };
+    }
+  }
+  function holdNow() {
+    pending = null;
+    held = true;
+    heldAge = 0;
+    if (entry) (entry.snap = keysOf(lastCtl)), (entry.snapSteer = lastCtl ? lastCtl.steer : 0);
+    keyDraw(1); // 앞 순간에 켜져 있던 키 불은 끄고 지금 키만
+    freeze(true);
+  }
+  function resume() {
+    if (held) {
+      held = false;
+      pulseT = 0;
+      capAge = Math.max(capAge, need * 0.6); // 멈춰서 읽었으니 남은 읽기 시간은 조금만
+      if (cur && cur.pulse) ts = game.timeScale = Math.min(ts, cur.pulse.ts); // 계속하면 그 순간을 슬로 모션으로 보여 줌
+    }
+    userPaused = false;
+    freeze(false);
+    syncUi();
+    return true;
+  }
+  const keyDraw = (dt) => ui.keys(lastCtl ? lastCtl.throttle : car.thr, lastCtl ? lastCtl.brake : car.brk, lastCtl ? lastCtl.steer : car.steerIn, dt, 0.2);
+  const api = {
     start() {
+      freeze(false);
+      held = userPaused = false;
+      pending = null;
+      holdDone.clear();
+      log = [];
+      lastCtl = null;
+      lastT = -1;
+      entry = null;
       place();
       // '지금 브레이크!' 글자가 뜨면 바로 브레이크 (예전엔 계획 지점까지 0.3초 동안 W가 켜진 채라 글자와 키가 어긋나 보였음)
-      game.controlsOverride = () => {
-        const c = drive();
-        if (P.demoCtl) P.demoCtl(c, cur, car); // 아카데미: 순간마다 조작 바꾸기 (리프트오프 = W 떼기, 트레일 = 브레이크 남기기 등)
-        else if (cur && cur.id === 'brake' && P.brakeKind === 'brake' && car.speed > P.vMin + 1) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
-        else if (cur && cur.id === 'brake' && P.brakeKind !== 'brake') c.brake = 0; // 브레이크가 필요 없는 코너는 W만 떼기 (운전사가 리프트 계획대로)
-        return (lastCtl = c);
-      };
+      game.controlsOverride = override;
       game.timeScale = ts = 1;
       cur = null;
       age = 0;
@@ -362,44 +519,137 @@ export function createDemo(game, P, ui, place) {
       ui.show('demo');
       ui.badge(P.badge || `🎬 시범 주행 · T${P.c.num}`);
       ui.cue(null);
+      syncUi();
     },
     stop() {
+      freeze(false);
+      pending = null;
+      held = userPaused = false;
+      ui.hold(null);
+      ui.pauseMark(false);
       if (game.controlsOverride) game.controlsOverride = null;
       game.timeScale = 1;
     },
     get moment() {
       return cur && cur.id;
     },
+    get held() {
+      return held;
+    },
+    get paused() {
+      return userPaused || held;
+    },
+    /** 지금 자막을 읽는 데 필요한 시간 (초) */
+    get readSec() {
+      return need;
+    },
+    get speed() {
+      return speed;
+    },
+    set speed(v) {
+      speed = v === 'normal' ? 'normal' : 'slow';
+      setDemoSpeed(speed);
+      if (cur) {
+        const [t, s] = momentText(P, cur.id) || ['', ''];
+        need = t ? readSec(t, s, speed) : 0;
+      }
+      if (speed === 'normal') pending = null;
+      if (speed === 'normal' && held) resume();
+      syncUi();
+    },
+    /** 멈춤 ↔ 계속 (핵심 순간에서 멈춰 있으면 계속) */
+    toggle() {
+      if (held) return resume();
+      userPaused = !userPaused;
+      freeze(userPaused);
+      syncUi();
+      return userPaused;
+    },
+    resume,
+    get log() {
+      return log;
+    },
+    /** 요점 카드: 방금 자막들을 순서대로 (번호 · 한 줄씩 · 작은 키 그림) */
+    summaryHtml() {
+      const items = log.filter((x) => x.title);
+      const keysFor = (x) => {
+        const k = x.snap || Object.fromEntries(Object.entries(x.on).map(([id, t]) => [id, x.tot > 0 && t >= 0.35 * x.tot]));
+        if (x.snapSteer != null) (k.left = x.snapSteer < -0.4), (k.right = x.snapSteer > 0.4); // 요점 카드엔 작은 핸들 보정은 안 보임
+        return ['throttle', 'brake', 'left', 'right'].filter((id) => k[id]);
+      };
+      return `<div class="td-sum"><ol>${items
+        .map((x, j) => {
+          const ks = keysFor(x).map((id) => `<kbd class="td-sk td-sk-${id}">${esc(keyCap(id).main)}</kbd>`).join('');
+          return `<li class="td-sum-${esc(x.id)}"><span class="n">${j + 1}</span><div class="tx"><b>${x.title}</b>${x.sub ? `<small>${x.sub}</small>` : ''}</div><span class="ks">${ks}</span></li>`;
+        })
+        .join('')}</ol></div>`;
+    },
     update(dt) {
       age += dt;
+      if (frozen) {
+        // 멈춘 동안: 자막·키 그림은 그대로 (깜빡임 방지 시간도 안 줄임), 읽을 시간이 지나면 '계속'이 은은하게 깜빡임
+        if (held) heldAge += dt;
+        keyDraw(0);
+        ui.slow(ts, held ? '⏸ 잠깐 멈춤 · 읽고 계속' : '⏸ 멈춤');
+        syncUi();
+        return null;
+      }
       const idx = car.trackInfo ? car.trackInfo.index % P.N : P.i0;
       const m = age < 0.3 ? 0 : P.dist(idx);
       const mo = P.momentAt(m);
+      // 다음 순간이 왔는데 지금 자막을 아직 다 못 읽었으면: 자막을 조금 더 두고 아주 느리게 (상태로 정하는 순간이 금방 바뀌는 레슨 = 슬립스트림·비행)
+      let defer = false;
       if (!cur || mo.id !== cur.id) {
-        cur = mo;
-        pulseT = 0; // 이 순간에 들어온 뒤 지난 실제 시간 (pulse 슬로 모션용)
-        const [t, s] = momentText(P, mo.id);
-        ui.caption(t, s, mo.id);
-        ui.strip(mo.id, P.strip);
+        if (cur && !pending && need > 0 && capAge < need * 0.9 && capAge < 5) defer = true;
+        else enter(mo);
       }
+      if (pending) {
+        pending.t += dt;
+        if (keyStr(lastCtl) !== pending.keys || pending.t > 0.6) {
+          holdNow();
+          ui.slow(ts, '⏸ 잠깐 멈춤');
+          syncUi();
+          return null;
+        }
+      }
+      capAge += dt;
       let want = cur.ts;
       pulseT += dt;
       const pu = cur.pulse;
-      if (pu && pulseT < pu.sec) want = pu.freeze && pulseT < pu.freezeSec ? pu.freeze : pu.ts; // 브레이크 순간은 처음 0.45초 거의 멈칫
+      // 놓치면 안 되는 순간: 천천히 = 멈춘 뒤 이 슬로 모션, 보통 = 예전처럼 처음 0.45초 거의 멈칫 + 슬로 모션
+      if (pu && pulseT < pu.sec * (speed === 'slow' ? 1.3 : 1)) want = speed !== 'slow' && pu.freeze && pulseT < pu.freezeSec ? pu.freeze : pu.ts;
+      // 자막이 읽을 시간만큼 머물게: 이 순간이 끝나는 곳까지 남은 거리로 필요한 배속을 계산 (끝을 모르는 순간은 일정하게 늦춤)
+      const R = READ[speed] || READ.slow;
+      const rem = need - capAge;
+      const past = P.done ? false : m > P.end;
+      if (rem > 0.05 && !past) {
+        const b = cur.b != null && cur.b < 1e8 ? cur.b : !P.done && P.end != null ? P.end : null;
+        if (b != null) want = Math.min(want, Math.max(R.minTs, Math.max(0, b - m) / Math.max(4, Math.abs(car.speed)) / rem));
+        else want = Math.min(want, R.unknownTs);
+      }
+      if (defer) want = Math.min(want, R.minTs);
       ts += (want - ts) * Math.min(1, dt * (want < ts ? 9 : 4)); // 들어갈 땐 빠르게, 나올 땐 약 0.5초에 걸쳐 부드럽게 1배로
       game.timeScale = ts;
       ui.slow(ts);
       // 키 그림은 지금 누르는 키(명령) 기준: 차의 페달 값은 천천히 바뀌어서 '지금 브레이크!'에도 W가 잠깐 켜져 보였음
-      ui.keys(lastCtl ? lastCtl.throttle : car.thr, lastCtl ? lastCtl.brake : car.brk, lastCtl ? lastCtl.steer : car.steerIn, dt, 0.2); // 깜빡임 방지 시간은 실제 시간 (슬로 모션 0.1×에서 W가 1.5초 남아 있었음)
+      keyDraw(dt); // 깜빡임 방지 시간은 실제 시간 (슬로 모션 0.1×에서 W가 1.5초 남아 있었음)
+      if (entry) {
+        entry.tot += dt;
+        const k = keysOf(lastCtl);
+        if (lastCtl) (k.left = lastCtl.steer < -0.4), (k.right = lastCtl.steer > 0.4); // 요점 카드: 작은 핸들 보정은 빼고
+        for (const id in entry.on) if (k[id]) entry.on[id] += dt;
+      }
       ui.pedals(car.thr, car.brk, car.speed, coachSpeed(car, game.track, idx));
       if (P.done ? P.done(m, dt) : m > P.end) {
         // 아카데미: P.done(m, dt)로 끝 조건을 바꿀 수 있음 (비행 = 착륙 뒤 등)
         endT += dt;
-        if (endT > 0.6) return 'done';
+        if (endT > 0.6 && (capAge >= need || endT > 5)) return 'done'; // 마지막 자막도 다 읽고 끝
       }
+      syncUi();
       return null;
     },
   };
+  return api;
 }
 
 // ------------------------------------------------------------------ 따라 하기 판정

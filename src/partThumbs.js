@@ -35,7 +35,7 @@ function stockIcon(slot,width,height){
  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 210 160"><g fill="#344b60" stroke="#acc6d9" stroke-width="4" stroke-linejoin="round"><path d="'+(paths[slot]||paths.gearbox)+'"/></g><text x="105" y="150" text-anchor="middle" fill="#cee6ed" font-size="15" font-family="sans-serif">'+labels[slot]+'</text></svg>';
  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }
-const fake=()=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode:'normal',sink:0,forwardSpeed:0,thr:0,grounded:true,surface:'road',drifting:false,driftDir:0,driftLevel:0,steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
+const fake=()=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode:'normal',sink:0,forwardSpeed:0,thr:0,grounded:true,surface:'road',steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
 /** partThumb('engine_turbo', {carId:'f1',size:400}) → Promise<dataURL>.
  * size는 가로 폭, 세로는 2/3. {width,height}도 가능. 순정은 'stock' + slot 옵션.
  * 동시 요청은 차례로 처리하며 실패는 reject. UI 연결은 호출하는 쪽에서 담당.

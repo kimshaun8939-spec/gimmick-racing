@@ -7,14 +7,13 @@
 import { listCars, stockCarConfig } from './carRoster.js';
 import { applyBuild } from './parts.js';
 
-/** 능력치 8개 [키, 이름, 단위 설명] — 홈 차 고르기 막대와 같은 키 */
+/** 능력치 7개 [키, 이름, 단위 설명] (드리프트는 2026-11-15에 없앰) — 홈 차 고르기 막대와 같은 키 */
 export const STAT_KEYS = [
   ['speed', '최고 속도'],
   ['accel', '가속'],
   ['handling', '핸들링'],
   ['grip', '접지력'],
   ['brake', '제동'],
-  ['drift', '드리프트'],
   ['offroad', '험한 길'],
   ['boat', '배'],
 ];
@@ -85,14 +84,12 @@ function simple(q) {
   for (; v < 100 / 3.6 && t < 20; t += 0.002) v += p.aAcc(v) * 0.002;
   const G = q.gears.at(-1) * q.modes.accel.gearFactor;
   const top = Math.min(p.vMax, Math.sqrt(Math.max(0, (q.engine.power * 0.9 * q.modes.accel.powerFactor) / G - q.aero.rolling) / q.aero.drag));
-  const d = q.drift;
   const raw = {
     speed: top * 3.6,
     accel: 1 / t,
     handling: q.steerRate * 0.45 + q.tire.yawResponse * 0.08 + q.input.steerRise * 0.2,
     grip: p.aLat(150 / 3.6),
     brake: p.aBrake(100 / 3.6),
-    drift: (d.holdAngle[1] - d.holdAngle[0]) * d.baseTurn / d.grip * (1 + d.exitKeep),
     offroad: q.offroad.maxSpeedFactor * 0.7 + q.offroad.gripFactor * 0.3,
     boat: p.boat.vMax * 3.6,
   };

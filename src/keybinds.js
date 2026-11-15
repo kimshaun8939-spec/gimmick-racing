@@ -1,4 +1,4 @@
-// 조작키 배치 + 내 설정: gimmick.keyPreset에 배치, gimmick.keys에 커스텀 저장 (드리프트는 대안까지 3키)
+// 조작키 배치 + 내 설정: gimmick.keyPreset에 배치, gimmick.keys에 커스텀 저장 (예전에 저장된 '드리프트' 키는 2026-11-15부터 읽을 때 무시)
 //   - input.js가 이 표를 보고 키를 행동으로 바꿈 (게임 코드는 행동만 봄)
 //   - 예전 코드가 input.wasPressed('KeyR')처럼 "기본 키 이름"으로 물어봐도, 그 키의 행동(복귀)으로 바꿔서 답함 (LEGACY)
 //   - 설정 화면의 "조작키" 탭(createKeybindPanel)에서 클릭 → 새 키 누르기로 바꿈. 겹치면 경고
@@ -15,7 +15,6 @@ export const ACTIONS = [
   { group: '운전', id: 'brake', label: '브레이크 · 후진', desc: '서 있을 때 누르면 뒤로', def: ['KeyS', 'ArrowDown'] },
   { group: '운전', id: 'left', label: '왼쪽으로', desc: '비행 중엔 왼쪽으로 기울여 선회', def: ['KeyA', 'ArrowLeft'] },
   { group: '운전', id: 'right', label: '오른쪽으로', desc: '비행 중엔 오른쪽으로 기울여 선회', def: ['KeyD', 'ArrowRight'] },
-  { group: '운전', id: 'drift', label: '드리프트', desc: '꺾으면서 누르기 (땅에서)', def: ['ShiftLeft', 'Space'], ctx: 'ground' },
   { group: '운전', id: 'booster', label: '아이템 사용', desc: '파워업 레이스에서 가진 아이템 쓰기', def: ['KeyE', null] },
   { group: '비행', id: 'climb', label: '이륙 · 상승', desc: '활주로에서 약 94 km/h를 넘으면 이륙', def: ['Space', null], ctx: 'fly' },
   { group: '비행', id: 'dive', label: '하강', desc: '기수를 아래로', def: ['ShiftLeft', null], ctx: 'fly' },
@@ -53,15 +52,14 @@ export const PRESETS = [
   { id: 'wasd', name: 'WASD 기본', desc: '익숙한 WASD · 방향키로도 운전해요', overrides: {} },
   { id: 'split', name: '양손 나누기', desc: '왼손으로 조향 · 오른손 두 손가락으로 가속과 브레이크', overrides: {
     throttle: ['KeyK', 'KeyW'], brake: ['KeyL', 'KeyS'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-    drift: ['Space', 'ShiftLeft'], racingLine: ['KeyG', null],
+    racingLine: ['KeyG', null],
   } },
   { id: 'split2', name: '양손 반대', desc: '오른손 방향키로 조향 · 왼손 D 가속, S 브레이크', overrides: {
     throttle: ['KeyD', null], brake: ['KeyS', null], left: ['ArrowLeft', null], right: ['ArrowRight', null],
-    drift: ['ShiftLeft', 'Space'],
   } },
-  { id: 'arrows', name: '방향키', desc: '방향키로 운전 · Shift, Ctrl 또는 / 로 드리프트', overrides: {
+  { id: 'arrows', name: '방향키', desc: '방향키로 운전 · 비행은 Space 상승, Ctrl 또는 / 하강', overrides: {
     throttle: ['ArrowUp', null], brake: ['ArrowDown', null], left: ['ArrowLeft', null], right: ['ArrowRight', null],
-    drift: ['ShiftRight', 'ControlRight', 'Slash'], climb: ['Space', null], dive: ['ControlRight', 'Slash'],
+    climb: ['Space', null], dive: ['ControlRight', 'Slash'],
   } },
   { id: 'custom', name: '내 설정', desc: '직접 바꾼 키를 따로 기억해요' },
 ];
@@ -96,7 +94,7 @@ function load() {
     for (const [id, keys] of Object.entries(saved.binds || saved)) {
       if (!BY_ID[id] || !Array.isArray(keys)) continue;
       const a = BY_ID[id];
-      b[id] = Array.from({ length: id === 'drift' ? Math.max(2, Math.min(3, keys.length)) : 2 }, (_, i) => i).map((s) => ((a.lock || []).includes(s) ? a.def[s] : typeof keys[s] === 'string' && keys[s] ? keys[s] : null));
+      b[id] = Array.from({ length: 2 }, (_, i) => i).map((s) => ((a.lock || []).includes(s) ? a.def[s] : typeof keys[s] === 'string' && keys[s] ? keys[s] : null));
     }
   } catch {}
   return b;
@@ -228,7 +226,7 @@ export const keybinds = {
   /** 키 하나 정하기. slot = 0(기본) / 1(보조). code = null이면 비움 */
   set(id, slot, code) {
     const a = BY_ID[id];
-    if (!a || !Number.isInteger(slot) || slot < 0 || slot > (id === 'drift' ? 2 : 1) || (a.lock || []).includes(slot)) return false;
+    if (!a || !Number.isInteger(slot) || slot < 0 || slot > 1 || (a.lock || []).includes(slot)) return false;
     if (code && RESERVED.has(code)) return false;
     const cur = binds[id];
     if (code) for (let i = 0; i < cur.length; i++) if (i !== slot && cur[i] === code) cur[i] = null;
@@ -365,7 +363,7 @@ export function captureKey(title, sub = '') {
   });
 }
 
-/** 배치 카드. 색과 글자로 가속/브레이크/조향/드리프트를 함께 표시. */
+/** 배치 카드. 색과 글자로 가속/브레이크/조향을 함께 표시. */
 export function createPresetPicker(opts = {}) {
   const el = document.createElement('section');
   el.className = 'kb-presets';
@@ -377,8 +375,8 @@ export function createPresetPicker(opts = {}) {
     ['ShiftLeft', 'KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Slash', 'ShiftRight'],
     ['Space', 'ControlRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'ArrowRight'],
   ];
-  const driving = ['throttle', 'brake', 'left', 'right', 'drift'];
-  const short = { throttle: '가속', brake: '브레이크', left: '왼쪽', right: '오른쪽', drift: '드리프트' };
+  const driving = ['throttle', 'brake', 'left', 'right'];
+  const short = { throttle: '가속', brake: '브레이크', left: '왼쪽', right: '오른쪽' };
   for (const p of PRESETS) {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'kb-preset'; b.dataset.preset = p.id; b.dataset.nav = '';
@@ -399,7 +397,7 @@ export function createPresetPicker(opts = {}) {
     b.innerHTML = '<span class="kb-preset-title"><b>' + escHtml(p.name) + '</b><span class="kb-selected">선택됨 ✓</span></span><span class="kb-preset-desc">' + escHtml(p.desc) + '</span>';
     b.appendChild(diagram);
     const summary = document.createElement('span'); summary.className = 'kb-preset-summary';
-    summary.innerHTML = ['throttle','brake','drift'].map(id => '<span class="kb-' + id + '">' + short[id] + ' <b>' + escHtml(table[id].filter(Boolean).map(codeLabel).join(' / ') || '없음') + '</b></span>').join('') + '<span class="kb-steer">조향 <b>' + escHtml([table.left[0], table.right[0]].filter(Boolean).map(codeLabel).join(' · ')) + '</b></span>';
+    summary.innerHTML = ['throttle','brake'].map(id => '<span class="kb-' + id + '">' + short[id] + ' <b>' + escHtml(table[id].filter(Boolean).map(codeLabel).join(' / ') || '없음') + '</b></span>').join('') + '<span class="kb-steer">조향 <b>' + escHtml([table.left[0], table.right[0]].filter(Boolean).map(codeLabel).join(' · ')) + '</b></span>';
     b.appendChild(summary);
     b.addEventListener('click', () => { keybinds.selectPreset(p.id); opts.sound?.('toggle'); });
     cards.appendChild(b);
@@ -411,7 +409,7 @@ export function createPresetPicker(opts = {}) {
     }
     // 커스텀 카드는 다시 만들어 최신 키를 보여 줌 (누른 버튼의 포커스는 유지).
     const custom = cards.querySelector('[data-preset="custom"] .kb-preset-summary');
-    custom.innerHTML = ['throttle','brake','drift'].map(id => '<span class="kb-' + id + '">' + short[id] + ' <b>' + escHtml(customBinds[id].filter(Boolean).map(codeLabel).join(' / ') || '없음') + '</b></span>').join('') + '<span class="kb-steer">조향 <b>' + escHtml([customBinds.left[0], customBinds.right[0]].filter(Boolean).map(codeLabel).join(' · ')) + '</b></span>';
+    custom.innerHTML = ['throttle','brake'].map(id => '<span class="kb-' + id + '">' + short[id] + ' <b>' + escHtml(customBinds[id].filter(Boolean).map(codeLabel).join(' / ') || '없음') + '</b></span>').join('') + '<span class="kb-steer">조향 <b>' + escHtml([customBinds.left[0], customBinds.right[0]].filter(Boolean).map(codeLabel).join(' · ')) + '</b></span>';
     const keys = cards.querySelectorAll('[data-preset="custom"] .kb-mini i');
     miniRows.flat().forEach((code, i) => {
       const a = driving.find(id => customBinds[id].includes(code));
@@ -461,7 +459,6 @@ export function createKeybindPanel(opts = {}) {
       <div class="kb-slots">
         <button class="kb-slot" data-nav data-slot="0" title="기본 키"></button>
         <button class="kb-slot alt" data-nav data-slot="1" title="보조 키"></button>
-        ${a.id === 'drift' ? '<button class="kb-slot alt" data-nav data-slot="2" title="대안 키"></button>' : ''}
         <button class="kb-reset" data-nav data-reset title="이 줄만 기본값으로">↺</button>
       </div>`;
     groupEl.appendChild(row);

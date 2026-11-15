@@ -796,7 +796,7 @@ kbd.pad.pf3 { background: #8a6a12; border-color: #ffcf3f; color: #fff6d6; }
 .gm-keys-panel .kb-row[hidden], .gm-keys-panel .kb-group[hidden] { display: none; }
 /* 운전 도움을 켜고 낸 기록 */
 .h-assist { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(80, 160, 255, 0.16); border: 1px solid rgba(80, 160, 255, 0.45); color: #9cc8ff; font-size: 10px; font-weight: 800; font-style: normal; letter-spacing: 0; vertical-align: middle; white-space: nowrap; }
-/* 튜토리얼: 드리프트 각도 막대 */
+/* 튜토리얼: 상태 막대 (라인 색 칩 등) */
 .tut-gauge { margin-top: 8px; padding: 8px 10px 9px; border-radius: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--gm-line); display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; font-size: 12px; font-weight: 800; transition: border-color 0.1s; }
 .tut-gauge.good { border-color: #3ddc6a; }
 .tut-gauge.bad { border-color: #ff4b5c; animation: tutPulse 0.4s ease-in-out infinite; }
@@ -825,7 +825,7 @@ kbd.pad.pf3 { background: #8a6a12; border-color: #ffcf3f; color: #fff6d6; }
 #touchCtl .tc-btn small { display: block; font-size: 10px; font-weight: 800; opacity: 0.8; margin-top: 3px; letter-spacing: -0.3px; }
 #touchCtl .tc-btn b { font-weight: 900; }
 #touchCtl .tc-btn.on { transform: scale(0.93); background: rgba(255, 255, 255, 0.28); border-color: #fff; }
-/* 오른쪽: 가속 (가장 큼) · 브레이크 · 드리프트 */
+/* 오른쪽: 가속 (가장 큼) · 브레이크 · (비행 중) 상승·하강 */
 #touchCtl { --s: 1; }
 #touchCtl[data-size="s"] { --s: 0.84; }
 #touchCtl[data-size="l"] { --s: 1.16; }
@@ -833,11 +833,11 @@ kbd.pad.pf3 { background: #8a6a12; border-color: #ffcf3f; color: #fff6d6; }
 #touchCtl .tc-gas.on { background: rgba(125, 255, 106, 0.35); border-color: #7dff6a; }
 #touchCtl .tc-brake { right: calc(max(16px, env(safe-area-inset-right)) + 116px * var(--s)); bottom: max(14px, env(safe-area-inset-bottom)); width: calc(82px * var(--s)); height: calc(82px * var(--s)); border-color: rgba(255, 90, 74, 0.65); }
 #touchCtl .tc-brake.on { background: rgba(255, 90, 74, 0.38); border-color: #ff5a4a; }
-#touchCtl .tc-drift { right: calc(max(16px, env(safe-area-inset-right)) + 14px * var(--s)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 116px * var(--s)); width: calc(76px * var(--s)); height: calc(76px * var(--s)); font-size: 22px; border-color: rgba(255, 207, 63, 0.6); }
-#touchCtl .tc-drift.on { background: rgba(255, 207, 63, 0.35); border-color: #ffcf3f; }
+#touchCtl .tc-climb { display: none; right: calc(max(16px, env(safe-area-inset-right)) + 14px * var(--s)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 116px * var(--s)); width: calc(76px * var(--s)); height: calc(76px * var(--s)); font-size: 22px; border-color: rgba(255, 207, 63, 0.6); }
+#touchCtl .tc-climb.on { background: rgba(154, 216, 255, 0.3); border-color: #9ad8ff; }
 #touchCtl .tc-dive { display: none; right: calc(max(16px, env(safe-area-inset-right)) + 122px * var(--s)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 94px * var(--s)); width: calc(66px * var(--s)); height: calc(66px * var(--s)); font-size: 20px; border-color: rgba(154, 216, 255, 0.6); }
 #touchCtl.fly .tc-dive { display: grid; }
-#touchCtl.fly .tc-drift { border-color: rgba(154, 216, 255, 0.6); }
+#touchCtl.fly .tc-climb { display: grid; border-color: rgba(154, 216, 255, 0.6); }
 /* 작은 버튼: 복귀 · 메뉴 (미니맵 왼쪽) */
 #touchCtl .tc-small { position: absolute; top: max(10px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 122px); display: flex; gap: 8px; }
 body.noMinimap #touchCtl .tc-small { right: max(12px, env(safe-area-inset-right)); }
@@ -879,8 +879,6 @@ body.touch-on #forms { display: none; }
 body.touch-on #speedBox { right: auto; left: 50%; transform: translateX(-50%); bottom: max(8px, env(safe-area-inset-bottom)); padding: 6px 12px; text-align: center; }
 body.touch-on #speed { font-size: 34px; }
 body.touch-on #speedUnit { font-size: 11px; }
-body.touch-on #driftBar { display: none; }
-body.touch-on #driftAng { width: 110px; margin-left: auto; margin-right: auto; }
 body.touch-on #speedBox { padding: 4px 12px 6px; min-width: 0; }
 body.touch-on #tachRow { justify-content: center; gap: 6px; margin-top: 4px; }
 body.touch-on #tach { width: 110px; height: 10px; }
@@ -1457,9 +1455,7 @@ body.noMinimap #fps { top: calc(var(--hud-edge) + 40px); }
 #speedBox { right: var(--hud-edge); bottom: var(--hud-edge); padding: 12px 14px 10px; width: 216px; display: grid; grid-template-columns: 1fr auto; column-gap: 6px; align-items: baseline; text-align: right; }
 #speed { font-size: 52px; letter-spacing: -0.02em; }
 #speedUnit { font-size: 12px; font-weight: 800; opacity: 1; color: #c3cde0; min-width: 34px; text-align: left; }
-#driftBar, #driftAng, #tachRow, #gearInfo { grid-column: 1 / -1; }
-#driftBar { width: 100%; height: 6px; border-radius: 3px; margin-top: 8px; background: rgba(255, 255, 255, 0.14); }
-#driftAng { width: 100%; }
+#tachRow, #gearInfo { grid-column: 1 / -1; }
 #tachRow { gap: 8px; margin-top: 8px; }
 #tach { flex: 1; width: auto; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); }
 #gear { font-size: 28px; min-width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--hud-line); }
@@ -1988,13 +1984,11 @@ body #lobby .lb-mycar .lb-cars { grid-auto-rows: max-content; }
 .kb-mini i.kb-throttle { color: #0c251f; background: #80e2b0; }
 .kb-mini i.kb-brake { color: #33131e; background: #ff9b9b; }
 .kb-mini i.kb-steer { color: #10273b; background: #83c8ff; }
-.kb-mini i.kb-drift { color: #2b1a34; background: #d5b1ff; }
 .kb-preset-summary { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; line-height: 1.7; }
 .kb-preset-summary b { font-weight: 700; }
 .kb-preset-summary .kb-throttle { color: #80e2b0; }
 .kb-preset-summary .kb-brake { color: #ff9b9b; }
 .kb-preset-summary .kb-steer { color: #83c8ff; }
-.kb-preset-summary .kb-drift { color: #d5b1ff; }
 .kb-preset-start { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .kb-preset-start p { margin: 0; }
 .kb-custom-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 14px 22px; align-items: start; }
@@ -2371,7 +2365,6 @@ body.touch-on .course-guide kbd { display:none; }
 body.touch-on #touchCtl .tc-btn small { font-size:12px; line-height:1.2; }
 body.touch-on #itemHud .slot kbd { font-size:0; }
 body.touch-on #itemHud .slot kbd::after { content:'사용'; font-size:12px; }
-body.touch-on #itemHud .gl { font-size:14px; }
 body.touch-on #itemHud .s2 { min-width:52px; min-height:52px; }
 @media (max-width:900px), (pointer:coarse) {
  #home .gm-btn.hx-ico { width:44px; height:44px; min-height:44px; }
@@ -3193,3 +3186,23 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 #home .gx-locknote .gx-buycar { margin-top: 8px; align-self: flex-start; min-height: 40px; }
 /* 낮거나 좁은 화면: 지갑 칸이 조각 3종으로 꽉 차서 '살 수 있는 수' 딱지는 상점 줄에만 (작업 C) */
 @media (max-height: 420px), (max-width: 560px) { #home .mt-wallet-btn .hm-wallet-badge { display: none; } }
+
+/* ───────── 계정 저장·로그아웃 (cloudsave, 2026-11-15) ───────── */
+.gm-welcome .wl-acc { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(90, 220, 140, 0.08); border: 1px solid rgba(90, 220, 140, 0.32); }
+.gm-welcome .wl-acc-who { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.gm-welcome .wl-acc-who small { flex-basis: 100%; color: var(--gm-dim); font-size: 11px; font-weight: 700; }
+.gm-welcome .wl-acc-who b { font-size: 16px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.gm-welcome .wl-acc-who em, .h-olme .ol-cloud { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(126, 240, 224, 0.12); color: #8ff3e6; border: 1px solid rgba(126, 240, 224, 0.32); white-space: nowrap; }
+.h-olme .ol-cloud { margin-left: 4px; }
+.h-olme .ol-cloud.wait, .gm-welcome .wl-acc-who em.wait { color: #ffd77a; background: rgba(255, 215, 122, 0.1); border-color: rgba(255, 215, 122, 0.3); }
+.gm-btn.cs-logout { border-color: rgba(255, 120, 100, 0.45); color: #ffc2b8; }
+.gm-btn.cs-logout:hover, .gm-btn.cs-logout:focus-visible { border-color: #ff7a64; color: #fff; background: rgba(255, 90, 70, 0.18); }
+.gm-welcome .wl-switch { display: block; margin-top: 6px; padding: 6px 9px; border-radius: 9px; background: rgba(255, 215, 122, 0.08); color: #ffd77a; font-size: 12px; font-weight: 700; line-height: 1.45; }
+.gm-welcome .wl-switch b { color: #fff; }
+.h-olme .ol-accbtns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.h-olme .ol-accbtns .gm-btn { margin-left: 0; }
+@media (max-width: 520px) {
+  .gm-welcome .wl-acc { padding: 9px 10px; }
+  .h-olme .ol-accbtns { width: 100%; }
+  .h-olme .ol-accbtns .gm-btn { flex: 1; min-height: 40px; }
+}

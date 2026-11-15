@@ -3,7 +3,7 @@
 //
 // 핵심 아이디어: 차가 자기만의 "위쪽(up)"과 "앞쪽(fwd)"을 가집니다.
 // 땅에 붙어 있을 때 up은 바닥면의 방향과 같아서, 벽과 천장도 "기울어진 바닥"일 뿐입니다.
-// 실제로 움직이는 방향은 fwd를 up 축으로 slip만큼 돌린 방향입니다 (slip = 미끄러짐 = 드리프트).
+// 실제로 움직이는 방향은 fwd를 up 축으로 slip만큼 돌린 방향입니다 (slip = 미끄러짐).
 //
 // 운전 모델 (data/car.json에서 수치 조절)
 //   - 엔진: 회전수(rpm)마다 힘이 다르고, 6단 기어 (자동/수동 T). 변속하는 동안은 힘이 끊김
@@ -122,11 +122,7 @@ export class Car {
     this.trackInfo = null;
     this.wasOnPad = false;
 
-    // 드리프트와 부스트
-    this.drifting = false;
-    this.driftDir = 0;
-    this.driftTime = 0;
-    this.driftLevel = 0; // 0, 1, 2
+    // 부스트 (드리프트 기능은 2026-11-15에 없앰, 사용자 요청)
     this.boostTime = 0;
 
     // 변신
@@ -171,15 +167,10 @@ export class Car {
     this.drs = this.draftTrain = 0;
     this.latG = 0; // 옆 가속 (m/s², + = 오른쪽으로 도는 중) → 차체 기울기 (carModel)
     this.lonG = 0; // 앞뒤 가속 (m/s², + 가속, - 브레이크) → 차체 앞뒤 숙임
-    this.tyreSlip = 0; // 0~1 타이어가 비명을 지르는 정도 (미끄러짐·헛돎·앞 밀림·바퀴 잠김·드리프트) → 타이어 소리
+    this.tyreSlip = 0; // 0~1 타이어가 비명을 지르는 정도 (미끄러짐·헛돎·앞 밀림·바퀴 잠김) → 타이어 소리
     this.thrHeld = 0; // 가속 페달을 꽉 밟고 있던 시간 (리프트오프 감지)
     this.liftKick = 0; // 리프트오프 순간 1 → 0.45초 동안 0으로
     this.liftOff = 0; // 0~1 코너 중 액셀을 확 뗌 → 뒤가 가벼워져 꼬리가 살짝 돎
-    this.driftAngle = 0; // 드리프트 각도 (rad, 도는 쪽이 +)
-    this.driftHold = 0; // 좋은 각도 창 안에서 버틴 시간 (초)
-    this.driftLoss = 0; // 이번 드리프트로 잃은 속도 (m/s)
-    this.exitRefund = 0; // 깔끔한 드리프트 탈출로 돌려받을 남은 속도 (m/s)
-    this.lastDriftInfo = null; // HUD용 { clean, quality, gain, hold, spin, t }
     this.launchTime = 0; // 완벽한 출발 효과 남은 시간
     this.launchSpin = 0; // 출발 실패(휠스핀) 남은 시간
     this.hitT = 0; // 세게 부딪힌 뒤 차가 자세를 되찾는 남은 시간 (이 동안은 꼬리가 더 돌아가지 않음)
@@ -229,9 +220,6 @@ export class Car {
     this.surface = hit ? hit.surface : 'ground';
     this.magnet = this.surface === 'magnet';
     this.airTime = 0;
-    this.drifting = false;
-    this.driftTime = 0;
-    this.driftLevel = 0;
     this.boostTime = 0;
     this.form = null;
     this.formTime = 0;
@@ -244,7 +232,6 @@ export class Car {
     this.wheelspin = this.understeer = this.sliding = 0;
     this.spool = 0;
     this.latG = this.lonG = this.tyreSlip = this.thrHeld = this.liftKick = this.liftOff = 0;
-    this.driftAngle = this.driftHold = this.driftLoss = this.exitRefund = 0;
     this.draft = 0;
     this.tow = this.slingT = this.assistDraft = 0;
     this.drs = this.draftTrain = 0;
@@ -265,11 +252,10 @@ export class Car {
     // fly2: 상승 기류 세기(0~1)·기류가 밀어 올리는 속도, 급강하로 올라간 비행 최고 속도, 부드러운 착지 가속 남은 시간, 마지막 비행 착지 기록
     this.thermalK = this.thermalUp = this.diveCap = this.landKickT = this.diveK = this.flyAir = 0;
     this.lastFlyLanding = null;
-    this.surgeT = this.surgeK = this.boatCarve = 0; // 배: 물살 가속 남은 시간·세기, 카빙 정도 (0~1)
-    // 배 개편 (boat3 2026-11-15): 물살 레인 세기·남은 시간, 카빙 탈출(버틴 시간·시작 속도·돌려받을 속도), 마지막 착수·카빙 탈출 기록
+    this.surgeT = this.surgeK = 0; // 배: 물살 가속 남은 시간·세기
+    // 배 개편 (boat3 2026-11-15): 물살 레인 세기·남은 시간, 마지막 착수 기록 (카빙은 2026-11-15에 없앰)
     this.flowK = this.flowT = 0;
-    this.carveHold = this.carveV0 = this.carveLost = this.carveRelease = this.carveRefund = this.carveSnap = 0;
-    this.lastLanding = this.lastCarveExit = null;
+    this.lastLanding = null;
     this.swellK = null;
   }
 
@@ -511,7 +497,7 @@ export class Car {
   }
 
   startBoost(seconds, minSpeedFactor = 1, fromBooster = false) {
-    // E 부스터는 booster.enabled, 그 밖의 부스트(패드·드리프트·고리)는 boostsEnabled로 켜고 끔
+    // E 부스터는 booster.enabled, 그 밖의 부스트(패드·고리)는 boostsEnabled로 켜고 끔
     if (!(fromBooster ? this.cfg.booster.enabled ?? true : this.cfg.boostsEnabled)) return;
     this.boostTime = Math.max(this.boostTime, seconds);
     this.speed = Math.max(this.speed, this.cfg.maxSpeed * minSpeedFactor);
@@ -595,7 +581,6 @@ export class Car {
       (this._recoverN || (this._recoverN = new THREE.Vector3())).copy(this._wallNormal);
       this._recoverOn = true;
     }
-    if (this.drifting) this.endDrift(false);
     // 충돌로 생긴 큰 slip이 타이어의 꼬리 회전으로 바뀌는 것만 막는다.
     this.hitT = Math.max(this.hitT, I.recover ?? 0.7);
   }
@@ -889,34 +874,11 @@ export class Car {
     if (this.slingT > 0 && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (DR.slingAccel ?? 6) * dt); // 슬링샷 (&slip=sling일 때만): 앞차 옆으로 튀어 나감
     // 슬립스트림 끌림 (2026-11-13 슬링샷 대신): 뒤에 붙어 있는 동안 바로 가속 +pullAccel × draft (기차면 더, 최고 속도 안에서)
     if (drK > 0 && DR.pullAccel && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + DR.pullAccel * drK * trK * dt);
-    // 깔끔한 드리프트 탈출: 드리프트로 잃은 속도 일부를 0.3초쯤에 걸쳐 돌려받음 (부스트 아님: 최고 속도를 넘지 않음)
-    if (this.exitRefund > 0) {
-      const a = Math.min(this.exitRefund, (cfg.drift.exitRate ?? 16) * dt);
-      this.exitRefund -= a;
-      if (f > 0 && f < maxSpeed) f = Math.min(maxSpeed, f + a);
-    }
     if (FLK && f > 5 && f < maxSpeed && this.thr > 0.3) f = Math.min(maxSpeed, f + (FLK.kickAccel ?? 5) * dt); // fly2 부드러운 착지 가속
     if (f > maxSpeed) f = THREE.MathUtils.lerp(f, maxSpeed, 1 - Math.exp(-(flyGround ? 5 : FLK ? FLK.keepRate ?? 0.8 : 2.5) * dt));
     if (offK > 0) f -= f * cfg.offroad.drag * offK * (this.runoff ? 0.3 : 1) * dt;
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
     if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDirTo(_md).y * 0.5 * dt;
-
-    // 드리프트 시작 / 종료
-    if (!this.drifting && c.drift && this.mode !== 'fly' && Math.abs(c.steer) > 0.3 && f > cfg.drift.minSpeed && !(this.hitT > 0)) {
-      this.drifting = true;
-      this.driftDir = Math.sign(c.steer);
-      this.driftTime = 0;
-      this.driftLevel = 0;
-      this.driftHold = this.driftLoss = this.exitRefund = 0;
-      this.events.push('driftStart');
-      if (this.up.y > 0.9) {
-        // 평지에서는 살짝 점프하며 드리프트 진입
-        this.speed = f;
-        this.leaveGround(this.moveDir.multiplyScalar(f).addScaledVector(this.up, 4));
-        return;
-      }
-    }
-    if (this.drifting && (!c.drift || f < cfg.drift.minSpeed * 0.6)) this.endDrift(f >= cfg.drift.minSpeed * 0.6, !c.drift);
 
     // 방향 전환
     const speedK = THREE.MathUtils.clamp(Math.abs(f) / 8, 0, 1);
@@ -938,23 +900,7 @@ export class Car {
     const lat = Math.max(0.5 * tire.lateral, tire.lateral * (1 + df) * surfGrip + bankLat * surfGrip); // 코너링 한계 (m/s², 경사 포함)
     let turn;
     this.understeer = 0;
-    if (this.drifting) {
-      turn = this.driftDir * (cfg.drift.baseTurn + c.steer * this.driftDir * cfg.drift.steerTurn);
-      // 드리프트도 아주 빠르면 덜 돎 (그래도 그냥 꺾는 것보다는 많이 돎)
-      turn *= Math.min(1, cfg.drift.highSpeedLat / (Math.max(1, vNow) * (cfg.drift.baseTurn + cfg.drift.steerTurn * 0.5)));
-      this.yawRate = turn;
-      // 드리프트 각도 창: holdAngle [최소, 최대] rad 안에서 버티면 드리프트가 쌓임 (레벨·탈출 보상)
-      //   안쪽으로 꺾으면 각도↑, 카운터(반대로 꺾기)면 각도↓, 뒷바퀴 굴림은 액셀을 밟을수록 각도↑ / 떼면↓ (앞바퀴 굴림은 반대: 밟으면 펴짐)
-      const win = cfg.drift.holdAngle || [0.28, 0.75];
-      const ang = this.slip * this.driftDir;
-      this.driftAngle = ang;
-      const inWin = ang >= win[0] && ang <= win[1];
-      if (inWin) this.driftHold += dt;
-      this.driftTime += dt * (inWin ? 1 : 0.35);
-      const lvl = this.driftTime > cfg.drift.level2Time ? 2 : this.driftTime > cfg.drift.level1Time ? 1 : 0;
-      if (lvl > this.driftLevel) this.events.push('driftLevel');
-      this.driftLevel = lvl;
-    } else {
+    {
       let want = this.steerIn * cfg.steerRate * speedK * highK * Math.sign(f || 1);
       // 앞바퀴 한계: 무게가 뒤로 쏠리면(가속 중) 앞이 가벼워져 덜 돎 → 언더스티어
       //   앞바퀴 굴림(fwd)은 헛돌면 앞이 더 밀림 (frontSpinK)
@@ -976,7 +922,7 @@ export class Car {
     //   고속 조향 한계 대신 느릴 때의 조향 속도(steerRate × impact.steerRecover × 핸들)까지 머리가 돎.
     //   늘어난 몫은 yawRate에 넣지 않고 slip이 0이 될 때까지만 → 진행 방향과 나란해지면 끝, 넘쳐서 반대로 돌 일 없음(스핀 없음).
     //   핸들을 안 꺾으면 0 (벽이 차를 저절로 돌리지 않음), 사람·봇 같은 규칙.
-    const steerFix = WALL_STEER && !this.drifting && f > 2 && (this._impactGrip || wallSlide) && Math.abs(this.slip) > 0.01 && this.steerIn * this.slip < 0; // 앞으로 갈 때만 (뒤로 밀리는 중은 예전 그대로)
+    const steerFix = WALL_STEER && f > 2 && (this._impactGrip || wallSlide) && Math.abs(this.slip) > 0.01 && this.steerIn * this.slip < 0; // 앞으로 갈 때만 (뒤로 밀리는 중은 예전 그대로)
     if (steerFix) {
       const rec = (cfg.impact?.steerRecover ?? 1) * cfg.steerRate * speedK * Math.abs(this.steerIn) * dt;
       const room = Math.abs(this.slip) - Math.abs(dYaw);
@@ -995,16 +941,7 @@ export class Car {
     this.slip -= dYaw; // 차는 돌았지만 이동 방향은 그대로 → 미끄러짐
 
     // 접지력: 이동 방향이 차 방향을 따라잡음
-    if (this.drifting) {
-      const D = cfg.drift;
-      const thrA = drv === 'fwd' ? -(D.fwdThrottleAngle ?? 0.3) : (D.throttleAngle ?? 0.35) * (drv === 'awd' ? 0.6 : 1);
-      this.slip *= Math.exp(-D.grip * (1 - thrA * (this.thr - 0.5) * 2) * dt);
-      // 너무 많이 돌아감 → 스핀: 드리프트가 끊기고 속도 손해
-      if (this.slip * this.driftDir > (D.spinAngle ?? 1.1)) {
-        f *= 1 - (D.spinLoss ?? 0.15);
-        this.endDrift(false, false, true);
-      }
-    } else if ((wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) || (steerFix && dYaw * this.slip > 0 && this._recoverOn && this._impactGrip && this.fwd.dot(this._recoverN) < -1e-5)) {
+    if ((wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) || (steerFix && dYaw * this.slip > 0 && this._recoverOn && this._impactGrip && this.fwd.dot(this._recoverN) < -1e-5)) {
       // (steerlock) 벽에서 살짝 떨어진 순간에도, 벽 반대로 꺾어 머리를 맞추는 동안은 타이어가 진행 방향을 벽 쪽으로 다시 끌지 않음
       // 머리가 벽 안쪽을 향하는 동안 접지력이 이동 방향을 다시 벽 쪽으로 끌지 않게 한다.
       // 위의 조향 회전(dYaw)은 이미 적용됨. 벽 바깥을 향해 꺾으면 즉시 정상 접지로 돌아간다.
@@ -1049,19 +986,14 @@ export class Car {
       }
       this.slip = THREE.MathUtils.clamp(this.slip, -1.3, 1.3);
     }
-    this.sliding = this.drifting ? 0 : THREE.MathUtils.clamp((Math.abs(this.slip) - 0.12) / 0.35, 0, 1);
+    this.sliding = THREE.MathUtils.clamp((Math.abs(this.slip) - 0.12) / 0.35, 0, 1);
     {
-      // 옆으로 미끄러지면 느려짐. 드리프트 중 좋은 각도 창 안이면 덜 느려짐 (drift.holdDrag)
-      const D = cfg.drift, win = D.holdAngle || [0.28, 0.75];
-      const inWin = this.drifting && this.driftAngle >= win[0] && this.driftAngle <= win[1];
-      const lost = (wallSlide ? 0 : f) * Math.abs(Math.sin(this.slip)) * D.slipDrag * (inWin ? D.holdDrag ?? 0.7 : 1) * dt;
-      f -= lost;
-      if (this.drifting) this.driftLoss += Math.abs(lost);
+      // 옆으로 미끄러지면 느려짐 (tire.slipDrag = 예전 drift.slipDrag 값 그대로)
+      f -= (wallSlide ? 0 : f) * Math.abs(Math.sin(this.slip)) * (tire.slipDrag ?? 0.6) * dt;
     }
     // 타이어 소리 크기 (0~1): 가장 심한 것 하나. 잔디 위에서는 비명 대신 흙 소리(offroadFx)라 줄임
     {
-      const dAng = this.drifting ? THREE.MathUtils.clamp(0.45 + Math.abs(this.slip) * 0.7, 0, 1) : 0;
-      const sl = Math.max(this.sliding * 0.95, this.understeer * 0.6, this.wheelspin * 0.85, brakeOver * 0.7, dAng, this.liftOff * 0.5);
+      const sl = Math.max(this.sliding * 0.95, this.understeer * 0.6, this.wheelspin * 0.85, brakeOver * 0.7, this.liftOff * 0.5);
       this.tyreSlip = sl * (1 - 0.85 * offK) * Math.min(1, vNow / 6) * (this.magnet ? 0.6 : 1);
     }
     this.speed = f;
@@ -1093,7 +1025,6 @@ export class Car {
         if (vn < 0) {
           v.addScaledVector(wall.normal, -vn);
           if (vn < -8) this.events.push('bump');
-          if (this.drifting) this.endDrift(false);
           this.setVelocityOnSurface(v, Math.PI / 2);
           this.afterImpact(vn, wall.normal);
           move = this.moveDirTo(_mv).multiplyScalar(this.speed * dt);
@@ -1159,7 +1090,7 @@ export class Car {
       this.autoBoatFrom = null;
     }
     if (this.mode !== 'boat') this.autoBoatFrom = null; // 직접 다른 모드를 고르면 자동 복귀 취소
-    if (this.surface !== 'water') this.surgeT = this.boatCarve = this.flowK = this.flowT = this.carveHold = this.carveRefund = 0; // 물살 가속·카빙은 물 위에서만
+    if (this.surface !== 'water') this.surgeT = this.flowK = this.flowT = 0; // 물살 가속은 물 위에서만
     // 활주로(그랑프리 비행 루트)에 들어서면 자동으로 비행 모드, 내려앉아 활주로 밖이면 원래 모드로
     if (this.track.runway && cfg.modes.fly.autoSwitch) {
       const zone = (this.rwZoneLast = this.runwayZone());
@@ -1490,51 +1421,16 @@ export class Car {
     if (f > maxF) f = THREE.MathUtils.lerp(f, maxF, 1 - Math.exp(-2 * dt));
     const v = Math.abs(f);
 
-    // 카빙 (2026-11-10): 드리프트 키 + 핸들 → 물을 깎으며 확 돎 (대신 속도를 조금 잃고 옆으로 더 미끄러짐)
-    const CV = b.carve;
-    const carving = !!(CV && c && c.drift && v > CV.minSpeed && Math.abs(this.steerIn) > 0.25 && f > 0);
-    if (carving && this.boatCarve < 0.05) this.events.push('boatCarve');
-    this.boatCarve = THREE.MathUtils.lerp(this.boatCarve || 0, carving ? 1 : 0, 1 - Math.exp(-(carving ? 7 : 4) * dt));
-    const cv = CV ? this.boatCarve : 0;
-    // 카빙 탈출 (boat3): 카빙을 exitMinHold초 넘게 버티다 핸들을 똑바로 펴서 빠지면, 카빙으로 잃은 속도의 exitKeep만큼 돌려받음
-    //   (땅 드리프트의 깔끔한 탈출과 같은 생각. 카빙은 잃는 쪽이 늘 더 크므로 직선에서 일부러 해도 이득 없음)
-    if (CV && CV.exitKeep) {
-      if (carving) {
-        if (!(this.carveHold > 0)) this.carveV0 = Math.max(0, f);
-        this.carveHold += dt;
-        this.carveLost = Math.max(this.carveLost || 0, this.carveV0 - f);
-        this.carveRelease = 0;
-      } else if (this.carveHold > 0) {
-        this.carveRelease += dt;
-        const straight = Math.abs(this.steerIn) < (CV.exitStraight ?? 0.3);
-        if (straight && this.carveHold >= (CV.exitMinHold ?? 0.5) && this.carveLost > 0.5) {
-          const dv = Math.min(CV.exitMax ?? 8, this.carveLost * Math.min(0.95, CV.exitKeep)); // 0.95 넘게는 안 줌 (카빙이 늘 손해여야 직선에서 일부러 안 함)
-          this.carveRefund += dv;
-          this.lastCarveExit = { t: this.simT, dv, hold: this.carveHold };
-          this.carveSnap = CV.exitSnap ?? 0.35; // 깔끔히 펴면 옆 미끄러짐이 빨리 잡힘 (뱃머리가 똑바로)
-          this.events.push('carveExit');
-          this.carveHold = this.carveLost = 0;
-        } else if (this.carveRelease > (CV.exitWindow ?? 0.35)) this.carveHold = this.carveLost = 0; // 늦게 폄 = 보상 없음
-      }
-    }
-    if (this.carveRefund > 0) {
-      const r = Math.min(this.carveRefund, (CV.exitRate ?? 14) * dt);
-      f += r;
-      this.carveRefund -= r;
-    }
     // 방향타: 움직일 때만 돌고, 빠를수록 조금 덜 돎
     const rudder = THREE.MathUtils.clamp(v / 6, 0, 1) * (1 - 0.35 * Math.min(1, v / b.maxSpeed));
-    const want = this.steerIn * b.turnRate * rudder * Math.sign(f || 1) * (1 + ((CV ? CV.turn : 1) - 1) * cv);
-    this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-((b.yawResponse ?? 4) + 3 * cv) * dt));
+    const want = this.steerIn * b.turnRate * rudder * Math.sign(f || 1);
+    this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-(b.yawResponse ?? 4) * dt));
     const dYaw = -this.yawRate * dt;
     this.fwd.applyAxisAngle(this.up, dYaw);
     this.slip -= dYaw; // 배는 옆으로 잘 미끄러짐 (천천히 진행 방향을 따라감)
-    this.slip *= Math.exp(-b.grip * (1 + ((CV ? CV.grip : 1) - 1) * cv) * (this.carveSnap > 0 ? CV.exitGrip ?? 3 : 1) * dt);
-    if (this.carveSnap > 0) this.carveSnap -= dt;
+    this.slip *= Math.exp(-b.grip * dt);
     this.slip = THREE.MathUtils.clamp(this.slip, -1.2, 1.2);
     f -= f * Math.abs(Math.sin(this.slip)) * 0.8 * dt;
-    if (cv > 0) f -= f * CV.drag * cv * dt;
-    if (this.drifting) this.endDrift(false);
 
     // 엔진: 프로펠러 부하라 속도보다 가속 페달을 더 따라감
     this.gear = f < -0.5 ? -1 : 1;
@@ -1598,7 +1494,6 @@ export class Car {
     this.bank = 0;
     this.stallFall = 0;
     this.thermalUp = this.thermalK = this.diveCap = this.diveK = 0;
-    if (this.drifting) this.endDrift(false);
     this.leaveGround(this.moveDir.multiplyScalar(this.speed).addScaledVector(WORLD_UP, 4));
     this.events.push('takeoff');
   }
@@ -1700,7 +1595,6 @@ export class Car {
       this.wheelspin = this.understeer = this.sliding = 0;
       this.load *= Math.exp(-4 * dt);
       this.sink = 0;
-      if (this.drifting) this.endDrift(false);
       this.updateFlight(dt, c);
     } else {
       this.flying = false;
@@ -1713,7 +1607,6 @@ export class Car {
   updateFall(dt, c) {
     const cfg = this.cfg;
     this.airTime += dt;
-    if (this.drifting) this.driftTime += dt;
     // 공중: 바퀴가 떠서 엔진이 헛돎
     const e = cfg.engine;
     this.rpm = THREE.MathUtils.lerp(this.rpm, e.idleRpm + (e.limiter - e.idleRpm) * this.thr, 1 - Math.exp(-6 * dt));
@@ -1861,43 +1754,12 @@ export class Car {
     this.pos.add(step);
   }
 
-  /**
-   * 드리프트 끝. released = 드리프트 키를 떼서 끝냄, spun = 너무 돌아가 스핀
-   * 깔끔한 탈출 (2026-11-10): 키를 뗄 때 각도가 exitAngle 아래(차가 이미 나갈 쪽을 봄) + 각도 창 안에서 exitMinHold초 이상 버팀
-   *   → 이번 드리프트로 잃은 속도의 exitKeep 비율(버틴 시간·탈출 각도에 따라, 최대 exitMax m/s)을 돌려받고, 미끄러짐이 exitAlign만큼 바로 펴짐
-   */
-  endDrift(giveBoost, released = false, spun = false) {
-    const D = this.cfg.drift;
-    if (giveBoost && this.driftLevel > 0) {
-      this.startBoost(this.driftLevel === 2 ? D.level2Boost : D.level1Boost);
-    }
-    const ang = this.slip * this.driftDir;
-    const exitA = D.exitAngle ?? 0.6, good = D.exitGood ?? 0.35;
-    const clean = !spun && released && giveBoost && this.driftHold >= (D.exitMinHold ?? 0.4) && ang < exitA && ang > -0.15 && !(this.hitT > 0);
-    let quality = 0, gain = 0;
-    if (clean) {
-      const holdQ = THREE.MathUtils.clamp(0.35 + (0.65 * this.driftHold) / (D.level2Time || 2), 0, 1);
-      const angQ = ang <= good ? 1 : 1 - (0.5 * (ang - good)) / Math.max(0.01, exitA - good);
-      quality = holdQ * angQ;
-      gain = Math.min(D.exitMax ?? 5, this.driftLoss * (D.exitKeep ?? 0.6) * quality);
-      this.exitRefund = gain;
-      this.slip *= 1 - (D.exitAlign ?? 0.4) * quality; // 진행 방향이 차 머리 쪽으로 바로 펴짐 (쭉 뻗어 나감)
-      this.events.push('driftExit');
-    } else if (spun) this.events.push('driftSpin');
-    if (this.driftTime > 0.3 || spun) this.lastDriftInfo = { clean, quality, gain, hold: this.driftHold, angle: ang, spin: spun, level: this.driftLevel, t: this.simT };
-    this.drifting = false;
-    this.driftAngle = 0;
-    this.driftHold = this.driftLoss = 0;
-    this.driftTime = 0;
-    this.driftLevel = 0;
-  }
-
   /** 네트워크 전송/리플레이용 상태 스냅샷 */
   snapshot() {
     return {
       pos: this.pos.toArray(), up: this.up.toArray(), fwd: this.fwd.toArray(), vel: this.vel.toArray(),
       speed: this.speed, slip: this.slip, grounded: this.grounded, gear: this.gear, rpm: this.rpm,
-      drifting: this.drifting, driftLevel: this.driftLevel, boostTime: this.boostTime,
+      boostTime: this.boostTime,
       form: this.form, formTime: this.formTime, mode: this.mode, sink: this.sink, flying: this.flying,
     };
   }

@@ -54,7 +54,7 @@ export function setNick(n) {
     localStorage.setItem('gimmick.nick', n);
   } catch {}
 }
-export const randomNick = () => ['번개', '질주', '드리프트', '터보', '로켓', '바람', '유성', '폭풍'][Math.floor(Math.random() * 8)] + Math.floor(10 + Math.random() * 90);
+export const randomNick = () => ['번개', '질주', '질풍', '터보', '로켓', '바람', '유성', '폭풍'][Math.floor(Math.random() * 8)] + Math.floor(10 + Math.random() * 90);
 export const cleanNick = (s) => String(s || '').replace(/[<>&"]/g, '').trim().slice(0, 12);
 
 /** 로비 → 레이스로 넘길 정보 (같은 탭 안에서만: sessionStorage) */

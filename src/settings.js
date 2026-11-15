@@ -51,7 +51,7 @@ export const SETTING_DEFS = [
     options: [['auto', '자동'], ['on', '켜기'], ['off', '끄기']], def: 'auto' },
   { group: '터치 (휴대폰)', key: 'touchSteer', label: '터치 조향', desc: '끌기 = 왼쪽 아무 데나 대고 옆으로 끈 만큼 · 버튼 = ◀ ▶', type: 'choice',
     options: [['pad', '끌기'], ['buttons', '버튼']], def: 'pad' },
-  { group: '터치 (휴대폰)', key: 'touchSize', label: '버튼 크기', desc: '휴대폰 가속·브레이크·드리프트 버튼의 크기', type: 'choice',
+  { group: '터치 (휴대폰)', key: 'touchSize', label: '버튼 크기', desc: '휴대폰 가속·브레이크 버튼의 크기', type: 'choice',
     options: [['s', '작게'], ['m', '보통'], ['l', '크게']], def: 'm' },
   { group: '터치 (휴대폰)', key: 'tilt', label: '기울여 조향', desc: '휴대폰을 핸들처럼 좌우로 기울여요 (iPhone은 처음에 허락을 물어요)', type: 'toggle', def: false },
 
@@ -546,7 +546,7 @@ export function createControlsPage(opts = {}) {
       ? `<section class="gm-touchctl"><h3>터치 (휴대폰)</h3>
       ${row('<kbd>◀ ●▶</kbd>', '조향', '화면 왼쪽 아무 데나 손가락을 대고 옆으로 끈 만큼 꺾여요 (설정에서 ◀ ▶ 버튼·기울이기로 바꿀 수 있어요)')}
       ${row('<kbd>▲</kbd><kbd>▼</kbd>', '가속 · 브레이크', '오른쪽 아래 큰 버튼 · 작은 버튼')}
-      ${row('<kbd>💨</kbd>', '드리프트', '비행기일 땐 ⬆ 상승 · ⬇ 하강 버튼이 생겨요')}
+      ${row('<kbd>⬆</kbd><kbd>⬇</kbd>', '상승 · 하강', '비행기일 때만 버튼이 생겨요')}
       ${row('<kbd>👁</kbd><kbd>↺</kbd><kbd>☰</kbd>', '시점 · 복귀 · 메뉴', '오른쪽 위 작은 버튼')}
       </section>`
       : '';
@@ -555,8 +555,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('throttle'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
-      ${row(K('drift'), '드리프트', '꺾으면서 누르기')}
-      ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '파워업 레이스에서 가진 아이템 쓰기 (드리프트로 게이지를 채우면 부스터)') : ''}
+      ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '파워업 레이스에서 가진 아이템 쓰기') : ''}
     </section>
     <section><h3>레이스</h3>
       ${row('<span class="gm-lights"><i></i><i></i><i></i><i></i><i></i></span>', '출발 신호', `빨간불 5개가 꺼지는 순간 ${K('throttle')}! 미리 밟으면 시동이 꺼져요`)}
@@ -581,7 +580,7 @@ export function createControlsPage(opts = {}) {
     <section class="gm-padctl${pad.connected() ? ' on' : ''}"><h3>게임패드 ${pad.connected() ? '<span class="ok">연결됨</span>' : '<small>(연결하고 버튼을 누르면 바로 써요)</small>'}</h3>
       ${row('<kbd class="pad">L 스틱</kbd>', '조향', '기울인 만큼 꺾여요 (설정 → 게임패드에서 데드존·커브)')}
       ${row(pad.html('throttle') + pad.html('brake'), '가속 · 브레이크', '트리거를 밟은 만큼')}
-      ${row(pad.html('drift'), '드리프트 · 이륙/상승', `하강 ${pad.html('dive')}`)}
+      ${row(pad.html('climb'), '이륙 · 상승 (비행)', `하강 ${pad.html('dive')}`)}
       ${actionVisible('booster') ? row(pad.html('booster') + pad.html('respawn'), '아이템 사용 · 복귀') : row(pad.html('respawn'), '도로로 복귀')}
       ${row(pad.html('shiftDown') + pad.html('shiftUp'), '기어 내림 · 올림 (수동)', `자동↔수동 ${pad.html('gearbox')} · 레이싱 라인 ${pad.html('racingLine')} · 시점 ${pad.html('camView')}`)}
       ${row(pad.html('menu') + pad.html('restart'), '메뉴 · 다시 하기(결과 화면)', `메뉴에서는 ${pad.name(0) ? `<kbd class="pad pf pf0">${pad.name(0)}</kbd>` : ''} 고르기 · <kbd class="pad pf pf1">${pad.name(1)}</kbd> 뒤로`)}

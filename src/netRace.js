@@ -121,7 +121,7 @@ export async function startNetRace(game, params) {
     if (pl.opp)
       pl.opp.set({
         pos: s.p, fwd: s.f, up: s.u, speed: s.v, lap: s.l, progress: s.pr, finished: !!s.fin, finishTime: s.ft ?? null, bestLap: s.bl ?? null,
-        mode: s.m, form: s.fo || null, flying: !!s.fl, drifting: !!s.dr,
+        mode: s.m, form: s.fo || null, flying: !!s.fl,
       });
   }
 
@@ -168,7 +168,6 @@ export async function startNetRace(game, params) {
       m: c.mode,
       fo: c.form || 0,
       fl: c.flying ? 1 : 0,
-      dr: c.drifting ? 1 : 0,
       fin: race.phase === 'finished' ? 1 : 0,
       ft: race.phase === 'finished' ? r2(totalTime()) : undefined,
       bl: Number.isFinite(race.best) ? r2(race.best) : undefined,

@@ -7,9 +7,9 @@
 //   2) 물길 양옆 부표 줄 (data.laneBuoys): 예전엔 그냥 장식(콘처럼 보였음) → 이제 "빠른 물" 경계.
 //      부표 밖은 거친 물이라 느려지고, 부표에 박으면 부표가 날아가고 느려짐 (시간이 지나면 제자리로 돌아옴)
 //   3) 물살 레인 (data.currents, boat3 2026-11-15): 물길 부표 줄 바깥의 하늘색 화살표 물결 띠 = 길지만 물이 밀어 주는 다른 길 (car.boatFlow)
-//   4) 배 연출: 꼬리 물기둥(수탉 꼬리), 카빙(드리프트 키) 때 바깥으로 솟는 물벽, 뒤에 남는 거품 자국, 물살 소리·게이트 소리
+//   4) 배 연출: 꼬리 물기둥(수탉 꼬리), 뒤에 남는 거품 자국, 물살 소리·게이트 소리
 //   5) (boat3) 너울 파도 높이(track.updateWaves, 레이스 시계) + 파도 앞 거품 줄(밝으면 지금 가면 꼭대기) + 꼭대기 물보라,
-//      소용돌이(data.whirlpools: 가장자리 = 앞으로 밀고 안쪽으로 돌려 줌, 깊으면 빙글), 착수·카빙 탈출 물보라 고리
+//      소용돌이(data.whirlpools: 가장자리 = 앞으로 밀고 안쪽으로 돌려 줌, 깊으면 빙글), 착수 물보라 고리
 //   게이트 점수는 플레이어만. 물살 레인·소용돌이·파도는 봇도 같은 규칙 (sea 봇 레이스로 복귀·코스 밖·접촉 확인, 2026-11-15)
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -271,14 +271,7 @@ export function createSeaGates(track, scene) {
         tone(95, t, 0.3, 0.22, 'sine', 50);
         noise(t, 0.7, 0.22, 900, 180, 'lowpass');
       },
-      /** (boat3) 카빙 탈출: 물을 차고 나가는 쉬익 + 올라가는 음 */
-      carveExit() {
-        if (!ok()) return;
-        const t = ctx.currentTime;
-        noise(t, 0.45, 0.1, 600, 3000);
-        tone(520, t + 0.05, 0.3, 0.05, 'triangle', 780);
-      },
-      /** 물살 소리: 물 위에서 빠를수록, 카빙할수록 크고 밝게 */
+      /** 물살 소리: 물 위에서 빠를수록 크고 밝게 */
       hiss(level, bright) {
         if (!hiss) return;
         const t = ctx.currentTime;
@@ -647,7 +640,7 @@ export function createSeaGates(track, scene) {
   });
   const foamLineIm = foamLines.length ? true : null;
 
-  // ================================================================ 물보라 입자 (꼬리 물기둥·카빙 물벽·부표 물보라)
+  // ================================================================ 물보라 입자 (꼬리 물기둥·부표 물보라)
   const NP = 1600;
   const pPos = new Float32Array(NP * 3), pVel = new Float32Array(NP * 3), pLife = new Float32Array(NP), pMax = new Float32Array(NP).fill(1);
   const pS0 = new Float32Array(NP), pS1 = new Float32Array(NP), aSize = new Float32Array(NP), aAlpha = new Float32Array(NP);
@@ -701,7 +694,7 @@ export function createSeaGates(track, scene) {
     }
   }
 
-  /** (boat3) 물보라 고리: 둘레로 퍼지는 물방울 + 거품 고리 (착수·카빙 탈출 성공 표시) */
+  /** (boat3) 물보라 고리: 둘레로 퍼지는 물방울 + 거품 고리 (깔끔한 착수 표시) */
   //   (뒤쪽 = 카메라 쪽은 빼고 낮고 작게: 크게 하면 화면이 하얗게 덮였음)
   function ring(x, z, r0, n, power, vx = 0, vz = 0) {
     const vl = Math.hypot(vx, vz) || 1, fx = vx / vl, fz = vz / vl;
@@ -736,8 +729,8 @@ export function createSeaGates(track, scene) {
   const fxState = new WeakMap();
   function carFx(c, dt, near) {
     let st = fxState.get(c);
-    if (!st) fxState.set(c, (st = { acc: 0, cacc: 0, lastX: c.pos.x, lastZ: c.pos.z, foamD: 0 }));
-    // (boat3) 착수·카빙 탈출 순간: 물보라 고리 (플레이어는 소리도)
+    if (!st) fxState.set(c, (st = { acc: 0, lastX: c.pos.x, lastZ: c.pos.z, foamD: 0 }));
+    // (boat3) 착수 순간: 물보라 고리 (플레이어는 소리도)
     const LL = c.lastLanding;
     if (LL && LL.t !== st.landT) {
       st.landT = LL.t;
@@ -750,13 +743,6 @@ export function createSeaGates(track, scene) {
         if (c === carRef) sfx.noseDive();
       } else burst(c.pos, near ? 18 : 8, 0.8);
     }
-    const CE = c.lastCarveExit;
-    if (CE && CE.t !== st.cexT) {
-      st.cexT = CE.t;
-      ring(c.pos.x, c.pos.z, 2, near ? 26 : 12, 0.9, c.vel.x, c.vel.z);
-      for (let k = 0; k < 12; k++) dropFoam(c.pos.x + Math.cos(k * 0.524) * 3.8, c.pos.z + Math.sin(k * 0.524) * 3.8, k * 0.524 + 1.57, 2.2, 3.4, near ? 2.4 : 1.2);
-      if (c === carRef) sfx.carveExit();
-    }
     const onW = c.mode === 'boat' && c.surface === 'water' && c.grounded && c.pos.y < 1.2;
     const sp = Math.hypot(c.vel.x, c.vel.z);
     const moved = Math.hypot(c.pos.x - st.lastX, c.pos.z - st.lastZ);
@@ -764,8 +750,7 @@ export function createSeaGates(track, scene) {
     st.lastZ = c.pos.z;
     if (!onW || sp < 6 || moved > 8) return;
     const fast = clamp01((sp - 10) / 35);
-    const fw = c.fwd, rt = c.right;
-    const cv = c.boatCarve || 0;
+    const fw = c.fwd;
     const rate = near ? 1 : 0.4;
     // 꼬리 물기둥: 선외기 뒤로 솟는 물 (빠를수록 높고 많이)
     st.acc += dt * (14 + 90 * fast) * rate;
@@ -775,22 +760,11 @@ export function createSeaGates(track, scene) {
       const back = 2 + sp * 0.12;
       emit(sx + R(-0.3, 0.3), 0.3, sz + R(-0.3, 0.3), c.vel.x * 0.5 - fw.x * back + R(-1.2, 1.2), R(3, 4) + 7.5 * fast * R(0.7, 1.1), c.vel.z * 0.5 - fw.z * back + R(-1.2, 1.2), R(0.55, 0.9), 0.35, 1.1 + 0.8 * fast);
     }
-    // 카빙 물벽: 도는 반대쪽(바깥)으로 물이 부채처럼 솟음
-    if (cv > 0.15) {
-      const out = -Math.sign(c.yawRate || 0) || 1; // +1 = 오른쪽 바깥
-      st.cacc += dt * 280 * cv * (0.4 + fast) * rate;
-      while (st.cacc >= 1) {
-        st.cacc -= 1;
-        const ox = c.pos.x + rt.x * out * 1.1 - fw.x * R(-0.4, 1.4), oz = c.pos.z + rt.z * out * 1.1 - fw.z * R(-0.4, 1.4);
-        const so = (4 + sp * 0.16) * R(0.7, 1.2);
-        emit(ox, 0.25, oz, c.vel.x * 0.55 + rt.x * out * so, R(2.5, 4.5) + 4 * cv, c.vel.z * 0.55 + rt.z * out * so, R(0.5, 0.9), 0.45, 2.3);
-      }
-    } else st.cacc = 0;
-    // 거품 자국: 2.4 m마다 하나 (카빙하면 넓게)
+    // 거품 자국: 2.4 m마다 하나
     st.foamD += moved;
     if (st.foamD > 2.4) {
       st.foamD = 0;
-      dropFoam(c.pos.x - fw.x * 2.6, c.pos.z - fw.z * 2.6, Math.atan2(fw.x, fw.z), 2.2 + 1.5 * cv, 3.2, (0.35 + 0.65 * fast) * (near ? 1 : 0.7));
+      dropFoam(c.pos.x - fw.x * 2.6, c.pos.z - fw.z * 2.6, Math.atan2(fw.x, fw.z), 2.2, 3.2, (0.35 + 0.65 * fast) * (near ? 1 : 0.7));
     }
   }
 
@@ -1015,9 +989,9 @@ export function createSeaGates(track, scene) {
     // 소리
     if (car) {
       const onW = car.mode === 'boat' && car.surface === 'water' && car.grounded;
-      const sp = Math.abs(car.speed), fast = clamp01((sp - 8) / 40), cv = car.boatCarve || 0;
+      const sp = Math.abs(car.speed), fast = clamp01((sp - 8) / 40);
       const fl = car.flowK > 0 ? 1 : 0;
-      sfx.hiss(onW ? 0.025 + 0.11 * fast + 0.16 * cv + (car.surgeT > 0 ? 0.04 : 0) + 0.05 * fl : 0, clamp01(0.3 * fast + 0.7 * cv + 0.25 * fl));
+      sfx.hiss(onW ? 0.025 + 0.11 * fast + (car.surgeT > 0 ? 0.04 : 0) + 0.05 * fl : 0, clamp01(0.3 * fast + 0.25 * fl));
     }
     if (dt <= 0) return;
 

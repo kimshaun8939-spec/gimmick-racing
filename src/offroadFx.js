@@ -110,7 +110,7 @@ export function createOffroadFx(scene) {
       }
 
       // 도로 위 타이어 연기: 바퀴가 헛돌거나 뒤가 미끄러질 때
-      const smoke = !car.offroad && car.grounded && !car.drifting ? Math.max(car.wheelspin || 0, car.sliding || 0) : 0;
+      const smoke = !car.offroad && car.grounded ? Math.max(car.wheelspin || 0, car.sliding || 0) : 0;
       if (smoke > 0.25) {
         smokeAcc += dt * 18 * smoke;
         const right = car.right;

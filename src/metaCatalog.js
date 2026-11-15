@@ -48,8 +48,10 @@ export const SHOP_CURRENCY = { car: 'pit', part: 'pit', costume: 'custom', paint
 export const CATEGORIES = [ ['all','전체','✦'], ['drive','주행','🏎️'], ['race','레이스','🏁'], ['map','맵 탐험','🗺️'], ['gimmick','기믹','✨'], ['academy','아카데미','🎓'], ['collect','수집','🎨'], ['secret','숨은 업적','🔮'] ];
 const medals = ['동','은','금'];
 export const ACHIEVEMENTS = [];
-function series(id, category, name, metric, goals, unit, icon, title) {
-  goals.forEach((goal,i) => ACHIEVEMENTS.push({ id: id+'-'+(i+1), family:id, category, name:name+' '+['I','II','III'][i], metric, goal, unit, icon, tier:i+1, medal:medals[i], coins:ECON.achievement[i].pit, reward:{...ECON.achievement[i]}, xp:[25,60,140][i], title:i===2?title:null }));
+/** 없앤 기능의 업적 (2026-11-15 드리프트): 목록·개수엔 안 셈. 이미 받은 칭호를 계속 보여 주려고 meta.title()만 찾아봄 */
+export const RETIRED_ACHIEVEMENTS = [];
+function series(id, category, name, metric, goals, unit, icon, title, list = ACHIEVEMENTS) {
+  goals.forEach((goal,i) => list.push({ id: id+'-'+(i+1), family:id, category, name:name+' '+['I','II','III'][i], metric, goal, unit, icon, tier:i+1, medal:medals[i], coins:ECON.achievement[i].pit, reward:{...ECON.achievement[i]}, xp:[25,60,140][i], title:i===2?title:null }));
 }
 series('road','drive','끝없이 달려요','distance',[5000,50000,250000],'m','🛣️','로드 트래블러');
 series('pace','drive','바람보다 빠르게','maxSpeed',[150,220,280],'km/h','⚡','스피드 스타');
@@ -59,7 +61,8 @@ series('finish','race','체커기를 향해','races',[1,15,75],'회','🏁','완
 series('podium','race','시상대 단골','podiums',[1,10,40],'회','🥈','포디움 헌터');
 series('win','race','가장 먼저 도착','wins',[1,5,25],'회','🏆','체커 챔피언');
 series('hard','race','진짜 승부사','hardWins',[1,5,15],'회','👑','마스터 브레이커');
-series('drift','gimmick','옆으로도 질주','driftDistance',[200,2000,15000],'m','🌀','드리프트 마에스트로');
+// 드리프트를 없애면서 뺌 (2026-11-15, 사용자 요청): 예전에 받은 칭호만 남김
+series('drift','gimmick','옆으로도 질주','driftDistance',[200,2000,15000],'m','🌀','드리프트 마에스트로', RETIRED_ACHIEVEMENTS);
 series('sea','gimmick','파도 위의 레이서','boatDistance',[300,3000,20000],'m','🚤','파도 지배자');
 series('flight','gimmick','하늘도 서킷','flyDistance',[200,2000,12000],'m','✈️','스카이 캡틴');
 series('form','gimmick','변신은 나의 힘','transforms',[5,50,250],'회','🔧','메타모포시스');
@@ -76,9 +79,11 @@ for (const a of [
  {id:'secret-triple',name:'세 가지 세계',metric:'threeForms',goal:1,hint:'한 레이스에서 땅·물·하늘을 모두 달려 보세요.',title:'트리플 모드'},
  {id:'secret-comeback',name:'끝까지 포기하지 마',metric:'comebacks',goal:1,hint:'한때 꼴찌였다가 시상대에 올라 보세요.',title:'역전의 주인공'},
  {id:'secret-s',name:'마스터의 증명',metric:'licenseS',goal:1,hint:'아카데미에서 가장 높은 라이선스를 따 보세요.',title:'S 마스터'},
- {id:'secret-night',name:'별이 빛나는 질주',metric:'nightFinishes',goal:1,hint:'밤 10시부터 새벽 5시 사이에 완주해 보세요.',title:'나이트 레이서'},
- {id:'secret-exit',name:'미끄러짐의 미학',metric:'perfectDrifts',goal:5,hint:'좋은 각도로 드리프트를 마무리해 보세요.',title:'사이드웨이즈'}
+ {id:'secret-night',name:'별이 빛나는 질주',metric:'nightFinishes',goal:1,hint:'밤 10시부터 새벽 5시 사이에 완주해 보세요.',title:'나이트 레이서'}
 ]) ACHIEVEMENTS.push({...a,category:'secret',family:a.id,unit:'회',icon:'🔮',tier:3,medal:'금',coins:ECON.secret.pit,reward:{...ECON.secret},xp:100,secret:true});
+// 드리프트 숨은 업적도 뺌 (2026-11-15): 칭호만 남김
+RETIRED_ACHIEVEMENTS.push({id:'secret-exit',name:'미끄러짐의 미학',metric:'perfectDrifts',goal:5,title:'사이드웨이즈',category:'secret',family:'secret-exit',unit:'회',icon:'🔮',tier:3,medal:'금',secret:true,retired:true});
+for (const a of RETIRED_ACHIEVEMENTS) a.retired = true;
 // 월드 투어 금메달은 F1 클래식 복장도 증정. 레벨 조건은 유지되어 Lv5부터 착용.
 ACHIEVEMENTS.find(a=>a.id==='explorer-3').costume='f1-heritage';
 export const CELEBRATIONS = [
@@ -99,7 +104,7 @@ export const GOAL_POOLS = {
  daily:[
  {metric:'distance',goal:5000,name:'오늘의 드라이브',unit:'m',icon:'🛣️'},
  {metric:'races',goal:2,name:'두 번의 체커기',unit:'회',icon:'🏁'},
- {metric:'driftDistance',goal:500,name:'사이드 스텝',unit:'m',icon:'🌀'},
+ {metric:'transforms',goal:6,name:'오늘의 변신',unit:'회',icon:'🔧'},
  {metric:'podiums',goal:1,name:'시상대에 서기',unit:'회',icon:'🥉'},
  {metric:'boatDistance',goal:800,name:'파도 산책',unit:'m',icon:'🚤'},
  {metric:'academySessions',goal:1,name:'오늘도 한 가지 배움',unit:'개',icon:'🎓'},
@@ -110,7 +115,7 @@ export const GOAL_POOLS = {
  {metric:'distance',goal:50000,name:'주간 로드 트립',unit:'m',icon:'🧭'},
  {metric:'races',goal:8,name:'레이스 위크',unit:'회',icon:'🏁'},
  {metric:'podiums',goal:3,name:'시상대 수집가',unit:'회',icon:'🏆'},
- {metric:'driftDistance',goal:3000,name:'드리프트 위크',unit:'m',icon:'🌀'},
+ {metric:'transforms',goal:40,name:'변신 위크',unit:'회',icon:'🔧'},
  {metric:'boatDistance',goal:5000,name:'코스트 투어',unit:'m',icon:'🌊'},
  {metric:'apex',goal:80,name:'코너 마스터 클래스',unit:'회',icon:'↪'}
  ]

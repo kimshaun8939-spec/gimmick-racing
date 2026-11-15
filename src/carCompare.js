@@ -10,7 +10,6 @@ const STATS = [
  ['handling','핸들링','방향 전환과 조향 반응'],
  ['grip','접지력','150 km/h에서 옆 가속 한계','lateral150','m/s²',1],
  ['brake','브레이크','100→0 km/h · 짧을수록 좋음','brake100M','m',0],
- ['drift','드리프트','미끄러짐을 유지하기 쉬운 정도'],
  ['offroad','험한 길','잔디에서 속도 유지율','offroadKeep','%',0],
  ['boat','배 성능','물 위 최고 속도','boatKmh','km/h',0],
 ];
@@ -37,8 +36,8 @@ export function createCarCompare({ host, cars, classOf, isOpen, onPick, onVisibi
   uiSound('back');
  }
  function summary(list) {
-  if(list.length<2)return '차를 한 대 더 넣으면 8가지 성능을 바로 비교할 수 있어요.';
-  const phrases={speed:'직선 속도',accel:'출발 가속',handling:'방향 전환',grip:'코너 접지력',brake:'제동',drift:'드리프트 유지',offroad:'잔디 주행',boat:'물 위 주행'};
+  if(list.length<2)return '차를 한 대 더 넣으면 7가지 성능을 바로 비교할 수 있어요.';
+  const phrases={speed:'직선 속도',accel:'출발 가속',handling:'방향 전환',grip:'코너 접지력',brake:'제동',offroad:'잔디 주행',boat:'물 위 주행'};
   const parts=list.map(c=> {
    const ranked=STATS.map(([key])=>({key,d:statScore(c.stats,key)-Math.max(...list.filter(o=>o!==c).map(o=>statScore(o.stats,key)))})).sort((a,b)=>b.d-a.d);
    return ranked[0].d>0 ? c.name+'는 '+phrases[ranked[0].key]+'에 강해요' : '';
@@ -63,7 +62,7 @@ export function createCarCompare({ host, cars, classOf, isOpen, onPick, onVisibi
     const actual=Number.isFinite(raw)?raw.toFixed(digits)+' <small>'+unit+'</small>':(key==='handling'?'조향 반응 점수':'유지 용이성 점수');
     return '<div class="cp-value'+(win?' is-win':'')+'" style="--cp-color:'+COLORS[i]+'" aria-label="'+esc(c.name)+' '+value+'점 '+verdict+'"><div class="cp-score"><strong>'+value+'</strong><span class="'+(win?'cp-win':diff<0?'cp-loss':'')+'">'+verdict+'</span></div><div class="cp-bar" role="meter" aria-label="'+esc(c.name)+' '+label+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+value+'"><i style="width:'+value+'%"></i></div><div class="cp-actual">'+actual+'</div></div>';
    }).join('')+'</section>';
-  }).join('')+'</div><div class="cp-summary"><b>나에게 맞는 선택</b><p>'+esc(summary(list))+'</p></div><details class="cp-method"><summary data-nav>예상 수치와 비교 기준 안내</summary><p>모든 차를 같은 평지 조건으로 계산한 예상 성능이며 실제 주행 기록과 달라요. 가속 변신을 포함하고 부스터·견인은 제외해요. 100점 점수는 전체 차량 사이의 상대 성능이에요. 초·제동 거리는 짧을수록, 나머지 수치는 클수록 좋아요. 우세와 차이는 100점 점수를 기준으로 표시해요.</p><p>핸들링은 조향·입력·회전 반응, 드리프트는 미끄러짐 유지 용이성이에요. 이 두 항목은 실제 단위 대신 점수로 비교해요. 접지력은 150 km/h에서의 옆 가속 한계예요.</p></details></div><footer class="cp-foot"><span>↑↓←→ 이동 · Enter / A 확인 · Esc / B 뒤로<span class="cp-scrollhint">아래로 스크롤해 8개 항목 비교</span></span>'+(list.length<3?btn('change','＋ 차 추가','data-slot="'+list.length+'"'):'<span>3대 비교 중</span>')+'</footer>';
+  }).join('')+'</div><div class="cp-summary"><b>나에게 맞는 선택</b><p>'+esc(summary(list))+'</p></div><details class="cp-method"><summary data-nav>예상 수치와 비교 기준 안내</summary><p>모든 차를 같은 평지 조건으로 계산한 예상 성능이며 실제 주행 기록과 달라요. 가속 변신을 포함하고 부스터·견인은 제외해요. 100점 점수는 전체 차량 사이의 상대 성능이에요. 초·제동 거리는 짧을수록, 나머지 수치는 클수록 좋아요. 우세와 차이는 100점 점수를 기준으로 표시해요.</p><p>핸들링은 조향·입력·회전 반응이에요. 이 항목은 실제 단위 대신 점수로 비교해요. 접지력은 150 km/h에서의 옆 가속 한계예요.</p></details></div><footer class="cp-foot"><span>↑↓←→ 이동 · Enter / A 확인 · Esc / B 뒤로<span class="cp-scrollhint">아래로 스크롤해 7개 항목 비교</span></span>'+(list.length<3?btn('change','＋ 차 추가','data-slot="'+list.length+'"'):'<span>3대 비교 중</span>')+'</footer>';
   if(focusSelector)focus(focusSelector);
   photos(list);
  }

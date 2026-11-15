@@ -52,7 +52,7 @@ export function createReplay(o) {
       d[b + 6] = v.up.x; d[b + 7] = v.up.y; d[b + 8] = v.up.z;
       d[b + 9] = v.forwardSpeed ?? v.speed ?? 0;
       d[b + 10] = v.steerVisual || 0;
-      d[b + 11] = Math.max(0, MODES.indexOf(v.mode)) + (v.form === 'spike' ? 8 : 0) + (v.drifting ? 16 : 0) + (v.flying ? 32 : 0) + (v.grounded === false ? 0 : 64);
+      d[b + 11] = Math.max(0, MODES.indexOf(v.mode)) + (v.form === 'spike' ? 8 : 0) + (v.flying ? 32 : 0) + (v.grounded === false ? 0 : 64);
       d[b + 12] = v.thr || 0;
     });
     frames.push({ t: clock, d });
@@ -165,7 +165,6 @@ export function createReplay(o) {
       const fl = (w < 0.5 ? a : c)[b + 11];
       v.mode = MODES[fl & 7] || 'normal';
       v.form = fl & 8 ? 'spike' : null;
-      v.drifting = !!(fl & 16);
       v.flying = !!(fl & 32);
       v.grounded = !!(fl & 64);
     });

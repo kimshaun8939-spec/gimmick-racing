@@ -674,7 +674,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
    * ctx = { since: 출발 신호 뒤 시간, dt, me: { progM, lat }, others: [{ progM, lat, speed }], finished }
    */
   function controls(ctx) {
-    const c = { throttle: 1, brake: 0, steer: 0, drift: false, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
+    const c = { throttle: 1, brake: 0, steer: 0, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
     const dt = ctx.dt;
     st.t += dt;
     const ti = car.trackInfo;

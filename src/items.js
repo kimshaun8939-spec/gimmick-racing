@@ -1,9 +1,8 @@
-// 아이템전 (?mode=item): 봇 레이스 + 아이템 상자·아이템 5종·드리프트 게이지
+// 아이템전 (?mode=item): 봇 레이스 + 아이템 상자·아이템 5종 (드리프트 게이지는 2026-11-15에 없앰)
 //   - 상자: 코스 직선 6~9곳에 4개씩 한 줄 (샘플에서 자동으로 고름: 점프·물·자석·루프·포털 근처는 뺌)
 //   - 아이템: 🚀 부스터 / 🛡 방어막 / 🛢 기름 웅덩이 / 🎯 유도 로켓 / ⚡ 전기 충격 (뒤쪽 순위만)
 //   - 맞으면 가던 방향 그대로 속도만 줄어듦 (옆으로 안 밀림 → 낭떠러지에서 안 떨어짐)
-//   - 드리프트 게이지: 드리프트로 채우면 부스터 1개
-//   - 화면(슬롯·게이지·경고)은 이 파일이 직접 만듦. 값은 아래 CFG (물리 값 3개는 data/car.json "items")
+//   - 화면(슬롯·경고)은 이 파일이 직접 만듦. 값은 아래 CFG (물리 값 3개는 data/car.json "items")
 import * as THREE from 'three';
 
 export const ITEMS = {
@@ -29,7 +28,6 @@ export const CFG = {
   rocketSlow: 0.6, rocketSpeed: 30, rocketMin: 75, rocketLife: 8, rocketRange: 500,
   shockSec: 2,
   immuneBot: 2, immunePlayer: 6, // 한 번 맞은 뒤 다시 안 맞는 시간 (플레이어는 길게 = 연속으로 안 맞게)
-  gaugeFill: 5, // 드리프트 이만큼(초) 하면 게이지 가득 (좋은 코너 2~3개)
 };
 
 export function createItems(o) {
@@ -222,7 +220,7 @@ export function createItems(o) {
       const flame = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
       aura.visible = flame.visible = false;
       root.add(aura, flame);
-      s = { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, thinkT: Math.random() * 0.3, useAt: 0, gauge: 0, aura, flame, hits: 0, used: 0, picked: 0 };
+      s = { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, thinkT: Math.random() * 0.3, useAt: 0, aura, flame, hits: 0, used: 0, picked: 0 };
       states.set(e, s);
     }
     return s;
@@ -462,15 +460,7 @@ export function createItems(o) {
       if (s.immuneT > 0) s.immuneT -= dt;
       if (s.shockT > 0) s.shockT -= dt;
       if (s.slots[0]) s.holdT += dt;
-      if (isMe(e)) {
-        // 드리프트 게이지
-        if (!e.finished && c.drifting && c.grounded && Math.abs(c.speed) > 12) s.gauge = Math.min(1, s.gauge + dt / CFG.gaugeFill);
-        if (s.gauge >= 1 && giveTo(e, 'boost', true)) {
-          s.gauge = 0;
-          say('🔥 드리프트 게이지 가득! 부스터 획득');
-          sfx('ready');
-        }
-      } else if (!e.finished && s.slots[0] && s.roulT <= 0) {
+      if (!isMe(e) && !e.finished && s.slots[0] && s.roulT <= 0) {
         s.thinkT -= dt;
         if (s.thinkT <= 0) {
           s.thinkT = 0.3;
@@ -575,9 +565,6 @@ export function createItems(o) {
 #itemHud .slot.pop { transform: scale(1.18); }
 #itemHud .slot kbd { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); font: 800 11px/1 system-ui, sans-serif; padding: 2px 6px; border-radius: 6px; background: #fff; color: #111; white-space: nowrap; }
 #itemHud .col { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-#itemHud .gauge { width: 120px; height: 12px; border-radius: 7px; background: rgba(10, 14, 26, 0.72); border: 1px solid rgba(255,255,255,0.35); overflow: hidden; }
-#itemHud .gauge i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #ffb13a, #ff5a2a); transition: width 0.1s linear; }
-#itemHud .gl { font: 800 11px/1 system-ui, sans-serif; color: #ffe1b0; text-shadow: 0 1px 2px #000; }
 #itemHud .fx { font: 800 12px/1 system-ui, sans-serif; color: #9fe8ff; text-shadow: 0 1px 2px #000; min-height: 12px; }
 #itemWarn { position: fixed; left: 50%; top: 24%; transform: translateX(-50%); padding: 8px 22px; border-radius: 12px; background: rgba(200, 30, 20, 0.85); color: #fff; font: 900 26px/1.1 system-ui, sans-serif; letter-spacing: 0.04em; z-index: 6; pointer-events: none; display: none; animation: itemWarnBlink 0.35s steps(2) infinite; }
 @keyframes itemWarnBlink { 50% { opacity: 0.45; } }
@@ -590,13 +577,13 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
   document.body.classList.add('item-race');
   const box = document.createElement('div');
   box.id = 'itemHud';
-  box.innerHTML = `<div class="col"><div class="fx" role="status"></div><div class="item-name"></div><div class="gl">🔥 드리프트 게이지</div><div class="gauge"><i></i></div></div><div class="slot s2" title="다음 아이템 · 지금 것을 쓰면 이 칸이 앞으로 와요"></div><button type="button" class="slot s1" aria-label="아이템 사용"><span></span><kbd></kbd></button>`;
+  box.innerHTML = `<div class="col"><div class="fx" role="status"></div><div class="item-name"></div></div><div class="slot s2" title="다음 아이템 · 지금 것을 쓰면 이 칸이 앞으로 와요"></div><button type="button" class="slot s1" aria-label="아이템 사용"><span></span><kbd></kbd></button>`;
   document.body.appendChild(box);
   const warn = document.createElement('div');
   warn.id = 'itemWarn';
   warn.textContent = '⚠ 로켓!';
   document.body.appendChild(warn);
-  const el = { s1: box.querySelector('.s1'), s1i: box.querySelector('.s1 span'), kbd: box.querySelector('kbd'), s2: box.querySelector('.s2'), g: box.querySelector('.gauge i'), fx: box.querySelector('.fx') };
+  const el = { s1: box.querySelector('.s1'), s1i: box.querySelector('.s1 span'), kbd: box.querySelector('kbd'), s2: box.querySelector('.s2'), fx: box.querySelector('.fx') };
   for (const ev of ['pointerdown', 'touchstart']) {
     el.s1.addEventListener(ev, (x) => {
       x.stopPropagation();
@@ -604,7 +591,7 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
     }, { passive: false });
   }
   el.s1.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); usePlayer(); });
-  let roulI = 0, roulAcc = 0, lastG = -1, lastFx = '', warnOn = false;
+  let roulI = 0, roulAcc = 0, lastFx = '', warnOn = false;
   function drawHud(dt) {
     const s = st(raceSys.me);
     if (s.roulT > 0) {
@@ -630,8 +617,6 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
       el.s2.setAttribute('aria-label', s.slots[1] ? '다음 아이템: ' + ITEMS[s.slots[1]].name : '다음 아이템 없음');
       hudDirty = false;
     }
-    const g = Math.round(s.gauge * 100);
-    if (g !== lastG) el.g.style.width = (lastG = g) + '%';
     const c = carOf(raceSys.me);
     if (s.noticeT > 0) s.noticeT = Math.max(0, s.noticeT - dt);
     const fx = s.noticeT > 0 ? s.notice : s.shieldT > 0 ? `🛡 ${Math.ceil(s.shieldT)}초` : c.itemBoostT > 0 ? '🚀 부스터!' : c.itemSlowT > 0 ? '⚡ 감전!' : '';
@@ -692,7 +677,7 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
   }
   function reset() {
     for (const s of states.values()) {
-      Object.assign(s, { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, gauge: 0, shockT: 0, hitFxT: 0, noticeT: 0, notice: '', hits: 0, used: 0, picked: 0 });
+      Object.assign(s, { slots: [null, null], roulT: 0, shieldT: 0, immuneT: 0, holdT: 0, shockT: 0, hitFxT: 0, noticeT: 0, notice: '', hits: 0, used: 0, picked: 0 });
       s.aura.visible = s.flame.visible = false;
     }
     for (const e of racers()) {
@@ -833,7 +818,7 @@ body.touch-on #itemHud { left: 50%; bottom: auto; top: 70px; transform: translat
     },
     get state() {
       const s = st(raceSys.me);
-      return { slots: s.slots.slice(), gauge: s.gauge, shield: s.shieldT, roulette: s.roulT, rank: rankOf(raceSys.me), boxes: nBox, rows: rows.length, hits: s.hits, used: s.used, picked: s.picked };
+      return { slots: s.slots.slice(), shield: s.shieldT, roulette: s.roulT, rank: rankOf(raceSys.me), boxes: nBox, rows: rows.length, hits: s.hits, used: s.used, picked: s.picked };
     },
     botStates() {
       return raceSys.bots.map((b) => {

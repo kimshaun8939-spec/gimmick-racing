@@ -360,3 +360,6 @@
 @media (prefers-reduced-motion:reduce){.pu-stars.lv5{animation:none}.ufx-banner,.pu-up-result,.ufx-ok .ufx-pct{animation:none!important}.ufx-no .ufx-fill{animation:none}}
 @media (max-height:520px){.ufx-banner{bottom:4%;padding:6px 16px}.ufx-banner b{font-size:19px}.ufx-img .ufx-pct{font-size:26px}.ufx-lab small{font-size:10px}}
 .ufx-img.ufx-ok .ufx-lab,.ufx-img.ufx-no .ufx-lab{opacity:0;transition:opacity .2s}
+/* partslock 2026-11-15: 모든 부품이 레벨 부족인 칸 = 잠금 (흐림 + 🔒 Lv.n), 누르면 짧은 안내 */
+#home .pu-slots button.pu-slotlock,.pu-slots button.pu-slotlock{opacity:.55;cursor:not-allowed;background:repeating-linear-gradient(135deg,#121c2c 0 7px,#162236 7px 14px);border-style:dashed}#home .pu-slots .pu-slotlock small,.pu-slots .pu-slotlock small{color:#ffcf81}#home .ct-pane[data-pane="parts"]{position:relative}.pu-slotmsg{position:absolute;left:0;z-index:6;box-shadow:0 6px 18px #0008;margin:0;padding:6px 9px;border-radius:8px;background:#2a1f0e;border:1px solid #ffcf8155;color:#ffdf9e;font-size:11px;line-height:1.35}.pu-slotmsg[hidden]{display:none}
+@media(max-width:600px){#home .ct-tab.ct-parts.fg-locked .fg-tabtag{display:none}#home .ct-tab.ct-parts.fg-locked>span::before{content:'🔒';margin-right:2px;font-size:.85em}}

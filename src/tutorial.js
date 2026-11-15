@@ -18,7 +18,7 @@ import { pad, padKbd } from './gamepad.js';
 import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
 import { touch, touchWanted } from './touch.js';
-import { cornerPlan, createCoachUI, createDemo, createDrill, momentText, kbd as kbdTd } from './tutorialDemo.js';
+import { cornerPlan, createCoachUI, createDemo, createDrill, momentText, kbd as kbdTd, demoButtonsHtml } from './tutorialDemo.js';
 import { needOf, smartProfile, coachSpeed } from './brakeNeed.js';
 import { TUTORIAL_TEXT } from './academyText.js';
 import { shortCard, shortKeys } from './academyCards.js';
@@ -28,7 +28,7 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // 지금 정한 키 (<kbd>). 패드를 쓰는 중이면 패드 버튼
 // 휴대폰(터치 버튼)이면 화면 버튼 이름으로
-const TOUCH_LBL = { menu: '☰ 메뉴', camView: '👁 시점', throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
+const TOUCH_LBL = { menu: '☰ 메뉴', camView: '👁 시점', throttle: '▲ 가속', brake: '▼ 브레이크', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
 const onTouch = () => !pad.usingPad() && touchWanted();
 const TK = (id) => (onTouch() && TOUCH_LBL[id] ? `<kbd>${TOUCH_LBL[id]}</kbd>` : null);
 // 운전 키(가속·브레이크·좌우)는 W와 ↑처럼 기본·보조 키를 같이 보여 줌 (방향키로 하는 사람도 있어서)
@@ -121,8 +121,6 @@ export function startTutorial(game) {
       const score = ([p, c]) => (p.drop > 1.5 ? 2 : 0) + (c.drop > 1.5 ? 2 : 0) + (p === brakeC || c === brakeC || p === apexC || c === apexC ? -3 : 0) + (c.vMin < 47 ? 1 : 0);
       return pairs.sort((a, b) => score(b) - score(a))[0] || null;
     })(),
-    // 드리프트: 땅 위에서 가장 느린 코너 (헤어핀)
-    drift: corners.filter(groundCorner).sort((a, b) => a.vMin - b.vMin)[0] || null,
     // 가속 모드: 땅 위에서 가장 긴 직선
     straight: (() => {
       if (!line || !line.curvature) return null;
@@ -316,7 +314,7 @@ export function startTutorial(game) {
     add({
       id: 'boatIntro', ic: '🚤', chip: '배 모드', title: '바다에서는 배로 변신!', info: true,
       card: () => `<p>이 코스에는 <b>바다 구간</b>이 있어요. 물에 닿으면 차가 <b>자동으로 배</b>로 변신하고, 땅에 올라오면 다시 차가 돼요.</p>
-        ${SVG.forms}<p class="tut-tip">💡 배는 물살에 살짝 미끄러져요. 꺾으면서 ${K('drift')}를 누르면 더 빨리 돌아요(카빙). 파도는 오르내려요: 앞의 하얀 거품 줄이 밝을 때 타면 높이 날아요. 부표 줄 밖 하늘색 물살 길은 밀어 주는 다른 길이에요(안 타도 괜찮아요).</p>`,
+        ${SVG.forms}<p class="tut-tip">💡 배는 물살에 살짝 미끄러져요. 굽은 물길에선 미리 조금씩 꺾어요. 파도는 오르내려요: 앞의 하얀 거품 줄이 밝을 때 타면 높이 날아요. 부표 줄 밖 하늘색 물살 길은 밀어 주는 다른 길이에요(안 타도 괜찮아요).</p>`,
       go: '연습하러 가기',
     });
     add({
@@ -361,7 +359,7 @@ export function startTutorial(game) {
     add({
       id: 'welcome', ic: '🏁', chip: '시작', title: '첫 출발, 같이 해 봐요!', info: true,
       card: () => `<p>약 <b>7분</b> 동안 운전하는 법부터 <b>진짜 레이스처럼 코너 도는 법</b>까지 하나씩 해 봐요. 게임을 처음 해도 괜찮아요!</p>
-        <ul class="tut-list"><li>🎮 출발 · 가속 · 핸들 · 브레이크</li><li>🟩 라인 색 읽기</li><li>🎬 시범 주행 (슬로 모션)</li><li>🏎️ 따라 하기 → 성적표</li><li>💨 드리프트 · 변신</li><li>🧭 복귀 · 메뉴</li></ul>
+        <ul class="tut-list"><li>🎮 출발 · 가속 · 핸들 · 브레이크</li><li>🟩 라인 색 읽기</li><li>🎬 시범 주행 (슬로 모션)</li><li>🏎️ 따라 하기 → 성적표</li><li>🔄 자동 변신</li><li>🧭 복귀 · 메뉴</li></ul>
         <p class="tut-tip">💡 막혀도 괜찮아요: 실패하면 <b>그 자리로 자동으로 돌아가고</b>, 도움말이 떠요. 미션마다 <b>건너뛰기</b>도 있어요. ${K('restart')} = 그 미션 다시.</p>
         ${pad.connected()
           ? `<p class="tut-tip tut-pad">🎮 게임패드 OK! ${pad.html('throttle')} 가속 · ${pad.html('brake')} 브레이크 · <kbd class="pad">L 스틱</kbd> 조향 · 설명 카드는 ${padKbd(0)}로 넘겨요</p>`
@@ -541,58 +539,6 @@ export function startTutorial(game) {
         hard: true,
       });
     }
-    const D = SPOT.drift;
-    if (D && line) {
-      // 드리프트 기초: 꺾으면서 드리프트 키 → 조금이라도 미끄러지면 성공 (깔끔한 탈출은 보너스)
-      const DCf = car.cfg.drift || {};
-      const skill = Array.isArray(DCf.holdAngle) && typeof car.driftAngle === 'number';
-      const WIN = skill ? DCf.holdAngle : [0.28, 0.75];
-      const SPIN = DCf.spinAngle || 1.15, EXIT = DCf.exitAngle || 0.6;
-      const deg = (r) => Math.round((r * 180) / Math.PI);
-      const NEED = 0.6;
-      add({
-        id: 'drift', ic: '💨', chip: '드리프트', title: '드리프트 맛보기',
-        card: () => `${driftSvg(WIN, SPIN, EXIT)}
-          <p>느린 헤어핀에서 ${STEER()}로 꺾으면서 ${K('drift')}를 누르면 <b>꼬리가 미끄러지며</b> 돌아요.</p>
-          <ul class="tut-list"><li>① 코너에서 꺾기</li><li>② ${K('drift')} 꾹</li><li>③ 너무 돌면 반대로 살짝</li><li>④ 펴면서 놓기</li></ul>
-          <p class="tut-tip">💡 이번엔 <b>${NEED}초만 미끄러지면</b> 성공이에요. 초록 칸(${deg(WIN[0])}~${deg(WIN[1])}°)에서 버티다 펴고 놓으면 <b>깔끔한 탈출</b> 보너스! 레이스에선 아주 급한 코너에서만 짧게 써요.</p>`,
-        go: `${cname(D)} 헤어핀으로`,
-        task: () => `${cname(D)} 에서 꺾으면서 ${KK('drift')} → <b>${NEED}초</b> 미끄러지기!`,
-        goals: [`드리프트 ${NEED}초`],
-        keys: true,
-        slowable: true,
-        setup(s) {
-          s.i0 = W(D.startI - M(200));
-          placeRolling(s.i0, 0.95);
-          s.dExit = fwd(s.i0, D.exitI);
-          s.t = 0;
-        },
-        update(dt, s) {
-          const d = fwd(s.i0, idxNow());
-          if (seen.includes('respawn')) return 'fail:길을 벗어났어요';
-          if (car.drifting) s.t += dt;
-          s.p = Math.min(1, s.t / NEED);
-          if (seen.includes('driftSpin')) setHint('스핀! 다음엔 반대로 살짝 꺾어(카운터) 각도를 줄여요', true);
-          if (seen.includes('driftExit')) {
-            const info = car.lastDriftInfo || {};
-            s.after = info.gain > 0.3 ? `깔끔한 탈출! +${Math.round(info.gain * 3.6)} km/h` : '깔끔한 탈출!';
-            if (s.t >= 0.2) return 'done';
-          }
-          if (s.t >= NEED && !car.drifting) {
-            s.after = s.after || '드리프트 성공!';
-            return 'done';
-          }
-          if (d < track.length / 2 && d > s.dExit + 40) return s.t >= NEED ? 'done' : s.t > 0 ? `fail:조금 더 길게! (${s.t.toFixed(1)}초)` : 'fail:코너에서 핸들을 꺾은 채로 드리프트 키를 꾹';
-          return null;
-        },
-        progress: (s) => [s.t >= NEED],
-        bar: (s) => s.p || 0,
-        gauge: skill ? () => driftGauge(car, WIN, SPIN, EXIT) : null,
-        after: '드리프트!',
-        hard: true,
-        hint: (f) => (f >= 2 ? `브레이크로 속도를 줄인 다음, 코너 안쪽으로 ${STEER()} 꺾고 바로 ${K('drift')}` : `핸들을 꺾은 상태에서 ${K('drift')}를 눌러야 미끄러져요`),
-      });
-    }
     add({
       id: 'forms', ic: '🔄', chip: '자동 변신', title: '차가 알아서 변신해요', info: true,
       card: () => `${SVG.forms}<p>변신은 모두 <b>자동</b>이에요. 운전만 하면 돼요. 화면 아래 버튼은 지금 모드를 보여 줄 뿐이에요.</p>
@@ -736,9 +682,9 @@ export function startTutorial(game) {
     });
   }
 
-  // 입문 코스: 기본 조작·드리프트 맛보기·메뉴·레이스의 자동 도움까지. 정교한 코너는 아카데미에서 이어 해요.
+  // 입문 코스: 기본 조작·메뉴·레이스의 자동 도움까지 (드리프트 단계는 2026-11-15에 없앰). 정교한 코너는 아카데미에서 이어 해요.
   if (quick) {
-    const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'drift', 'forms', 'accel', 'fly', 'respawn', 'menu', 'modes', 'done']);
+    const keep = new Set(['welcome', 'start', 'gas', 'steer', 'stop', 'line', 'forms', 'accel', 'fly', 'respawn', 'menu', 'modes', 'done']);
     for (let i = STEPS.length - 1; i >= 0; i--) if (!keep.has(STEPS[i].id)) STEPS.splice(i, 1);
     const intro = STEPS.find((x) => x.id === 'welcome');
     if (intro) intro.card = () => '<p>딱 필요한 것만, <b>약 3~5분</b> 함께 달려 봐요.</p><div class="nq-roadmap"><span>① 불이 꺼지면 출발</span><span>② 핸들은 짧게 톡톡</span><span>③ 빨강은 브레이크</span><span>④ 차가 알아서 변신!</span></div><p class="tut-tip">막히면 건너뛰어도 괜찮아요. 레이스는 시험이 아니에요. 마치면 넓은 빙하 코스에서 쉬운 봇 3대와 첫 레이스!</p>';
@@ -804,7 +750,7 @@ export function startTutorial(game) {
 
   function cardFrame(s, chip) {
     phase = 'card';
-    $('.tut-card').classList.remove('ac-short-frame');
+    $('.tut-card').classList.remove('ac-short-frame', 'td-sumcard');
     stopAuto();
     pause(true);
     try {
@@ -902,13 +848,16 @@ export function startTutorial(game) {
     const P = cornerPlan(game, SPOT.demo, 330);
     demo = createDemo(game, P, coach, () => placeRolling(P.i0, 0.95));
     demo.start();
-    coach.buttons(`<button class="gm-btn small" data-t="demoAgain">↺ 처음부터 <kbd>${esc(keybinds.main('restart'))}</kbd></button><button class="gm-btn small" data-t="demoSkip">${returnTo != null ? '돌아가기 ›' : '건너뛰기 ›'}</button>`);
+    // 시범 조작 (2026-11-15, 아카데미와 같은 엔진): ⏸ 멈춤/▶ 계속(Space·P) · ↺ 처음부터(R) · 🐢 천천히/보통
+    coach.buttons(`${demoButtonsHtml(keybinds.main('respawn'))}<button class="gm-btn small" data-t="demoSkip">${returnTo != null ? '돌아가기 ›' : '건너뛰기 ›'}</button>`);
   }
   function demoDone(skipped) {
+    const sum = !skipped && demo && demo.summaryHtml ? demo.summaryHtml() : '';
     stopAuto();
     coach.hide();
     const s = STEPS[cur];
     if (!skipped) doneSet.add(s.id);
+    if (sum.includes('<li')) return showDemoSummary(s, sum);
     if (returnTo != null) {
       cur = returnTo;
       returnTo = null;
@@ -923,6 +872,19 @@ export function startTutorial(game) {
     void burst.offsetWidth;
     burst.classList.add('on');
     chime(true);
+  }
+  /** 요점 카드: 방금 시범의 자막들을 순서대로 → [다시 보기] / [따라 하기 ›] (2026-11-15) */
+  function showDemoSummary(s, sum) {
+    cardFrame(s, `${cur + 1} / ${STEPS.length} · 시범 요점`);
+    phase = 'report'; // 성적표처럼: Enter = 따라 하기, ↺ = 다시 보기
+    $('.tut-card').classList.remove('tdr');
+    $('.tut-card').classList.add('td-sumcard');
+    $('.tut-card h2').textContent = '시범 요점';
+    $('.tut-card .tut-body').innerHTML = `<p class="td-sum-lead">방금 시범에서 본 순서예요. 이대로 따라 해 봐요!</p>${sum}
+      <div class="tdr-btns"><button class="gm-btn" data-t="demoAgain">↺ 다시 보기</button><span class="sp"></span><button class="gm-btn primary" data-t="sumNext">${returnTo != null ? '돌아가기 ›' : '따라 하기 ›'}${onTouch() ? '' : ' <kbd>Enter</kbd>'}</button></div>`;
+    $('.tut-card .tut-btns').style.display = 'none';
+    chime(true);
+    openCard($('.tut-card [data-t="sumNext"]'));
   }
   function watchDemo() {
     const j = STEPS.findIndex((x) => x.kind === 'demo');
@@ -1247,10 +1209,25 @@ export function startTutorial(game) {
     }
     // 시범 주행 중: "처음부터 다시" 키 = 시범 처음부터, 다른 운전 키는 게임에 안 보냄 (메뉴는 그대로)
     if (phase === 'demo') {
-      if (acts.includes('restart')) {
+      // Space·P = 멈춤/계속, Enter = (멈춰 있으면) 계속, R(복귀 키) = 처음부터 (Enter는 이제 '계속'이라 처음부터로 안 씀)
+      if (demo && (e.code === 'Enter' || e.code === 'NumpadEnter') && !demo.paused) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        retry();
+        return;
+      }
+      if (acts.includes('respawn') || (acts.includes('restart') && !(e.code === 'Enter' || e.code === 'NumpadEnter'))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (!e.repeat) retry();
+        return;
+      }
+      if (demo && (e.code === 'Space' || e.code === 'KeyP' || ((e.code === 'Enter' || e.code === 'NumpadEnter') && demo.paused))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (e.repeat) return;
+        uiSound(demo.paused ? 'select' : 'move');
+        if (e.code === 'Enter' || e.code === 'NumpadEnter') demo.resume();
+        else demo.toggle();
         return;
       }
       if (acts.length && !acts.includes('menu') && !acts.includes('sound')) e.stopImmediatePropagation();
@@ -1276,6 +1253,9 @@ export function startTutorial(game) {
     if (ended || phase === 'card' || phase === 'report') return true;
     if (id === 'restart') return retry(), false;
     if (id === 'map') return setHint('튜토리얼 중에는 맵을 바꿀 수 없어요'), false;
+    if (phase === 'demo' && demo && id === 'climb') return uiSound('select'), demo.toggle(), false; // 패드 A = 멈춤/계속
+    if (phase === 'demo' && demo && id === 'respawn') return retry(), false; // 패드 Y = 처음부터
+    if (phase === 'demo' && demo && id === 'booster') return uiSound('move'), (demo.speed = demo.speed === 'slow' ? 'normal' : 'slow'), false; // 패드 X = 천천히/보통
     if (phase === 'demo') return id === 'menu';
     if (id === 'respawn' && st) st.keyed = true;
     return true;
@@ -1308,6 +1288,17 @@ export function startTutorial(game) {
     else if (t === 'card') showCard();
     else if (t === 'demo') watchDemo();
     else if (t === 'demoSkip') (uiSound('back'), demoDone(true));
+    else if (t === 'demoGo') (uiSound('select'), demo && demo.resume());
+    else if (t === 'demoPause') (uiSound('move'), demo && demo.toggle());
+    else if (t === 'demoSpeed') (uiSound('move'), demo && (demo.speed = demo.speed === 'slow' ? 'normal' : 'slow'));
+    else if (t === 'sumNext') {
+      uiSound('select');
+      if (returnTo != null) {
+        cur = returnTo;
+        returnTo = null;
+        showCard();
+      } else next();
+    }
     else if (t === 'next') (uiSound('select'), next());
     else if (t === 'slow' || t === 'slowTog') {
       uiSound('move');
@@ -1398,35 +1389,3 @@ export function startTutorial(game) {
   return game.tutorial;
 }
 
-// ------------------------------------------------------------------ 드리프트 각도 막대 (미션 판)
-const GAUGE_MAX = 1.35; // 막대 끝 = 77°
-/** 지금 드리프트 각도: 초록 칸(버티기) · 빨강(스핀) · 노란 선(이 아래에서 놓으면 깔끔) */
-function driftGauge(car, win, spin, exit) {
-  const pc = (r) => `${Math.max(0, Math.min(100, (r / GAUGE_MAX) * 100)).toFixed(1)}%`;
-  const a = car.drifting ? Math.abs(car.driftAngle || 0) : 0;
-  const inWin = a >= win[0] && a <= win[1];
-  const state = !car.drifting ? '드리프트 키를 누르면 바늘이 움직여요' : a > spin * 0.9 ? '⚠ 너무 돌아요! 카운터' : inWin ? (a < exit ? '좋아요! 지금 놓으면 깔끔' : '좋아요! 버티다가 펴면서 놓기') : a < win[0] ? '더 꺾어요' : '카운터로 줄여요';
-  return `<div class="tut-gauge${car.drifting ? ' on' : ''}${inWin ? ' good' : ''}${a > spin * 0.9 ? ' bad' : ''}">
-    <div class="gt"><span>드리프트 각도</span><b>${Math.round((a * 180) / Math.PI)}°</b></div>
-    <div class="gb"><i class="win" style="left:${pc(win[0])};width:calc(${pc(win[1])} - ${pc(win[0])})"></i><i class="spin" style="left:${pc(spin)}"></i><i class="exit" style="left:${pc(exit)}"></i><i class="needle" style="left:${pc(a)}"></i></div>
-    <div class="gs">${state}</div><div class="gh">유지 ${(car.driftHold || 0).toFixed(1)}초</div></div>`;
-}
-/** 설명 카드 그림: 차 위에서 본 각도 + 막대 */
-function driftSvg(win, spin, exit) {
-  const x = (r) => 20 + (r / GAUGE_MAX) * 260;
-  return `<svg class="tut-svg" viewBox="0 0 300 120" aria-hidden="true">
-    <g transform="translate(70 52)">
-      <path d="M-46 0 H46" stroke="#ffffff40" stroke-width="2" stroke-dasharray="5 5"/><text x="10" y="16" style="fill:#ffffff99;font-size:10px">진행 방향 →</text>
-      <g transform="rotate(-28)"><rect x="-20" y="-9" width="40" height="18" rx="6" fill="#ff4b3a"/><rect x="8" y="-6" width="9" height="12" rx="2" fill="#ffe2b0"/></g>
-      <path d="M30 0 A30 30 0 0 0 26.5 -14" fill="none" stroke="#ffcf3f" stroke-width="2.5"/><text x="34" y="-10" style="fill:#ffcf3f;font-size:12px" font-weight="800">각도</text>
-      <path d="M-30 18 q-14 4 -26 2" stroke="#ffffff55" stroke-width="3" fill="none"/><path d="M-26 -16 q-14 -6 -28 -4" stroke="#ffffff55" stroke-width="3" fill="none"/>
-    </g>
-    <rect x="20" y="92" width="260" height="10" rx="5" fill="#ffffff1f"/>
-    <rect x="${x(win[0])}" y="92" width="${x(win[1]) - x(win[0])}" height="10" rx="3" fill="#3ddc6a"/>
-    <rect x="${x(spin)}" y="92" width="${280 - x(spin)}" height="10" rx="3" fill="#ff4b5c"/>
-    <path d="M${x(exit)} 86 V106" stroke="#ffcf3f" stroke-width="2"/>
-    <text x="${(x(win[0]) + x(win[1])) / 2}" y="117" style="fill:#3ddc6a;font-size:10px" text-anchor="middle" font-weight="800">버티기</text>
-    <text x="${x(exit)}" y="83" style="fill:#ffcf3f;font-size:10px" text-anchor="middle" font-weight="800">이 아래로 펴고 놓기</text>
-    <text x="${(x(spin) + 280) / 2}" y="117" style="fill:#ff4b5c;font-size:10px" text-anchor="middle" font-weight="800">스핀</text>
-  </svg>`;
-}

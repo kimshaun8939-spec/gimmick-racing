@@ -4,7 +4,7 @@ import { touchWanted } from './touch.js';
 import { pad as gamepad, padKbd } from './gamepad.js';
 import { metaResultsHtml, playMetaCelebration } from './metaUI.js';
 import { prepareRewards, rewardBandHtml, levelUpHtml, rewardDetailsHtml, mountRewards } from './rewardBand.js'; // 결과 화면 보상 띠·레벨 업 카드 (rewards1, 2026-11-15)
-// 화면 위 정보 표시 (랩, 시간, 속도, 드리프트 게이지, 미니맵, 안내 문구)
+// 화면 위 정보 표시 (랩, 시간, 속도, 미니맵, 안내 문구)
 import { academy, licenseChip } from './academyStore.js'; // 결과 화면 라이선스 배지 (드라이빙 아카데미, 2026-11-12)
 const $ = (id) => document.getElementById(id);
 // 표시 값이 같으면 DOM을 다시 만들지 않음. 다른 코드가 바꾼 값도 실제 DOM으로 확인.
@@ -172,7 +172,7 @@ export function createHud(track) {
 
   const el = {
     lap: $('lap'), time: $('time'), best: $('best'), speed: $('speed'),
-    driftFill: $('driftFill'), driftAng: $('driftAng'), driftWin: $('driftWin'), driftNeedle: $('driftNeedle'), big: $('bigText'), toast: $('toast'),
+    big: $('bigText'), toast: $('toast'),
     results: $('results'), speedUnit: $('speedUnit'),
     gear: $('gear'), tach: $('tach'), tachFill: $('tachFill'), tachRed: $('tachRed'), tachGreen: $('tachGreen'),
     gearMode: $('gearMode'), tireState: $('tireState'), shiftPerfect: $('shiftPerfect'),
@@ -317,28 +317,6 @@ export function createHud(track) {
       if (fastNow !== el.speed._fast) el.speed.classList.toggle('fast', (el.speed._fast = fastNow));
       const boostNow = s.form === 'spike';
       if (boostNow !== el.speed._boost) el.speed.classList.toggle('boost', (el.speed._boost = boostNow));
-
-      const d = s.cfg.drift;
-      const pct = s.drifting ? Math.min(1, s.driftTime / d.level2Time) : 0;
-      writeStyle(el.driftFill, 'width', `${pct * 100}%`);
-      writeStyle(el.driftFill, 'background', ['#ffffff', 'var(--blue)', 'var(--orange)'][s.driftLevel]);
-      // 드리프트 각도 막대: 초록 칸 = 버티면 좋은 각도 (car.cfg.drift.holdAngle), 바늘 = 지금 각도. 드리프트 중에만 보임
-      if (el.driftAng) {
-        const on = !!s.drifting;
-        if (on !== el.driftAng._on) el.driftAng.classList.toggle('on', (el.driftAng._on = on));
-        if (on) {
-          const win = d.holdAngle || [0.28, 0.75], MAXA = 1.1; // 막대 끝 = 1.1 rad (약 63°)
-          const px = (a) => Math.max(0, Math.min(1, a / MAXA)) * 100;
-          if (el.driftWin._w !== win) {
-            el.driftWin._w = win;
-            el.driftWin.style.left = `${px(win[0])}%`;
-            el.driftWin.style.width = `${px(win[1]) - px(win[0])}%`;
-          }
-          const a = s.driftAngle || 0, inWin = a >= win[0] && a <= win[1];
-          writeStyle(el.driftNeedle, 'left', `${px(a)}%`);
-          el.driftNeedle.className = inWin ? 'in' : a > win[1] ? 'over' : '';
-        }
-      }
 
       // 회전수계: 0 ~ 한계 회전수. 빨간 구간 = 레드라인 이상, 초록 = 출발 구간(카운트다운 중)
       const e = s.cfg.engine;

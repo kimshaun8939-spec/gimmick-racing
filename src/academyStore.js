@@ -27,15 +27,16 @@ export const LESSONS = [
   { id: 'chain', icon: '🔗', name: '연속 코너 잇기', short: '두 코너를 한 번에 생각하기', group: 'corner', map: 'gp', art: 'chicane', mins: 3 },
   { id: 'kerb', icon: '🟥', name: '연석 쓰기', short: '빨강·흰 연석까지 길을 넓게', group: 'corner', map: 'gp', art: 'kerbs', mins: 2 },
   { id: 'slip', icon: '💨', name: '슬립스트림', short: '앞차 뒤에 바짝 붙어 빨라진 뒤 추월', group: 'race', map: 'gp', art: 'slipstream', mins: 2, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 0 } },
-  { id: 'drift', icon: '🌀', name: '드리프트', short: '헤어핀에서 꼬리를 미끄러뜨려 돌기', group: 'special', map: 'gp', art: 'drift', mins: 2 },
   { id: 'fly', icon: '✈️', name: '비행 루트', short: '활주로 → 고리 4개 → 착륙장', group: 'special', map: 'gp', art: 'fly', mins: 2 },
-  { id: 'boat', icon: '🚤', name: '배 카빙', short: '물 위에서 드리프트 키로 날카롭게 돌기', group: 'special', map: 'sea', art: 'boat', mins: 2 },
+  { id: 'boat', icon: '🚤', name: '배 물길', short: '물 위에서 미리 꺾어 물길 따라 빠르게 건너기', group: 'special', map: 'sea', art: 'boat', mins: 2 },
 ];
 /**
  * 숨긴 레슨 (목록·메달 개수·업적 '모든 레슨'에 안 셈): DRS는 2026-11-15에 게임에서 꺼 둠 (사용자 요청)
  *   레슨 코드(academyLessons.js RUN.drs)는 남김 → 주소 ?academy=drs로만 열림 (drs: 1 = 이 판만 DRS 켬)
  */
 export const HIDDEN_LESSONS = [
+  // 드리프트 레슨은 2026-11-15 드리프트 기능과 함께 없앰 (사용자 요청): 예전 메달 이름 표시용으로만 남김 (레슨 코드 없음 → ?academy=drift는 첫 레슨으로)
+  { id: 'drift', icon: '🌀', name: '드리프트 (없앤 레슨)', short: '', group: 'special', map: 'gp', art: 'drift', mins: 2, hidden: true, retired: true },
   { id: 'drs', icon: '🟩', name: 'DRS', short: '앞차와 1초 안이면 뒷날개가 열려요', group: 'race', map: 'gp', art: 'drs', mins: 2, hidden: true, extra: { mode: 'race', bots: 1, botLevel: 'normal', intro: 0, tow: 0, drs: 1 } },
 ];
 /** 시험에만 나오는 과제 (레슨 카드는 없음) */
@@ -51,7 +52,7 @@ export const lessonMeta = (id) => LESSONS.find((l) => l.id === id) || EXAM_TASKS
 export const LICENSES = [
   { id: 'C', name: 'C 라이선스', sub: '기초', color: '#e0a36b', tasks: ['brake', 'trail', 'lift'], need: 1, xp: 150, paint: 11, desc: '브레이크·페달을 쓸 줄 알아요' },
   { id: 'B', name: 'B 라이선스', sub: '코너', color: '#cfdbe8', tasks: ['late', 'chain', 'kerb'], need: 2, xp: 250, paint: 12, desc: '코너를 빠르게 이어 달려요' },
-  { id: 'A', name: 'A 라이선스', sub: '레이스', color: '#f3c74e', tasks: ['drift', 'fly', 'slip'], need: 2, xp: 400, paint: 13, desc: '레이스 기술과 변신을 다뤄요' },
+  { id: 'A', name: 'A 라이선스', sub: '레이스', color: '#f3c74e', tasks: ['boat', 'fly', 'slip'], need: 2, xp: 400, paint: 13, desc: '레이스 기술과 변신을 다뤄요' },
   { id: 'S', name: 'S 라이선스', sub: '마스터', color: '#d698ff', tasks: ['trail', 'chain', 'lap'], need: 3, xp: 700, paint: 14, desc: '어떤 코너든 금메달처럼' },
 ];
 export const licenseMeta = (id) => LICENSES.find((l) => l.id === id) || null;

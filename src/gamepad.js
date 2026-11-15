@@ -9,7 +9,7 @@ import { ACTIONS, keybinds, actionVisible } from './keybinds.js';
 const STORE = 'gimmick.pad';
 // 표준 배치 버튼 번호: 0 A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 LT, 7 RT, 8 View, 9 Menu, 10 LS, 11 RS, 12 ↑, 13 ↓, 14 ←, 15 →, 16 Home
 export const PAD_DEF = {
-  throttle: 7, brake: 6, left: 14, right: 15, drift: 0, booster: 2, climb: 0, dive: 1,
+  throttle: 7, brake: 6, left: 14, right: 15, booster: 2, climb: 0, dive: 1, // drift(A)는 2026-11-15에 없앰 (A = 비행 상승)
   gearbox: 10, shiftUp: 5, shiftDown: 4, respawn: 3, restart: 8, menu: 9, racingLine: 12, sound: null, map: null, camView: 11, // camView = 시점 바꾸기 (RS 누르기, 2026-11-12)
 };
 const LOCKED = new Set(['menu']); // Menu(Start) 버튼 = 항상 메뉴

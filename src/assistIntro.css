@@ -1,0 +1,73 @@
+/* 첫 레이스 '주행 도움이 켜져 있어요' 카드 (src/assistIntro.js). 바탕·버튼은 menu.css의 .gm-confirm·.gm-btn·.gm-switch */
+.assist-intro { z-index: 92; background: rgba(3, 6, 14, 0.62); backdrop-filter: blur(3px); }
+
+.assist-intro .ai-box {
+  width: min(560px, calc(100vw - 28px)); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box;
+  padding: 22px 24px 16px; text-align: left; display: flex; flex-direction: column; gap: 12px;
+}
+.assist-intro .ai-head { display: flex; gap: 14px; align-items: flex-start; }
+.assist-intro .ai-badge {
+  flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 24px;
+  background: linear-gradient(160deg, rgba(125, 255, 106, 0.22), rgba(64, 196, 255, 0.16)); border: 1px solid rgba(125, 255, 106, 0.35);
+}
+.assist-intro h3 { margin: 2px 0 4px; font-size: 21px; line-height: 1.25; word-break: keep-all; }
+.assist-intro .ai-sub { margin: 0; color: #c3cee2; font-size: 13.5px; line-height: 1.5; word-break: keep-all; }
+.assist-intro .ai-rows { display: flex; flex-direction: column; gap: 6px; }
+.assist-intro .ai-row {
+  appearance: none; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%;
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 7px 10px 7px 12px; box-sizing: border-box;
+  border-radius: 14px; background: rgba(125, 255, 106, 0.07); border: 1px solid rgba(125, 255, 106, 0.22);
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.assist-intro .ai-row:hover { background: rgba(125, 255, 106, 0.12); }
+.assist-intro .ai-row.off { background: rgba(255, 255, 255, 0.035); border-color: rgba(255, 255, 255, 0.09); }
+.assist-intro .ai-row.off .ai-txt { opacity: 0.62; }
+.assist-intro .ai-row:focus-visible, .assist-intro .ai-btns .gm-btn:focus-visible { outline: none; box-shadow: var(--ring, 0 0 0 2px #0b1020, 0 0 0 4px #ffcf3f); }
+.assist-intro .ai-ic { flex: none; width: 30px; text-align: center; font-size: 20px; }
+.assist-intro .ai-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.assist-intro .ai-txt b { font-size: 15px; font-weight: 800; }
+.assist-intro .ai-txt small { font-size: 12.5px; color: #b2bfd4; line-height: 1.35; word-break: keep-all; }
+.assist-intro .ai-state { flex: none; font-size: 12px; font-weight: 800; color: #9dff8f; min-width: 2.6em; text-align: right; }
+.assist-intro .ai-row.off .ai-state { color: #8b97ad; }
+.assist-intro .ai-row .gm-switch { flex: none; pointer-events: none; }
+.assist-intro .ai-row.off .gm-switch { background: rgba(255, 255, 255, 0.2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+.assist-intro .ai-row.off .gm-switch i { background: #c9d2e3; }
+.assist-intro .ai-note { margin: 0; font-size: 12.5px; color: #ffd98a; line-height: 1.4; word-break: keep-all; }
+.assist-intro .ai-btns { display: flex; gap: 10px; justify-content: flex-end; margin: 2px 0 0; }
+.assist-intro .ai-btns .gm-btn { min-height: 46px; min-width: 120px; }
+.assist-intro .ai-btns .gm-btn:disabled { opacity: 0.4; cursor: default; }
+.assist-intro .ai-later { margin: 0; text-align: center; font-size: 12.5px; color: #95a2bb; word-break: keep-all; }
+body.touch-on .assist-intro kbd { display: none; }
+/* 카드가 떠 있는 동안 게임 화면 글자·터치 버튼은 숨김 (코스 안내와 같음) */
+body:has(.assist-intro) > .hud, body:has(.assist-intro) :is(#menuBtn, #touchCtl, #itemHud, .nr-hints) { visibility: hidden; }
+
+/* 휴대폰 세로 */
+@media (max-width: 520px) {
+  .assist-intro .ai-box { padding: 18px 16px 14px; gap: 10px; }
+  .assist-intro h3 { font-size: 19px; }
+  .assist-intro .ai-badge { width: 40px; height: 40px; font-size: 21px; }
+  .assist-intro .ai-btns .gm-btn { flex: 1; min-width: 0; }
+  .assist-intro .ai-state { display: none; }
+  .assist-intro .ai-row { gap: 10px; }
+}
+/* 낮은 가로 화면 (휴대폰 가로 등): 도움을 두 줄로 나란히, 설명은 짧게 */
+@media (max-height: 520px) and (min-width: 600px) {
+  .assist-intro .ai-box { width: min(760px, calc(100vw - 24px)); padding: 12px 16px 10px; gap: 8px; }
+  .assist-intro .ai-head { gap: 10px; align-items: center; }
+  .assist-intro .ai-badge { width: 34px; height: 34px; font-size: 18px; border-radius: 10px; }
+  .assist-intro h3 { font-size: 17px; margin: 0 0 2px; }
+  .assist-intro .ai-sub { font-size: 12px; }
+  .assist-intro .ai-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .assist-intro .ai-row { min-height: 46px; padding: 5px 8px; gap: 8px; }
+  .assist-intro .ai-ic { width: 22px; font-size: 16px; }
+  .assist-intro .ai-txt b { font-size: 13.5px; }
+  .assist-intro .ai-txt small { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .assist-intro .ai-state { display: none; }
+  .assist-intro .ai-note { font-size: 11.5px; }
+  .assist-intro .ai-foot { display: flex; }
+  .assist-intro .ai-btns .gm-btn { min-height: 44px; }
+  .assist-intro .ai-later { font-size: 11.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assist-intro, .assist-intro .ai-box, .assist-intro .ai-row { animation: none !important; transition: none !important; }
+}

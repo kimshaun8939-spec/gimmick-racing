@@ -37,9 +37,9 @@ export function partTireGeometry(r,width,side,tread=false){
  const geos=[],ring=new THREE.RingGeometry(r*.77,r*.88,10);
  ring.rotateY(side*Math.PI/2).translate(side*(width/2+.005),0,0);geos.push(ring);
  if(tread===true||tread==='knob')for(let i=0;i<8;i++){const a=i*Math.PI/4;geos.push(new THREE.PlaneGeometry(width*.75,r*.20).rotateX(-Math.PI/2).translate(0,r+.006,0).rotateX(a));}
- const ticks=tread==='slick'?3:tread==='drift'?8:6;
- for(let i=0;i<ticks;i++){const a=i*Math.PI*2/ticks;geos.push(new THREE.PlaneGeometry(r*(tread==='drift'?.08:.18),r*.06).rotateY(side*Math.PI/2).translate(side*(width/2+.012),r*.70,0).rotateX(a));}
- if(tread==='drift')for(let i=0;i<6;i++){const a=i*Math.PI/3;geos.push(new THREE.PlaneGeometry(width*.70,.014).rotateX(-Math.PI/2).rotateY(.35).translate(0,r+.006,0).rotateX(a));}
+ const sharp=tread==='sharp';const ticks=tread==='slick'?3:sharp?8:6;
+ for(let i=0;i<ticks;i++){const a=i*Math.PI*2/ticks;geos.push(new THREE.PlaneGeometry(r*(sharp?.08:.18),r*.06).rotateY(side*Math.PI/2).translate(side*(width/2+.012),r*.70,0).rotateX(a));}
+ if(sharp)for(let i=0;i<6;i++){const a=i*Math.PI/3;geos.push(new THREE.PlaneGeometry(width*.70,.014).rotateX(-Math.PI/2).rotateY(.35).translate(0,r+.006,0).rotateX(a));}
  // 측면 S / AT / D 글자를 얇은 금형 무늬로 바퀴 묶음에 합침. 텍스처 불필요.
  const strokes=tread==='slick'?[[0,0,0,1],[0,0,.5,0],[.5,0,.5,1],[.5,1,1,1],[1,0,1,1]]:tread==='knob'?[[0,0,1,.3],[1,.3,0,.6],[.4,.12,.4,.48],[1,.7,1,1.3],[1,1,0,1]]:[[0,0,1,0],[1,0,.8,.8],[.8,.8,.2,.8],[.2,.8,0,0]];
  for(const [a,b,c,d]of strokes){const y0=-r*.84+a*r*.11,z0=(b-.6)*r*.12,y1=-r*.84+c*r*.11,z1=(d-.6)*r*.12,len=Math.hypot(y1-y0,z1-z0),ny=-(z1-z0)/len*r*.008,nz=(y1-y0)/len*r*.008,x=side*(width/2+.017);const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([x,y0+ny,z0+nz,x,y1+ny,z1+nz,x,y1-ny,z1-nz,x,y0-ny,z0-nz],3));g.setIndex(side>0?[0,2,1,0,3,2]:[0,1,2,0,2,3]);g.computeVertexNormals();geos.push(g);}

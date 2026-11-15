@@ -615,7 +615,7 @@ export async function openLobby(opts = {}) {
           : `<b>${rmode === 'item' ? '🎁 파워업 레이스' : '🏁 클래식 레이스'}</b>`
       }`;
     $('#lbModeHelp').textContent = rmode === 'item'
-      ? '🎁 상자를 지나 아이템을 얻고, 화면 위 아이템 칸을 눌러 사용해요. 드리프트 게이지를 채워도 부스터를 얻어요.'
+      ? '🎁 상자를 지나 아이템을 얻고, 화면 위 아이템 칸을 눌러 사용해요.'
       : '🏁 정해진 바퀴를 먼저 완주하면 승리해요. 다른 사람이 모두 준비 완료를 누르면 방장이 출발해요.';
     const bots = s.bots();
     $('#lbBots').innerHTML = `<span>🤖 컴퓨터 차</span>${

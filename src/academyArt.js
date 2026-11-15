@@ -1,7 +1,7 @@
 // 드라이빙 아카데미 설명용 SVG. 외부 파일·DOM 없이 문자열로 사용한다.
 export const ART_KEYS = Object.freeze([
   'brakePoint', 'trailBrake', 'liftOff', 'lateApex', 'chicane', 'kerbs',
-  'slipstream', 'drs', 'drift', 'fly', 'boat',
+  'slipstream', 'drs', 'fly', 'boat',
 ]);
 const C = { green: '#4dff7a', red: '#ff6b5e', gold: '#ffd23a', cyan: '#73dfff' };
 let serial = 0; // 같은 그림·배지를 여러 번 넣어도 SVG 정의 id가 겹치지 않게
@@ -80,16 +80,6 @@ function scene(key, id) {
         arrow('M210 104H296') +
         '<g transform="translate(240 135)"><path d="M0 21V7M47 21V7" stroke="#a9b4ca" stroke-width="3"/><path d="M-2 17H49" stroke="#8896ae" stroke-width="4"/><path d="M0 7L46 0" stroke="#4dff7a" stroke-width="5"/></g>' +
         text(237, 173, '날개 열림', C.green, 10);
-    case 'drift':
-      return road('M-10 148Q109 147 139 83T331 48', 68) +
-        path('M16 155Q104 155 139 95', '#182031', 3, 'stroke-dasharray="7 4"') +
-        path('M13 144Q97 146 128 87', '#182031', 3, 'stroke-dasharray="7 4"') +
-        arrow('M19 143Q111 147 145 83T298 41') +
-        car(143, 88, 6, C.green, true) +
-        path('M147 62A28 28 0 0 1 168 75', C.gold, 3) +
-        arrow('M130 60Q112 50 106 73', C.cyan, 2) +
-        text(16, 27, '앞바퀴는 반대쪽', C.cyan, 11) + text(194, 123, '각도 유지', C.gold) +
-        text(181, 148, '카운터 스티어', C.cyan, 11);
     case 'fly':
       return '<rect x="10" y="98" width="83" height="59" rx="5" fill="#424a60" stroke="#8791aa"/>' +
         '<rect x="237" y="43" width="73" height="59" rx="5" fill="#424a60" stroke="#8791aa"/>' +
@@ -104,7 +94,7 @@ function scene(key, id) {
         path('M21 132Q102 158 145 91T294 49', '#d0faff', 18, 'opacity=".13"') +
         arrow('M21 132Q102 158 145 91T294 49') +
         '<g transform="translate(148 91) rotate(32)"><path d="M0 -24Q16 -10 12 18Q0 25 -12 18Q-16 -10 0 -24Z" fill="#edf2ff" stroke="#73dfff" stroke-width="2"/><path d="M-6 -4H6V13H-6Z" fill="#2f667a"/></g>' +
-        text(18, 34, '드리프트 + 조향', C.cyan, 12) + text(205, 139, '크게 카빙', C.green);
+        text(18, 34, '미리 꺾기', C.cyan, 12) + text(205, 139, '물길 따라', C.green);
     default: return '';
   }
 }
@@ -117,7 +107,7 @@ export function academyArt(key) {
     liftOff: '가속을 떼고 라인을 조이기', lateApex: '늦은 에이펙스와 탈출 가속',
     chicane: '연속 코너를 하나의 흐름으로', kerbs: '안쪽과 탈출 연석 활용',
     slipstream: '앞차 뒤 슬립스트림과 추월', drs: 'DRS 감지선과 가속 구간',
-    drift: '드리프트 각도와 카운터 스티어', fly: '이륙과 고리 통과, 착륙', boat: '물 위 카빙',
+    fly: '이륙과 고리 통과, 착륙', boat: '물길을 따라 건너는 배',
   };
   const markers = [['go', C.green], ['red', C.red], ['cyan', C.cyan]].map(([name, color]) =>
     '<marker id="' + id + '-' + name + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="' + color + '"/></marker>').join('');

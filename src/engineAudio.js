@@ -48,7 +48,6 @@ export function createEngineAudio(sound = {}) {
   let onThrottle = false; // 페달을 깊게 밟고 있었는지 (떼는 순간 감지용)
   let popTime = 0; // 남은 팝/크래클 시간(초)
   let wasShifting = false;
-  let lastDrift = null; // 마지막으로 본 드리프트 결과 (car.lastDriftInfo.t)
 
   // 흰 잡음 버퍼 (흡기·배기 질감, 터보 바람, 물소리, 팝에 같이 씀)
   function makeNoise(sec) {
@@ -228,7 +227,7 @@ export function createEngineAudio(sound = {}) {
     waterSrc.connect(waterLP).connect(waterMod).connect(waterG).connect(comp);
 
     // ── 타이어 비명 (2026-11-10): 떨리는 톱니파를 좁은 대역으로 깎은 '끼이익' + 높은 잡음 '쉬익'
-    //   car.tyreSlip(0~1)만큼: 옆으로 미끄러짐·앞 밀림·바퀴 헛돎·브레이크 잠김·드리프트
+    //   car.tyreSlip(0~1)만큼: 옆으로 미끄러짐·앞 밀림·바퀴 헛돎·브레이크 잠김
     const sq = ctx.createOscillator();
     sq.type = 'sawtooth';
     sq.frequency.value = 900;
@@ -286,24 +285,6 @@ export function createEngineAudio(sound = {}) {
     g.gain.setTargetAtTime(0, t + 0.002, dec);
     src.connect(f).connect(g).connect(N.fxBus);
     src.start(t, Math.random() * 1.5, dec * 7 + 0.01);
-  }
-
-  // 깔끔한 드리프트 탈출 '띵-딩': 짧은 두 음 (품질이 높으면 더 높고 밝게)
-  function chime(q) {
-    const t = ctx.currentTime;
-    const base = q > 0.75 ? 1046 : 880;
-    [0, 0.08].forEach((d, i) => {
-      const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = base * (i ? 1.5 : 1);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0, t + d);
-      g.gain.linearRampToValueAtTime(0.09 * (0.6 + 0.4 * q), t + d + 0.01);
-      g.gain.setTargetAtTime(0, t + d + 0.02, 0.09);
-      o.connect(g).connect(N.fxBus);
-      o.start(t + d);
-      o.stop(t + d + 0.6);
-    });
   }
 
   // 블로오프 밸브 '피시익': 높은 잡음이 아래로 미끄러지며 사라짐
@@ -447,12 +428,6 @@ export function createEngineAudio(sound = {}) {
       N.sqG.gain.setTargetAtTime(0.32 * sqK * (P.squeal ?? 1), t, sqK > 0 ? 0.04 : 0.09);
       N.sqNBP.frequency.setTargetAtTime(1800 + 1400 * slip, t, 0.08);
       N.sqNG.gain.setTargetAtTime(0.1 * Math.min(1, slip * 1.6) * (P.squeal ?? 1) * (P.squealNoise ?? 1), t, 0.06);
-      const di = car.lastDriftInfo;
-      if (di && di.t !== lastDrift) {
-        if (lastDrift !== null && di.clean && !silent) chime(di.quality);
-        lastDrift = di.t;
-      }
-      if (!di) lastDrift = -1;
 
       // ── 환경: 보트는 물 위라 먹먹, 가라앉으면 점점 물속처럼
       let envCut = 18000;

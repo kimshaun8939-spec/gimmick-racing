@@ -146,7 +146,7 @@ async function getStudio() {
 // createCarModel이 쓰는 차 상태를 흉내 낸 가짜 차 (홈 미리보기와 같음, 서 있는 일반 모드)
 const fake = {
   pos: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), fwd: new THREE.Vector3(0, 0, 1), vel: new THREE.Vector3(),
-  mode: 'normal', sink: 0, forwardSpeed: 0, thr: 0, grounded: true, surface: 'road', drifting: false, driftDir: 0, driftLevel: 0,
+  mode: 'normal', sink: 0, forwardSpeed: 0, thr: 0, grounded: true, surface: 'road', 
   steerVisual: 0, load: 0, form: null, flying: false, boostTime: 0, brk: 0,
 };
 

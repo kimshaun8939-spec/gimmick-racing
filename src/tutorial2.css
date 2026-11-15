@@ -194,3 +194,76 @@ body.touch-on .td-keys { bottom: auto; top: 46%; transform: translateX(-50%) sca
  #tutorial .tut-panel:not(.tdc) .tut-goals .g { font-size: 11px; gap: 6px; }
  body.touch-on #tutorial .tut-panel:not(.tdc) { top: 54px!important; }
 }
+
+/* academydemo (2026-11-15): 시범 자막이 머물고 핵심 순간에서 멈춤 · ▶ 계속 · ⏸ 멈춤 표시 · 요점 카드 */
+.td-go:empty { display: none; }
+.td-go { margin-top: 10px; display: flex; justify-content: center; }
+#tutorial .td-gobtn { pointer-events: auto; min-height: 44px; padding: 8px 22px; font-size: 17px; font-weight: 900; border-radius: 14px; color: #10131c; background: linear-gradient(180deg, #ffe066, #ffb33a); border: 0; box-shadow: 0 6px 20px #0009; opacity: 0.72; transition: opacity 0.3s, transform 0.2s; }
+#tutorial .td-gobtn kbd { margin-left: 6px; min-width: 24px; height: 24px; font-size: 12px; padding: 0 7px; vertical-align: 1px; color: #fff; background: #10131caa; border-color: #10131c; }
+#tutorial .td-gobtn small { margin-left: 4px; font-size: 12px; font-weight: 800; opacity: 0.8; }
+#tutorial .td-gobtn.ready { opacity: 1; animation: tdGoGlow 1.6s ease-in-out infinite; }
+#tutorial .td-gobtn:hover, #tutorial .td-gobtn:focus-visible { opacity: 1; transform: translateY(-1px); }
+@keyframes tdGoGlow { 0%, 100% { box-shadow: 0 6px 20px #0009, 0 0 0 0 #ffd23a00; } 50% { box-shadow: 0 6px 20px #0009, 0 0 0 7px #ffd23a40; } }
+.td-cap.held { opacity: 1; background: radial-gradient(ellipse at 50% 50%, rgba(6, 10, 22, 0.78), rgba(6, 10, 22, 0.5) 72%, rgba(6, 10, 22, 0) 100%); }
+.td.held .td-vig { opacity: 0.55 !important; }
+.td-pz { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); display: none; align-items: center; gap: 10px; padding: 10px 22px; border-radius: 999px; font-size: 22px; font-weight: 900; color: #fff; background: rgba(8, 12, 24, 0.72); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 10px 30px #0009; white-space: nowrap; }
+.td-pz.on { display: flex; }
+.td-pz small { font-size: 13px; font-weight: 800; color: #bfe3ff; }
+.td-btns .td-spdbtn.on { border-color: rgba(140, 200, 255, 0.7); }
+@media (prefers-reduced-motion: reduce) { #tutorial .td-gobtn.ready { animation: none; } }
+@media (max-width: 767px), (max-height: 520px) {
+  #tutorial .td-gobtn { font-size: 15px; padding: 6px 16px; }
+  .td-pz { font-size: 17px; padding: 8px 16px; }
+}
+@media (max-height: 520px) {
+  .td-go { margin-top: 5px; }
+  #tutorial .td-gobtn { min-height: 38px; padding: 4px 14px; }
+  .td-pz { top: 58%; }
+}
+
+/* 요점 카드 (시범이 끝나면: 번호 · 자막 한 줄씩 · 작은 키 그림) */
+.td-sum-lead { margin: 2px 0 10px; font-size: 14px; color: #c7d4ec; }
+.td-sum ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.td-sum li { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 4px 10px; padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); }
+.td-sum .n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; color: #10131c; background: #ffcf3f; }
+.td-sum .tx { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.td-sum .tx b { font-size: 15px; line-height: 1.3; color: #fff; }
+.td-sum .tx small { font-size: 12.5px; line-height: 1.35; color: #b9c6dd; }
+.td-sum li[class*="brake"] .tx b, .td-sum li.td-sum-trail .tx b { color: #ff9c8e; }
+.td-sum li[class*="gas"] .tx b, .td-sum li.td-sum-pass .tx b { color: #9dff8c; }
+.td-sum li[class*="apex"] .tx b { color: #ffd84f; }
+.td-sum .ks { display: flex; gap: 3px; }
+#tutorial .td-sum .td-k, #tutorial .td-sum kbd { min-width: 20px; height: 20px; font-size: 11px; padding: 0 5px; vertical-align: 1px; border-radius: 5px; }
+#tutorial .td-sum .td-sk { min-width: 22px; height: 22px; font-size: 11px; border-radius: 6px; color: #10131c; background: #ffe066; border-color: #b08a1a; }
+#tutorial .td-sum .td-sk-brake { background: #ff8a7a; border-color: #a2382a; }
+#tutorial .td-sum .td-sk-throttle { background: #8dff7a; border-color: #3a9a2a; }
+.tut-card.td-sumcard .tdr-btns, .tut-card.ac-sumcard .tut-btns { position: sticky; bottom: -1px; padding-top: 10px; background: linear-gradient(180deg, rgba(12, 17, 32, 0), rgba(12, 17, 32, 0.97) 30%); }
+@media (max-height: 520px) {
+  .td-sum-lead { display: none; }
+  .td-sum ol { grid-template-columns: 1fr 1fr; gap: 4px; }
+  .td-sum li { padding: 4px 7px; grid-template-columns: 20px 1fr auto; gap: 2px 6px; }
+  .td-sum .n { width: 19px; height: 19px; font-size: 10.5px; }
+  .td-sum .tx b { font-size: 12px; }
+  .td-sum .tx small { font-size: 10.5px; }
+  .tut-card.td-sumcard .tut-hero .tut-ic, .tut-card.ac-sumcard .tut-hero .tut-ic { display: none; }
+  .tut-card.td-sumcard .tut-hero h2, .tut-card.ac-sumcard .tut-hero h2 { font-size: 19px; }
+}
+/* 시범 중 버튼이 5개(멈춤·처음부터·속도·직접·설명)라 좁은 화면 배치를 다시 (academydemo) */
+@media (max-width: 767px) and (min-height: 521px) {
+  .td.demo .td-btns { left: 8px; right: 8px; top: auto; bottom: 10px; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .td.demo .td-btns .gm-btn { min-height: 40px; padding: 6px 10px; font-size: 12.5px; }
+  .td.demo .td-btns .gm-btn kbd { display: none; }
+  .td.demo .td-cap { top: 31%; }
+  .td.demo .td-ped { top: auto; bottom: 210px; }
+  .td.demo .td-keys, body.touch-on .td.demo .td-keys { top: auto; bottom: 112px; transform: translateX(-50%); }
+  .td.demo .td-pz { top: 58%; }
+}
+@media (max-height: 520px) {
+  .td.demo .td-btns { left: auto; right: 8px; top: 108px; }
+  .td.demo .td-pz { top: 128px; }
+  #tutorial .td-gobtn { min-height: 40px; }
+}
+/* 휴대폰 세로: 위쪽 배지·순간 띠가 왼쪽 위 기록판과 겹쳐서 시범 중엔 숨김 (자막·계속 버튼·멈춤 표시가 대신 알려 줌) */
+@media (max-width: 480px) and (min-height: 521px) {
+  .td.demo .td-top { display: none; }
+}

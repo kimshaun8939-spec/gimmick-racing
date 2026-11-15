@@ -123,8 +123,6 @@ export function pickSpots(ctx) {
       .sort((a, b) => (a.apexes.length === 1 ? 0 : 1) - (b.apexes.length === 1 ? 0 : 1) || (lone(a) ? 0 : 1) - (lone(b) ? 0 : 1) || Math.abs(a.vMin - 40) - Math.abs(b.vMin - 40))[0] ||
       good.find((c) => !used.has(c)) || null,
   );
-  // 드리프트: 땅 위에서 가장 느린 코너 (헤어핀)
-  S.drift = corners.filter((c) => ground(c) && [c.apexI, c.exitI].every(clearAt)).sort((a, b) => a.vMin - b.vMin)[0] || null;
   // 슬립스트림: 땅 위에서 가장 긴 직선 (그다음 긴 직선은 DRS 없는 맵에서 대신)
   S.straight = (() => {
     if (!line.curvature) return null;
@@ -687,7 +685,7 @@ function drivePace(ctx, b, mulFn, keepFn) {
   const pprof = ctx.car._lineProfile || (ctx.car.lineSpeed(0), ctx.car._lineProfile);
   if (!b._origControls) b._origControls = b.driver.controls;
   b.driver.controls = () => {
-    const c = { throttle: 1, brake: 0, steer: 0, drift: false, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
+    const c = { throttle: 1, brake: 0, steer: 0, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
     if (!car.trackInfo) return c;
     const i0 = car.trackInfo.index % N, v = Math.max(8, Math.abs(car.speed));
     const j = (i0 + Math.round((6 + v * 0.12) / ds)) % N;
@@ -957,91 +955,6 @@ RUN.drs = {
   },
 };
 
-// 9) 드리프트 ---------------------------------------------------------------
-RUN.drift = {
-  demo: true,
-  spot: (ctx) => ctx.spots.drift,
-  intro: (ctx, c) => {
-    const D = ctx.car.cfg.drift || {};
-    const W = Array.isArray(D.holdAngle) ? D.holdAngle : [0.28, 0.75];
-    const deg = (r) => Math.round((r * 180) / Math.PI);
-    return `
-    <p>아주 느린 <b>헤어핀</b>에서는 꼬리를 미끄러뜨려 차 머리를 빨리 돌릴 수 있어요. 꺾으면서 ${ctx.K('drift')}를 누르고, 너무 돌면 <b>반대로 살짝</b> 꺾어(카운터) 각도를 잡아요.</p>
-    ${steps([['①', `${ctx.kbd('brake')}로 충분히 줄이기`], ['②', `꺾으면서 ${ctx.K('drift')} 꾹`], ['③', `각도 ${deg(W[0])}~${deg(W[1])}° 버티기`], ['④', '펴면서 놓기 = 깔끔한 탈출']])}
-    ${why(`각도가 초록 칸 안이면 오래 버틸 수 있고, 너무 크면(약 ${deg(D.spinAngle || 1.15)}° 넘게) <b>스핀</b>해요. 각도가 작아질 때 놓으면 '깔끔한 탈출'로 잃은 속도를 조금 돌려받아요. 빠른 코너에선 드리프트보다 그냥 라인이 빨라요.`)}
-    <p class="tut-tip">💡 너무 돌 때는 핸들을 반대로 <b>톡톡</b>. 꾹 누르면 반대쪽으로 튀어요.</p>`;
-  },
-  plan: (ctx, c) => {
-    const P = cornerPlan(ctx.game, c, Math.min(220, runUp(ctx, c)));
-    P.driver = () => lineDriver(ctx.game, { look: DEMO_LOOK });
-    P.badge = `🎬 시범 · ${ctx.cname(c)} 드리프트`;
-    P.moments = [
-      { id: 'straight', a: -1e9, b: P.dB - 0.3 * P.vB, ts: 1 },
-      { id: 'brake', a: P.dB - 0.3 * P.vB, b: P.dA - 30, ts: 1 },
-      { id: 'kick', a: P.dA - 30, b: P.dA - 8, ts: 1, pulse: { ts: 0.3, sec: 1.2 } },
-      { id: 'hold', a: P.dA - 8, b: P.dA + 18, ts: 1, pulse: { ts: 0.35, sec: 1.0 } },
-      { id: 'exit', a: P.dA + 18, b: 1e9, ts: 1 },
-    ];
-    P.momentAt = (m) => P.moments.find((x) => m >= x.a && m < x.b) || P.moments[0];
-    P.strip = stripOf([['straight', '직선'], ['brake', '브레이크'], ['kick', '꺾고 드리프트'], ['hold', '각도 버티기'], ['exit', '펴고 놓기']]);
-    const Dk = ctx.kbd('drift') || ctx.K('drift'), S = ctx.kbd(P.turnKey), O = ctx.kbd(P.outKey), B = ctx.kbd('brake'), T = ctx.kbd('throttle');
-    P.texts = (id, coach) =>
-      coach
-        ? { straight: [`${T}`, ''], brake: [`${B} 충분히`, ''], kick: [`${S} + ${Dk}`, ''], hold: ['각도 버티기', `너무 돌면 ${O} 살짝`], exit: ['펴면서 놓기', `${T}`] }[id]
-        : {
-            straight: ['헤어핀이 와요', '먼저 속도를 충분히 줄여요'],
-            brake: [`${B}로 충분히 줄이기`, '빠르면 드리프트가 길게 미끄러져요'],
-            kick: [`${S} 꺾으면서 ${Dk} 꾹`, '꼬리가 바깥으로 미끄러져요'],
-            hold: ['각도 버티기', `너무 돌면 ${O} 쪽으로 살짝 (카운터)`],
-            exit: ['핸들을 펴면서 놓기', `${T} 꾹 → 깔끔한 탈출`],
-          }[id];
-    P.demoCtl = (c, cur, car) => {
-      if (!cur) return;
-      if (cur.id === 'brake' && car.speed > P.vMin + 1) (c.throttle = 0), (c.brake = Math.max(c.brake, 0.9));
-      if (cur.id === 'kick' || cur.id === 'hold') {
-        const ang = Math.abs(car.driftAngle || 0);
-        c.drift = cur.id === 'kick' || ang < 0.62;
-        c.brake = 0;
-        c.throttle = ang > 0.7 ? 0.3 : 0.65;
-      }
-      if (cur.id === 'exit') c.drift = false;
-    };
-    return P;
-  },
-  task: (ctx, P) => `${ctx.cname(P.c)}: 꺾으면서 ${ctx.K('drift')} → 각도 버티기 → 펴면서 놓기`,
-  goals: ['드리프트 시작', '각도 버티기', '스핀 없이', '깔끔한 탈출'],
-  cue: (P, id) => ({ straight: 'throttle', brake: 'brake', kick: P.turnKey, hold: null, exit: 'throttle' })[id],
-  gauge: true,
-  judge(ctx, P) {
-    const car = ctx.car, D = car.cfg.drift || {};
-    const W = Array.isArray(D.holdAngle) ? D.holdAngle : [0.28, 0.75];
-    const X = { driftT: 0, holdT: 0, spin: false, exit: false, gain: 0, respawn: false };
-    return {
-      step(dt, seen) {
-        if (seen.includes('respawn') || seen.includes('fall')) return (X.respawn = true), 'end';
-        if (car.drifting) X.driftT += dt;
-        const a = Math.abs(car.driftAngle || 0);
-        if (car.drifting && a >= W[0] && a <= W[1]) X.holdT += dt;
-        if (seen.includes('driftSpin')) X.spin = true;
-        if (seen.includes('driftExit')) (X.exit = true), (X.gain = (car.lastDriftInfo || {}).gain || 0);
-        if (!car.trackInfo) return null;
-        const m = P.dist(car.trackInfo.index % P.N);
-        if (m > P.dX + 40 && !car.drifting) return 'end';
-        return null;
-      },
-      prog: () => [X.driftT > 0.3, X.holdT > 0.6, X.driftT > 0.3 && !X.spin, X.exit],
-      result() {
-        const rows = [];
-        rows.push(X.driftT >= 0.3 ? row('start', 'ok', '드리프트 시작', `${t1(X.driftT)}초 미끄러졌어요`) : X.driftT > 0 ? row('start', 'meh', '드리프트 시작', '아주 짧았어요. 꺾은 채로 드리프트 키를 꾹') : row('start', 'bad', '드리프트 시작', `코너에서 꺾은 채로 ${ctx.K('drift')}`));
-        rows.push(X.holdT >= 0.6 ? row('hold', 'ok', '각도 버티기', `초록 각도에서 ${t1(X.holdT)}초!`) : X.holdT >= 0.2 ? row('hold', 'meh', '각도 버티기', `${t1(X.holdT)}초 버텼어요. 반대로 살짝 꺾어 각도를 잡아요`) : row('hold', 'bad', '각도 버티기', '초록 각도에 거의 못 들어갔어요'));
-        rows.push(X.spin ? row('spin', 'bad', '스핀 없이', '스핀! 너무 돌면 반대로 살짝 꺾어요') : X.driftT > 0.3 ? row('spin', 'ok', '스핀 없이', '스핀 없이 버텼어요') : row('spin', 'meh', '스핀 없이', '드리프트를 해야 볼 수 있어요'));
-        rows.push(X.exit ? row('exit', 'ok', '깔끔한 탈출', X.gain > 0.3 ? `깔끔한 탈출! +${Math.round(X.gain * 3.6)} km/h` : '깔끔한 탈출!') : row('exit', X.driftT > 0.3 ? 'meh' : 'bad', '깔끔한 탈출', '각도가 작아질 때 핸들을 펴면서 놓아요'));
-        return { rows, respawn: X.respawn };
-      },
-    };
-  },
-};
-
 // 10) 비행 루트 (그랑프리) ---------------------------------------------------
 function botDemoDriver(ctx) {
   const { car, track, game } = ctx;
@@ -1143,19 +1056,19 @@ RUN.fly = {
   },
 };
 
-// 11) 배 카빙 (바닷가) --------------------------------------------------------
+// 11) 배 물길 (바닷가, 카빙은 2026-11-15에 없앰) --------------------------------------------------------
 RUN.boat = {
   demo: true,
   spot: (ctx) => ctx.spots.water,
   intro: (ctx) => `
-    <p>물에 닿으면 저절로 <b>배</b>가 돼요. 배는 옆으로 잘 미끄러져서 크게 돌아요. 꺾으면서 ${ctx.K('drift')}를 누르면 <b>카빙</b>: 물을 파고들며 <b>훨씬 날카롭게</b> 돌아요.</p>
-    ${steps([['①', `${ctx.kbd('throttle')}로 물까지`], ['②', '배로 변신 (자동)'], ['③', `굽은 곳에서 꺾으며 ${ctx.K('drift')}`], ['④', '펴지면 놓고 꾹']])}
-    ${why('카빙 중엔 약 1.7배 빨리 돌지만 속도가 <b>조금</b> 줄어요. 그래서 <b>굽은 곳에서만 짧게</b> 쓰고 곧은 물에서는 놓아요. 0.5초 넘게 버티다 <b>핸들을 똑바로 펴며</b> 빠지면 잃은 속도 일부를 돌려받아요(물보라 고리). 물에서 액셀을 떼면 가라앉을 수 있어요.')}
-    <p class="tut-tip">💡 물살 무늬가 휘는 곳 = 미리 카빙 준비.</p>`,
+    <p>물에 닿으면 저절로 <b>배</b>가 돼요. 배는 옆으로 잘 미끄러져서 <b>크게</b> 돌아요. 그래서 굽은 물길은 <b>들어가기 전에 미리</b> 조금씩 꺾어요.</p>
+    ${steps([['①', `${ctx.kbd('throttle')}로 물까지`], ['②', '배로 변신 (자동)'], ['③', '굽기 전에 미리 꺾기'], ['④', `곧은 물은 ${ctx.kbd('throttle')} 끝까지`]])}
+    ${why('배는 핸들을 꺾어도 진행 방향이 천천히 따라와요(옆으로 미끄러짐). 늦게 꺾으면 부표 줄 밖으로 밀려 느려져요. 물에서 액셀을 떼면 가라앉을 수 있어요.')}
+    <p class="tut-tip">💡 물살 무늬가 휘는 곳 = 미리 꺾을 준비.</p>`,
   plan(ctx, wr) {
     const { N, ds, W, track, car } = ctx;
     const iw0 = W(Math.round(wr.t0 * N)), iw1 = W(Math.round(wr.t1 * N));
-    const P = { c: { num: 0, side: 1 }, N, ds, i0: W(iw0 - Math.round(150 / ds)), vMin: 0, side: 1, turnKey: 'right', outKey: 'left', badge: '🎬 시범 · 배 카빙' };
+    const P = { c: { num: 0, side: 1 }, N, ds, i0: W(iw0 - Math.round(150 / ds)), vMin: 0, side: 1, turnKey: 'right', outKey: 'left', badge: '🎬 시범 · 배 물길' };
     P.dist = (idx) => {
       const m = W(idx - P.i0) * ds;
       return m > track.length / 2 ? m - track.length : m;
@@ -1168,9 +1081,9 @@ RUN.boat = {
     let tt = 0;
     for (let i = iw0, n = 0; n < W(iw1 - iw0); i = W(i + 1), n++) tt += ds / Math.max(5, prof.speed[i]);
     // 계획은 배 최고 속도로 바로 들어간다고 보지만 실제로는 물에 들어가며 속도가 붙어야 해서 ×1.2 + 1초 (시범 운전 16.7초 / 계획 13.5초)
-    P.waterTarget = tt * 1.2 + 1;
+    P.waterTarget = tt * 1.25 + 1; // 카빙을 없애며 1.2 → 1.25 (2026-11-15)
     const curv = ctx.line.curvature;
-    // '굽은 곳' 기준: 이 물 구간에서 가장 많이 휜 곳의 45% 이상 (바닷가 물길은 반지름 90 m보다 완만해서 예전 기준으로는 카빙 순간이 한 번도 안 나왔음)
+    // '굽은 곳' 기준: 이 물 구간에서 가장 많이 휜 곳의 45% 이상 (바닷가 물길은 반지름 90 m보다 완만함)
     let kMax = 0;
     for (let i = iw0, n = 0; n < W(iw1 - iw0); i = W(i + 1), n++) kMax = Math.max(kMax, Math.abs(curv[i]));
     const kTurn = Math.max(1 / 600, kMax * 0.45);
@@ -1181,42 +1094,41 @@ RUN.boat = {
       return false;
     };
     const mo = (id, pulse) => ({ id, ts: 1, pulse });
-    const MO = { shore: mo('shore'), splash: mo('splash', { ts: 0.35, sec: 1.0 }), straight: mo('straight'), carve: mo('carve', { ts: 0.35, sec: 1.1 }), out: mo('out') };
+    const MO = { shore: mo('shore'), splash: mo('splash', { ts: 0.35, sec: 1.0 }), straight: mo('straight'), turn: mo('turn', { ts: 0.35, sec: 1.1 }), out: mo('out') };
     P.momentAt = (m) => {
       if (m < P.dW0 - 15) return MO.shore;
       if (m > P.dW1) return MO.out;
       if (m < P.dW0 + 25) return MO.splash;
-      return turning() ? MO.carve : MO.straight;
+      return turning() ? MO.turn : MO.straight;
     };
-    P.strip = stripOf([['shore', '물까지'], ['splash', '배 변신'], ['straight', '곧은 물'], ['carve', '카빙'], ['out', '땅으로']]);
-    const T = ctx.kbd('throttle'), Dk = ctx.K('drift');
+    P.strip = stripOf([['shore', '물까지'], ['splash', '배 변신'], ['straight', '곧은 물'], ['turn', '미리 꺾기'], ['out', '땅으로']]);
+    const T = ctx.kbd('throttle');
     P.texts = (id, coach) =>
       coach
-        ? { shore: [`${T} 꾹`, ''], splash: ['배로 변신!', `${T} 계속`], straight: ['곧은 물 · 놓기', ''], carve: [`꺾으며 ${Dk}`, ''], out: ['땅으로!', ''] }[id]
+        ? { shore: [`${T} 꾹`, ''], splash: ['배로 변신!', `${T} 계속`], straight: ['곧은 물 · 꾹', ''], turn: ['미리 꺾기', ''], out: ['땅으로!', ''] }[id]
         : {
             shore: [`${T} 꾹, 바다로!`, '물에 닿으면 저절로 배가 돼요'],
             splash: ['배로 변신!', '물에서는 액셀을 떼지 않아요'],
-            straight: ['곧은 물에선 카빙 놓기', '카빙은 속도를 조금 깎아요'],
-            carve: [`굽은 곳: 꺾으며 ${Dk} = 카빙`, '물을 파고들며 날카롭게 돌아요'],
+            straight: [`곧은 물: ${T} 끝까지`, '핸들은 똑바로'],
+            turn: ['굽은 곳: 미리 꺾기', '배는 옆으로 미끄러지며 천천히 돌아요'],
             out: ['땅에 올라오면 다시 차로', ''],
           }[id];
     P.driver = () => lineDriver(ctx.game, { look: 0.16 });
     P.demoCtl = (c, cur) => {
       c.brake = 0;
       c.throttle = 1;
-      c.drift = !!(cur && cur.id === 'carve' && Math.abs(c.steer) > 0.12);
     };
     return P;
   },
   place(ctx, P) {
     ctx.placeRolling(P.i0, 0.8, 18);
   },
-  task: (ctx) => `물에서 굽은 곳마다 꺾으며 ${ctx.K('drift')} (카빙) → 빠르게 건너기`,
-  goals: ['배로 변신', '카빙 쓰기', '물 구간 시간', '가라앉지 않기'],
-  cue: (P, id) => ({ shore: 'throttle', splash: 'throttle', straight: 'throttle', carve: null, out: 'throttle' })[id],
+  task: () => '굽은 물길은 미리 꺾고, 가속은 끝까지 → 빠르게 건너기',
+  goals: ['배로 변신', '물 구간 시간', '가라앉지 않기'],
+  cue: (P, id) => ({ shore: 'throttle', splash: 'throttle', straight: 'throttle', turn: 'throttle', out: 'throttle' })[id],
   judge(ctx, P) {
     const car = ctx.car;
-    const X = { boat: false, carveT: 0, tIn: null, tOut: null, t: 0, sink: false, respawn: false };
+    const X = { boat: false, tIn: null, tOut: null, t: 0, sink: false, respawn: false };
     return {
       step(dt, seen) {
         X.t += dt;
@@ -1226,20 +1138,18 @@ RUN.boat = {
           X.boat = true;
           if (X.tIn == null) X.tIn = X.t;
         }
-        if ((car.boatCarve || 0) > 0.5 && car.mode === 'boat') X.carveT += dt;
         if (X.boat && X.tOut == null && car.mode !== 'boat' && car.grounded) X.tOut = X.t;
         if (!car.trackInfo) return null;
         const m = P.dist(car.trackInfo.index % P.N);
         if (m > P.end) return 'end';
         return null;
       },
-      prog: () => [X.boat, X.carveT > 1, X.tOut != null && X.tOut - X.tIn <= P.waterTarget, X.boat && !X.sink],
+      prog: () => [X.boat, X.tOut != null && X.tOut - X.tIn <= P.waterTarget, X.boat && !X.sink],
       result() {
         const rows = [];
         rows.push(X.boat ? row('boat', 'ok', '배로 변신', '물에서 배가 됐어요') : row('boat', 'bad', '배로 변신', '물까지 못 갔어요'));
-        rows.push(X.carveT >= 1 ? row('carve', 'ok', '카빙 쓰기', `카빙 ${t1(X.carveT)}초!`) : X.carveT >= 0.3 ? row('carve', 'meh', '카빙 쓰기', `${t1(X.carveT)}초만 썼어요. 굽은 곳마다 꺾으며 드리프트 키`) : row('carve', 'bad', '카빙 쓰기', `물 위에서 꺾으며 ${ctx.K('drift')}를 눌러 봐요`));
         const wt = X.tIn != null && X.tOut != null ? X.tOut - X.tIn : null;
-        rows.push(wt == null ? row('time', 'bad', '물 구간 시간', '물을 끝까지 못 건넜어요') : wt <= P.waterTarget ? row('time', 'ok', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초)`) : wt <= P.waterTarget * 1.12 ? row('time', 'meh', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초). 카빙은 짧게`) : row('time', 'bad', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초)`));
+        rows.push(wt == null ? row('time', 'bad', '물 구간 시간', '물을 끝까지 못 건넜어요') : wt <= P.waterTarget ? row('time', 'ok', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초)`) : wt <= P.waterTarget * 1.12 ? row('time', 'meh', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초). 굽기 전에 미리 꺾어요`) : row('time', 'bad', '물 구간 시간', `${t1(wt)}초 (목표 ${t1(P.waterTarget)}초)`));
         rows.push(!X.boat ? row('sink', 'bad', '가라앉지 않기', '물까지 못 갔어요') : X.sink || X.respawn ? row('sink', 'bad', '가라앉지 않기', '가라앉았어요. 물에서는 액셀을 계속') : row('sink', 'ok', '가라앉지 않기', '끝까지 떠서 건넜어요'));
         return { rows, respawn: X.respawn };
       },

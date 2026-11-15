@@ -10,7 +10,7 @@ import { pad, padKbd } from './gamepad.js';
 import { settings, uiSound } from './settings.js';
 import { raceUrl, homeUrl, setLast } from './gameData.js';
 import { touch, touchWanted } from './touch.js';
-import { createCoachUI, createDemo, momentText } from './tutorialDemo.js';
+import { createCoachUI, createDemo, momentText, demoButtonsHtml } from './tutorialDemo.js';
 import { coachSpeed } from './brakeNeed.js';
 import { LESSON_TEXT, EXAM_TEXT } from './academyText.js';
 import { shortCard, shortKeys } from './academyCards.js';
@@ -25,7 +25,7 @@ import { paintOf } from './unlocks.js';
 
 const EX_KEY = 'gimmick.academy.exam';
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const TOUCH_LBL = { throttle: '▲ 가속', brake: '▼ 브레이크', drift: '💨 드리프트', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
+const TOUCH_LBL = { throttle: '▲ 가속', brake: '▼ 브레이크', climb: '⬆ 상승', dive: '⬇ 하강', respawn: '↺ 복귀', left: '◀', right: '▶' };
 const onTouch = () => !pad.usingPad() && touchWanted();
 const DRIVE_IDS = new Set(['throttle', 'brake', 'left', 'right']);
 const K = (id) => (onTouch() && TOUCH_LBL[id] ? `<kbd>${TOUCH_LBL[id]}</kbd>` : pad.usingPad() && pad.get(id) != null ? pad.html(id) : keybinds.html(id, DRIVE_IDS.has(id) ? 2 : 1));
@@ -229,7 +229,7 @@ export function startAcademy(game) {
     $('.tut-card .tut-ic').innerHTML = icon;
     $('.tut-card h2').textContent = title;
     $('.ac-crumb').innerHTML = crumb();
-    $('.tut-card').classList.remove('tdr', 'ac-rep', 'ac-final', 'ac-short-frame');
+    $('.tut-card').classList.remove('tdr', 'ac-rep', 'ac-final', 'ac-short-frame', 'ac-sumcard');
   }
   function crumb() {
     if (exam) {
@@ -275,7 +275,7 @@ export function startAcademy(game) {
       $('.tut-card .tut-body').innerHTML = shortCard({
         ...text, title: text.title + (label() ? ' · ' + label() : ''), badge,
         tip: examText ? examText.tip : text.tip, more: text.more + rule,
-        keyHtml: (key) => shortKeys(key, K, lessonId === 'fly' ? 'dive' : 'drift'),
+        keyHtml: (key) => shortKeys(key, K),
       });
     } else {
       const goals = (L.goals || []).map((g) => `<span>${esc(g)}</span>`).join('');
@@ -317,12 +317,15 @@ export function startAcademy(game) {
       console.warn('시범 주행 오류', e);
       return startLive();
     }
-    coach.buttons(`<button class="gm-btn small" data-t="demoAgain">↺ 처음부터 <kbd>${esc(keybinds.main('restart'))}</kbd></button><button class="gm-btn small" data-t="demoSkip">직접 해 보기 ›</button><button class="gm-btn small" data-t="card">‹ 설명·나가기</button>`);
+    // 시범 조작 (2026-11-15): ⏸ 멈춤/▶ 계속(Space·P) · ↺ 처음부터(R) · 🐢 천천히/보통 + 직접 해 보기 · 설명
+    coach.buttons(`${demoButtonsHtml(keybinds.main('respawn'))}<button class="gm-btn small" data-t="demoSkip">직접 해 보기 ›</button><button class="gm-btn small" data-t="card">‹ 설명·나가기</button>`);
   }
   function demoDone(skipped) {
+    const sum = !skipped && demo && demo.summaryHtml ? demo.summaryHtml() : '';
     stopAuto();
     coach.hide();
     if (skipped) return startLive();
+    if (sum.includes('<li')) return showDemoSummary(sum);
     phase = 'between';
     waitT = 1.5;
     burst.querySelector('.ok').textContent = '🎬';
@@ -332,6 +335,21 @@ export function startAcademy(game) {
     void burst.offsetWidth;
     burst.classList.add('on');
     chime(true);
+  }
+
+  /** 요점 카드: 시범이 끝나면 방금 자막들을 순서대로 모아서 → [다시 보기] / [따라 하기 ›] (2026-11-15) */
+  function showDemoSummary(sum) {
+    frame(chipText(), '🎬', `시범 요점 · ${meta.name}`);
+    $('.tut-card').classList.add('ac-sumcard');
+    $('.tut-card .tut-body').innerHTML = `<p class="td-sum-lead">방금 시범에서 본 순서예요. 이대로 따라 해 봐요!</p>${sum}`;
+    $('.tut-card .tut-btns').innerHTML = btn('card', '‹ 설명') + '<span class="sp"></span>' + btn('demoAgain', '↺ 다시 보기') + btn('go', `따라 하기 › ${enterK}`, 'primary');
+    open('.tut-card .primary');
+    chime(true);
+  }
+  /** 시범 속도 바꾸기 (천천히 ↔ 보통, 기억함) */
+  function demoSpeedToggle() {
+    if (!demo) return;
+    demo.speed = demo.speed === 'slow' ? 'normal' : 'slow';
   }
 
   // ------------------------------------------------------------------ 따라 하기
@@ -397,7 +415,7 @@ export function startAcademy(game) {
     try {
       prog = judge && judge.prog ? judge.prog() : [];
     } catch {}
-    $('.tut-panel .tut-goals').innerHTML = (L.goals || []).map((g, j) => `<div class="g ${prog[j] ? 'ok' : ''}"><i>${prog[j] ? '✓' : ''}</i><span>${esc(g)}</span></div>`).join('') + (L.gauge && phase === 'live' ? driftGauge(car) : '') + (L.standing ? lapInfo() : '');
+    $('.tut-panel .tut-goals').innerHTML = (L.goals || []).map((g, j) => `<div class="g ${prog[j] ? 'ok' : ''}"><i>${prog[j] ? '✓' : ''}</i><span>${esc(g)}</span></div>`).join('') + (L.standing ? lapInfo() : '');
   }
   function lapInfo() {
     const t = race.phase === 'racing' ? race.time - (race.lapStart || 0) : 0;
@@ -481,8 +499,7 @@ export function startAcademy(game) {
       'slip:pass': '앞차 바로 뒤에서 가속을 유지하고, 거의 닿기 전에 옆으로 나와 추월해요.',
       'fly:zone': '마지막 고리를 지나면 상승을 놓고, 착륙장을 향해 하강을 눌러요. 하늘길 옆으로 멀리 벗어나지 마세요.',
       'fly:land': '마지막 고리 뒤에서는 상승을 놓고 착륙장 위에서 하강을 눌러요.',
-      'boat:time': '가속은 계속 누르고, 굽은 물길에서만 드리프트와 조향을 짧게 함께 써요.',
-      'drift:hold': '코너에서 드리프트를 누른 채 꺾어요. 각도가 초록 칸을 넘으면 반대로 살짝 꺾어 잡아요.',
+      'boat:time': '가속은 계속 누르고, 굽은 물길 앞에서 미리 조금씩 꺾어요.',
     };
     return hints[lessonId + ':' + r.id] || r.text;
   }
@@ -750,10 +767,24 @@ export function startAcademy(game) {
       return;
     }
     if (phase === 'demo' || phase === 'between') {
-      if (acts.includes('restart')) {
+      // 시범: Space·P = 멈춤/계속, Enter = (멈춰 있으면) 계속, R(복귀 키) = 처음부터 (Enter는 이제 '계속'이라 처음부터로 안 씀)
+      if (phase === 'demo' && demo && (e.code === 'Enter' || e.code === 'NumpadEnter') && !demo.paused) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        return phase === 'demo' ? startDemo() : null;
+        return;
+      }
+      if (acts.includes('respawn') || (acts.includes('restart') && !(e.code === 'Enter' || e.code === 'NumpadEnter'))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (e.repeat) return;
+        return phase === 'demo' ? (uiSound('back'), startDemo()) : null;
+      }
+      if (phase === 'demo' && demo && (e.code === 'Space' || e.code === 'KeyP' || ((e.code === 'Enter' || e.code === 'NumpadEnter') && demo.paused))) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (e.repeat) return;
+        uiSound(demo.paused ? 'select' : 'move');
+        return e.code === 'Enter' || e.code === 'NumpadEnter' ? demo.resume() : demo.toggle();
       }
       if (acts.length && !acts.includes('menu') && !acts.includes('sound')) e.stopImmediatePropagation();
       return;
@@ -773,6 +804,9 @@ export function startAcademy(game) {
     if (ended || cardLike()) return true;
     if (id === 'restart') return phase === 'demo' ? startDemo() : retry(), false;
     if (id === 'map') return setHint('아카데미 중에는 맵을 바꿀 수 없어요'), false;
+    if (phase === 'demo' && demo && id === 'climb') return uiSound('select'), demo.toggle(), false; // 패드 A = 멈춤/계속
+    if (phase === 'demo' && demo && id === 'respawn') return uiSound('back'), startDemo(), false; // 패드 Y = 처음부터
+    if (phase === 'demo' && demo && id === 'booster') return uiSound('move'), demoSpeedToggle(), false; // 패드 X = 천천히/보통
     if (phase === 'demo' || phase === 'between') return id === 'menu';
     return true;
   });
@@ -797,6 +831,12 @@ export function startAcademy(game) {
         return uiSound('back'), startDemo();
       case 'demoSkip':
         return uiSound('select'), demoDone(true);
+      case 'demoGo':
+        return uiSound('select'), demo && demo.resume();
+      case 'demoPause':
+        return uiSound('move'), demo && demo.toggle();
+      case 'demoSpeed':
+        return uiSound('move'), demoSpeedToggle();
       case 'retry':
         return retry();
       case 'card':
@@ -941,20 +981,5 @@ export function startAcademy(game) {
   return api;
 }
 
-// ------------------------------------------------------------------ 드리프트 각도 막대 (따라 하기 판)
-const GAUGE_MAX = 1.35;
-function driftGauge(car) {
-  const D = car.cfg.drift || {};
-  const win = Array.isArray(D.holdAngle) ? D.holdAngle : [0.28, 0.75];
-  const spin = D.spinAngle || 1.15, exit = D.exitAngle || 0.6;
-  const pc = (r) => `${Math.max(0, Math.min(100, (r / GAUGE_MAX) * 100)).toFixed(1)}%`;
-  const a = car.drifting ? Math.abs(car.driftAngle || 0) : 0;
-  const inWin = a >= win[0] && a <= win[1];
-  const state = !car.drifting ? '드리프트 키를 누르면 바늘이 움직여요' : a > spin * 0.9 ? '⚠ 너무 돌아요! 카운터' : inWin ? (a < exit ? '좋아요! 지금 놓으면 깔끔' : '좋아요! 버티다가 펴면서 놓기') : a < win[0] ? '더 꺾어요' : '카운터로 줄여요';
-  return `<div class="tut-gauge${car.drifting ? ' on' : ''}${inWin ? ' good' : ''}${a > spin * 0.9 ? ' bad' : ''}">
-    <div class="gt"><span>드리프트 각도</span><b>${Math.round((a * 180) / Math.PI)}°</b></div>
-    <div class="gb"><i class="win" style="left:${pc(win[0])};width:calc(${pc(win[1])} - ${pc(win[0])})"></i><i class="spin" style="left:${pc(spin)}"></i><i class="exit" style="left:${pc(exit)}"></i><i class="needle" style="left:${pc(a)}"></i></div>
-    <div class="gs">${state}</div></div>`;
-}
 void padKbd;
 void codeLabel;

@@ -13,6 +13,7 @@ import { settings, SETTING_DEFS, createSettingsPanel, createControlsPage, spatia
 import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutorialUrl, RACE_MODES, sampleOutline, outlineLength, drawTrackThumb } from './gameData.js';
 import { records, fmtTime } from './records.js';
 import { online } from './online.js';
+import { toastNext as cloudToastNext } from './cloudSave.js'; // 계정 저장: 새로 고침 뒤 알림
 import { createCarModel } from './carModel.js';
 import { loadCarThumbs, thumbUrl } from './garageThumbQueue.js'; // 차 고르기 카드의 진짜 차 사진
 import { profile } from './profile.js'; // 드라이버 카드 (레벨·티어·XP)
@@ -41,11 +42,11 @@ import { createCoach, lockTip, closeLockTip } from './coachMarks.js'; // 해금 
 export const VERSION = 'v0.9 · 2026.11';
 /** 운전 도움을 켜고 낸 기록 표시 */
 const ASSIST_TAG = '<span class="h-assist" title="운전 도움을 켜고 낸 기록">🛟 도움</span>';
-const STAT_NAMES = [['speed', '최고 속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력'], ['brake', '브레이크'], ['drift', '드리프트'], ['offroad', '험한 길'], ['boat', '배 성능']]; // 부스터는 꺼 둠 (car.json booster.enabled)
+const STAT_NAMES = [['speed', '최고 속도'], ['accel', '가속'], ['handling', '핸들링'], ['grip', '접지력'], ['brake', '브레이크'], ['offroad', '험한 길'], ['boat', '배 성능']]; // 부스터는 꺼 둠 (car.json booster.enabled)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 /** 차 특기 (cars.json stats의 숨은 값) → 정보 칸 아래 작은 딱지 */
-const PERKS = [['offroad', 3, '잔디에 강해요'], ['boat', 3, '배가 빨라요'], ['fly', 3, '비행을 잘해요'], ['drift', 4, '드리프트 쉬워요']];
+const PERKS = [['offroad', 3, '잔디에 강해요'], ['boat', 3, '배가 빨라요'], ['fly', 3, '비행을 잘해요']];
 /** 'LE MANS PROTO · 접지력' → ['LE MANS PROTO', '접지력'] */
 const splitTag = (tag) => {
   const [en, ...ko] = String(tag || '').split('·');
@@ -282,7 +283,7 @@ export async function runHome() {
             <div class="ct-statbox">
               <div class="ns-heading"><b>퍼포먼스 <small>100점 기준</small></b><button class="gm-btn small ns-compare" type="button" data-nav>⚖ 비교하기</button></div>
               <div class="h-stats"></div>
-              <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h에서 버티는 힘과 차를 누르는 힘, 드리프트는 유지 각도·회전·미끄러짐, 험한 길은 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
+              <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h에서 버티는 힘과 차를 누르는 힘, 험한 길은 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
             </div>
           </section>
           <section class="ct-pane" data-pane="parts" id="ctPane-parts" role="tabpanel" aria-labelledby="ctTab-parts" hidden></section>
@@ -339,7 +340,21 @@ export async function runHome() {
     if (sound && changed) uiSound('toggle');
     if (focus) carInfoEl.querySelector(`.ct-tab[data-ct="${id}"]`)?.focus({ preventScroll: true });
   }
-  function stepCarTab(dir, focus = false) {
+  function stepCarTab(dir, focus = false, arrow = false) {
+    // partslock 2026-11-15: [ ] = 잠긴 조립 탭 건너뜀, 탭 위 ←→ = 잠긴 조립 탭에 멈추고 말풍선만 (들어가지 않음)
+    if (arrow) {
+      const from = document.activeElement?.dataset?.ct;
+      const i = CAR_TABS.indexOf(CAR_TABS.includes(from) ? from : carTab);
+      const next = CAR_TABS[(i + dir + CAR_TABS.length) % CAR_TABS.length];
+      if (next === 'parts' && !G('parts')) {
+        const b = carInfoEl.querySelector('.ct-tab.ct-parts');
+        if (b) { b.focus({ preventScroll: true }); uiSound('back'); lockTip(b, 'parts', { host: home, onRace: () => show(playView()) }); }
+        return;
+      }
+      closeLockTip();
+      setCarTab(next, { focus, sound: true });
+      return;
+    }
     const tabs = CAR_TABS.filter((t) => t !== 'parts' || G('parts'));
     const i = tabs.indexOf(carTab);
     setCarTab(tabs[(i + dir + tabs.length) % tabs.length], { focus, sound: true });
@@ -594,7 +609,7 @@ export async function runHome() {
   const metricLabel = (c, k) => {
     const m = c.stats?.metrics;
     if (!m) return '';
-    return ({ speed: m.topKmh + ' km/h', accel: '0→100 · ' + m.zero100Sec.toFixed(2) + '초', handling: '방향 전환 반응', grip: m.lateral150 + ' m/s² · 150 km/h', brake: '100→0 · 약 ' + m.brake100M + ' m', drift: '미끄러짐 유지 용이성', offroad: '잔디 속도 ' + m.offroadKeep + '% 유지', boat: '약 ' + m.boatKmh + ' km/h' })[k] || '';
+    return ({ speed: m.topKmh + ' km/h', accel: '0→100 · ' + m.zero100Sec.toFixed(2) + '초', handling: '방향 전환 반응', grip: m.lateral150 + ' m/s² · 150 km/h', brake: '100→0 · 약 ' + m.brake100M + ' m', offroad: '잔디 속도 ' + m.offroadKeep + '% 유지', boat: '약 ' + m.boatKmh + ' km/h' })[k] || '';
   };
   function renderStats(c) {
     const info = views.car.querySelector('.h-carinfo');
@@ -1011,9 +1026,36 @@ export async function runHome() {
   }
   // 순위표 아래 내 계정 줄 (이름 + 비밀번호 4자리 = 한 계정, 2026-11-12)
   function olMeHtml(me) {
-    if (me && me.claimed) return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> <em class="ol-lock">🔐 내 이름</em></span><span class="ol-tip">다른 기기에서도 같은 이름 + 비밀번호를 넣으면 이 계정이에요</span><button class="gm-btn small" data-act="name" data-nav>👤 바꾸기</button>`;
+    // 계정 저장 (2026-11-15): 로그인한 이름 + 진행 저장 상태 + [계정 바꾸기] [로그아웃]
+    if (me && me.claimed) {
+      const cs = online.cloudStatus ? online.cloudStatus() : {};
+      const cloud = cs.missing ? '' : cs.linked ? `<em class="ol-cloud">☁ 진행 저장됨</em>` : `<em class="ol-cloud wait">☁ 저장 준비 중</em>`;
+      return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> <em class="ol-lock">🔐 로그인 중</em>${cloud}</span><span class="ol-tip">${cs.missing ? '다른 기기에서도 같은 이름 + 비밀번호를 넣으면 이 계정이에요' : '다른 기기에서도 같은 이름 + 비밀번호면 레벨·조각·산 물건·기록이 그대로 이어져요'}</span><span class="ol-accbtns"><button class="gm-btn small" data-act="name" data-nav>👤 계정 바꾸기</button><button class="gm-btn small cs-logout" data-act="logout" data-nav>로그아웃</button></span>`;
+    }
     if (me) return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> 으로 올리는 중</span><span class="ol-tip warn">비밀번호를 정하면 이 이름이 내 것이 되고, 다른 기기에서도 이어 할 수 있어요</span><button class="gm-btn small primary" data-act="name" data-nav>🔐 비밀번호 정하기</button>`;
     return `<span class="ol-tip warn">이름과 비밀번호 4자리를 정하면 완주 기록이 순위표에 올라가요 · 다른 기기에서도 같은 이름 + 비밀번호면 같은 계정</span><button class="gm-btn small primary" data-act="name" data-nav>🔐 이름·비밀번호 정하기</button>`;
+  }
+  // 로그아웃 (2026-11-15): 확인 → 계정에 저장 (실패하면 아무것도 안 지우고 안내) → 처음 상태로 홈 새로 열기
+  let loggingOut = false;
+  async function logoutFlow() {
+    const me = online.me();
+    if (loggingOut || !me || !me.claimed) return;
+    if (!(await confirmDialog(`'${me.nick}' 계정에서 로그아웃할까요?`, '지금 진행을 계정에 저장하고 나가요 · 이 기기는 처음 상태가 돼요 (설정·조작키는 그대로). 같은 이름 + 비밀번호로 다시 들어오면 진행이 돌아와요.', '저장하고 로그아웃'))) return;
+    loggingOut = true;
+    toast('☁ 계정에 저장하는 중…');
+    let r;
+    try {
+      r = await online.logout();
+    } catch (err) {
+      r = { ok: false, message: '계정에 저장하지 못했어요 · 인터넷 연결 뒤 다시 해 주세요' };
+    }
+    loggingOut = false;
+    if (!r.ok) {
+      $('#hToast').classList.remove('on');
+      await confirmDialog('로그아웃하지 못했어요', `${r.message} · 이 기기 진행은 그대로예요.`, '확인', '닫기');
+      return;
+    }
+    location.replace(location.pathname);
   }
   async function renderOnline() {
     const box = views.records.querySelector('.h-online');
@@ -1306,6 +1348,7 @@ export async function runHome() {
       if (lock) el.setAttribute('aria-description', `${gate.lockText(id)} · ${gate.featureOf(id)?.name || ''}`);
       else el.removeAttribute('aria-description');
       if (el.classList.contains('ct-tab')) {
+        if (lock) el.setAttribute('aria-disabled', 'true'); else el.removeAttribute('aria-disabled'); // partslock: 잠긴 조립 탭은 못 들어감
         let tag = el.querySelector('.fg-tabtag');
         if (lock && !tag) { tag = document.createElement('i'); tag.className = 'fg-tabtag'; el.appendChild(tag); }
         if (tag) { tag.hidden = !lock; tag.textContent = lock ? gate.lockText(id, true) : ''; }
@@ -1406,7 +1449,7 @@ export async function runHome() {
         <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-coach="mode.next" data-nav>다음: 맵 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
-          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}" data-coach="mode.${m.id}"${m.id !== 'race' ? ` data-gate="${gate.MODE_FEATURE[m.id] || 'play'}"` : ''}><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 드리프트 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
+          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}" data-coach="mode.${m.id}"${m.id !== 'race' ? ` data-gate="${gate.MODE_FEATURE[m.id] || 'play'}"` : ''}><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
           <div class="opts"></div></div>`,
       ).join('')}</div>
       <div class="h-modetip"></div>
@@ -1423,7 +1466,7 @@ export async function runHome() {
   const OPT_LABEL = { bots: '봇 수', botLevel: '봇 실력', ghost: '고스트' };
   const MODE_TIPS = {
     race: '🏁 봇들과 같은 출발선에서 출발해요. 봇은 내 차와 같은 등급의 차를 타요',
-    item: '🎁 상자를 지나 아이템을 얻어요. 화면 위 아이템 칸을 누르거나 ' + keybinds.label('booster') + ' 키로 사용해요. 드리프트 게이지를 채워도 부스터를 얻어요',
+    item: '🎁 상자를 지나 아이템을 얻어요. 화면 위 아이템 칸을 누르거나 ' + keybinds.label('booster') + ' 키로 사용해요',
     time: '⏱️ 혼자 달리며 고스트(내 최고 기록)와 겨뤄요. 구간마다 빨라졌는지 느려졌는지 알려 줘요',
     net: '🌐 방을 만들어 코드를 친구에게 보내거나, 친구 코드로 들어가요. 모두 준비되면 같이 출발해요',
     free: '🧭 봇·고스트 없이 혼자 달려요. 코스를 익히거나 레이싱 라인을 연습할 때 좋아요',
@@ -1805,13 +1848,19 @@ export async function runHome() {
     else if (act === 'editKeys') show('settings', true, 'keys');
     else if (act === 'name') {
       const r = await welcomeDialog({ first: false });
-      if (r) {
+      if (r && r.logout) logoutFlow();
+      else if (r && r.reload) {
+        // 계정 저장 (2026-11-15): 다른 계정으로 바꿨거나 서버 진행을 받아 합침 → 홈을 새로 열어 그 진행으로
+        cloudToastNext(r.msg || '👤 계정 진행을 불러왔어요');
+        location.reload();
+      } else if (r) {
         myLevel = unlocks.currentLevel(); // 계정에 들어가면 다른 기기 경험치까지 합친 레벨
         showName();
         if (r.msg) toast(r.msg);
         if (view === 'records') renderOnline();
       }
     }
+    else if (act === 'logout') logoutFlow();
     else if (act === 'olMap') {
       // 기록 화면 위 맵 띠: 고른 맵으로 순위표·내 기록 둘 다 바꿈
       if (olMap !== b.dataset.map) {
@@ -1955,7 +2004,7 @@ export async function runHome() {
       e.preventDefault();
       // 차 정보 탭 위: ←→ = 탭 바꾸기
       if (view === 'car' && (dir === 'left' || dir === 'right') && act && act.classList && act.classList.contains('ct-tab')) {
-        stepCarTab(dir === 'left' ? -1 : 1, true);
+        stepCarTab(dir === 'left' ? -1 : 1, true, true);
         return;
       }
       // 차 정보 칸 안(색·코스튬·바로 가기): ←→ = 칸 안에서 옆 버튼으로 (차는 그대로)
@@ -2060,7 +2109,7 @@ export async function runHome() {
     .catch(() => {})
     .finally(() => setTimeout(levelNews, 150));
   setTimeout(levelNews, 2500); // 서버가 느리면 기다리지 않음
-  setTimeout(startThumbs, 1500); // 메인 화면에 있어도 미리 찍어 둠 (다음부터는 저장된 사진을 바로 씀)
+  setTimeout(startThumbs, 2800); // 메인 화면에 있어도 미리 찍어 둠 (다음부터는 저장된 사진을 바로 씀). wheelfx2: 1.5→2.8초 = 바퀴가 굴러 나간 뒤에 (겹치면 바퀴가 끊김)
   const ld = document.getElementById('loading');
   if (ld) {
     ld.classList.add('out');
@@ -2227,7 +2276,7 @@ function createPreview(home) {
   // 차 모델 (createCarModel이 쓰는 차 상태를 흉내 낸 가짜 차)
   const fake = {
     pos: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0), fwd: new THREE.Vector3(0, 0, 1), vel: new THREE.Vector3(),
-    mode: 'normal', sink: 0, forwardSpeed: 0, thr: 0, grounded: true, surface: 'road', drifting: false, driftDir: 0, driftLevel: 0,
+    mode: 'normal', sink: 0, forwardSpeed: 0, thr: 0, grounded: true, surface: 'road', 
     steerVisual: 0, load: 0, form: null, flying: false, boostTime: 0, brk: 0,
   };
   let model = null, holder = null, drop = 0;
@@ -2373,6 +2422,7 @@ function createPreview(home) {
   function loop(now) {
     requestAnimationFrame(loop);
     if (!home.isConnected || document.hidden) return;
+    if (window.__wf?.busy?.()) return; // wheelfx2: 바퀴가 덮으며 다른 화면으로 가는 중엔 3D 미리 보기를 쉼 (가만히 서 있는 차라 멈춰도 티 안 남)
     // 홈의 3D 미리보기도 사용자가 고른 프레임 제한을 따름 (고주사율 화면 발열/배터리).
     const cap = settings.get('fpsCap');
     if (cap) {
@@ -2429,7 +2479,7 @@ function createPreview(home) {
 // ------------------------------------------------------------------ 이름 (net.js와 같은 저장 칸 'gimmick.nick')
 const NICK_KEY = 'gimmick.nick';
 const cleanNick = (v) => String(v || '').replace(/[<>&"]/g, '').trim().slice(0, 12);
-const randomNick = () => ['번개', '질주', '드리프트', '터보', '로켓', '바람', '유성', '폭풍', '코너', '에이펙스'][Math.floor(Math.random() * 10)] + Math.floor(10 + Math.random() * 90);
+const randomNick = () => ['번개', '질주', '질풍', '터보', '로켓', '바람', '유성', '폭풍', '코너', '에이펙스'][Math.floor(Math.random() * 10)] + Math.floor(10 + Math.random() * 90);
 function getNick() {
   try {
     return localStorage.getItem(NICK_KEY) || '';
@@ -2454,18 +2504,23 @@ function welcomeDialog({ first = false } = {}) {
     const wrap = document.createElement('div');
     wrap.className = 'gm-confirm gm-welcome';
     const cur = getNick();
+    // 계정 저장 (2026-11-15): 지금 로그인한 계정 + [로그아웃], 다른 이름으로 들어갈 때 안내
+    const meAcc = online.enabled ? online.me() : null;
+    const acc = meAcc && meAcc.claimed ? meAcc : null;
+    const accCs = acc && online.cloudStatus ? online.cloudStatus() : {};
     wrap.innerHTML = `<div class="box" role="dialog" aria-modal="true">
       ${first ? '<div class="wl-flag">🏁</div><h3>트랜스폼 레이서에 온 걸 환영해요!</h3><p>먼저 레이스에서 보일 <b>이름</b>을 정해 주세요. 멀티플레이와 결과표에 나와요.</p>' : '<h3>👤 내 이름</h3><p>멀티플레이 대기실과 레이스 결과표에 보이는 이름이에요.</p>'}
+      ${!first && acc ? `<div class="wl-acc"><span class="wl-acc-who"><small>지금 로그인한 계정</small><b>🔐 ${esc(acc.nick)}</b>${accCs.missing ? '' : `<em>${accCs.linked ? '☁ 진행 저장됨' : '☁ 저장 준비 중'}</em>`}</span><button class="gm-btn small cs-logout" data-r="logout">로그아웃</button></div>` : ''}
       <div class="wl-name"><input type="text" maxlength="12" spellcheck="false" autocomplete="off" aria-label="이름"><button class="gm-btn small" data-r="dice" title="아무 이름이나">🎲</button></div>
       <small class="wl-hint">최대 12글자 · 나중에 홈 오른쪽 위 👤에서 바꿀 수 있어요</small>
       ${online.enabled ? `<div class="wl-pin"><label><span>🔐 비밀번호 <small>숫자 4자리</small></span><input type="password" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="비밀번호 숫자 4자리" placeholder="${online.isMine(cur) ? '이 이름은 이미 내 것 · 비워 둬도 돼요' : '••••'}"></label>
-        <small class="wl-pinhint">🌐 온라인 순위표용 · <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>
+        ${acc ? `<small class="wl-switch">↪ 다른 이름 + 비밀번호 = 그 계정으로 들어가요 (없는 이름이면 새 계정) · 지금 진행은 <b>${esc(acc.nick)}</b> 계정에 저장돼요. 이름만 바꾸려면 비밀번호를 비워 두세요</small>` : `<small class="wl-pinhint">🌐 <b>같은 이름 + 같은 비밀번호면 다른 기기에서도 같은 계정</b>이에요 · 순위표 기록과 레벨·조각·산 물건이 같이 이어져요. 처음 쓰는 이름이면 이 비밀번호로 내 이름이 돼요.${first ? ' 비워 두면 순위표에는 안 올라가요.' : ''}</small>`}
         <div class="wl-err" role="alert"></div></div>` : ''}
       ${first ? `<div class="wl-keypreset"><label for="welcomeKeyPreset"><b>⌨️ 어떤 배치로 할래요?</b></label>
         <select id="welcomeKeyPreset" aria-label="조작키 배치">${PRESETS.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
         <small class="wl-keypreset-desc"></small><div class="wl-keypreset-keys"></div>
         <small>기본은 WASD · 나중에 설정 → 조작키에서 바꾸거나 직접 고칠 수 있어요</small></div>` : ''}
-      ${first ? `<div class="wl-tut"><span class="ic">🎓</span><div><b>처음이라면 튜토리얼부터!</b><small>약 5분 · 출발 신호, 브레이크, 에이펙스, 드리프트, 변신(가속·배·비행)까지 직접 해 보며 배워요</small></div></div>` : ''}
+      ${first ? `<div class="wl-tut"><span class="ic">🎓</span><div><b>처음이라면 튜토리얼부터!</b><small>약 5분 · 출발 신호, 브레이크, 에이펙스, 변신(가속·배·비행)까지 직접 해 보며 배워요</small></div></div>` : ''}
       <div class="btns">${first ? '<button class="gm-btn" data-r="skip">바로 둘러보기</button><button class="gm-btn primary" data-r="tut">🎓 튜토리얼 시작<kbd>Enter</kbd></button>' : '<button class="gm-btn" data-r="cancel">취소</button><button class="gm-btn primary" data-r="ok">저장<kbd>Enter</kbd></button>'}</div></div>`;
     const inp = wrap.querySelector('input');
     const pinInp = wrap.querySelector('.wl-pin input');
@@ -2477,7 +2532,7 @@ function welcomeDialog({ first = false } = {}) {
       const drawPreset = () => {
         const preset = PRESETS.find((p) => p.id === keybinds.preset());
         wrap.querySelector('.wl-keypreset-desc').textContent = preset?.desc || '';
-        wrap.querySelector('.wl-keypreset-keys').innerHTML = [['throttle', '가속'], ['brake', '브레이크'], ['left', '왼쪽'], ['right', '오른쪽'], ['drift', '드리프트']]
+        wrap.querySelector('.wl-keypreset-keys').innerHTML = [['throttle', '가속'], ['brake', '브레이크'], ['left', '왼쪽'], ['right', '오른쪽']]
           .map(([id, text]) => `<span><small>${text}</small>${keybinds.html(id)}</span>`).join('');
       };
       presetSelect.addEventListener('change', () => {
@@ -2499,6 +2554,13 @@ function welcomeDialog({ first = false } = {}) {
     };
     const done = async (r) => {
       if (busy) return;
+      if (r === 'logout') {
+        window.removeEventListener('keydown', onKey, true);
+        wrap.remove();
+        uiSound('select');
+        if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
+        return resolve({ logout: true });
+      }
       if (r) {
         const n = cleanNick(inp.value) || cur || randomNick();
         // 온라인: 비밀번호를 넣었으면 이름 + 비밀번호로 시작/이어 하기, 안 넣었으면 이 기기 계정 이름만 바꿈
@@ -2510,7 +2572,8 @@ function welcomeDialog({ first = false } = {}) {
           try {
             if (pin) {
               const res = await online.login(n, pin);
-              wrap.dataset.msg = res.merged ? `👤 ${res.nick} 계정으로 이어 해요 · 이 기기 기록 ${res.merged}개를 합쳤어요` : res.created || res.claimed ? `🔐 ${res.nick} 이름을 지켰어요` : `👤 ${res.nick} 계정으로 이어 해요`;
+              wrap.dataset.msg = res.switched ? `👤 ${res.nick} 계정으로 바꿨어요 · 그 계정 진행을 불러왔어요` : res.merged ? `👤 ${res.nick} 계정으로 이어 해요 · 이 기기 기록 ${res.merged}개를 합쳤어요` : res.created || res.claimed ? `🔐 ${res.nick} 이름을 지켰어요` : res.reload ? `👤 ${res.nick} 계정으로 이어 해요 · 계정 진행을 불러왔어요` : `👤 ${res.nick} 계정으로 이어 해요`;
+              if (res.reload) wrap.dataset.reload = '1';
             } else if (!(await online.rename(n))) {
               busy = false;
               wrap.classList.remove('busy');
@@ -2529,7 +2592,7 @@ function welcomeDialog({ first = false } = {}) {
         if (m && m.claimed && m.nick !== n) setNick(m.nick); // 서버의 이름(대소문자·띄어쓰기)을 따름
         uiSound('select');
         if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
-        resolve({ name: getNick(), tutorial: r === 'tut', msg: wrap.dataset.msg || '' });
+        resolve({ name: getNick(), tutorial: r === 'tut', msg: wrap.dataset.msg || '', reload: wrap.dataset.reload === '1' });
       } else {
         window.removeEventListener('keydown', onKey, true);
         wrap.remove();

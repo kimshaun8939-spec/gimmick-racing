@@ -28,14 +28,14 @@ settings.onChange(syncPadConfig);
 // 키보드 핸들 서서히 꺾기: 초당 얼마나 (돌아올 때는 2.5배 빠르게)
 const RAMP = { instant: 0, fast: 7, smooth: 3.2 };
 
-/** @typedef {{ throttle:number, brake:number, steer:number, drift:boolean, climb:boolean, dive:boolean, booster:boolean, mode:(null|'normal'|'accel'|'boat'|'fly'), shiftUp:boolean, shiftDown:boolean }} ControlState */
+/** @typedef {{ throttle:number, brake:number, steer:number, climb:boolean, dive:boolean, booster:boolean, mode:(null|'normal'|'accel'|'boat'|'fly'), shiftUp:boolean, shiftDown:boolean }} ControlState */
 
 export function emptyControls() {
-  return { throttle: 0, brake: 0, steer: 0, drift: false, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
+  return { throttle: 0, brake: 0, steer: 0, climb: false, dive: false, booster: false, mode: null, shiftUp: false, shiftDown: false };
 }
 
 // 운전 키는 브라우저 기본 동작(스크롤 등)을 막음
-const DRIVE_ACTIONS = ['throttle', 'brake', 'left', 'right', 'drift', 'climb', 'dive', 'booster'];
+const DRIVE_ACTIONS = ['throttle', 'brake', 'left', 'right', 'climb', 'dive', 'booster'];
 
 export function createKeyboardInput() {
   const down = new Set();
@@ -139,7 +139,6 @@ export function createKeyboardInput() {
         throttle: Math.max(kbHeld('throttle') ? 1 : 0, pa.throttle, tc.throttle),
         brake: Math.max(kbHeld('brake') ? 1 : 0, pa.brake, tc.brake),
         steer: Math.max(-1, Math.min(1, kb + pa.steer + tSteer)), // +1 = 오른쪽
-        drift: held('drift') || tc.drift,
         // 비행 모드: 상승(이륙) / 하강 (기본 Space / Shift)
         climb: held('climb') || tc.climb,
         dive: held('dive') || tc.dive,
@@ -225,10 +224,10 @@ function decorateLoading() {
   el.className = 'ld-keys';
   const draw = () =>
     (el.innerHTML = touchWanted()
-      ? [['<kbd>◀ ▶</kbd>', '조향'], ['<kbd>▲</kbd>', '가속'], ['<kbd>▼</kbd>', '브레이크'], ['<kbd>💨</kbd>', '드리프트'], ['<kbd>↺</kbd>', '복귀'], ['<kbd>👁</kbd>', '시점']]
+      ? [['<kbd>◀ ▶</kbd>', '조향'], ['<kbd>▲</kbd>', '가속'], ['<kbd>▼</kbd>', '브레이크'], ['<kbd>↺</kbd>', '복귀'], ['<kbd>👁</kbd>', '시점']]
           .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
           .join('')
-      : [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], [K('drift'), '드리프트'], new URLSearchParams(location.search).get('mode') === 'item' && [K('booster'), '아이템'], [K('respawn'), '복귀'], [K('camView'), '시점'], ['<kbd>Esc</kbd>', '메뉴']]
+      : [[K('throttle'), '가속'], [K('brake'), '브레이크'], [LR(), '조향'], new URLSearchParams(location.search).get('mode') === 'item' && [K('booster'), '아이템'], [K('respawn'), '복귀'], [K('camView'), '시점'], ['<kbd>Esc</kbd>', '메뉴']]
         .filter(Boolean)
         .map(([k, t]) => `<span>${k}<small>${t}</small></span>`)
         .join('') + (pad.connected() ? '<span class="pad">🎮 패드 OK</span>' : ''));

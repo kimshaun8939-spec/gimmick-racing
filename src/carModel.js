@@ -62,7 +62,6 @@ import { applyCostume, dressCar } from './carCostumes.js';
 import { buildRacingBoat } from './carBody_boat.js';
 import { buildAccelKit, accelIdentity } from './carBody_accel.js';
 
-const DRIFT_COLORS = [0xffffff, 0x4fc3ff, 0xff9a2e];
 const FORM_COLORS = { spike: new THREE.Color('#7dff6a') };
 const MODE_COLORS = {
   normal: new THREE.Color('#e8ecf2'),
@@ -71,8 +70,6 @@ const MODE_COLORS = {
   fly: new THREE.Color('#9ad8ff'),
 };
 const BOOST_FLAME = new THREE.Color('#ffb347');
-const DRIFT_EXIT_GOLD = new THREE.Color('#ffd34a'); // 깔끔한 드리프트 탈출 (품질 높음)
-const DRIFT_EXIT_BLUE = new THREE.Color('#7fd8ff'); // 깔끔한 드리프트 탈출
 const SPIKE_FLAME = new THREE.Color('#6dff5a');
 
 // --- 애니메이션 도우미 ---
@@ -246,7 +243,6 @@ const BASE_ANCHORS = {
   glow: { y: 0.652, z: 1.45, len: 1.5, rot: 0.21, w: 0.06 }, // 노즈 위 빛나는 줄
   flames: [[0, 0.5, 1, -2.1], [-0.16, 0.56, 0.6, -2.1], [0.16, 0.56, 0.6, -2.1]], // 부스트 불꽃 [x, y, 크기, z]
   motor: [0.38, 0.3, -2.5], // 선외기 경첩
-  spark: [0.86, 0.25, -1.95], // 드리프트 불꽃
   seams: [0.88, 0.17, -0.1], // 바닥 빛나는 이음선
   lean: 0.045, // 코너에서 기우는 정도
   drsRest: 0.45, // 뒷날개 윗판 기본 각도
@@ -747,15 +743,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   });
 
   // ------------------------------------------------------------------ 효과
-  // 드리프트 불꽃 (뒷바퀴 뒤)
-  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-  const sparks = [-1, 1].map((side) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), sparkMat);
-    m.position.set(side * A.spark[0], A.spark[1], A.spark[2]);
-    root.add(m);
-    return m;
-  });
-
   // 부스트 불꽃 (가운데 배기구). 부스터(스파이크)가 펼쳐지면 대신 엔진 부스터의 초록 불꽃이 남
   const flameMat = new THREE.MeshBasicMaterial({ color: BOOST_FLAME, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
   const flames = A.flames.map(([x, y, s, z]) => {
@@ -809,8 +796,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
 
   // ------------------------------------------------------------------ 상태
   let wheelAngle = 0;
-  let lean = 0, leanV = 0, pitchNow = 0, pitchV = 0, lastDriftT = null;
-  let driftYaw = 0;
+  let lean = 0, leanV = 0, pitchNow = 0, pitchV = 0;
   let spikeP = 0; // 스파이크(부스터) 변신 진행도 0~1
   let lastForm = null;
   let accelP = 0; // 가속 모드 변신 진행도 0~1
@@ -827,7 +813,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   const basis = new THREE.Matrix4();
   const xAxis = new THREE.Vector3();
   const qTarget = new THREE.Quaternion();
-  const qDrift = new THREE.Quaternion();
   const qMode = new THREE.Quaternion();
   const eMode = new THREE.Euler();
   const Y = new THREE.Vector3(0, 1, 0);
@@ -940,7 +925,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   // 부스터(스파이크) 부품·불꽃도 접어 둠 → sync 없이 홈 화면 미리보기로 써도 평소 모습
   poseSpike(0, false);
   for (const fl of flames) fl.visible = false;
-  for (const sp of sparks) sp.visible = false;
   for (const bo of boosters) bo.flame.visible = bo.flameIn.visible = false;
   body.position.y = 0;
 
@@ -1162,12 +1146,11 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       const plane = Math.min(1, spd / 30);
       const calm = 1 - 0.6 * plane;
       // 물결 타기 (2026-11-10, 사용자 요청 "배가 심심해"): 빠를수록 선체가 물결 위에서 통 튀었다가 철썩 내려앉음 (뱃머리가 먼저 들림)
-      //   + 도는 쪽으로 몸을 눕혀 돎 (자동차와 반대), 카빙(드리프트 키)이면 더 깊게
+      //   + 도는 쪽으로 몸을 눕혀 돎 (자동차와 반대)
       const fast = clamp01((spd - 15) / 30);
       if (!instant) chopPh += dt * (2.0 + 2.8 * fast);
       const hop = float * Math.pow(Math.max(0, Math.sin(chopPh)), 3) * (0.04 + 0.17 * fast) * (0.65 + 0.35 * Math.sin(chopPh * 0.31 + 1.7));
-      const cv = car.boatCarve || 0;
-      const rollT = float * THREE.MathUtils.clamp(((car.yawRate || 0) * Math.min(spd, 40)) / 22, -1, 1) * (0.13 + 0.12 * cv);
+      const rollT = float * THREE.MathUtils.clamp(((car.yawRate || 0) * Math.min(spd, 40)) / 22, -1, 1) * 0.13;
       boatRoll = instant ? rollT : THREE.MathUtils.lerp(boatRoll, rollT, 1 - Math.exp(-5 * dt));
       const heave = (Math.sin(time * 2.1) * 0.035 + Math.sin(time * 3.4 + 1.3) * 0.018) * calm + 0.09 * plane + hop;
       const modePitch = float * (Math.sin(time * 1.7 + 0.4) * 0.025 * calm - 0.085 * plane - 0.55 * hop - 0.04 * (car.surgeT > 0 ? 1 : 0)) + sink * 0.28;
@@ -1179,10 +1162,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       xAxis.crossVectors(car.up, car.fwd).normalize();
       basis.makeBasis(xAxis, car.up, car.fwd);
       qTarget.setFromRotationMatrix(basis);
-      driftYaw = THREE.MathUtils.lerp(driftYaw, car.drifting ? car.driftDir * -0.15 : 0, 1 - Math.exp(-8 * dt));
-      if (car._hitboxState) driftYaw=car._hitboxState.drift;
-      qDrift.setFromAxisAngle(Y, driftYaw);
-      qTarget.multiply(qDrift);
       // 바퀴(root에 붙음)도 같이 기울도록 모드 기울기는 root에 줌
       qMode.setFromEuler(eMode.set(modePitch, 0, modeRoll));
       qTarget.multiply(qMode);
@@ -1196,8 +1175,8 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       const hasG = typeof car.latG === 'number';
       const rollK = A.lean * (feel.roll ?? 1), pitchK = (A.pitch ?? A.lean * 0.7) * (feel.pitch ?? 1);
       const targetLean = !car.grounded || car.flying || float > 0.5 ? 0 // 물 위의 배는 위의 boatRoll로 안쪽으로 눕힘
-        : hasG ? THREE.MathUtils.clamp(car.latG / 17, -1.4, 1.4) * rollK * (car.drifting ? 1.3 : 1)
-        : car.steerVisual * Math.min(1, Math.abs(car.forwardSpeed) / 30) * A.lean * (car.drifting ? 1.8 : 1);
+        : hasG ? THREE.MathUtils.clamp(car.latG / 17, -1.4, 1.4) * rollK
+        : car.steerVisual * Math.min(1, Math.abs(car.forwardSpeed) / 30) * A.lean;
       const targetPitch = !car.grounded || car.flying ? THREE.MathUtils.clamp(-car.vel.dot(car.up) * 0.015, -0.3, 0.3)
         : hasG ? THREE.MathUtils.clamp(-car.lonG / 17, -1, 1.4) * pitchK
         : -car.load * 0.03;
@@ -1211,7 +1190,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
         pitchV += (kS * (targetPitch - pitchNow) - cS * pitchV) * h;
         pitchNow += pitchV * h;
       }
-      if (car._hitboxState) { lean=car._hitboxState.lean; pitchNow=car._hitboxState.pitch; driftYaw=car._hitboxState.drift; }
+      if (car._hitboxState) { lean=car._hitboxState.lean; pitchNow=car._hitboxState.pitch; }
       body.rotation.z = -lean;
       body.rotation.x = pitchNow;
 
@@ -1231,12 +1210,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       if (mode !== lastMode) {
         if (lastMode !== undefined && MODE_COLORS[mode]) scan(MODE_COLORS[mode]);
         lastMode = mode;
-      }
-      // 깔끔한 드리프트 탈출: 차체에 빛이 한 번 훑고 지나감 (품질이 높으면 금색)
-      const di = car.lastDriftInfo;
-      if (di && di.t !== lastDriftT) {
-        if (di.clean && !instant) scan(di.quality > 0.75 ? DRIFT_EXIT_GOLD : DRIFT_EXIT_BLUE, false);
-        lastDriftT = di.t;
       }
       // 부스터(스파이크): 0.45초 동안 펼쳐지고, 0.35초 동안 접힘
       // 부스터 중 E를 다시 눌러도 form은 그대로 'spike'라서 진행도는 1에 머묾 (애니메이션 재시작 없음)
@@ -1296,14 +1269,6 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
         pillar.material.opacity = 0;
       }
 
-      const showSpark = car.drifting && car.grounded;
-      for (const sp of sparks) {
-        sp.visible = showSpark;
-        if (showSpark) {
-          sp.material.color.setHex(DRIFT_COLORS[car.driftLevel]);
-          sp.scale.setScalar(0.6 + car.driftLevel * 0.35 + Math.sin(time * 60 + sp.position.x) * 0.2);
-        }
-      }
       for (const fl of flames) {
         fl.visible = car.boostTime > 0 && spikeP < 0.6;
         if (fl.visible) fl.scale.set(1, 1, 0.8 + Math.random() * 0.6);
@@ -1330,9 +1295,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       sprayMat.opacity = 0.5 * float;
       for (const s of sprays) {
         s.visible = showSpray;
-        // 카빙하면 바깥쪽(도는 반대쪽) 물보라가 크게 솟음 (s.userData.side: +1 = 왼쪽)
-        const outer = Math.sign(car.yawRate || 0) === s.userData.side ? 1 : 0.35;
-        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane + 0.6 * cv * outer) * (0.85 + Math.random() * 0.3) * Math.min(1, A.hull?.[2] || 1));
+        if (showSpray) s.scale.setScalar((0.4 + 0.8 * plane) * (0.85 + Math.random() * 0.3) * Math.min(1, A.hull?.[2] || 1));
       }
       const wakeK = float * Math.min(1, spd / 15 + push * 0.3);
       wake.visible = wakeK > 0.02;

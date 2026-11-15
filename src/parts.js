@@ -138,7 +138,9 @@ function level(lv) {
 
 /** 다른 길(업적·아카데미·라이선스·튜토리얼)을 채웠나 */
 function altDone(p) {
-  const a = p && p.alt;
+  return !!p && (altOk(p.alt) || altOk(p.legacyAlt)); // legacyAlt = 예전 다른 길 (드리프트 레슨 금 등, 2026-11-15 nodrift) → 이미 채운 사람은 계속 가짐
+}
+function altOk(a) {
   if (!a) return false;
   try {
     if (a.type === 'tutorial') return localStorage.getItem(TUT_KEY) === 'done';

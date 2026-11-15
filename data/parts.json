@@ -1,7 +1,7 @@
 {
   "_설명": "부품 조립 1차 (2026-11-15, 설계 .debug/design/parts-design.md, 약속 .debug/agents/parts-contract.md). 부품 = 장단점만 있는 옆으로 바꾸기 (업그레이드 아님). 값은 '그 차의 원래 값(차 tune을 합친 뒤)에 대한 비율'. mul = 곱하기(배열 값이면 칸마다 곱함, 숫자면 배열 전체에 곱함), add = 더하기, set = 덮어쓰기(꼭 필요할 때만), fx = 특수 계산(torqueTilt: 토크 표를 회전수 쪽으로 기울임, turbo: 터보 넣기/세게). 키는 car.json 경로를 점으로 (engine.power). 차 cfg에 없는 키는 defaults에서 시작하고, defaults에도 없으면 건너뜀(partsInfo.skipped) → ②가 car.json modes.boat에 새 키를 넣으면 그때부터 저절로 효과. 이 파일은 부품 뼈대 담당(①)과 균형 담당(⑥)만 고침",
   "version": 1,
-  "_limits": "안전장치: 한 키는 여러 칸을 합쳐도 순정(그 차 원래 값) 대비 ±default(8%) 안으로 자름. 단, 설계에서 부품 하나만으로도 8%를 넘게 정한 '성격 키'(연석·잔디·드리프트·변속 시간·다운포스·배 방향타·소리 등)는 keys에 따로 적은 범위(ratio = 원래 값 대비 배수, abs = 최종 값의 절대 한계) 안으로 자름. 'sound.*'처럼 끝이 *이면 그 아래 모든 키. 속도에 바로 닿는 키(engine.power, maxSpeed, gears, aero.drag, tire.lateral/traction/brakeGrip, steerLat, yawResponse, 배 thrust/maxSpeed/drag)는 keys에 없음 = ±8%",
+  "_limits": "안전장치: 한 키는 여러 칸을 합쳐도 순정(그 차 원래 값) 대비 ±default(8%) 안으로 자름. 단, 설계에서 부품 하나만으로도 8%를 넘게 정한 '성격 키'(연석·잔디·변속 시간·다운포스·배 방향타·소리 등)는 keys에 따로 적은 범위(ratio = 원래 값 대비 배수, abs = 최종 값의 절대 한계) 안으로 자름. 'sound.*'처럼 끝이 *이면 그 아래 모든 키. 속도에 바로 닿는 키(engine.power, maxSpeed, gears, aero.drag, tire.lateral/traction/brakeGrip, steerLat, yawResponse, 배 thrust/maxSpeed/drag)는 keys에 없음 = ±8%",
   "limits": {
     "default": 0.08,
     "torqueTilt": 0.3,
@@ -19,16 +19,9 @@
       "offroad.drag": { "ratio": [0.65, 1.3] },
       "kerb.gripLoss": { "ratio": [0.4, 1.6] },
       "kerb.jitter": { "ratio": [0.4, 1.6] },
-      "drift.grip": { "ratio": [0.8, 1.2] },
-      "drift.holdAngle": { "ratio": [0.9, 1.15] },
-      "drift.exitKeep": { "ratio": [0.8, 1.4], "abs": [0, 0.8] },
-      "drift.holdDrag": { "ratio": [0.85, 1.1] },
       "aero.downforce": { "ratio": [0.65, 1.4] },
       "steerLatDownforce": { "ratio": [0.75, 1.25] },
       "modes.boat.turnRate": { "ratio": [0.82, 1.18] },
-      "modes.boat.carve.turn": { "ratio": [0.8, 1.25] },
-      "modes.boat.carve.drag": { "ratio": [0.55, 1.2] },
-      "modes.boat.carve.*": { "ratio": [0.5, 1.6] },
       "modes.boat.surge.thrust": { "ratio": [0.8, 1.4] },
       "modes.boat.landSpeedFactor": { "ratio": [0.8, 1.6], "abs": [0, 0.8] },
       "modes.boat.landPowerFactor": { "ratio": [0.8, 1.4], "abs": [0, 0.9] },
@@ -48,7 +41,7 @@
   "slots": [
     { "id": "engine", "letter": "e", "name": "엔진", "icon": "🔥", "desc": "언제 힘이 세게 나오는지", "camera": "rearTop", "phase": 1 },
     { "id": "gearbox", "letter": "g", "name": "기어", "icon": "⚙️", "desc": "빠른 출발과 최고 속도 사이", "camera": "rearTop", "phase": 1 },
-    { "id": "tire", "letter": "t", "name": "타이어", "icon": "🛞", "desc": "포장도로·잔디·연석·드리프트", "camera": "wheelLow", "phase": 1 },
+    { "id": "tire", "letter": "t", "name": "타이어", "icon": "🛞", "desc": "포장도로·잔디·연석·핸들 반응", "camera": "wheelLow", "phase": 1 },
     { "id": "aero", "letter": "a", "name": "날개", "icon": "🪽", "desc": "직선 속도와 빠른 코너 사이", "camera": "rear", "phase": 1 },
     { "id": "water", "letter": "w", "name": "배 부품", "icon": "🚤", "desc": "물 위에서 배로 변신했을 때", "camera": "sideLow", "phase": 1 },
     { "id": "susp", "letter": "s", "name": "스프링", "icon": "🔩", "desc": "반응·연석·점프 (2차)", "camera": "wheelLow", "phase": 2 },
@@ -120,10 +113,10 @@
     {
       "id": "tire_soft", "slot": "tire", "no": 1, "name": "찰떡 타이어", "short": "찰떡 타이어",
       "desc": "말랑하고 끈끈한 고무. 포장도로에서 코너·브레이크가 가장 세지만 잔디·연석에서는 약해요.",
-      "pros": ["포장도로 코너·브레이크 최강"], "cons": ["잔디·연석에 약함", "드리프트가 잘 안 걸림"],
+      "pros": ["포장도로 코너·브레이크 최강"], "cons": ["잔디·연석에 약함"],
       "shines": { "maps": ["gp", "glacier"], "text": ["깔끔하게 달리기"] },
       "level": 2, "price": 200,
-      "mul": { "tire.lateral": 1.05, "tire.traction": 1.06, "tire.brakeGrip": 1.05, "offroad.gripFactor": 0.8, "offroad.maxSpeedFactor": 0.9, "kerb.gripLoss": 1.5, "drift.grip": 1.15 },
+      "mul": { "tire.lateral": 1.05, "tire.traction": 1.06, "tire.brakeGrip": 1.05, "offroad.gripFactor": 0.8, "offroad.maxSpeedFactor": 0.9, "kerb.gripLoss": 1.5 },
       "look": { "sidewall": "#ff3b3b", "tread": "slick", "label": "S" }
     },
     {
@@ -136,13 +129,15 @@
       "look": { "sidewall": "#ffd23a", "tread": "knob", "label": "AT" }
     },
     {
-      "id": "tire_drift", "slot": "tire", "no": 3, "name": "드리프트 타이어", "short": "드리프트",
-      "desc": "뒤 고무를 딱딱하게. 드리프트 자세를 오래 버티고, 깔끔하게 빠져나오면 속도를 더 돌려받아요.",
-      "pros": ["드리프트 유지·깔끔한 탈출 보너스 ↑"], "cons": ["그냥 돌 때는 코너 손해", "뒤가 잘 미끄러짐"],
-      "shines": { "maps": ["volcano", "foundry"], "text": ["급커브", "드리프트 잘하는 사람"] },
-      "level": 11, "price": 450, "alt": { "type": "academy", "id": "drift", "medal": 3 },
-      "mul": { "tire.rearGrip": 0.88, "drift.grip": 0.85, "drift.holdAngle": [1, 1.12], "drift.exitKeep": 1.3, "drift.holdDrag": 0.9, "tire.lateral": 0.97 },
-      "look": { "sidewall": "#a04bff", "tread": "drift", "label": "D" }
+      "id": "tire_drift", "slot": "tire", "no": 3, "name": "날쌘 타이어", "short": "날쌘",
+      "_id": "2026-11-15 드리프트 기능을 없애며 '드리프트 타이어'를 다른 성격으로 바꿈 (id·no는 기록·조립·강화·산 물건이 이어지게 그대로). 예전 값 .debug/parts.before-nodrift.json",
+      "desc": "앞 고무를 단단하고 날카롭게 깎았어요. 핸들을 꺾는 순간 차 머리가 바로 돌아 급커브에 빨리 들어가지만, 출발·가속 때 바퀴가 잘 헛돌고 브레이크가 조금 밀려요.",
+      "pros": ["핸들 반응·회전이 빠름 (급커브 진입)"], "cons": ["출발·가속 때 바퀴가 잘 헛돎", "브레이크가 조금 밀림"],
+      "shines": { "maps": ["volcano", "foundry"], "text": ["급커브", "지그재그"] },
+      "level": 11, "price": 450, "alt": { "type": "academy", "id": "chain", "medal": 3 }, "legacyAlt": { "type": "academy", "id": "drift", "medal": 3 },
+      "_legacyAlt": "예전 다른 길(아카데미 드리프트 금)로 이미 받은 사람도 계속 가짐 (parts.js altDone)",
+      "mul": { "steerRate": 1.06, "tire.yawResponse": 1.08, "input.steerRise": 1.06, "tire.traction": 0.93, "tire.brakeGrip": 0.95 },
+      "look": { "sidewall": "#a04bff", "tread": "sharp", "label": "Q" }
     },
     {
       "id": "aero_lowdrag", "slot": "aero", "no": 1, "name": "납작 날개", "short": "납작 날개",
@@ -175,20 +170,20 @@
     },
     {
       "id": "hull_planing", "slot": "water", "no": 1, "name": "물수제비 배", "short": "물수제비",
-      "desc": "물 위로 떠서 통통 미끄러지는 배 바닥. 물 직선이 가장 빠르고 파도 꼭대기를 맞추면 멀리 날아요. 물 위 드리프트(카빙)는 약해요.",
-      "pros": ["물 직선 최고 속도 ↑ (약 200 km/h)", "파도 점프 장인"], "cons": ["물 위 드리프트·방향 바꾸기 약함", "파도를 잘못 맞추면 뱃머리가 박혀 손해 큼", "땅에서 조금 무거움"],
+      "desc": "물 위로 떠서 통통 미끄러지는 배 바닥. 물 직선이 가장 빠르고 파도 꼭대기를 맞추면 멀리 날아요. 대신 방향 바꾸기는 둔해요.",
+      "pros": ["물 직선 최고 속도 ↑ (약 200 km/h)", "파도 점프 장인"], "cons": ["물 위 방향 바꾸기 약함", "파도를 잘못 맞추면 뱃머리가 박혀 손해 큼", "땅에서 조금 무거움"],
       "shines": { "maps": ["sea"], "text": ["긴 물 직선", "파도"] },
       "level": 4, "price": 250, "alt": { "type": "achievement", "id": "sea-1" },
-      "mul": { "modes.boat.thrust": 1.06, "modes.boat.maxSpeed": 1.08, "modes.boat.drag": 0.94, "modes.boat.turnRate": 0.85, "modes.boat.carve.turn": 0.85, "modes.boat.swell.launch": 1.3, "modes.boat.swell.noseLoss": 1.5, "engine.power": 0.99 },
+      "mul": { "modes.boat.thrust": 1.06, "modes.boat.maxSpeed": 1.08, "modes.boat.drag": 0.94, "modes.boat.turnRate": 0.85, "modes.boat.swell.launch": 1.3, "modes.boat.swell.noseLoss": 1.5, "engine.power": 0.99 },
       "look": { "hull": "planing", "steps": true, "sponson": "long" }
     },
     {
       "id": "hull_deepv", "slot": "water", "no": 2, "name": "칼날 배", "short": "칼날 배",
-      "desc": "칼날처럼 뾰족한 V자 배 바닥. 물을 가르며 날카롭게 꺾고, 물 위 드리프트(카빙)를 깔끔히 펴서 빠져나오면 속도를 돌려받아요.",
-      "pros": ["물 위 드리프트 장인: 짧은 안쪽 길", "물 위 드리프트 속도 손해 ↓"], "cons": ["물 직선 최고 속도 ↓", "파도 점프 작음", "땅에서 조금 무거움"],
+      "desc": "칼날처럼 뾰족한 V자 배 바닥. 물을 가르며 날카롭게 꺾고 옆으로 덜 미끄러져요.",
+      "pros": ["물 위 코너 장인: 짧은 안쪽 길", "옆으로 덜 미끄러짐"], "cons": ["물 직선 최고 속도 ↓", "파도 점프 작음", "땅에서 조금 무거움"],
       "shines": { "maps": ["sea"], "text": ["물 위 코너"] },
       "level": 9, "price": 350, "alt": { "type": "academy", "id": "boat", "medal": 3 },
-      "mul": { "modes.boat.turnRate": 1.15, "modes.boat.carve.turn": 1.2, "modes.boat.carve.drag": 0.6, "modes.boat.carve.exitKeep": 1.5, "modes.boat.maxSpeed": 0.95, "modes.boat.swell.launch": 0.8, "modes.boat.swell.noseLoss": 0.6, "engine.power": 0.99 },
+      "mul": { "modes.boat.turnRate": 1.15, "modes.boat.grip": 1.08, "modes.boat.yawResponse": 1.08, "modes.boat.maxSpeed": 0.95, "modes.boat.swell.launch": 0.8, "modes.boat.swell.noseLoss": 0.6, "engine.power": 0.99 },
       "look": { "hull": "deepv", "keel": "deep" }
     },
     {
@@ -218,12 +213,12 @@
       "engine.power": 1, "maxSpeed": 1, "engine.perfectShiftKick": 1,
       "tire.lateral": 1, "tire.traction": 1, "tire.brakeGrip": 1, "tire.rearGrip": 1, "tire.yawResponse": 1,
       "steerLat": 1, "steerLatDownforce": 1, "aero.downforce": 1,
-      "offroad.gripFactor": 1, "offroad.maxSpeedFactor": 1, "drift.holdAngle": 1, "drift.exitKeep": 1,
-      "modes.boat.thrust": 1, "modes.boat.maxSpeed": 1, "modes.boat.turnRate": 1, "modes.boat.carve.turn": 1, "modes.boat.carve.exitKeep": 1,
+      "offroad.gripFactor": 1, "offroad.maxSpeedFactor": 1, "steerRate": 1, "input.steerRise": 1,
+      "modes.boat.thrust": 1, "modes.boat.maxSpeed": 1, "modes.boat.turnRate": 1, "modes.boat.grip": 1, "modes.boat.yawResponse": 1,
       "modes.boat.swell.launch": 1, "modes.boat.currentGain": 1, "modes.boat.surge.thrust": 1, "modes.boat.landSpeedFactor": 1, "modes.boat.landPowerFactor": 1,
       "gears": -1, "engine.shiftTime": -1, "engine.downShiftTime": -1, "tire.liftOff": -1,
-      "offroad.drag": -1, "kerb.gripLoss": -1, "kerb.jitter": -1, "drift.grip": -1, "drift.holdDrag": -1, "aero.drag": -1,
-      "modes.boat.drag": -1, "modes.boat.carve.drag": -1, "modes.boat.swell.noseLoss": -1,
+      "offroad.drag": -1, "kerb.gripLoss": -1, "kerb.jitter": -1, "aero.drag": -1,
+      "modes.boat.drag": -1, "modes.boat.swell.noseLoss": -1,
       "engine.engineBrake": 0, "camera.topKmh": 0, "engine.turbo.share": 0, "sound.*": 0
     }
   },

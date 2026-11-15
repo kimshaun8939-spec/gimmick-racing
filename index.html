@@ -28,15 +28,6 @@
     #speed.fast { color: #ffe9c4; text-shadow: 0 0 14px rgba(255, 140, 50, 0.65), 0 2px 6px rgba(0,0,0,0.45); }
     #speed.boost { color: #e6ffe0; text-shadow: 0 0 16px rgba(125, 255, 106, 0.75), 0 2px 6px rgba(0,0,0,0.45); }
     #speedUnit { font-size: 14px; opacity: 0.8; }
-    #driftBar { margin-top: 8px; width: 180px; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.2); overflow: hidden; margin-left: auto; }
-    #driftFill { height: 100%; width: 0%; background: #fff; transition: background 0.1s; }
-    /* 드리프트 각도 막대 (드리프트 중에만): 초록 칸 안에 바늘을 두면 드리프트가 쌓임 */
-    #driftAng { position: relative; margin: 5px 0 0 auto; width: 180px; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.14); opacity: 0; transition: opacity 0.2s; }
-    #driftAng.on { opacity: 1; }
-    #driftWin { position: absolute; top: 0; bottom: 0; background: rgba(92,255,138,0.45); border-radius: 3px; }
-    #driftNeedle { position: absolute; top: -3px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6); }
-    #driftNeedle.in { background: #5cff8a; }
-    #driftNeedle.over { background: #ff5a4a; }
     /* 회전수계 + 기어 */
     #tachRow { display: flex; align-items: center; gap: 10px; margin-top: 8px; justify-content: flex-end; }
     #gear { font-size: 34px; font-weight: 900; min-width: 30px; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -290,7 +281,16 @@
     .wf .wf-lines.r { left:auto; right:48%; transform-origin:100% 50%; }
     .wf .wf-ghost { left:35%; top:5%; width:95%; height:90%; border-radius:50%; opacity:0; background:radial-gradient(farthest-side at 0 50%,rgba(8,10,16,.78),rgba(40,46,60,.5) 35%,rgba(255,140,40,.14) 62%,transparent); }
     .wf .wf-dust { left:50%; top:96%; width:0; height:0; overflow:visible; }
-    .wf .wf-dust i { position:absolute; left:-14px; top:-14px; width:28px; height:28px; border-radius:50%; opacity:0; background:radial-gradient(closest-side,rgba(214,196,170,.75),rgba(170,150,130,.25) 60%,transparent); }
+    .wf .wf-dust i { position:absolute; left:-14px; top:-14px; width:28px; height:28px; border-radius:50%; opacity:0; background:radial-gradient(closest-side,rgba(214,196,170,.75),rgba(170,150,130,.25) 60%,transparent); will-change:transform,opacity; }
+    /* wheelfx2: 바퀴가 화면을 다 덮은 동안 뒤 화면은 그리지 않음 (레이아웃·WebGL 준비는 그대로). 굴러 나가기 2프레임 전에 다시 보임 */
+    html.wf-cov body > :not(#loading):not(#wheelFx):not(script):not(style) { visibility:hidden !important; }
+    .wf .wf-ring { will-change:transform; }
+    /* wheelfx2 휠 스핀: 바닥(바퀴 닿는 곳)에 남는 타이어 연기·불꽃·고무 조각. 작은 요소 몇 개를 transform·opacity로만 */
+    .wf .wf-fx { position:absolute; left:50%; top:calc(var(--cy) + var(--wd)/2 - 3px); width:0; height:0; overflow:visible; pointer-events:none; }
+    .wf .wf-fx i { position:absolute; left:-32px; top:-32px; width:64px; height:64px; border-radius:50%; opacity:0; background:radial-gradient(closest-side,rgba(222,225,232,.78),rgba(168,174,186,.4) 55%,rgba(120,126,140,0)); will-change:transform,opacity; }
+    .wf .wf-fx b { position:absolute; left:-1.5px; top:-8px; width:3px; height:16px; border-radius:2px; opacity:0; background:linear-gradient(#fff8d6,#ffbe45 45%,rgba(255,110,20,0)); will-change:transform,opacity; }
+    .wf .wf-fx u { position:absolute; left:-3px; top:-3px; width:6px; height:5px; border-radius:1.5px; opacity:0; background:#16181d; will-change:transform,opacity; }
+    html.wf-going .h-floor { animation-play-state:paused !important; } /* 떠나는 중: 홈 바닥 무늬가 매 프레임 다시 그려지던 것 멈춤 */
     /* 글자: 가로 화면은 바퀴 양옆 (왼쪽 맵·차, 오른쪽 진행·팁), 세로 화면은 바퀴 아래 */
     :is(#loading,#wheelFx).wf .ld { position:absolute; left:0; right:0; top:var(--cy); transform:translateY(-50%); width:auto; max-width:none; max-height:none; overflow:visible; margin:0; padding:0; display:grid; grid-template-columns:1fr var(--wd) 1fr; align-items:center; gap:0; text-align:left; pointer-events:none; }
     :is(#loading,#wheelFx).wf .ld button { pointer-events:auto; }
@@ -374,8 +374,6 @@
   <div id="speedBox" class="hud panel">
     <div id="speed">0</div>
     <div id="speedUnit">km/h</div>
-    <div id="driftBar"><div id="driftFill"></div></div>
-    <div id="driftAng" title="드리프트 각도: 초록 칸 안에서 버티면 드리프트가 쌓여요"><div id="driftWin"></div><div id="driftNeedle"></div></div>
     <div id="tachRow">
       <div id="tach"><div id="tachFill"></div><div id="tachGreen"></div><div id="tachRed"></div></div>
       <div id="gear">1</div>
@@ -435,6 +433,17 @@
     function hex(c, r) { var s = '', x = +c.split(' ')[0], y = +c.split(' ')[1]; for (var i = 0; i < 6; i++) { var a = (i * 60 + 30) * Math.PI / 180; s += (i ? 'L' : 'M') + f(x + r * Math.cos(a)) + ' ' + f(y + r * Math.sin(a)); } return s + 'Z'; }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
     var VB = 'viewBox="-100 -100 200 200" preserveAspectRatio="xMidYMid meet"';
+    // wheelfx2: 소리 담당(src/wheelSfx.js)에게 알림. 시각은 performance.now() 기준
+    function emit(type, d) { d = d || {}; d.type = type; d.at = d.at || NOW(); try { window.dispatchEvent(new CustomEvent('wheelfx', { detail: d })); } catch (e) {} }
+    // wheelfx2: 다 덮인 동안 뒤 화면 숨기기 (덮개가 여럿이면 모두 나갈 때 풂)
+    var covers = 0;
+    function hidePage(on) { covers = Math.max(0, covers + (on ? 1 : -1)); try { document.documentElement.classList.toggle('wf-cov', covers > 0); } catch (e) {} }
+    // wheelfx2: 화면을 n번 그린 뒤에 (창이 숨겨져 rAF가 멈추면 시간으로)
+    function afterFrames(n, fn) {
+      var fired = false, to = setTimeout(run, 120 + n * 60);
+      function run() { if (fired) return; fired = true; clearTimeout(to); fn(); }
+      (function step(k) { if (k <= 0) return run(); try { requestAnimationFrame(function () { step(k - 1); }); } catch (e) { run(); } })(n);
+    }
     function us(id, u) { return 'url(#' + id + u + ')'; }
     // 바퀴 그림: 돌아가는 뒤판(타이어·트레드·옆면 글자·림 통·브레이크 디스크) / 서 있는 캘리퍼 / 돌아가는 앞판(스포크·림 테·허브·너트) / 서 있는 광택·진행 고리
     function wheelHtml(u, id) {
@@ -497,10 +506,12 @@
       var i, ln = '', du = '', L = [[10, 58, 10], [19, 86, 0], [28, 44, 22], [40, 100, 6], [50, 64, 16], [61, 92, 2], [71, 48, 24], [81, 74, 8], [90, 40, 18]];
       for (i = 0; i < L.length; i++) ln += '<i style="top:' + L[i][0] + '%;width:' + L[i][1] + '%;margin-left:' + L[i][2] + '%;opacity:' + (.45 + (i % 3) * .2) + '"></i>';
       for (i = 0; i < 18; i++) du += '<i></i>';
+      var fx = ''; for (i = 0; i < 10; i++) fx +='<i></i>'; for (i = 0; i < 9; i++) fx += '<b></b>'; for (i = 0; i < 5; i++) fx += '<u></u>';
       return '<div class="wf-wipe wf-wl"><i></i></div><div class="wf-wipe wf-wr r"><i></i></div><div class="wf-veil"></div>' +
         '<div class="wf-track"><div class="wf-ghost"></div><div class="wf-lines">' + ln + '</div><div class="wf-shadow"></div>' +
         '<div class="wf-hop"><div class="wf-body"' + (main ? ' id="ldProgress" aria-hidden="true"' : ' aria-hidden="true"') + '>' + wheelHtml(u) + '</div></div>' +
-        '<div class="wf-dust">' + du + '</div></div>';
+        '<div class="wf-dust">' + du + '</div></div>' +
+        '<div class="wf-fx" aria-hidden="true">' + fx + '</div>'; // 연기·불꽃은 바퀴 앞 (바닥에 닿는 곳에서 뒤로)
     }
 
     function make(root, mode, main) {
@@ -509,12 +520,13 @@
       root.insertAdjacentHTML('afterbegin', layers(u, main));
       var q = function (s) { return root.querySelector(s); }, qa = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
       var track = q('.wf-track'), hop = q('.wf-hop'), body = q('.wf-body'), veil = q('.wf-veil'), wl = q('.wf-wl'), wr = q('.wf-wr'),
-        lines = q('.wf-lines'), ghost = q('.wf-ghost'), blur = q('.wf-blur'), shadow = q('.wf-shadow'), dust = qa('.wf-dust i');
+        lines = q('.wf-lines'), ghost = q('.wf-ghost'), blur = q('.wf-blur'), shadow = q('.wf-shadow'), dust = qa('.wf-dust i'),
+        smoke = qa('.wf-fx i'), sparks = qa('.wf-fx b'), bits = qa('.wf-fx u');
       var R1 = qa('.wf-rot'), R2 = qa('.wf-rot > div'), R3 = qa('.wf-rot > div > div');
       var D, cx, W, K;
       function measure() { var rc = track.getBoundingClientRect(); D = rc.width || 300; cx = rc.left + D / 2; W = window.innerWidth || 1280; K = 360 / (Math.PI * D); }
       measure();
-      var spins = [], rate = 1, done = false, endAt = 0, gone = false, enterMs = 0;
+      var spins = [], rate = 1, done = false, endAt = 0, gone = false, enterMs = 0, hidden = false, prog = -1, dbg = {};
       function A(el, kf, o) { if (!el || !el.animate) return null; try { return el.animate(kf, o); } catch (e) { return null; } }
       function each(l, kf, o) { var r = []; for (var i = 0; i < l.length; i++) { var a = A(l[i], kf, o); if (a) r.push(a); } return r; }
       function tx(x) { return 'translateX(' + f(x) + 'px)'; }
@@ -536,13 +548,16 @@
         if (RM) return;
         var Pm = 1150, T = 700, X = 360 * T / Pm / 2;
         spins = spins.concat(each(R2, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(' + f(-X) + 'deg)' }], { duration: T, delay: delay, easing: 'cubic-bezier(.33,0,.67,.33)', fill: 'forwards' }));
-        // 한 바퀴를 36칸(10°)씩: 화면을 다시 그리는 횟수가 절반쯤으로 줄어 코스 준비(셰이더 만들기)와 덜 다툼. 흐림 덮개가 있어 끊겨 보이지 않음
-        spins = spins.concat(each(R3, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-360deg)' }], { duration: Pm, delay: delay + T, iterations: Infinity, easing: 'steps(36, end)' }));
+        // wheelfx2: 예전 36칸(10°) 계단 회전은 초당 약 31번만 바뀌어 툭툭 끊겨 보였음 → 72칸(5°) = 초당 약 63~94번 (60 Hz 화면에선 매끈).
+        //   완전히 매끈하게(linear) 하면 144 Hz 화면에서 초당 144번 그려 코스 셰이더 만들기(같은 그래픽 프로세스)와 더 다툼.
+        //   뒤 화면은 숨겨서(wf-cov) 한 번 그리는 일은 바퀴 레이어 몇 장뿐
+        spins = spins.concat(each(R3, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-360deg)' }], { duration: Pm, delay: delay + T, iterations: Infinity, easing: 'steps(72, end)' }));
+        emit('spin', { at: NOW() + delay, accel: T, period: Pm, rate: rate, main: !!main });
         var ba = A(blur, [{ opacity: 0 }, { opacity: .2 }], { duration: T + 300, delay: delay, fill: 'forwards' });
         if (ba && ba.finished) ba.finished.then(function () { try { if (!done) { ba.commitStyles(); ba.cancel(); } } catch (e) {} }, function () {});
         setRate(rate);
       }
-      function setRate(r) { rate = r; for (var i = 0; i < spins.length; i++) { try { if (spins[i].updatePlaybackRate) spins[i].updatePlaybackRate(r); else spins[i].playbackRate = r; } catch (e) {} } }
+      function setRate(r) { if (Math.abs(r - rate) > .01) emit('rate', { rate: r, main: !!main }); rate = r; for (var i = 0; i < spins.length; i++) { try { if (spins[i].updatePlaybackRate) spins[i].updatePlaybackRate(r); else spins[i].playbackRate = r; } catch (e) {} } }
       // (a) 오른쪽 화면 밖에서 굴러 들어와 가운데에 멈춤 (조금 넘어갔다 돌아옴 + 통통 + 먼지)
       function enter(dur, cover) {
         var dx0 = W - cx + D * .62, EZ = 'cubic-bezier(.16,.74,.3,1.07)', o = { duration: dur, easing: EZ, fill: 'backwards' };
@@ -567,32 +582,82 @@
         }
         A(text(), [{ opacity: 0 }, { opacity: 1 }], { duration: 280, delay: dur * .5, fill: 'backwards' });
         enterMs = dur; endAt = NOW() + dur;
+        // 소리: 땅에 닿는 순간 = hop 열쇠틀 .4(쿵) · .74(통)
+        emit('enter', { dur: dur, cover: !!cover, hits: [dur * .4, dur * .74, dur * .88], main: !!main });
       }
       function finish() {
-        if (gone) return; gone = true;
+        if (gone) return; gone = true; dbg.fin = NOW();
         try { Element.prototype.remove.call(root); } catch (e) {}
       }
       // (c) 준비 끝: 왼쪽으로 굴러 나감. 바퀴 오른쪽(지나간 자리)부터 새 화면이 보임. (a)가 아직이면 끝난 뒤에
+      // wheelfx2: 바로 굴리지 않고 뒤 화면을 다시 보이게 한 뒤 2번 그린 다음에 시작
+      //   (게임 첫 화면·홈 첫 화면의 무거운 그리기가 바퀴가 덮고 있을 때 끝나고, 애니메이션도 깨끗한 상태에서 그래픽 쪽에 올라감.
+      //    예전엔 홈이 화면을 만드는 긴 작업 한가운데서 시작해서 굴러 나가기 애니메이션이 메인 스레드에서 돌며 0.1~0.3초씩 멈췄음)
       function ready() {
         if (done) return; done = true;
         root.classList.add('out');
+        if (hidden) { hidden = false; hidePage(false); }
+        dbg.ready = NOW();
+        afterFrames(2, function () { if (!dbg.roll) rollOut(); });
+        setTimeout(function () { if (!dbg.roll) rollOut(); }, 700); // 안전장치: 무슨 일이 있어도 굴러 나가기 시작
+      }
+      function rollOut() {
+        if (dbg.roll) return;
+        dbg.roll = NOW();
+        try { rollAnims(); } catch (e) { finish(); } // 안전장치: 오류가 나도 바퀴 화면이 남아 입력을 막지 않게
+      }
+      function rollAnims() {
         var delay = Math.max(0, endAt - NOW());
-        if (RM) { A(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, delay: delay, fill: 'forwards' }); setTimeout(finish, delay + 260); return; }
+        if (RM) { A(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, delay: delay, fill: 'forwards' }); setTimeout(finish, delay + 260); emit('out', { at: NOW() + delay, dur: 220, rm: true, main: !!main }); return; }
         measure();
-        var dur = 640, back = D * .06, dxW = -(cx + D * .64), PW = W + 2 * D;
-        var keys = [[0, 0, 'cubic-bezier(.3,0,.5,1)'], [.17, back, 'cubic-bezier(.5,0,.86,.48)'], [1, dxW]], o = { duration: dur, delay: delay, fill: 'forwards' };
+        // 같은 요소에 앞 애니메이션(들어오기 fill·흐림 덮개)이 남아 있으면 크롬이 새 애니메이션을 그래픽 쪽에 못 올림(예전 wf-blur) → 지금 값으로 굳히고 지움
+        if (delay < 30) [track, hop, wl, wr, veil, lines, ghost, blur, shadow, text()].concat(R1).forEach(function (el) {
+          if (el && el.getAnimations) el.getAnimations().forEach(function (a) { try { a.commitStyles(); } catch (e) {} try { a.cancel(); } catch (e) {} });
+        });
+        // wheelfx2 (사용자 요청 "나갈 때 오른쪽으로 살짝 갔다가 휠 스핀이 살짝 일어나고 왼쪽으로"):
+        //   ① 0~0.22초 오른쪽으로 살짝 밀림(차체가 눌림) ② ~0.58초 제자리 휠 스핀(빠르게 헛돎·흐림·바닥에 타이어 연기·불꽃·고무 조각)
+        //   ③ ~1.18초 왼쪽으로 튀어 나가며 화면이 드러남. 게임·홈은 이미 준비된 뒤라 로딩 시간은 그대로
+        var dur = 1180, N1 = .19, S1 = .49, back = D * .1, dxW = -(cx + D * .64), PW = W + 2 * D, ps = D / 260;
+        emit('out', { at: NOW() + delay, dur: dur, spinAt: dur * N1, spinDur: dur * (S1 - N1), launchAt: dur * S1, main: !!main });
+        var keys = [[0, 0, 'cubic-bezier(.25,.1,.3,1)'], [N1, back], [S1, back, 'cubic-bezier(.38,0,.82,.55)'], [1, dxW]], o = { duration: dur, delay: delay, fill: 'forwards' };
         A(track, kfs(keys, tx), o);
-        each(R1, kfs(keys, rot), o);
-        A(hop, [{ offset: 0, transform: 'scale(1,1)' }, { offset: .17, transform: 'scale(.96,1.035)' }, { offset: .34, transform: 'scale(1.012,.99)' }, { offset: 1, transform: 'scale(1,1)' }], o);
+        // 회전: 밀릴 땐 뒤로 조금 → 헛돌기(빠르게 약 2바퀴) → 튀어 나가며 계속 빠르게 돌다 굴러가는 빠르기로
+        var r0 = back * K, SP = -780, SP2 = -560;
+        each(R1, [{ offset: 0, transform: 'rotate(0deg)', easing: 'cubic-bezier(.25,.1,.3,1)' }, { offset: N1, transform: 'rotate(' + f(r0) + 'deg)', easing: 'cubic-bezier(.55,0,.9,.6)' },
+          { offset: S1, transform: 'rotate(' + f(r0 + SP) + 'deg)', easing: 'cubic-bezier(.2,.45,.5,1)' }, { offset: 1, transform: 'rotate(' + f(dxW * K + SP + SP2) + 'deg)' }], o);
+        var j = D * .007;
+        A(hop, [{ offset: 0, transform: 'translateY(0px) scale(1,1)' }, { offset: .1, transform: 'translateY(0px) scale(1.035,.965)' }, { offset: N1, transform: 'translateY(0px) scale(.985,1.015)' },
+          { offset: .25, transform: 'translateY(' + f(-j) + 'px) scale(1.012,.988)' }, { offset: .31, transform: 'translateY(' + f(j * .4) + 'px) scale(1.018,.982)' }, { offset: .37, transform: 'translateY(' + f(-j) + 'px) scale(1.012,.988)' },
+          { offset: .43, transform: 'translateY(' + f(j * .4) + 'px) scale(1.02,.98)' }, { offset: S1, transform: 'translateY(0px) scale(.95,1.04)' }, { offset: .6, transform: 'translateY(0px) scale(1.012,.99)' }, { offset: 1, transform: 'translateY(0px) scale(1,1)' }], o);
         A(wl, [{ opacity: 1 }, { opacity: 0 }], { duration: 1, delay: delay, fill: 'forwards' });
         A(wr, kfs(keys, function (x) { return tx(cx + x - PW); }), { duration: dur, delay: delay, fill: 'both' });
-        A(veil, [{ offset: 0, opacity: 1 }, { offset: .16, opacity: .93 }, { offset: .74, opacity: 0 }, { offset: 1, opacity: 0 }], o);
+        A(veil, [{ offset: 0, opacity: 1 }, { offset: S1, opacity: 1 }, { offset: .55, opacity: .93 }, { offset: .86, opacity: 0 }, { offset: 1, opacity: 0 }], o);
         A(text(), [{ opacity: 1 }, { opacity: 0 }], { duration: 170, delay: delay, fill: 'forwards' });
-        A(lines, [{ offset: 0, opacity: 0, transform: 'scaleX(.35)' }, { offset: .22, opacity: 0, transform: 'scaleX(.35)' }, { offset: .56, opacity: 1, transform: 'scaleX(1.1)' }, { offset: .8, opacity: .8, transform: 'scaleX(1.3)' }, { offset: 1, opacity: 0, transform: 'scaleX(1.4)' }], o);
-        A(ghost, [{ offset: 0, opacity: 0 }, { offset: .25, opacity: 0 }, { offset: .6, opacity: .85 }, { offset: .82, opacity: .6 }, { offset: 1, opacity: 0 }], o);
-        A(blur, [{ offset: 0, opacity: .2 }, { offset: .3, opacity: .75 }, { offset: 1, opacity: .95 }], o);
-        A(shadow, [{ offset: 0, transform: 'scale(1,1)' }, { offset: .17, transform: 'scale(1.05,1.05)' }, { offset: 1, transform: 'scale(1,1)' }], o);
-        puff(delay + dur * .17, 0, 18, true);
+        A(lines, [{ offset: 0, opacity: 0, transform: 'scaleX(.35)' }, { offset: .55, opacity: 0, transform: 'scaleX(.35)' }, { offset: .76, opacity: 1, transform: 'scaleX(1.1)' }, { offset: .9, opacity: .8, transform: 'scaleX(1.3)' }, { offset: 1, opacity: 0, transform: 'scaleX(1.4)' }], o);
+        A(ghost, [{ offset: 0, opacity: 0 }, { offset: .58, opacity: 0 }, { offset: .8, opacity: .85 }, { offset: .92, opacity: .6 }, { offset: 1, opacity: 0 }], o);
+        A(blur, [{ offset: 0, opacity: .2 }, { offset: N1, opacity: .3 }, { offset: .3, opacity: .88 }, { offset: S1, opacity: .92 }, { offset: 1, opacity: .95 }], o);
+        A(shadow, [{ offset: 0, transform: 'scale(1,1)' }, { offset: N1, transform: 'scale(1.06,1.05)' }, { offset: S1, transform: 'scale(1.08,1.1)' }, { offset: .6, transform: 'scale(.96,1)' }, { offset: 1, transform: 'scale(1,1)' }], o);
+        // 타이어 연기 (뒤 = 오른쪽·위로 퍼짐, 바닥에 남아 천천히 사라짐)
+        var s0 = delay + dur * (N1 + .01), sw = dur * (S1 - N1), i, r, r2;
+        for (i = 0; i < smoke.length; i++) {
+          r = ((i * 7919) % 97) / 97; r2 = ((i * 104729) % 89) / 89;
+          A(smoke[i], [{ offset: 0, opacity: 0, transform: 'translate(' + f(back + D * .03) + 'px,0px) scale(' + f(.5 * ps) + ')' }, { offset: .14, opacity: .9 },
+            { offset: 1, opacity: 0, transform: 'translate(' + f(back + D * (.2 + r * .55)) + 'px,' + f(-D * (.04 + r2 * .26)) + 'px) scale(' + f((2.6 + r * 2.4) * ps) + ')' }],
+            { duration: 820 + r2 * 360, delay: s0 + sw * (i / smoke.length) * .9, easing: 'cubic-bezier(.2,.65,.35,1)', fill: 'backwards' });
+        }
+        // 불꽃·고무 조각: 바닥에서 뒤로 튀었다 떨어짐
+        function fling(el, k, n, slow) {
+          r = ((k * 7919 + 13) % 97) / 97; r2 = ((k * 104729 + 7) % 89) / 89;
+          var ex = back + D * (.2 + r * .42), ey = -D * (.06 + r2 * .2), mx = back + D * (.08 + r * .22), my = ey * 1.45;
+          var a0 = Math.atan2(my, mx - back) * 180 / Math.PI + 90, a1 = Math.atan2(ey - my, ex - mx) * 180 / Math.PI + 90 + (slow ? 400 : 0);
+          A(el, [{ offset: 0, opacity: 0, transform: 'translate(' + f(back + D * .02) + 'px,0px) rotate(' + f(a0) + 'deg) scale(' + f(ps) + ')' }, { offset: .08, opacity: 1 },
+            { offset: .5, opacity: .95, transform: 'translate(' + f(mx) + 'px,' + f(my) + 'px) rotate(' + f(a0) + 'deg) scale(' + f(ps) + ')' },
+            { offset: 1, opacity: 0, transform: 'translate(' + f(ex) + 'px,' + f(ey * .4) + 'px) rotate(' + f(a1) + 'deg) scale(' + f(ps * .7) + ')' }],
+            { duration: (slow ? 560 : 380) + r2 * (slow ? 220 : 200), delay: s0 + sw * (k / n), easing: 'cubic-bezier(.2,.6,.5,1)', fill: 'backwards' });
+        }
+        for (i = 0; i < sparks.length; i++) fling(sparks[i], i, sparks.length, false);
+        for (i = 0; i < bits.length; i++) fling(bits[i], i + 20, bits.length, true);
+        puff(delay + dur * S1, 0, 18, true);
         setTimeout(finish, delay + dur + 80);
       }
       // 다른 코드가 .out을 붙이거나 지워도(홈 화면) 굴러 나간 뒤에 지워짐
@@ -600,8 +665,11 @@
       if (window.MutationObserver) {
         new MutationObserver(function () { if (!done && root.classList.contains('out')) ready(); }).observe(root, { attributes: true, attributeFilter: ['class'] });
         new MutationObserver(function () {
-          var s = parseFloat(getComputedStyle(body).getPropertyValue('--wheel-speed')) || 1.35;
+          // 인라인 style만 읽음 (getComputedStyle은 로딩 중 스타일 계산을 강제해서 뺌)
+          var s = parseFloat(body.style.getPropertyValue('--wheel-speed')) || 1.35;
           if (Math.abs(1.35 / s - rate) > .01) setRate(1.35 / s);
+          var p = parseFloat(body.style.getPropertyValue('--wheel-progress'));
+          if (p >= 0 && p !== prog) { prog = p; emit('progress', { p: p, main: !!main }); }
         }).observe(body, { attributes: true, attributeFilter: ['style'] });
       }
       if (RM) {
@@ -610,7 +678,10 @@
       } else if (mode === 'hold') { endAt = NOW(); spin(0); }
       else if (mode === 'fresh') { enter(500, false); spin(400); }
       else enter(640, true);
-      return { ready: ready, root: root, get enterMs() { return enterMs; }, get endAt() { return endAt; }, get done() { return done; } };
+      // 뒤 화면 숨기기: 처음부터 덮인 채 시작(hold·fresh = 배경 판이 화면 전체) / cover는 다 덮인 순간부터
+      if (mode === 'cover') setTimeout(function () { if (!done && !gone) { hidden = true; hidePage(true); } }, Math.max(0, endAt - NOW()));
+      else { hidden = true; hidePage(true); }
+      return { ready: ready, root: root, mode: mode, dbg: dbg, t0: NOW(), get rate() { return rate; }, get progress() { return prog; }, get enterMs() { return enterMs; }, get endAt() { return endAt; }, get done() { return done; } };
     }
 
     // 다른 주소로: 지금 화면 위로 바퀴를 굴려 넣고, 다 덮이면 이동 (새 페이지는 가운데에서 이어서 시작)
@@ -630,6 +701,7 @@
       o = o || {};
       if (going) return false;
       going = true;
+      try { document.documentElement.classList.add('wf-going'); } catch (e) {}
       var c = cover(o);
       setTimeout(function () {
         try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), title: o.title || '', sub: o.sub || '' })); } catch (e) {}
@@ -641,6 +713,7 @@
     window.addEventListener('pageshow', function (e) {
       if (!e.persisted) return;
       going = false;
+      try { document.documentElement.classList.remove('wf-going'); } catch (e2) {}
       var el = document.getElementById('wheelFx');
       if (el && el.__wf) el.__wf.ready();
     });
