@@ -180,6 +180,7 @@ function build() {
       sessionStorage.setItem('gimmick.portraitOk', '1');
     } catch {}
     document.body.classList.add('rotate-ok');
+    update();
   });
   try {
     if (sessionStorage.getItem('gimmick.portraitOk')) document.body.classList.add('rotate-ok');
@@ -264,6 +265,14 @@ export const touch = {
     };
     if (document.body) go();
     else document.addEventListener('DOMContentLoaded', go, { once: true });
+  },
+  /** 회전 안내가 실제로 보일 때만 멈춰요. */
+  get rotationHold() {
+    update();
+    const hold = !!root && root.classList.contains('show') && root.classList.contains('racing')
+      && !document.body.classList.contains('rotate-ok') && matchMedia('(orientation: portrait)').matches;
+    if (hold) releaseAll();
+    return hold;
   },
   /** 지금 터치 입력 (메뉴가 떠 있거나 꺼져 있으면 0) */
   read() {

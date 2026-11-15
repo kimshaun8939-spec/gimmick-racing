@@ -12,7 +12,8 @@ export function go(url, opts = {}) {
   const w = W();
   if (!url) return false;
   if (!w) { location.href = url; return true; }
-  return w.go(url, opts);
+  const home = !new URL(url, location.href).searchParams.has('map');
+  return w.go(url, { ...opts, sub: opts.sub === '트랜스폼 레이서' ? '' : opts.sub, status: opts.status || (home ? '홈으로 가는 중' : '레이스를 준비해요') });
 }
 
 export function wheelOut(opts = {}) {

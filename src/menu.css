@@ -3232,3 +3232,22 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
   .gm-welcome .wl-name, .gm-welcome .wl-pin, .gm-welcome .wl-acc { margin-top: 10px; }
   .gm-welcome .btns { margin-top: 12px; }
 }
+
+/* qafixB: 방식 카드만 스크롤하고 다음 버튼은 남겨요. */
+@media (max-width:767px) {
+ #home .h-view[data-view="mode"].on { overflow:hidden; min-height:0; display:flex; flex-direction:column; }
+ #home .h-view[data-view="mode"].on > .h-modes { flex:1; height:100%; min-height:0; overflow:hidden; }
+ #home .h-modes .h-modegrid { flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; align-content:start; }
+ #home .h-modes .bar { position:static; flex:0 0 auto; margin-top:0; }
+ #home .h-modes .h-modetip { flex:0 0 auto; }
+}
+#home .h-map[data-map="starter"] .stars { color:transparent; background:linear-gradient(90deg,#ffcf3f 33.33333333333333%,#66758c 33.33333333333333%); background-clip:text; -webkit-background-clip:text; }
+#home .h-map[data-map="glacier"] .stars { color:transparent; background:linear-gradient(90deg,#ffcf3f 33.33333333333333%,#66758c 33.33333333333333%); background-clip:text; -webkit-background-clip:text; }
+#home .h-map[data-map="sea"] .stars { color:transparent; background:linear-gradient(90deg,#ffcf3f 66.66666666666666%,#66758c 66.66666666666666%); background-clip:text; -webkit-background-clip:text; }
+#home .h-map[data-map="jungle"] .stars { color:transparent; background:linear-gradient(90deg,#ffcf3f 66.66666666666666%,#66758c 66.66666666666666%); background-clip:text; -webkit-background-clip:text; }
+#home .h-map[data-map="neon"] .stars { color:transparent; background:linear-gradient(90deg,#ffcf3f 66.66666666666666%,#66758c 66.66666666666666%); background-clip:text; -webkit-background-clip:text; }
+
+/* 상세 난이도도 빈 별만 흐리게: 별은 한 글자 폭으로 맞춰요. */
+#home .mp-diff:is(.d1,.d2) { background-color:#080c16c7; background-image:linear-gradient(90deg,#ffcf3f 0 var(--filled),#66758c var(--filled) 3em,#c3d0e6 3em); background-origin:content-box; background-clip:text; -webkit-background-clip:text; color:transparent; letter-spacing:0; }
+#home .mp-diff.d1 { --filled:1em; }
+#home .mp-diff.d2 { --filled:2em; }

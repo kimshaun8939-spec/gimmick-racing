@@ -846,3 +846,7 @@ body.touch-on .ct-keys { display: none; }
 }
 /* leftovers 2차 사진 검토: 등급 딱지 왼쪽 위 공간도 비워 둔다. */
 #home .g2-list .h-carcard .chk { left:40px; top:8px; }
+
+/* qafixB: 터치에서는 등급 키 안내 숨김 */
+body.touch-on #home .h-qe { display:none; }
+@media (pointer:coarse) { #home .h-qe { display:none; } }

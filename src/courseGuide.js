@@ -5,7 +5,7 @@ import { keybinds } from './keybinds.js';
 import { pad, padKbd } from './gamepad.js';
 
 export const COURSE_TIPS = {
-  starter: ['직선에서 150 km/h를 넘기면 가속 모드, 물길에 들어가면 배, 활주로에 올라서면 비행기로 저절로 변신해요', '땅길이 오른쪽으로 꺾이는 곳에서 핸들을 그대로 두면 활주로예요. 끝에서 저절로 날아 고리를 지나 착륙장 오르막에 내려요. 날기 싫으면 오른쪽 땅길로!', '날 때는 Space 위 · Shift 아래. 아무것도 안 눌러도 괜찮아요'],
+  starter: ['직선에서 150 km/h를 넘기면 가속 모드, 물길에 들어가면 배, 활주로에 올라서면 비행기로 저절로 변신해요', '땅길이 오른쪽으로 꺾이는 곳에서 핸들을 그대로 두면 활주로예요. 끝에서 저절로 날아 고리를 지나 착륙장 오르막에 내려요. 날기 싫으면 오른쪽 땅길로!', '날 때는 상승·하강으로 높이를 조절해요. 아무것도 안 눌러도 괜찮아요'],
   glacier: ['넓은 고속 코스예요. 직선 끝 빨간 라인 전에 속도를 줄여요', '눈밭은 느리고 미끄러워요. 도로 안쪽으로 부드럽게 돌아와요'],
   sea: ['물에 닿으면 자동으로 배가 돼요. 가속을 유지하며 부표가 이어진 물길을 따라가요', '파도 앞 하얀 거품 줄이 밝을 때 타면 높이 날아요. 땅에 오르면 자동차로 돌아와요'],
   jungle: ['용암 지하 세계 일부는 난간이 없어요. 연석 밖은 바로 용암이니 넓게 나가지 마세요', 'U자 안쪽 용암 둑길은 신호가 초록일 때만 열려요. 빨강이면 바깥 길로 돌아가요', '둥실 언덕에서는 차가 오래 떠요. 점프 전에 방향을 맞추고 용암과 길 끝을 피해요'],
@@ -27,14 +27,14 @@ export function showCourseGuide({ map, title, mode, championship, params, onClos
   const tips = COURSE_TIPS[map];
   if (!tips) return state;
   const touch = touchWanted();
-  const usingPad = pad.connected() && !touch;
+  const usingPad = pad.connected() && (pad.usingPad() || !touch);
   const label = id => usingPad ? pad.label(id) : keybinds.label(id);
   const drive = usingPad
     ? '왼쪽 스틱 조향 · ' + label('throttle') + ' 가속 · ' + label('brake') + ' 브레이크 · ' + label('respawn') + ' 복귀'
     : touch
     ? (settings.get('tilt') ? '휴대폰을 좌우로 기울여 조향' : settings.get('touchSteer') === 'buttons' ? '왼쪽 ◀ ▶ 버튼으로 조향' : '왼쪽 화면을 옆으로 끌어 조향') + ' · 오른쪽 ▲ 가속 / ▼ 브레이크 · ↺ 복귀'
     : keybinds.label('throttle') + ' 가속 · ' + keybinds.label('brake') + ' 브레이크 · ' + keybinds.label('respawn') + ' 복귀';
-  const fly = map === 'gp' ? (touch ? '\n비행: 💨 버튼이 ⬆ 상승으로 바뀌고 ⬇ 하강 버튼이 생겨요.' : '\n비행: ' + label('climb') + ' 상승 · ' + label('dive') + ' 하강') : '';
+  const fly = ['gp', 'starter'].includes(map) ? (touch && !usingPad ? '\n비행: ⬆·⬇ 버튼으로 상승·하강해요.' : '\n비행: ' + label('climb') + ' 상승 · ' + label('dive') + ' 하강') : '';
   const rules = mode === 'item'
     ? '\n🎁 상자를 지나 아이템 획득 → 화면 위 아이템 칸' + (touch ? '을 눌러 사용해요.' : '을 누르거나 ' + label('booster') + (usingPad ? ' 버튼으로 사용해요.' : ' 키로 사용해요.'))
     : championship ? '\n🏆 여러 코스의 순위 점수를 합쳐 챔피언을 정해요. 결과에서 다음 경기로 이어가요.'
@@ -44,7 +44,7 @@ export function showCourseGuide({ map, title, mode, championship, params, onClos
   const dialog = document.querySelector('.gm-confirm');
   dialog?.classList.add('course-guide');
   const confirmHint = dialog?.querySelector('[data-r="1"] kbd');
-  if (touch) confirmHint?.remove();
+  if (touch && !usingPad) confirmHint?.remove();
   else if (usingPad && confirmHint) confirmHint.outerHTML = padKbd(0);
   answer.then(ok => {
     if (ok) { try { localStorage.setItem(key, 'seen'); } catch {} }

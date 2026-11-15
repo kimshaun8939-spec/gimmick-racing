@@ -4,16 +4,17 @@ const progress = document.getElementById('ldProgress');
 const title = document.getElementById('ldMap');
 const home = !new URLSearchParams(location.search).get('map');
 // wheelfx: 앞 화면이 바퀴를 굴려 넣으며 넘겨준 제목이 있으면 그대로 둠 (index.html 인라인 바퀴 엔진이 채움)
-if (title && !document.getElementById('loading')?.hasAttribute('data-wf-title')) title.textContent = home ? '트랜스폼 레이서에 오신 걸 환영해요' : '첫 레이스를 준비해요';
+if (title && !document.getElementById('loading')?.hasAttribute('data-wf-title')) title.textContent = home ? '어서 오세요' : '첫 레이스를 준비해요';
+const homeText = title?.textContent === '홈으로' ? '홈으로 가는 중' : '홈을 준비해요';
 let downloading = true, count = 0, lastProgressAt = 0;
 const say = text => { if (status) status.textContent = text; };
-say('기본 파일 불러오기');
+say(home ? homeText : '레이스를 준비해요');
 // 퍼센트를 추측하지 않고 실제 도착한 파일 수를 알려 줘요.
 const observer = typeof PerformanceObserver === 'function' ? new PerformanceObserver(list => {
   count += list.getEntries().length;
-  if (downloading && performance.now()-lastProgressAt>400 && status?.textContent.startsWith('기본 파일')) {
+  if (downloading && performance.now()-lastProgressAt>400 && (status?.textContent.startsWith('준비 중') || status?.textContent === '레이스를 준비해요')) {
     lastProgressAt=performance.now();
-    say('기본 파일 · ' + count + '개 도착');
+    say(home ? homeText : '준비 중 · ' + count + '개 완료');
   }
 }) : null;
 observer?.observe({ type: 'resource', buffered: true });
@@ -55,7 +56,7 @@ try {
   }
   // 갱신 진행 100%는 업데이트 파일만 뜻해요. 화면에 필요한 나머지는 별도 준비예요.
   progress?.style.setProperty('--wheel-progress', 12);
-  say('기본 파일 · ' + count + '개 도착');
+  say(home ? homeText : '준비 중 · ' + count + '개 완료');
   if (home) {
     // 주행 물리·봇·다른 코스는 레이스를 시작할 때 main.js가 불러와요.
     await import('./audioMix.js');

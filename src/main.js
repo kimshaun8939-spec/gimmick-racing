@@ -7,6 +7,7 @@ import { Car } from './car.js';
 import { createCarModel } from './carModel.js';
 import { initCarLighting } from './carLighting.js';
 import { createKeyboardInput, emptyControls } from './input.js';
+import { touch } from './touch.js';
 import { keybinds } from './keybinds.js';
 import { COURSE_TIPS, showCourseGuide } from './courseGuide.js';
 import { withAssistIntro } from './assistIntro.js'; // 첫 레이스 출발 전 '주행 도움이 켜져 있어요' 카드 (2026-11-15)
@@ -221,7 +222,7 @@ await loadingStage(2, '도로 준비');
 performance.mark('load:start');
 const track = mapMod && mapMod.buildTrack ? mapMod.buildTrack(trackData, scene) : defaultTrack.buildTrack(trackData, scene);
 performance.mark('load:track');
-await loadingStage(3, '풍경 · 기믹 준비');
+await loadingStage(3, '풍경과 장애물을 준비해요');
 const scenery = mapMod && mapMod.buildScenery ? mapMod.buildScenery(track, scene) : defaultScenery.buildScenery(track, scene);
 const staticRoots = scene.children.filter((c) => !sceneBeforeMap.has(c)); // 트랙 + 풍경 (소품·차는 빼고)
 performance.mark('load:scenery');
@@ -1049,7 +1050,7 @@ const totalLaps = trackData.laps;
 function goHome(page) {
   setLast({ map: mapName, car: carId });
   // wheelfx: 바퀴가 굴러 들어와 덮은 뒤 이동 (두 번 눌러도 한 번만)
-  wheelGo(homeUrl(page), { title: page ? '레이스 준비' : '홈으로', sub: '트랜스폼 레이서' });
+  wheelGo(homeUrl(page), { title: page ? '레이스 준비' : '홈으로', sub: '', status: page ? '차고와 코스를 준비해요' : '홈으로 가는 중' });
 }
 const menu = createPauseMenu({
   getInfo: () => ({
@@ -1288,6 +1289,7 @@ const courseGuide = withAssistIntro(params, () => showCourseGuide({ map: mapName
   onClose() { input.clear(); last = performance.now(); acc = 0; }, onHome: () => goHome(),
 }), () => { input.clear(); last = performance.now(); acc = 0; if (race.phase === 'countdown') race.assist = assistOn(); });
 
+let rotationHeld = false;
 function frame(now, manual = false) {
   // 프레임 제한 (설정): 너무 이르면 이번 화면은 건너뜀
   const cap = settings.values.fpsCap;
@@ -1305,9 +1307,17 @@ function frame(now, manual = false) {
     if (!manual) requestAnimationFrame(frame); // 테스트용 일시정지
     return;
   }
-  // 첫 코스 설명을 읽는 동안 출발 신호·물리도 기다림.
-  if (courseGuide.open) {
+  const rotate = touch.rotationHold;
+  if (rotate !== rotationHeld) {
+    rotationHeld = rotate;
+    duckAudio(rotate || menu.isOpen);
     input.clear();
+    acc = 0;
+  }
+  // 첫 코스 설명과 회전 안내 동안 출발 신호·물리·봇도 기다림.
+  if (courseGuide.open || rotate) {
+    input.clear();
+    acc = 0;
     if (!manual) requestAnimationFrame(frame);
     return;
   }

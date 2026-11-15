@@ -573,13 +573,32 @@ export function createDemo(game, P, ui, place, o = {}) {
     summaryHtml() {
       const items = log.filter((x) => x.title);
       const keysFor = (x) => {
-        const k = x.snap || Object.fromEntries(Object.entries(x.on).map(([id, t]) => [id, x.tot > 0 && t >= 0.35 * x.tot]));
-        if (x.snapSteer != null) (k.left = x.snapSteer < -0.4), (k.right = x.snapSteer > 0.4); // 요점 카드엔 작은 핸들 보정은 안 보임
-        return ['throttle', 'brake', 'left', 'right'].filter((id) => k[id]);
+        // 요점은 잔손질 대신 설명의 핵심 동작을 보여 줘요.
+        const text = x.title + ' ' + x.sub;
+        const explicit = [...text.matchAll(/td-k-(throttle|brake|left|right|climb|dive)\b/g)].map(m => m[1]);
+        if (x.id === 'straight') return ['throttle'];
+        if (x.id === 'trail' && P.turnKey) return ['brake', P.turnKey];
+        if (/브레이크.*다 떼기/.test(text)) return ['brake', ...(P.turnKey ? [P.turnKey] : [])];
+        if (/브레이크 지점|곧 브레이크/.test(text)) return ['brake'];
+        if (/브레이크를 서서히|서서히 떼/.test(text)) return ['brake', ...explicit.filter(id => id === 'left' || id === 'right')];
+        if (explicit.length) return [...new Set(explicit)].filter(id => !(/브레이크 없이|안 밟|없이/.test(text) && id === 'brake'));
+        if (/에이펙스|안쪽에 붙/.test(text) && P.turnKey) return [P.turnKey];
+        if (/바깥으로 넓게|탈출/.test(text)) return ['throttle'];
+        if (x.id === 'takeoff') return ['climb'];
+        if (x.id === 'rings') return ['climb', 'dive'];
+        if (/가속|액셀|붙어 있기/.test(plainText(text))) return ['throttle'];
+        // 설명에 키 동작이 없는 순간은 잔손질 키를 덧붙이지 않아요.
+        return [];
       };
       return `<div class="td-sum"><ol>${items
         .map((x, j) => {
-          const ks = keysFor(x).map((id) => `<kbd class="td-sk td-sk-${id}">${esc(keyCap(id).main)}</kbd>`).join('');
+          const ks = keysFor(x).map((id) => {
+            const text = plainText(x.title + ' ' + x.sub);
+            const release = id === 'throttle' ? /떼기|가속.*떼|액셀.*떼/.test(text) : id === 'brake' && /다 떼기/.test(text);
+            const tap = id === 'brake' && /톡톡|서서히/.test(text);
+            const cap = onTouch() && (id === 'climb' || id === 'dive') ? (id === 'climb' ? '⬆' : '⬇') : keyCap(id).main;
+            return `<kbd class="td-sk td-sk-${id}"${release ? ' style="background:#303c52;color:#d5e0f0"' : ''}>${esc(cap)}${release ? ' 떼기' : tap ? ' 톡톡' : ''}</kbd>`;
+          }).join('');
           return `<li class="td-sum-${esc(x.id)}"><span class="n">${j + 1}</span><div class="tx"><b>${x.title}</b>${x.sub ? `<small>${x.sub}</small>` : ''}</div><span class="ks">${ks}</span></li>`;
         })
         .join('')}</ol></div>`;

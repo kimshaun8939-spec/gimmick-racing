@@ -416,7 +416,7 @@
   <div id="results"></div>
 
   <!-- 로딩 화면 (main.js가 맵·차 이름을 채움) -->
-  <div id="loading"><div class="ld"><div class="wf-a"><div class="logo">트랜스폼 레이서</div><div class="map" id="ldMap">출발 준비 중</div><div class="car" id="ldCar"></div></div><div class="wf-b"><div class="status" id="ldStatus" role="status" aria-live="polite">게임을 불러오고 있어요</div><div class="tip" id="ldTip">한 대의 차로 땅 · 물 · 하늘까지. 변신은 차가 알아서 해요.</div></div></div></div>
+  <div id="loading"><div class="ld"><div class="wf-a"><div class="logo">트랜스폼 레이서</div><div class="map" id="ldMap">출발 준비 중</div><div class="car" id="ldCar"></div></div><div class="wf-b"><div class="status" id="ldStatus" role="status" aria-live="polite">준비하고 있어요</div><div class="tip" id="ldTip">한 대의 차로 땅 · 물 · 하늘까지. 변신은 차가 알아서 해요.</div></div></div></div>
   <script>
   // wheelfx 엔진 (인라인 = 첫 화면부터 바로 보임). 모듈 쪽 이름은 src/wheelTransition.js (go · wheelOut · ready).
   // 모드: hold = 앞 페이지가 굴려 넣고 이동해 옴(가운데에서 시작) · fresh = 주소를 직접 열거나 새로고침(짧게 굴러 들어옴) · cover = 지금 화면 위로 굴러 들어와 덮음
@@ -690,7 +690,7 @@
       var el = document.createElement('div');
       el.id = 'wheelFx';
       el.setAttribute('role', 'status');
-      el.innerHTML = '<div class="ld"><div class="wf-a"><div class="logo">트랜스폼 레이서</div><div class="map">' + esc(o.title) + '</div><div class="car">' + esc(o.sub) + '</div></div>' +
+      el.innerHTML = '<div class="ld"><div class="wf-a"><div class="logo">트랜스폼 레이서</div><div class="map">' + esc(o.title) + '</div><div class="car">' + esc(o.sub === '트랜스폼 레이서' ? '' : o.sub) + '</div></div>' +
         '<div class="wf-b"><div class="status">' + esc(o.status || '준비하고 있어요') + '</div></div></div>';
       document.body.appendChild(el);
       var c = make(el, 'cover', false);
@@ -704,7 +704,7 @@
       try { document.documentElement.classList.add('wf-going'); } catch (e) {}
       var c = cover(o);
       setTimeout(function () {
-        try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), title: o.title || '', sub: o.sub || '' })); } catch (e) {}
+        try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), title: o.title || '', sub: o.sub || '', status: o.status || '' })); } catch (e) {}
         location.href = url;
       }, Math.max(0, c.endAt - NOW()) + 30);
       return true;
@@ -725,6 +725,11 @@
       var cont = !!(carry && Date.now() - carry.t < 20000);
       if (cont && carry.title) { var m = document.getElementById('ldMap'); if (m) m.textContent = carry.title; L.setAttribute('data-wf-title', '1'); }
       if (cont && carry.sub) { var cr = document.getElementById('ldCar'); if (cr) cr.textContent = carry.sub; }
+      var homePage = !new URLSearchParams(location.search).get('map');
+      var st = document.getElementById('ldStatus');
+      if (st) st.textContent = cont && carry.status ? carry.status : homePage ? '홈을 준비해요' : '레이스를 준비해요';
+      var tip = document.getElementById('ldTip');
+      if (homePage && tip) tip.textContent = '차와 코스를 골라 다시 달려요.';
       main = make(L, cont ? 'hold' : 'fresh', true);
     }
     window.__wf = { RM: RM, go: go, cover: cover, main: main, busy: function () { return going; } };
