@@ -2701,3 +2701,22 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
  #home .mp-info > * { flex-shrink:0; }
  #home .mp-info .mp-desc { display:block; }
 }
+
+/* 부품 조립 1차 ⑤ (2026-11-15): 순위표 '순정만' 토글·줄 조립 칩·따라 하기, 내 기록 조립 칩 */
+.h-oltabs .h-olstock { border-color: var(--sf-line2, rgba(255, 255, 255, 0.18)); color: var(--gm-text); }
+.h-oltabs .h-olcar + .h-olstock { margin-left: 0; }
+.ol-build, .hm-build { display: inline-block; max-width: 100%; vertical-align: bottom; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ffd27a; }
+.ol-who small .ol-build { margin-left: 2px; }
+.hm-build { margin-top: 2px; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 1.6; background: rgba(255, 200, 90, 0.1); border: 1px solid rgba(255, 200, 90, 0.28); align-self: flex-start; }
+.ol-acts { display: flex; align-items: center; gap: 4px; }
+.ol-copy { min-height: 32px; padding: 0 9px; }
+.ol-copy span { display: none; }
+.ol-list li:hover .ol-copy span, .ol-copy:focus span { display: inline; }
+.ol-noghost { min-width: 32px; text-align: center; font-size: 12px; opacity: 0.45; cursor: help; }
+@media (max-width: 719px) { .ol-acts { flex-direction: column; gap: 4px; } .ol-acts .gm-btn { min-height: 40px; min-width: 44px; padding: 0 8px; } .ol-acts .gm-btn span { display: none !important; } }
+
+/* partsqa 2026-11-15: 휴대폰 세로 순위표에서 이름이 한 글자만 보이던 것 → 줄의 차 사진을 숨기고 이름 칸을 넓힘 (차 이름은 아래 작은 글자로 그대로) */
+@media (max-width: 480px) {
+  .ol-list li .ol-who img, .ol-list li .ol-who .ph { display: none; }
+  .ol-list li.r1 .ol-time strong { font-size: 18px; }
+}

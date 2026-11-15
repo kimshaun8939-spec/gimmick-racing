@@ -27,6 +27,9 @@ import { applyCostume, listCostumes } from './carCostumes.js';
 import { meta, bootMeta } from './meta.js';
 import { createMetaPage, createCostumePicker } from './metaUI.js';
 import { paintPrice } from './metaCatalog.js';
+import { createPartsUI } from './partsUI.js';
+import * as parts from './parts.js';
+import { createGarageLift } from './garageLift.js';
 import { touchWanted } from './touch.js';
 
 export const VERSION = 'v0.9 · 2026.11';
@@ -220,6 +223,7 @@ export async function runHome() {
   const CAR_TAB_DEFS = [
     { id: 'info', icon: '📝', label: '소개' },
     { id: 'stats', icon: '📊', label: '성능' },
+    { id: 'parts', icon: '🔧', label: '조립' },
     { id: 'custom', icon: '🎨', label: '커스텀' },
   ];
   views.car.innerHTML = `
@@ -265,6 +269,7 @@ export async function runHome() {
               <details class="ns-method"><summary>평지 예상 성능 · 점수는 어떻게 정했나요?</summary><p>21대의 실제 설정을 같은 조건으로 계산한 상대 점수예요. 숫자가 클수록 해당 성능이 좋아요. 최고 속도·0→100·제동 거리는 평지 계산 예상치이며 실제 주행 기록과 달라요. 가속 변신을 포함하며 부스터·견인은 제외해요.</p><p>핸들링은 조향·키 입력·회전 반응, 접지력은 150 km/h 옆 한계와 다운포스, 드리프트는 유지 각도·회전·미끄러짐, 오프로드는 잔디 속도·접지 유지율, 배는 추진력·물 저항을 반영해요.</p></details>
             </div>
           </section>
+          <section class="ct-pane" data-pane="parts" id="ctPane-parts" role="tabpanel" aria-labelledby="ctTab-parts" hidden></section>
           <section class="ct-pane" data-pane="custom" id="ctPane-custom" role="tabpanel" aria-labelledby="ctTab-custom" hidden>
             <div class="ct-locknote" hidden></div>
             <div class="gx-paint"><div class="gx-ptitle">색 바꾸기 <small></small></div><div class="gx-swatches"></div></div>
@@ -279,10 +284,11 @@ export async function runHome() {
     onEquipped(look) { const c = carOf(carId); c.look = look; preview.setCar(c); loadCarThumbs([c], { onThumb: putThumb }); heroThumb(); }, toast,
   });
   // 정보 칸 탭: 소개 / 성능 / 커스텀 (마지막에 본 탭 기억 'gimmick.carTab'; 키보드 [ ] · 패드 LT/RT · 탭 위에서 ←→)
+  const partsUI = createPartsUI(views.car.querySelector('[data-pane="parts"]'), {preview: b => preview.setParts?.(b), animate: (b, slot) => preview.replacePart?.(b,slot)});
   const CAR_TABS = CAR_TAB_DEFS.map((t) => t.id);
   let carTab = 'info';
   try {
-    const t = localStorage.getItem('gimmick.carTab');
+    const t = new URLSearchParams(location.search).get('carTab') || localStorage.getItem('gimmick.carTab');
     if (CAR_TABS.includes(t)) carTab = t;
   } catch {}
   const carInfoEl = views.car.querySelector('.h-carinfo');
@@ -300,6 +306,8 @@ export async function runHome() {
     carInfoEl.querySelectorAll('.ct-pane').forEach((p) => (p.hidden = p.dataset.pane !== id));
     const body = carInfoEl.querySelector('.ct-body');
     if (changed) body.scrollTop = 0;
+    if (id !== 'parts') preview.setParts?.(parts.getBuild(carId));
+    if (id === 'parts') {partsUI.show(carOf(carId),isOpen(carId));partsUI.activate();}
     if (id !== 'custom' && changed) { costumePicker.restore(); costumePicker.refresh(); } // 코스튬 미리 보기 중에 다른 탭으로 가면 입은 모습으로
     if (save) try { localStorage.setItem('gimmick.carTab', id); } catch {}
     if (sound && changed) uiSound('toggle');
@@ -314,7 +322,7 @@ export async function runHome() {
     if (!t) return;
     setCarTab(t.dataset.ct || t.dataset.ctgo, { sound: true, focus: !!t.dataset.ctgo });
   });
-  const metaPage = createMetaPage(views.meta);
+  const metaPage = createMetaPage(views.meta, {cars, carId: () => carId});
   const carList = views.car.querySelector('.list');
   const tabsEl = views.car.querySelector('.h-classtabs');
   if (cars.length > 8) views.car.querySelector('.h-carlist').classList.add('compact'); // 차가 많으면 카드를 작게
@@ -609,6 +617,8 @@ export async function runHome() {
       setLast({ car: id });
     }
     showGarage(c, open);
+    partsUI.show(c, open);
+    preview.setParts?.(parts.getBuild(c.id));
   }
   /** 차 정보 칸의 잠금 안내 + 색 고르기 줄 */
   function showGarage(c, open = isOpen(c.id)) {
@@ -867,7 +877,7 @@ export async function runHome() {
       <div class="hm-main"><div class="hm-name"><b>${esc(m.title)}</b><span>${info.laps}바퀴${kmTxt ? ` · ${kmTxt}` : ''}</span></div>
         ${best
           ? `<div class="hm-best"><small>최고 기록${info.laps > 1 ? ` (${info.laps}바퀴 합)` : ''}</small><strong>${fmtTime(best.v.race)}</strong>${best.v.raceAssist ? ASSIST_TAG : ''}</div>
-             <div class="hm-car">${pic(best.c.id, true)}<span><b>${esc(best.c.name)}</b><small>${esc(best.c.tag || '')}</small></span></div>`
+             <div class="hm-car">${pic(best.c.id, true)}<span><b>${esc(best.c.name)}</b><small>${esc(best.c.tag || '')}</small>${buildTag(best.v.raceBuild, 'hm-build')}</span></div>`
           : `<div class="hm-none">🏁 아직 이 맵을 달리지 않았어요<small>타임 어택이나 자유 연습을 완주하면 기록이 쌓여요</small></div>`}
         <button class="gm-btn primary small hm-go" data-act="recRace" data-nav>🏁 이 맵 달리기 ›</button></div></div>`;
     if (!runs.length) {
@@ -878,7 +888,7 @@ export async function runHome() {
         .map((x, i) => {
           const gap = x.v.race - top;
           const w = Math.max(14, 100 - (gap / top) * 100 * 6);
-          return `<li class="${i === 0 ? 'top' : ''}">${pic(x.c.id)}<span class="n"><b>${esc(x.c.name)}</b><small>최고 랩 ${x.v.lap ? fmtTime(x.v.lap) : '—'}${x.v.lapAssist ? ' 🛟' : ''}</small></span>
+          return `<li class="${i === 0 ? 'top' : ''}">${pic(x.c.id)}<span class="n"><b>${esc(x.c.name)}</b><small>최고 랩 ${x.v.lap ? fmtTime(x.v.lap) : '—'}${x.v.lapAssist ? ' 🛟' : ''}</small>${buildTag(x.v.raceBuild, 'hm-build')}</span>
             <span class="bar"><i style="width:${w.toFixed(1)}%"></i></span><span class="t"><b>${fmtTime(x.v.race)}${x.v.raceAssist ? ' 🛟' : ''}</b><small>${i === 0 ? '내 1등 차' : `+${gap.toFixed(3)}`}</small></span></li>`;
         })
         .join('');
@@ -904,6 +914,14 @@ export async function runHome() {
   // ------------------------------------------------------------------ 온라인 순위표 (내 기록 화면 위쪽)
   //   맵마다 사람별 가장 빠른 완주 기록 (어느 차든) / 지금 고른 차만. 줄마다 "👻 같이 달리기" = 그 사람 고스트와 타임 어택
   let olMap = null, olCarOnly = false, olSeq = 0;
+  // 부품 조립 1차 ⑤ (2026-11-15): 순위표 '순정만' 보기 (기억 gimmick.olStock) + 조립 칩 ('g1.t2' → 🔧 숏 · 소프트, 순정은 표시 안 함)
+  let olStockOnly = (() => { try { return localStorage.getItem('gimmick.olStock') === '1'; } catch { return false; } })();
+  function buildTag(sig, cls = 'ol-build') {
+    if (!sig || sig === 'stock') return '';
+    let short = sig, full = sig;
+    try { short = parts.buildSummary(sig, { short: true }); full = parts.buildSummary(sig); } catch {}
+    return `<i class="${cls}" title="부품 조립: ${esc(full)}">🔧 ${esc(short)}</i>`;
+  }
   // 순위표 아래 내 계정 줄 (이름 + 비밀번호 4자리 = 한 계정, 2026-11-12)
   function olMeHtml(me) {
     if (me && me.claimed) return `<span class="ol-acc">👤 <b>${esc(me.nick)}</b> <em class="ol-lock">🔐 내 이름</em></span><span class="ol-tip">다른 기기에서도 같은 이름 + 비밀번호를 넣으면 이 계정이에요</span><button class="gm-btn small" data-act="name" data-nav>👤 바꾸기</button>`;
@@ -916,8 +934,8 @@ export async function runHome() {
     fixRecMap();
     const me = online.me();
     box.innerHTML = `<h3 class="h-subt">🌐 온라인 순위표 <small>혼자 달린 완주 기록만 · 이름 + 비밀번호 4자리</small></h3>
-      <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button></div>
-      <p class="ol-help">👻 같이 달리기: 저장된 주행과 겨루는 타임 어택이에요. 같은 차로 출발해요.<br>+시간은 1위와의 차이예요.</p>
+      <div class="h-oltabs ol-one"><b class="ol-map">🗺️ ${esc(mapOf(olMap).title)}</b><button class="gm-btn small h-olcar${olCarOnly ? ' on' : ''}" data-act="olCar" data-nav>${olCarOnly ? `🏎️ ${esc(carOf(carId).name)}만` : '🏎️ 모든 차'}</button><button class="gm-btn small h-olstock${olStockOnly ? ' on' : ''}" data-act="olStock" data-nav aria-pressed="${olStockOnly}" title="${olStockOnly ? '부품을 끼우지 않은 기록만 보는 중 · 누르면 조립 기록도' : '조립 기록도 같이 보는 중 · 누르면 순정 기록만'}">${olStockOnly ? '⚙️ 순정만' : '🔧 조립 포함'}</button></div>
+      <p class="ol-help">👻 같이 달리기: 저장된 주행과 겨루는 타임 어택이에요. 같은 차로 출발해요.<br>+시간은 1위와의 차이예요. 🔧 = 부품을 끼우고 낸 기록${olStockOnly ? ' · 지금은 부품 없이 낸 기록만' : ''}</p>
       <div class="h-olboard"><div class="none">불러오는 중…</div></div>
       <div class="h-olme">${olMeHtml(me)}</div>`;
     if (me) online.refresh().then((m2) => {
@@ -927,10 +945,10 @@ export async function runHome() {
     const seq = ++olSeq;
     const board = box.querySelector('.h-olboard');
     try {
-      const rows = await online.board(olMap, olCarOnly ? carId : null, 50);
+      const rows = await online.board(olMap, olCarOnly ? carId : null, 50, { stockOnly: olStockOnly });
       if (seq !== olSeq) return;
       if (!rows.length) {
-        board.innerHTML = '<div class="none">아직 아무도 기록이 없어요. 첫 번째가 되어 보세요!</div>';
+        board.innerHTML = olStockOnly ? '<div class="none">아직 순정 기록이 없어요. 부품 없이 달려 첫 번째가 되어 보세요!</div>' : '<div class="none">아직 아무도 기록이 없어요. 첫 번째가 되어 보세요!</div>';
         return;
       }
       const lapsN = mapInfo[olMap].laps;
@@ -944,9 +962,9 @@ export async function runHome() {
           const cls = [i < 3 ? `r${i + 1} podium` : '', mine ? 'me' : ''].join(' ').trim();
           const rank = i < 3 ? `<span class="ol-medal">${i === 0 ? '<i class="crown">👑</i>' : ''}<b>${i + 1}</b></span>` : `<span class="ol-num">${i + 1}</span>`;
           return `<li class="${cls}" style="--i:${i}">${rank}
-            <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${r.license ? licenseChip(r.license, 18) : mine && academy.top() ? licenseChip(academy.top(), 18) : ''}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}</small></span></span>
+            <span class="ol-who">${pic ? `<img src="${pic}" alt="">` : `<span class="ph" data-car="${esc(r.car)}">🏎️</span>`}<span><b>${esc(r.nickname)}${r.license ? licenseChip(r.license, 18) : mine && academy.top() ? licenseChip(academy.top(), 18) : ''}${mine ? ' <em class="ol-me">나</em>' : ''}</b><small>${esc((c && c.id === r.car && c.name) || r.car)}${r.stock === false ? ' ' + buildTag(r.build) : ''}</small></span></span>
             <span class="ol-time"><strong>${fmtTime(r.total)}</strong>${r.assist ? ASSIST_TAG : ''}<small>${i === 0 ? (r.best_lap && lapsN > 1 ? `최고 랩 ${fmtTime(r.best_lap)}` : '1위') : `+${(r.total - first).toFixed(3)}`}</small></span>
-            <button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)} 고스트와 같이 달리기" title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button></li>`;
+            <span class="ol-acts">${r.ghostOk === false ? '<span class="ol-noghost" title="이 사람의 서버 고스트는 조립 주행이라 순정만 보기에서는 같이 달릴 수 없어요">👻✕</span>' : `<button class="gm-btn small ol-ghost" data-act="olGhost" data-pid="${esc(r.player_id)}" data-car="${esc(r.car)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)} 고스트와 같이 달리기" title="이 사람의 고스트와 같은 차로 타임 어택">👻<span> 같이 달리기</span></button>`}${r.stock === false ? `<button class="gm-btn small ol-copy" data-act="olCopyBuild" data-car="${esc(r.car)}" data-build="${esc(r.build)}" data-nick="${esc(r.nickname)}" data-nav aria-label="${esc(r.nickname)}의 조립 따라 하기" title="이 조립을 내 ${esc((c && c.id === r.car && c.name) || r.car)}에 끼우기 (가진 부품만, 없는 부품은 순정)">🔧<span> 따라 하기</span></button>` : ''}</span></li>`;
         })
         .join('')}</ol>`;
     } catch (err) {
@@ -1036,7 +1054,7 @@ export async function runHome() {
       if (!thumbJob) setTimeout(startThumbs, 300); // 차 사진이 아직 없으면 찍기 시작 (도착하면 putThumb가 끼움)
     }
     if (name === 'map') refreshRecords();
-    if (name === 'car') { startThumbs(); showGarage(carOf(carId)); }
+    if (name === 'car') { startThumbs(); showGarage(carOf(carId));partsUI.show(carOf(carId),isOpen(carId));preview.setParts?.(parts.getBuild(carId)); }
     if (name === 'season') renderSeason();
     refreshFlow();
     if (name === 'academy') renderAcademy();
@@ -1127,6 +1145,7 @@ export async function runHome() {
       const el = box.querySelector('.hx-aclic');
       if (el) el.innerHTML = top ? licenseChip(top, 26) : '';
     }
+    let pn=box.querySelector('.pu-next');if(!pn){pn=document.createElement('span');pn.className='pu-next';box.querySelector('.hx-dinfo').append(pn);}const np=parts.nextPart(p.level);pn.textContent=np?'다음 부품 · Lv.'+np.level+' '+np.parts.map(x=>x.name).join(' · '):'모든 부품 구매 레벨 달성';if(np)pn.innerHTML+='<i><em style="width:'+Math.round((p.level-1+(p.pct||0))/(np.level-1)*100)+'%"></em></i>';
     const nx = unlocks.nextUnlock(p.level);
     if (nx) box.title = `다음 해금: Lv.${nx.level} ${nx.text}\n(누르면 이름 바꾸기)`;
   }
@@ -1136,21 +1155,27 @@ export async function runHome() {
     try {
       n = unlocks.takeLevelNews();
     } catch {}
-    if (!n) return;
+    const partNews=parts.takeNews();
+    if (!n && !partNews.length) return;
+    const giftOnly = !n;
+    n ||= {from:profile.get().level,to:profile.get().level,cars:[],paints:[]};
+    const available=parts.partsBetween(n.from,n.to);
     const items = [...n.cars.map((x) => `<li><i>🚗</i>${esc(x)}</li>`), ...n.paints.map((x) => `<li><i>🎨</i>${esc(x)} 색</li>`)];
+    items.push(...available.map(x=>'<li><i>🔧</i>'+esc(x.name)+' · 구매 가능</li>'),...partNews.map(x=>'<li><i>🎁</i>'+esc(x.name)+'</li>'));
+    const hasParts = available.length > 0 || partNews.length > 0;
     const nx = unlocks.nextUnlock(n.to);
     const el = document.createElement('div');
     el.className = 'gx-news';
-    el.innerHTML = `<div class="gx-newsbox"><div class="gx-burst">🎉</div><h3>Lv.${n.to} 달성!</h3>
+    el.innerHTML = `<div class="gx-newsbox"><div class="gx-burst">🎉</div><h3>${giftOnly ? '새 부품을 받았어요' : `Lv.${n.to} 달성!`}</h3>
       ${items.length ? `<p>새로 열렸어요</p><ul>${items.join('')}</ul>` : '<p>계속 달리면 새 차와 색이 열려요</p>'}
       ${nx ? `<div class="gx-nx">다음 해금 · Lv.${nx.level} ${esc(nx.text)}</div>` : ''}
-      <div class="gx-newsbtns">${n.cars.length || n.paints.length ? '<button class="gm-btn primary" data-gx="car">차고 보러 가기</button>' : ''}<button class="gm-btn" data-gx="ok">확인</button></div></div>`;
+      <div class="gx-newsbtns">${items.length ? `<button class="gm-btn primary" data-gx="car">${hasParts ? '차고에서 끼우기' : '차고 보러 가기'}</button>` : ''}<button class="gm-btn" data-gx="ok">확인</button></div></div>`;
     const close = () => el.remove();
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-gx]');
       if (!b && e.target !== el) return;
       close();
-      if (b && b.dataset.gx === 'car') show('car');
+      if (b && b.dataset.gx === 'car') {show('car');if (hasParts) setCarTab('parts');}
     });
     home.appendChild(el);
     setTimeout(() => {
@@ -1500,11 +1525,12 @@ export async function runHome() {
     const b = e.target.closest('[data-go], [data-act]');
     if (!b) return;
     if (b.dataset.go) {
+      if(b.dataset.shopCarId)selectCar(b.dataset.shopCarId);
       show(b.dataset.go);
       // 샵의 코스튬 구경은 성능표 아래를 다시 찾지 않아도 바로 보여 줌.
-      if (b.dataset.go === 'car' && b.dataset.carSection === 'costume') {
-        setCarTab('custom');
-        requestAnimationFrame(() => views.car.querySelector('.mt-costume-box .mt-costume.on, .mt-costume-box .mt-costume')?.focus({ preventScroll: true }));
+      if (b.dataset.go === 'car' && ['costume','parts'].includes(b.dataset.carSection)) {
+        setCarTab(b.dataset.carSection === 'parts' ? 'parts' : 'custom');
+        requestAnimationFrame(() => views.car.querySelector(b.dataset.carSection==='parts'?'[data-slot]':'.mt-costume-box .mt-costume.on, .mt-costume-box .mt-costume')?.focus({ preventScroll: true }));
       }
       return;
     }
@@ -1571,6 +1597,21 @@ export async function runHome() {
     else if (act === 'olCar') {
       olCarOnly = !olCarOnly;
       renderOnline();
+    }
+    else if (act === 'olStock') {
+      olStockOnly = !olStockOnly;
+      try { localStorage.setItem('gimmick.olStock', olStockOnly ? '1' : '0'); } catch {}
+      renderOnline();
+    }
+    else if (act === 'olCopyBuild') {
+      // '이 조립 따라 하기' (부품 조립 1차 ⑤): 내가 가진 부품만 끼우고 없는 칸은 순정
+      const car = b.dataset.car, nick = b.dataset.nick;
+      const r = await online.copyBuildFrom(car, b.dataset.build);
+      const cn = (carOf(car) && carOf(car).name) || car;
+      if (!r.ok) toast(r.message || '조립을 바꾸지 못했어요');
+      else if (r.same) toast(`🔧 ${nick}의 조립을 내 ${cn}에 끼웠어요`);
+      else if (r.sig === 'stock') toast(`🔧 아직 가진 부품이 없어 ${cn}은(는) 순정이에요 · 필요한 부품: ${r.missing.map((m) => m.name).join(', ')}`);
+      else toast(`🔧 가진 부품만 끼웠어요 · 없는 부품(순정 칸): ${r.missing.map((m) => m.name).join(', ')}`);
     }
     else if (act === 'olGhost') {
       const nick = b.dataset.nick, car = b.dataset.car, map = olMap, pid = b.dataset.pid;
@@ -1952,7 +1993,18 @@ function createPreview(home) {
     });
   }
 
+  const lift = createGarageLift(table);
+  let swapSlot=null;
+  api.setParts = build => { model?.setParts?.(parts.partLook(build)); };
+  api.replacePart = async (build,slot) => {
+    const skip=document.createElement('button');skip.className='pu-skip';skip.textContent='🔧 부품 교체 중 · 건너뛰기 ↵';swapSlot=slot;home.append(skip);
+    const key=e=>{if(['Enter','Escape'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();lift.skip();}};
+    const click=e=>{e.preventDefault();e.stopImmediatePropagation();lift.skip();};
+    window.addEventListener('keydown',key,true);window.addEventListener('pointerdown',click,true);
+    try{await lift.play(()=>api.setParts(build));}finally{swapSlot=null;skip.remove();window.removeEventListener('keydown',key,true);window.removeEventListener('pointerdown',click,true);}
+  };
   api.setCar = (c) => {
+    lift.skip();
     api.carId = c.id;
     disposeModel(model, holder);
     let look = c.look;
@@ -1963,6 +2015,7 @@ function createPreview(home) {
       console.warn('차 모델 만들기 실패, 기본 색으로', e);
       model = createCarModel('#e8463a');
     }
+    model.setParts?.(parts.partLook(parts.getBuild(c.id)));
     fake.mode = 'normal';
     fake.flying = false;
     model.sync(fake, 1, 0);
@@ -2070,9 +2123,10 @@ function createPreview(home) {
     idle += dt;
     if (!dragging) {
       spin = reduceMotion.matches ? 0 : spin * Math.exp(-3 * dt);
-      const auto = !reduceMotion.matches && idle > 2 ? 0.32 : 0;
+      const auto = !lift.active && !reduceMotion.matches && idle > 2 ? 0.32 : 0;
       angle += (spin + auto) * dt;
     }
+    if(lift.active) angle=THREE.MathUtils.lerp(angle,({engine:2.6,gearbox:2.4,tire:.85,aero:2.9,water:1.2})[swapSlot]||.85,1-Math.exp(-5*dt));
     table.rotation.y = angle;
     // 새 차가 살짝 위에서 내려앉음
     if (holder) {
@@ -2082,6 +2136,7 @@ function createPreview(home) {
     }
     ringMat.opacity = THREE.MathUtils.lerp(ringMat.opacity, 0.55 + 0.15 * Math.sin(time * 2), 1 - Math.exp(-3 * dt));
     if (model) model.sync(fake, dt, time);
+    lift.update(holder);
     if (holder) holder.position.y += 0; // sync가 root 위치를 0으로 둠 (holder가 높이 담당)
 
     // 화면 속 차 위치: 카메라 투영을 옆으로 밀어서(setViewOffset) 원하는 자리에
