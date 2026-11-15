@@ -399,7 +399,7 @@ export function buildSeaScenery(track, scene) {
       canvasTexture(1024, 128, (c, w, h) => {
         const blocks = [
           ['#ff6a2c', '#ffffff', 'SUNSET COAST'],
-          ['#ffffff', '#1d5fa8', '노을 해안 서킷'],
+          ['#ffffff', '#1d5fa8', '노을 바닷가'],
           ['#ffcf3f', '#1d3f6e', 'SEA BREEZE'],
           ['#19b3a6', '#ffffff', 'BEACH FM 98.5'],
         ];
@@ -431,7 +431,7 @@ export function buildSeaScenery(track, scene) {
         c.fillText('SUNSET COAST', w / 2, h * 0.42);
         c.fillStyle = '#ffb02e';
         c.font = '800 40px "Segoe UI", sans-serif';
-        c.fillText('노을 해안 서킷 · PIT LANE', w / 2, h * 0.82);
+        c.fillText('노을 바닷가 · PIT LANE', w / 2, h * 0.82);
       }),
     // 출발 게이트 다리 (세로 글자)
     '128x768': () =>
@@ -1437,7 +1437,7 @@ export function buildSeaScenery(track, scene) {
     for (const u of [-width * 0.35, width * 0.35]) circle(q.x + s.right.x * u, q.z + s.right.z * u, 0.5, y, y + 8);
     occupy(q.x, q.z, width / 2);
   }
-  for (const a of P.signs || [[18.6, -24, 'LIGHTHOUSE', '등대섬까지 1.2 km', '#1d3f6e'], [31.6, 26, 'BOAT ZONE', '물 위에서는 배로 변신!', '#0f6a7a', '#7ff6ff'], [10.5, -26, 'SUNSET COAST', '노을 해안 서킷', '#3b2b74', '#ff9a4a']]) sign(...a);
+  for (const a of P.signs || [[18.6, -24, 'LIGHTHOUSE', '등대섬까지 1.2 km', '#1d3f6e'], [31.6, 26, 'BOAT ZONE', '물 위에서는 배로 변신!', '#0f6a7a', '#7ff6ff'], [10.5, -26, 'SUNSET COAST', '노을 바닷가', '#3b2b74', '#ff9a4a']]) sign(...a);
   {
     const N = track.sampleCount;
     const head = track.samples.map((s) => Math.atan2(s.tan.x, s.tan.z));

@@ -26,7 +26,7 @@ series('lesson','academy','배움의 레이싱','lessons',[1,6,LESSONS.length],'
 series('gold','academy','금빛 성적표','goldLessons',[1,6,LESSONS.length],'개','🎓','아카데미 수석');
 series('collector','collect','나만의 차고','purchases',[1,5,15],'개','🎨','피트 큐레이터');
 series('explorer','map','모든 길을 달려','uniqueMaps',[2,5,8],'곳','🧭','월드 투어러');
-for (const [id,name,icon] of [['glacier','빙하','❄️'],['sea','노을 해안','🌊'],['jungle','정글','🌿'],['neon','네온 시티','🌃'],['foundry','파운드리','⚙️'],['moon','달 기지','🌙'],['gp','그랑프리','🌌'],['volcano','화산','🌋']]) series('map-'+id,'map',name+'의 발자취','map:'+id,[1,5,20],'회',icon,name+' 정복자');
+for (const [id,name,icon] of [['glacier','빙하','❄️'],['sea','노을 바닷가','🌊'],['jungle','정글','🌿'],['neon','네온 도시','🌃'],['foundry','톱니 공장','⚙️'],['moon','달 기지','🌙'],['gp','그랑프리','🌌'],['volcano','화산','🌋']]) series('map-'+id,'map',name+'의 발자취','map:'+id,[1,5,20],'회',icon,name+' 정복자');
 for (const a of [
  {id:'secret-clean',name:'흠집 없는 여정',metric:'cleanRaces',goal:1,hint:'벽 충돌·복귀 없이 완주해 보세요.',title:'클린 드라이버'},
  {id:'secret-triple',name:'세 가지 세계',metric:'threeForms',goal:1,hint:'한 레이스에서 땅·물·하늘을 모두 달려 보세요.',title:'트리플 모드'},

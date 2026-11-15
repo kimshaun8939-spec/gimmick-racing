@@ -390,7 +390,7 @@ export function buildGlitch(track, scene, { cityObjects = [], getCityEnv = () =>
     if (announce) {
       flash = 1;
       labelT = 2.2;
-      label.textContent = g ? '⚡ 글리치 차원' : '🌃 네온 시티 귀환';
+      label.textContent = g ? '⚡ 지지직 차원' : '🌃 네온 도시 귀환';
       label.style.textShadow = g ? '-3px 0 #ff2fd0, 3px 0 #38f0ff, 0 0 18px #ff2fd0' : '0 0 14px #38f0ff, 0 0 28px #ff2f8e';
       fx.style.background = g
         ? 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,47,208,0.7) 45%, rgba(20,0,40,0.9) 100%)'

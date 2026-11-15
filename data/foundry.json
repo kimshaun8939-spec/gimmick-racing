@@ -1,7 +1,7 @@
 {
  "_gen": "node .debug/foundry_gen.mjs; edit generator only",
  "revision": 3,
- "name": "클록워크 파운드리",
+ "name": "톱니바퀴 공장",
  "module": "foundryMap",
  "style": "foundry",
  "laps": 2,

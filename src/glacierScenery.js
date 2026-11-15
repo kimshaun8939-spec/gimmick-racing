@@ -403,7 +403,7 @@ export function buildGlacierScenery(track, scene) {
 
   // ---------------------------------------------------------------- 표지판·광고판 묶음 (그림 한 장)
   const CELLS = [
-    { title: 'GLACIER HIGHWAY', sub: '빙하 하이웨이 · 2 LAPS', bg: '#0f2a4a', accent: '#7fe8ff', logo: 'peak' },
+    { title: 'GLACIER HIGHWAY', sub: '빙하 고속도로 · 2 LAPS', bg: '#0f2a4a', accent: '#7fe8ff', logo: 'peak' },
     { title: '1 KM', bg: '#f4f7fb', fg: '#0f2a4a', accent: '#2f7fd8' },
     { title: '2 KM', bg: '#f4f7fb', fg: '#0f2a4a', accent: '#2f7fd8' },
     { title: '3 KM', bg: '#f4f7fb', fg: '#0f2a4a', accent: '#2f7fd8' },
@@ -588,7 +588,7 @@ export function buildGlacierScenery(track, scene) {
         if (!img || !img.getContext || img.width !== 1024 || img.height !== 128 || img.__glacier) continue;
         img.__glacier = true;
         const c = img.getContext('2d'), w = img.width, h = img.height;
-        const blocks = [['#2f7fd8', '#ffffff', 'GLACIER GP'], ['#0f2a4a', '#7fe8ff', '빙하 하이웨이'], ['#f4f7fb', '#0f2a4a', 'FROSTLINE'], ['#1d1240', '#5dffb0', 'AURORA FIZZ']];
+        const blocks = [['#2f7fd8', '#ffffff', 'GLACIER GP'], ['#0f2a4a', '#7fe8ff', '빙하 고속도로'], ['#f4f7fb', '#0f2a4a', 'FROSTLINE'], ['#1d1240', '#5dffb0', 'AURORA FIZZ']];
         const bw = w / blocks.length;
         blocks.forEach(([bg, fg, text], i) => {
           c.fillStyle = bg;
@@ -645,7 +645,7 @@ export function buildGlacierScenery(track, scene) {
         c.fillText('GLACIER PIT', w / 2, h * 0.42);
         c.fillStyle = '#7fe8ff';
         c.font = '800 38px "Malgun Gothic", sans-serif';
-        c.fillText('빙하 하이웨이 · PIT LANE', w / 2, h * 0.8);
+        c.fillText('빙하 고속도로 · PIT LANE', w / 2, h * 0.8);
         m.map.needsUpdate = true;
       }
     });

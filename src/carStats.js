@@ -15,7 +15,7 @@ export const STAT_KEYS = [
   ['grip', '접지력'],
   ['brake', '제동'],
   ['drift', '드리프트'],
-  ['offroad', '오프로드'],
+  ['offroad', '험한 길'],
   ['boat', '배'],
 ];
 /** 예상 수치 [키, 이름, 단위, 클수록 좋음?] */
@@ -23,13 +23,13 @@ export const METRIC_KEYS = [
   ['topKmh', '최고 속도', 'km/h', true],
   ['zero100Sec', '0→100', '초', false],
   ['zero150Sec', '0→150', '초', false],
-  ['lateral150', '150 km/h 옆 가속', 'm/s²', true],
-  ['downforce', '다운포스', '', true],
+  ['lateral150', '150 km/h 코너 힘', 'm/s²', true],
+  ['downforce', '누르는 힘', '', true],
   ['brake100M', '100→0 제동 거리', 'm', false],
   ['offroadKeep', '잔디 속도 유지', '%', true],
   ['boatKmh', '배 최고 속도', 'km/h', true],
   ['shiftSec', '변속 시간', '초', false],
-  ['turboLag', '터보 랙', '초', false],
+  ['turboLag', '터보 늦음', '초', false],
 ];
 
 /**

@@ -40,7 +40,7 @@ export const HIDDEN_LESSONS = [
 ];
 /** 시험에만 나오는 과제 (레슨 카드는 없음) */
 export const EXAM_TASKS = {
-  lap: { id: 'lap', icon: '⏱️', name: '깔끔한 한 바퀴', short: '빙하 하이웨이 한 바퀴 · 복귀 없이 목표 시간 안', map: 'glacier', art: 'lateApex' },
+  lap: { id: 'lap', icon: '⏱️', name: '깔끔한 한 바퀴', short: '빙하 고속도로 한 바퀴 · 복귀 없이 목표 시간 안', map: 'glacier', art: 'lateApex' },
 };
 export const lessonMeta = (id) => LESSONS.find((l) => l.id === id) || EXAM_TASKS[id] || HIDDEN_LESSONS.find((l) => l.id === id) || null;
 

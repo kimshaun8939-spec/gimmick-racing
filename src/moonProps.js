@@ -273,7 +273,7 @@ export function buildMoonProps(track, scene) {
     // 구역 바뀜 → 알림
     if (key !== lastKey) {
       const s = car.trackInfo && car.trackInfo.sample;
-      if (key === 'low' && s && s.zone) showToast(`🌙 저중력 구역 ${s.zone.g.toFixed(2)} G`, hz && s.zone.name === 'LOW-G A' ? '점프 뒤 갈림길 — 빠르면 오른쪽 롱 점프로 크레이터를 넘어요' : '점프가 둥실 — 멀리 날아가요', '#38d8ff'), chime('low');
+      if (key === 'low' && s && s.zone) showToast(`🌙 저중력 구역 ${s.zone.g.toFixed(2)} G`, hz && s.zone.name === 'LOW-G A' ? '점프 뒤 갈림길 — 빠르면 오른쪽 멀리뛰기로 구덩이를 넘어요' : '점프가 둥실 — 멀리 날아가요', '#38d8ff'), chime('low');
       else if (key === 'high' && s && s.zone) showToast(`⬇ 고중력 구역 ${s.zone.g.toFixed(2)} G`, '차가 무거워져요 — 착지·내리막 조심', '#ff8a2a'), chime('high');
       else if (key === 'loop' && !inLoop) showToast('🔄 중력 루프', '자석 도로 — 핸들은 곧게, 속도 유지!', '#b87cff'), chime('loop');
       if (key === 'loop') inLoop = true;

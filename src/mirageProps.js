@@ -23,7 +23,7 @@ export function buildMirageProps(track,scene){
  car.vel.addScaledVector(w.type==='tail'?n.sample.tan:n.sample.right,k*dt*w.dir);car.setVelocityOnSurface(car.vel);effects[player?w.type==='tail'?'tail':'cross':'bots']+=dt;}}
  const notices=winds.map(w=>({...w,kind:'wind',title:w.type==='cross'?'바람의 협곡 →':'순풍 능선 ↑',hint:w.type==='cross'?'오른쪽으로 밀려요 · 왼쪽 조향으로 중심 유지':'순풍으로 속도를 얻고 · 다음 코너 전에 제동'}));
  // All information is useful even with the optional racing line switched off.
- for(const zone of track.data.storms||[])notices.push({...zone,kind:'storm',title:'모래폭풍 · 청록 항로',hint:'청록 비콘과 노면 선을 따라가요 · 길은 계속 이어져요'});
+ for(const zone of track.data.storms||[])notices.push({...zone,kind:'storm',title:'모래폭풍 · 청록 항로',hint:'청록 안내등과 바닥 선을 따라가요 · 길은 계속 이어져요'});
  if(track.data.wallRide)notices.push({...track.data.wallRide,id:'wall',kind:'bank',title:'협곡 벽타기 ↷',hint:'기울어진 도로를 따라 부드럽게 · 청록 선 안쪽 유지'});
  function showNotice(car){const t=car?.trackInfo?.t;if(t==null){toast.style.opacity='0';return;}
  let active=notices.find(w=>t>=w.t0&&t<=w.t1),ahead=null,dist=Infinity;

@@ -94,7 +94,7 @@ export function createMoonHazards(track, scene, { showToast = () => {}, chime = 
       g.add(m);
     };
     mk(['테두리 길', '안전 · T4 제동'], '#ffb02e', -1, 4.6, 8.6); // 운전자 왼쪽 (+x가 운전자 왼쪽: 판이 PI 돌아 있음)
-    mk(['롱 점프', `${MOON2_CFG.needKmh} km/h 이상 · 쿠션 없음`], '#5ff0ff', 1, -4.6, 8.6);
+    mk(['멀리뛰기', `${MOON2_CFG.needKmh} km/h 이상 · 쿠션 없음`], '#5ff0ff', 1, -4.6, 8.6);
     g.quaternion.setFromRotationMatrix(basisAt(s));
     g.position.copy(s.pos);
     group.add(g);
@@ -160,7 +160,7 @@ export function createMoonHazards(track, scene, { showToast = () => {}, chime = 
     // 착지대 앞 큰 'LAND' 판 (구덩이 건너편에서 보이게 착지대 뒤 끝에 세움)
     const last = pad[pad.length - 1], first = pad[0];
     if (last && first) {
-      const tex = boardTex(['LANDING ZONE', '롱 점프 착지대'], { accent: '#ffb02e', w: 1024, h: 256 });
+      const tex = boardTex(['LANDING ZONE', '멀리뛰기 착지대'], { accent: '#ffb02e', w: 1024, h: 256 });
       const g = new THREE.Group();
       const plate = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.DoubleSide }));
       plate.position.y = 5.2;
@@ -299,7 +299,7 @@ export function createMoonHazards(track, scene, { showToast = () => {}, chime = 
       if (car.grounded && track.onCut(car.pos, 0.5) && n.q >= cut.pad0 - 2) {
         if (isPlayer) {
           stats.success++;
-          showToast('🌙 롱 점프 성공!', `${st.air.t.toFixed(1)}초 비행 · 착지 ${Math.round(Math.abs(car.speed) * 3.6)} km/h`, '#5ff0ff');
+          showToast('🌙 멀리뛰기 성공!', `${st.air.t.toFixed(1)}초 비행 · 착지 ${Math.round(Math.abs(car.speed) * 3.6)} km/h`, '#5ff0ff');
           chime('low');
         }
         if (stats.landKmh.length < 40) stats.landKmh.push(`${name}:${Math.round(Math.abs(car.speed) * 3.6)}/${st.air.t.toFixed(2)}s`);
@@ -319,7 +319,7 @@ export function createMoonHazards(track, scene, { showToast = () => {}, chime = 
       if (isPlayer) stats.playerFalls++;
       else stats.botFalls++;
       if (stats.where.length < 60) stats.where.push(`${name}@q${Math.round(n.q)}`);
-      if (isPlayer) showToast('🕳 크레이터에 빠졌어요!', `롱 점프는 립에서 ${MOON2_CFG.needKmh} km/h 이상 · 똑바로`, '#ff8a5a');
+      if (isPlayer) showToast('🕳 구덩이에 빠졌어요!', `멀리뛰기는 점프대 끝에서 ${MOON2_CFG.needKmh} km/h 이상 · 똑바로`, '#ff8a5a');
     }
   }
 
@@ -334,7 +334,7 @@ export function createMoonHazards(track, scene, { showToast = () => {}, chime = 
     if (!((d > -2 && d < 140) || onLane) || car.flying) return setChip(false);
     const v = Math.abs(car.speed) * 3.6, need = MOON2_CFG.needKmh, ok = v >= need;
     const color = ok ? '#5fff9a' : '#ff8a5a';
-    setChip(true, `🚀 롱 점프 <span style="opacity:.75;font-weight:700">필요 ${need}</span> · <span style="color:${color}">지금 ${Math.round(v)} km/h ${ok ? '✓' : '✗'}</span>` + (onLane ? '' : '<div style="font-size:12px;font-weight:700;opacity:.8">오른쪽 차선 = 지름길 · 왼쪽 = 안전한 길</div>'), color);
+    setChip(true, `🚀 멀리뛰기 <span style="opacity:.75;font-weight:700">필요 ${need}</span> · <span style="color:${color}">지금 ${Math.round(v)} km/h ${ok ? '✓' : '✗'}</span>` + (onLane ? '' : '<div style="font-size:12px;font-weight:700;opacity:.8">오른쪽 차선 = 지름길 · 왼쪽 = 안전한 길</div>'), color);
   }
 
   function update(dt, car) {

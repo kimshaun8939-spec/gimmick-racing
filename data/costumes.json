@@ -3,7 +3,7 @@
     {
       "id": "f1-heritage",
       "name": "클래식 그랑프리",
-      "desc": "이탈리아 레드 · 아이보리 더블 스트라이프 · 크롬 배기",
+      "desc": "빨간 차체 · 크림색 두 줄 · 반짝이는 배기구",
       "unlockLevel": 5,
       "pattern": "heritage",
       "brand": "AUREL",
@@ -28,8 +28,8 @@
     },
     {
       "id": "f1-magma",
-      "name": "용암 코어",
-      "desc": "무광 흑요석 · 뒤로 흐르는 용암 불꽃 · 샤크핀",
+      "name": "용암 불꽃",
+      "desc": "광 없는 검은 돌색 · 뒤로 흐르는 용암 불꽃 · 상어 지느러미",
       "unlockLevel": 15,
       "pattern": "magma",
       "brand": "IGNIS",
@@ -55,7 +55,7 @@
     {
       "id": "f1-sakura",
       "name": "벚꽃 질주",
-      "desc": "자주빛 진주 도장 · 한 쌍의 벚꽃 리본 · 분할 날개",
+      "desc": "자줏빛 진주색 · 한 쌍의 벚꽃 리본 · 나뉜 날개",
       "unlockLevel": 25,
       "pattern": "petal",
       "brand": "HANAMI",
@@ -79,8 +79,8 @@
     },
     {
       "id": "f1-sovereign",
-      "name": "황제의 카본",
-      "desc": "무광 카본 블랙 · 샴페인 골드 핀라인 · 3단 날개",
+      "name": "검은 황제",
+      "desc": "광 없는 검정 · 금빛 가는 줄 · 3단 날개",
       "unlockLevel": 40,
       "pattern": "carbon",
       "brand": "REGALIA",
@@ -108,8 +108,8 @@
   "proto": [
     {
       "id": "proto-endurance",
-      "name": "24시 내구 레이서",
-      "desc": "헤리티지 블루 · 오렌지 레이싱 스트라이프 · 롱테일",
+      "name": "24시간 레이서",
+      "desc": "옛날 파랑 · 주황 경주 줄무늬 · 긴 꼬리",
       "unlockLevel": 6,
       "pattern": "heritage",
       "brand": "HOUR24",
@@ -134,8 +134,8 @@
     },
     {
       "id": "proto-abyss",
-      "name": "심해 탐사정",
-      "desc": "심해 네이비 · 청록 정밀 회로선 · 쌍 수직핀",
+      "name": "심해 잠수함",
+      "desc": "깊은 바다 남색 · 청록 회로선 · 세로 지느러미 두 개",
       "unlockLevel": 17,
       "pattern": "circuit",
       "brand": "BATHYS",
@@ -161,7 +161,7 @@
     {
       "id": "proto-orbital",
       "name": "은하 탐사",
-      "desc": "진주 실버 · 네이비 임무 띠 · 폐쇄형 고리 날개",
+      "desc": "진주빛 은색 · 남색 띠 · 고리 날개",
       "unlockLevel": 28,
       "pattern": "cosmos",
       "brand": "ORBITAL",
@@ -186,8 +186,8 @@
     },
     {
       "id": "proto-blackstar",
-      "name": "블랙스타 LM",
-      "desc": "블랙 사파이어 · 바이올렛 스트라이프 · 이중 날개",
+      "name": "검은 별",
+      "desc": "검푸른 보석색 · 보라 줄무늬 · 두 겹 날개",
       "unlockLevel": 38,
       "pattern": "carbon",
       "brand": "VOID LM",
@@ -215,8 +215,8 @@
   "hyper": [
     {
       "id": "hyper-velvet",
-      "name": "벨벳 모나크",
-      "desc": "버건디 진주 도장 · 샴페인 스피어 · 낮은 덕테일",
+      "name": "자줏빛 임금님",
+      "desc": "포도주빛 진주색 · 금빛 창 무늬 · 낮은 오리꼬리 날개",
       "unlockLevel": 8,
       "pattern": "chevron",
       "brand": "MONARCH",
@@ -242,8 +242,8 @@
     },
     {
       "id": "hyper-serpent",
-      "name": "에메랄드 바이퍼",
-      "desc": "브리티시 그린 · 에메랄드 창끝 · 크롬 사이드 배기",
+      "name": "초록 독사",
+      "desc": "짙은 초록 · 에메랄드 창끝 · 반짝이는 옆 배기구",
       "unlockLevel": 18,
       "pattern": "scales",
       "brand": "VIPER",
@@ -269,8 +269,8 @@
     },
     {
       "id": "hyper-chrome",
-      "name": "크롬 미라지",
-      "desc": "스모크 크롬 · 미드나잇 더블 스트라이프 · 고리 날개",
+      "name": "은빛 거울",
+      "desc": "거울 같은 은색 · 남색 두 줄 · 고리 날개",
       "unlockLevel": 29,
       "pattern": "chrome",
       "brand": "MIRAGE",
@@ -295,8 +295,8 @@
     },
     {
       "id": "hyper-prism",
-      "name": "프리즘 오버드라이브",
-      "desc": "블랙 오팔 · 청록 프리즘 블레이드 · 분할 날개",
+      "name": "무지갯빛 칼날",
+      "desc": "검은 무지갯빛 · 청록 칼날 무늬 · 나뉜 날개",
       "unlockLevel": 39,
       "pattern": "prism",
       "brand": "SPECTRA",
@@ -324,8 +324,8 @@
   "rocket": [
     {
       "id": "rocket-salt",
-      "name": "솔트플랫 레코드",
-      "desc": "솔트 실버 · 레코드 레드 스트라이프 · 유선형 카울",
+      "name": "소금 사막 신기록",
+      "desc": "소금빛 은색 · 신기록 빨강 줄무늬 · 매끈한 덮개",
       "unlockLevel": 7,
       "pattern": "heritage",
       "brand": "LANDSPEED",
@@ -350,8 +350,8 @@
     },
     {
       "id": "rocket-inferno",
-      "name": "인페르노 로켓",
-      "desc": "블랙 체리 · 뒤로 뻗는 인페르노 불꽃 · 쌍 테일핀",
+      "name": "활활 불꽃 로켓",
+      "desc": "검붉은 체리색 · 뒤로 뻗는 불꽃 · 꼬리 지느러미 두 개",
       "unlockLevel": 16,
       "pattern": "flame",
       "brand": "INFERNO",
@@ -376,8 +376,8 @@
     },
     {
       "id": "rocket-apollo",
-      "name": "아폴로 테스트 파일럿",
-      "desc": "실버 화이트 · 네이비 임무 띠 · 항공 테일핀",
+      "name": "우주 시험 비행사",
+      "desc": "흰 은색 · 남색 띠 · 비행기 꼬리날개",
       "unlockLevel": 27,
       "pattern": "cosmos",
       "brand": "APOGEE",
@@ -402,8 +402,8 @@
     },
     {
       "id": "rocket-plasma",
-      "name": "플라즈마 드래곤",
-      "desc": "딥 인디고 · 바이올렛 플라즈마 · 3단 날개",
+      "name": "번개 용",
+      "desc": "짙은 남보라 · 보라 번개 · 3단 날개",
       "unlockLevel": 37,
       "pattern": "circuit",
       "brand": "DRAGON",
@@ -430,8 +430,8 @@
   "volt": [
     {
       "id": "volt-vector",
-      "name": "벡터 팩토리",
-      "desc": "레이싱 그린 · 실버 전류선 · 밀폐형 터빈 휠",
+      "name": "초록 전류",
+      "desc": "경주용 초록 · 은빛 전기 줄 · 막힌 바람개비 바퀴",
       "unlockLevel": 9,
       "pattern": "circuit",
       "brand": "VECTOR",
@@ -456,8 +456,8 @@
     },
     {
       "id": "volt-ion",
-      "name": "이온 블루",
-      "desc": "코발트 블루 · 이온 블레이드 · 쌍 수직핀",
+      "name": "파란 전기",
+      "desc": "짙은 파랑 · 전기 칼날 무늬 · 세로 지느러미 두 개",
       "unlockLevel": 19,
       "pattern": "chevron",
       "brand": "ION LAB",
@@ -482,8 +482,8 @@
     },
     {
       "id": "volt-aurora",
-      "name": "오로라 스트림",
-      "desc": "블랙 펄 · 오로라 에메랄드 리본 · 고리 날개",
+      "name": "오로라 물결",
+      "desc": "검은 진주색 · 초록 오로라 리본 · 고리 날개",
       "unlockLevel": 30,
       "pattern": "prism",
       "brand": "AURORA",
@@ -508,8 +508,8 @@
     },
     {
       "id": "volt-singularity",
-      "name": "싱귤래리티",
-      "desc": "블랙 크롬 · 티타늄 더블 스트라이프 · 정밀 라임광",
+      "name": "블랙홀",
+      "desc": "거울 같은 검정 · 은회색 두 줄 · 연두 불빛",
       "unlockLevel": 40,
       "pattern": "carbon",
       "brand": "SINGULAR",
@@ -537,8 +537,8 @@
   "razor": [
     {
       "id": "razor-retro",
-      "name": "레트로 터보 88",
-      "desc": "번트 오렌지 · 차콜 웨이브 · 루버 윙",
+      "name": "추억의 터보",
+      "desc": "탄 주황 · 숯색 물결 · 블라인드 날개",
       "unlockLevel": 10,
       "pattern": "sunset",
       "brand": "TURBO88",
@@ -563,8 +563,8 @@
     },
     {
       "id": "razor-ronin",
-      "name": "네온 로닌",
-      "desc": "무광 가지색 · 크림슨 궤적 · 이중 날개",
+      "name": "네온 무사",
+      "desc": "광 없는 가지색 · 진홍 궤적 · 두 겹 날개",
       "unlockLevel": 20,
       "pattern": "circuit",
       "brand": "RONIN",
@@ -590,7 +590,7 @@
     {
       "id": "razor-glacier",
       "name": "빙하의 칼날",
-      "desc": "딥 글레이셔 · 실버 칼날 · 분할 에어로 윙",
+      "desc": "짙은 빙하색 · 은빛 칼날 · 나뉜 날개",
       "unlockLevel": 31,
       "pattern": "shard",
       "brand": "ICEWORKS",
@@ -615,8 +615,8 @@
     },
     {
       "id": "razor-obsidian",
-      "name": "옵시디언 GT",
-      "desc": "옵시디언 블랙 · 크림슨 창끝 · 브론즈 트림",
+      "name": "흑요석 칼",
+      "desc": "까만 흑요석 · 진홍 창끝 · 구릿빛 테두리",
       "unlockLevel": 39,
       "pattern": "scales",
       "brand": "OBSIDIAN",
@@ -643,8 +643,8 @@
   "nova": [
     {
       "id": "nova-solar",
-      "name": "솔라 플레어",
-      "desc": "웜 카본 · 솔라 오렌지 불꽃 · 흡기구와 와이드 바디",
+      "name": "태양 불꽃",
+      "desc": "따뜻한 탄소 검정 · 주황 태양 불꽃 · 공기 구멍과 넓은 차체",
       "unlockLevel": 12,
       "pattern": "flame",
       "brand": "HELIOS",
@@ -669,8 +669,8 @@
     },
     {
       "id": "nova-lunar",
-      "name": "루나 패트롤",
-      "desc": "문스톤 실버 · 건메탈 임무 띠 · 고리 날개",
+      "name": "달 순찰대",
+      "desc": "달빛 은색 · 쇳빛 띠 · 고리 날개",
       "unlockLevel": 22,
       "pattern": "cosmos",
       "brand": "SELENE",
@@ -695,8 +695,8 @@
     },
     {
       "id": "nova-supernova",
-      "name": "초신성 펄스",
-      "desc": "플럼 진주 도장 · 초신성 오렌지 리본 · 쌍 테일핀",
+      "name": "번쩍 초신성",
+      "desc": "자두빛 진주색 · 주황 리본 · 꼬리 지느러미 두 개",
       "unlockLevel": 33,
       "pattern": "prism",
       "brand": "SUPERNOVA",
@@ -721,8 +721,8 @@
     },
     {
       "id": "nova-eclipse",
-      "name": "이클립스 로열",
-      "desc": "로열 퍼플 · 앤티크 골드 스트라이프 · 3단 날개",
+      "name": "황금 일식",
+      "desc": "임금님 보라 · 옛 금빛 줄무늬 · 3단 날개",
       "unlockLevel": 40,
       "pattern": "carbon",
       "brand": "ECLIPSE",
@@ -750,8 +750,8 @@
   "gt": [
     {
       "id": "gt-velocity",
-      "name": "벨로시티 GT3",
-      "desc": "애틀랜틱 블루 · 실버 레이스 스트라이프 · GT3 와이드 윙",
+      "name": "파란 질주",
+      "desc": "바다 파랑 · 은빛 경주 줄무늬 · 넓은 경주 날개",
       "unlockLevel": 8,
       "pattern": "heritage",
       "brand": "VELOCITY",
@@ -776,8 +776,8 @@
     },
     {
       "id": "gt-sundown",
-      "name": "선다운 크루저",
-      "desc": "보르도 레드 · 노을 리본 · 크롬 사이드 배기",
+      "name": "해 질 녘 드라이브",
+      "desc": "와인빛 빨강 · 노을 리본 · 반짝이는 옆 배기구",
       "unlockLevel": 24,
       "pattern": "sunset",
       "brand": "SUNDOWN",
@@ -804,8 +804,8 @@
   "rally": [
     {
       "id": "rally-expedition",
-      "name": "익스페디션 RX",
-      "desc": "포레스트 그린 · 한 줄의 탐험대 블록 띠 · 와이드 펜더",
+      "name": "숲 탐험대",
+      "desc": "숲 초록 · 탐험대 블록 띠 · 넓은 바퀴 덮개",
       "unlockLevel": 6,
       "pattern": "digital",
       "brand": "TRAIL RX",
@@ -830,8 +830,8 @@
     },
     {
       "id": "rally-thunder",
-      "name": "썬더볼트 WRC",
-      "desc": "로열 블루 · 옐로 랠리 궤적 · 이중 날개",
+      "name": "번개 랠리",
+      "desc": "짙은 파랑 · 노란 랠리 궤적 · 두 겹 날개",
       "unlockLevel": 23,
       "pattern": "circuit",
       "brand": "STORM RX",
@@ -858,8 +858,8 @@
   "muscle": [
     {
       "id": "muscle-hotrod",
-      "name": "체리 봄 핫로드",
-      "desc": "체리 레드 · 전통 핫로드 불꽃 · 크롬 배기",
+      "name": "체리 불꽃",
+      "desc": "체리 빨강 · 옛날 불꽃 무늬 · 반짝이는 배기구",
       "unlockLevel": 15,
       "pattern": "flame",
       "brand": "CHERRY BOMB",
@@ -886,8 +886,8 @@
   "junior": [
     {
       "id": "junior-apex",
-      "name": "에이펙스 아카데미",
-      "desc": "아카데미 블루 · 화이트 에이펙스 띠 · 이중 날개",
+      "name": "아카데미 새내기",
+      "desc": "아카데미 파랑 · 흰 코너 띠 · 두 겹 날개",
       "unlockLevel": 5,
       "pattern": "chevron",
       "brand": "APEX LAB",
@@ -913,8 +913,8 @@
   "trophy": [
     {
       "id": "trophy-baja",
-      "name": "바하 데저트 팀",
-      "desc": "무광 슬레이트 · 데저트 오렌지 블록 띠 · 루프 장비",
+      "name": "사막 원정대",
+      "desc": "광 없는 잿빛 · 사막 주황 블록 띠 · 지붕 장비",
       "unlockLevel": 18,
       "pattern": "digital",
       "brand": "BAJA 1000",
@@ -941,8 +941,8 @@
   "buggy": [
     {
       "id": "buggy-dune",
-      "name": "듄 서퍼",
-      "desc": "듄 오렌지 · 딥 오션 리본 · 오프로드 장비",
+      "name": "모래 파도타기",
+      "desc": "모래 주황 · 깊은 바다 리본 · 험한 길 장비",
       "unlockLevel": 10,
       "pattern": "sunset",
       "brand": "DUNE SURF",
@@ -968,8 +968,8 @@
   "kart": [
     {
       "id": "kart-comet",
-      "name": "코멧 레이서",
-      "desc": "딥 블루 · 코멧 오렌지 임무 띠 · 낮은 날개",
+      "name": "혜성 레이서",
+      "desc": "짙은 파랑 · 주황 혜성 띠 · 낮은 날개",
       "unlockLevel": 3,
       "pattern": "cosmos",
       "brand": "COMET K",
@@ -993,8 +993,8 @@
     },
     {
       "id": "kart-candy",
-      "name": "캔디 팝 스프린트",
-      "desc": "베리 펄 · 체리 핑크 리본 · 꽃잎 분할 날개",
+      "name": "사탕 팡팡",
+      "desc": "딸기빛 진주색 · 분홍 리본 · 꽃잎 모양 나뉜 날개",
       "unlockLevel": 20,
       "pattern": "petal",
       "brand": "CANDY POP",
@@ -1021,8 +1021,8 @@
   "hatch": [
     {
       "id": "hatch-checkmate",
-      "name": "체크메이트 컵",
-      "desc": "차콜 블랙 · 화이트 컵 스트라이프 · 와이드 바디",
+      "name": "흑백 체스",
+      "desc": "숯색 검정 · 흰 대회 줄무늬 · 넓은 차체",
       "unlockLevel": 7,
       "pattern": "heritage",
       "brand": "CHECKMATE",
@@ -1049,8 +1049,8 @@
   "roadster": [
     {
       "id": "roadster-tour",
-      "name": "리비에라 투어",
-      "desc": "페트롤 그린 · 크림 더블 스트라이프 · 클래식 크롬 배기",
+      "name": "바닷가 여행",
+      "desc": "청록 초록 · 크림색 두 줄 · 반짝이는 옛날 배기구",
       "unlockLevel": 14,
       "pattern": "heritage",
       "brand": "RIVIERA",
@@ -1077,8 +1077,8 @@
   "pickup": [
     {
       "id": "pickup-rescue",
-      "name": "오션 레스큐",
-      "desc": "레스큐 오렌지 · 화이트 해안 경계 띠 · 루프 램프",
+      "name": "바다 구조대",
+      "desc": "구조대 주황 · 흰 해안 경비 띠 · 지붕 경광등",
       "unlockLevel": 11,
       "pattern": "chevron",
       "brand": "COAST 09",
@@ -1104,8 +1104,8 @@
   "cube": [
     {
       "id": "cube-surf",
-      "name": "서프 클럽 배달부",
-      "desc": "딥 티얼 · 샌드 서프 리본 · 루프 롱보드",
+      "name": "서핑 배달부",
+      "desc": "짙은 청록 · 모래색 서핑 리본 · 지붕 서핑보드",
       "unlockLevel": 4,
       "pattern": "sunset",
       "brand": "SURF CLUB",
@@ -1129,8 +1129,8 @@
     },
     {
       "id": "cube-pixel",
-      "name": "픽셀 아케이드",
-      "desc": "아케이드 퍼플 · 큰 청록 계단 띠 · 터빈 휠",
+      "name": "픽셀 오락실",
+      "desc": "오락실 보라 · 큰 청록 계단 띠 · 바람개비 바퀴",
       "unlockLevel": 26,
       "pattern": "digital",
       "brand": "PIXEL RUN",
@@ -1157,8 +1157,8 @@
   "scorpion": [
     {
       "id": "scorpion-safari",
-      "name": "사파리 정찰대",
-      "desc": "올리브 카본 · 사파리 골드 창끝 · 정찰대 장비",
+      "name": "초원 정찰대",
+      "desc": "올리브 탄소색 · 금빛 창끝 · 정찰대 장비",
       "unlockLevel": 16,
       "pattern": "scales",
       "brand": "SAFARI 13",
@@ -1184,8 +1184,8 @@
   "midnight": [
     {
       "id": "midnight-shinobi",
-      "name": "시노비 나이트런",
-      "desc": "미드나잇 퍼플 · 크림슨 검날 · 분할 날개",
+      "name": "한밤 닌자",
+      "desc": "한밤 보라 · 진홍 칼날 · 나뉜 날개",
       "unlockLevel": 30,
       "pattern": "prism",
       "brand": "SHINOBI",
@@ -1212,8 +1212,8 @@
   "blizzard": [
     {
       "id": "blizzard-polar",
-      "name": "폴라 레스큐 RX",
-      "desc": "폴라 네이비 · 아이스 실버 칼날 · 구조대 장비",
+      "name": "북극 구조대",
+      "desc": "북극 남색 · 얼음 은색 칼날 · 구조대 장비",
       "unlockLevel": 22,
       "pattern": "shard",
       "brand": "POLAR RX",

@@ -746,7 +746,7 @@ export function startTutorial(game) {
     if (endStep) {
       endStep.title = '이제 출발할 준비 끝!';
       endStep.go = '첫 레이스 시작';
-      endStep.card = () => '<div class="nq-finish">🏁<b>다음 목적지: 빙하 하이웨이</b><span>넓은 도로 · 쉬운 봇 3대 · 레이싱 라인 켬</span></div><p>순위보다 <b>코너를 하나씩 완성하는 재미</b>부터! 초록이면 가속, 빨강이면 브레이크. 변신은 자동이에요.</p><div class="tut-choices"><button class="gm-btn" data-goto="academy">🎓 아카데미 둘러보기</button><button class="gm-btn" data-goto="home">홈으로</button></div>';
+      endStep.card = () => '<div class="nq-finish">🏁<b>다음 목적지: 빙하 고속도로</b><span>넓은 도로 · 쉬운 봇 3대 · 레이싱 라인 켬</span></div><p>순위보다 <b>코너를 하나씩 완성하는 재미</b>부터! 초록이면 가속, 빨강이면 브레이크. 변신은 자동이에요.</p><div class="tut-choices"><button class="gm-btn" data-goto="academy">🎓 아카데미 둘러보기</button><button class="gm-btn" data-goto="home">홈으로</button></div>';
     }
   }
 

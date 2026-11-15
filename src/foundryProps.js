@@ -14,8 +14,8 @@ export function buildFoundryProps(track,scene){
  const title=document.createElement('div'),hint=document.createElement('div');title.style.cssText='font-size:clamp(14px,2.1vw,20px);font-weight:900;line-height:1.4';hint.style.cssText='font-size:clamp(12px,1.7vw,15px);line-height:1.6;color:#d2e9de';toast.append(title,hint);document.body.append(toast);
  let clock=0,lastWarning='';
  const warnings=belts.map(b=>({id:b.id,t0:b.t0,t1:b.t1,kind:'belt',name:b.name,msg:b.type==='split'?'민트 ↑ 가속 · 황색 ↓ 감속 · 민트 쪽이 빨라요':'오른쪽으로 밀려요 → 왼쪽 조향으로 중심 유지'}));
- warnings.push({id:'table',t0:track.turntable.t-track.turntable.radius/track.length,t1:track.turntable.t+track.turntable.radius/track.length,kind:'table',name:'회전 이송대',msg:'중앙을 곧게 통과하면 빨라요 · 가장자리는 회전 방향으로 밀림'});
- const bowl=track.data.bank?.[0];if(bowl)warnings.push({id:'bowl',...bowl,kind:'bank',name:'용광로 사발 코너',msg:'경사진 도로를 따라 부드럽게 꺾어요 · 안쪽 선 유지'});
+ warnings.push({id:'table',t0:track.turntable.t-track.turntable.radius/track.length,t1:track.turntable.t+track.turntable.radius/track.length,kind:'table',name:'빙글 원판',msg:'중앙을 곧게 통과하면 빨라요 · 가장자리는 회전 방향으로 밀림'});
+ const bowl=track.data.bank?.[0];if(bowl)warnings.push({id:'bowl',...bowl,kind:'bank',name:'쇳물 그릇 코너',msg:'경사진 도로를 따라 부드럽게 꺾어요 · 안쪽 선 유지'});
  const state=new WeakMap();const effects={forward:0,reverse:0,cross:0,turntable:0,bots:0};
  const active=(t,b)=>t>=b.t0&&t<=b.t1;
  function apply(car,dt,player){if(!car?.trackInfo)return;const n=car.trackInfo,t=n.t;let changed=false;const table=track.turntable;if(table&&car.grounded&&table.inDisk(car.pos)){changed=true;const dx=car.pos.x-table.center.x,dz=car.pos.z-table.center.z,edge=smooth((table.radius-Math.hypot(dx,dz))/5);car.vel.x+=dz*table.angularSpeed*table.friction*edge*dt;car.vel.z-=dx*table.angularSpeed*table.friction*edge*dt;if(player)effects.turntable+=dt;}const st=state.get(car)||{belt:null};state.set(car,st);let id=null;for(const b of belts){if(!active(t,b)||Math.abs(n.lateral)>n.sample.hw-.4||!car.grounded||car.pos.y>n.sample.pos.y+3)continue;id=b.id;changed=true;const w=smooth((t-b.t0)*track.length/12)*smooth((b.t1-t)*track.length/12);if(b.type==='split'){// 1.5 m 중앙 이음새에서는 방향이 부드럽게 바뀜.
