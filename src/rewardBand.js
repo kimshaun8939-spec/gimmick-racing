@@ -9,6 +9,7 @@
 //   경험치·보상 칸(hud .res-rewards)은 업적·목표·자세히만 (rewardDetailsHtml) → XP·코인·다음 목표가 두 번 안 나옴
 //   움직임 줄이기(prefers-reduced-motion)면 애니메이션 없이 마지막 상태
 // hud.js가 씀: prepareRewards(meta, { carId, room }) → model, rewardBandHtml(model), levelUpHtml(model), rewardDetailsHtml(meta), mountRewards(rootEl, model)
+import { isOpen, levelOf, rewardLock, rewardLockText } from './featureGate.js';
 import { levelOfXp } from './profile.js';
 import { nextRewardLevel, nextRewards, rewardsBetween, racesToLevel } from './rewardPath.js';
 import { takeNews } from './parts.js';
@@ -67,6 +68,7 @@ const KIND_LABEL = { car: '새 차', part: '부품', paint: '색', costume: '코
 const priceTxt = (it) => (it.price > 0 ? `${currencyIcon(it.currency || (it.kind === 'part' || it.kind === 'car' ? 'pit' : 'custom'), 12)} ${n(it.price)}` : '');
 /** 타일 아래 작은 줄 (HTML) */
 function subHtml(it) {
+  if (rewardLock(it)) return rewardLockText(it);
   if (it.kind === 'part') return `${esc(it.slotName)} · ${it.how === 'gift' ? '선물' : priceTxt(it)}`;
   if (it.kind === 'costume') return `${esc(it.carName)} · ${priceTxt(it)}`;
   if (it.kind === 'car') return it.state === 'owned' ? '내 차' : `${priceTxt(it)}으로 살 수 있어요`;
@@ -149,6 +151,7 @@ export function rewardBandHtml(m) {
 
 // ───────── 레벨 업 카드 ─────────
 function goUrl(it, carId) {
+  if (rewardLock(it)) return '';
   const u = new URL(location.href);
   u.search = '';
   u.searchParams.set('menu', 'car');
@@ -172,7 +175,7 @@ function tileOrder(list) {
 export function levelUpHtml(m) {
   if (!m || (!m.levelUp && !m.gifts.length)) return '';
   const gifts = m.gifts.length
-    ? `<div class="rw-gifts"><span>🎁 받은 선물</span><b>${m.gifts.map((g) => esc(g.name)).join(' · ')}</b><small>${esc(m.gifts.map((g) => g.text.replace(/^🔧 새 부품: [^—]*— /, '')).join(' · '))}</small>${m.room ? '' : `<button type="button" class="rw-giftgo" data-rw-go="${esc(goUrl({ kind: 'part' }, m.carId))}">차고에서 끼우기 ›</button>`}</div>`
+    ? `<div class="rw-gifts"><span>🎁 받은 선물</span><b>${m.gifts.map((g) => esc(g.name)).join(' · ')}</b><small>${esc(m.gifts.map((g) => g.text.replace(/^🔧 새 부품: [^—]*— /, '')).join(' · '))}</small>${m.room ? '' : !isOpen('parts') ? `<small>🔒 Lv.${levelOf('parts')}에 열려요</small>` : `<button type="button" class="rw-giftgo" data-rw-go="${esc(goUrl({ kind: 'part' }, m.carId))}">차고에서 끼우기 ›</button>`}</div>`
     : '';
   if (!m.levelUp) return `<section class="rw-levelup gift-only" aria-label="받은 선물">${gifts}</section>`;
   const tier = m.unlocked.find((x) => x.kind === 'tier');
@@ -201,7 +204,7 @@ export function rewardDetailsHtml(r) {
     (goals.length ? '<p class="mt-result-goals">✓ ' + goals.map((g) => esc(g.name)).join(' · ') + '</p>' : '') +
     (r.title ? '<div class="mt-result-title">✦ ' + esc(r.title) + '</div>' : '') + prog +
     '<details class="res-detail"><summary>보상 내역 <span class="mt-cur-row">' + rewardChipsHtml(r.gain || { pit: r.coins }, { size: 13 }) + '</span></summary><div class="mt-result-breakdown">' + linesHtml(r) + '<div class="mt-line"><span>XP</span><span>완주 +' + n(r.raceXp) + ' · 업적·목표 +' + n(r.xp) + '</span></div></div></details>' +
-    '<a class="mt-result-link" href="?menu=achievements">업적 · 피트 샵 →</a></section>';
+    (isOpen('goals') ? '<a class="mt-result-link" href="?menu=achievements">업적 · 목표 →</a>' : '<span class="mt-result-link">🔒 Lv.' + levelOf('goals') + '에 열려요</span>') + '</section>';
 }
 
 // ───────── 움직임·사진·바로 가기 ─────────

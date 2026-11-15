@@ -122,6 +122,14 @@ export function isOpen(id) {
   return gateLevel() >= BY_ID[id].level;
 }
 
+/** 보상 자체가 열려도 사용할 메뉴·구매 기능이 잠겨 있으면 그 기능을 알려 줘요. */
+export function rewardLock(it) {
+  const ids = [{ car: 'garage', part: 'parts', paint: 'custom', costume: 'custom', celebration: 'custom' }[it.kind]];
+  if (it.how === 'coin' && it.state !== 'owned') ids.push('shop');
+  return ids.filter((id) => id && !isOpen(id)).sort((a, b) => levelOf(b) - levelOf(a))[0] || null;
+}
+export const rewardLockText = (it) => { const id = rewardLock(it); return id ? `🔒 Lv.${levelOf(id)}에 열려요` : ''; };
+
 /** 그 기능까지 약 몇 판 (rewardPath.racesToLevel과 같은 계산: 남은 XP ÷ 최근 5판 평균 XP, 기록이 없으면 130) */
 export function racesTo(id) {
   const level = levelOf(id);

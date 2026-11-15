@@ -66,9 +66,9 @@ export const SETTING_DEFS = [
   { group: '레이스', key: 'ghost', label: '고스트 차', desc: '충돌 없는 이전 주행 · 맵 최고 = 모든 차 중 가장 빠른 기록 · 이 차 최고 = 지금 차 기록 (없으면 다른 차 최고). 화면 최고 기록도 같은 기준', type: 'choice',
     options: [['off', '끔'], ['best', '맵 최고 (모든 차)'], ['car', '이 차 최고'], ['bot', '봇 기록']], def: 'best' },
   { group: '레이스', key: 'bots', label: '봇 수', desc: '봇 레이스에서 같이 달리는 차', type: 'choice',
-    options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 5 },
-  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 입문 · 중간 = 연습 필요 · 어려움 = 잘하는 사람 수준 · 마스터 = 훨씬 빠름', type: 'choice',
-    options: [['easy', '쉬움'], ['normal', '중간'], ['hard', '어려움'], ['master', '마스터']], def: 'normal' },
+    options: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7']], def: 3 },
+  { group: '레이스', key: 'botLevel', label: '봇 실력', desc: '쉬움 = 입문 · 보통 = 연습 필요 · 어려움 = 잘하는 사람 수준 · 마스터 = 훨씬 빠름', type: 'choice',
+    options: [['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움'], ['master', '마스터']], def: 'easy' },
   // DRS: 꺼 둠 (사용자 요청 2026-11-15 "DRS도 굳이 필요한지 모르겠어"). 화면에 안 보이고, 예전에 저장된 값은 무시 (load()에서 끔).
   //   코드(src/drs.js)·car.json drs는 남아 있음 → 시험할 때만 주소에 &drs=1. 되살리려면 hidden을 빼고 def: true, load()의 강제 끄기를 지울 것
   { group: '레이스', key: 'drs', label: 'DRS (실험)', desc: '', type: 'toggle', hidden: true, def: false },
@@ -85,6 +85,7 @@ export const SETTING_DEFS = [
 ];
 
 const DEFAULTS = Object.fromEntries(SETTING_DEFS.map((d) => [d.key, d.def]));
+// 새 사용자는 직접 바꿀 때까지 쉬운 봇 3대. load()가 저장된 봇 수·실력을 우선하므로 기존 설정은 유지돼요.
 
 function load() {
   let saved = {};

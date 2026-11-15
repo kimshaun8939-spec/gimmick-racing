@@ -687,7 +687,7 @@ export async function runHome() {
   async function buyCarFlow(id = carId) {
     const c = carOf(id), st = carState(id);
     if (st.owned) return true;
-    if (!st.buy) { uiSound('back'); toast(`🔒 ${c.name}은(는) 레벨 ${st.level}부터 살 수 있어요 (지금 Lv.${myLevel})`); return false; }
+    if (!st.buy) { uiSound('back'); toast(`🔒 ${c.name} · 레벨 ${st.level}부터 살 수 있어요 (지금 Lv.${myLevel})`); return false; }
     if (st.short) { uiSound('back'); toast(`⬡ ${st.short.toLocaleString('ko-KR')} 피트 조각이 부족해요 · 레이스·목표·아카데미에서 모아요`); return false; }
     if (!(await confirmDialog(`${c.name} 사기`, `⬡ ${st.price.toLocaleString('ko-KR')} 피트 조각으로 살까요? (지금 ⬡ ${st.have.toLocaleString('ko-KR')})`, '사기'))) return false;
     const r = buyCar(id);
@@ -1246,15 +1246,15 @@ export async function runHome() {
     for (const b of home.querySelectorAll('[data-wallet]')) b.textContent = (wl[b.dataset.wallet] || 0).toLocaleString('ko-KR');
     home.querySelector('.mt-wallet-btn').setAttribute('aria-label', '내 조각 ' + CURRENCY_IDS.map((k) => CURRENCIES[k].name + ' ' + (wl[k] || 0)).join(', ') + ' · 상점 열기');
     const products = meta.shop({carId});
-    const available = products.filter(p => p.canBuy && p.canAfford && !p.owned);
+    const available = products.filter(p => G('shop') && !gate.rewardLock(p) && p.canBuy && p.canAfford && !p.owned);
     const pc = available.filter(p => p.kind === 'part').length, carN = available.filter(p => p.kind === 'car').length, cc = available.length - pc - carN;
     const badge = [carN ? '🚗' + carN : '', pc ? '🔧' + pc : '', cc ? '✦' + cc : ''].filter(Boolean).join(' ');
     views.main.querySelector('.hm-shop small').textContent = available.length ? '지금 살 수 있어요 · ' + badge : '차 · 부품 · 코스튬 · 색 · 세리머니';
     const wallet = home.querySelector('.mt-wallet-btn');
     let wb = wallet.querySelector('.hm-wallet-badge');
     if (!wb) { wb = document.createElement('span'); wb.className = 'hm-wallet-badge'; wallet.append(wb); }
-    wb.textContent = badge; wb.hidden = !available.length;
-    const fresh = parts.listParts(null, {carId}).filter(p => p.owned && !p.equipped);
+    wb.textContent = badge; wb.hidden = !G('shop') || !available.length;
+    const fresh = !G('parts') ? [] : parts.listParts(null, {carId}).filter(p => p.owned && !p.equipped);
     views.main.querySelector('.hm-garage small').textContent = fresh.length ? '새 부품 ' + fresh.length + ' · 이 차에 아직 안 끼웠어요' : '차 구경 · 조립 · 꾸미기';
     views.car.querySelector('.ct-parts .ct-badge').textContent = fresh.length ? '● ' + fresh.length : '';
     const next = nextRewards({carId,n:1})[0];
@@ -1298,20 +1298,23 @@ export async function runHome() {
     const featOnly = !n && !partNews.length;
     const giftOnly = !n && !featOnly;
     n ||= {from:profile.get().level,to:profile.get().level,cars:[],paints:[]};
-    const available=parts.partsBetween(n.from,n.to);
-    const items = featOnly ? [] : rewardsBetween(n.from,n.to,{carId}).map(x=>'<li><i>'+esc(x.icon)+'</i>'+esc(x.name)+(x.how==='coin'?' · 구매 가능':'')+'</li>');
-    items.push(...partNews.map(x=>'<li><i>🎁</i>'+esc(x.name)+'</li>'));
-    const hasParts = (available.length > 0 || partNews.length > 0) && G('parts');
+    const newRewards = featOnly ? [] : rewardsBetween(n.from,n.to,{carId});
+    const items = newRewards.map(x=>'<li><i>'+esc(x.icon)+'</i>'+esc(x.name)+(gate.rewardLock(x)?' · '+gate.rewardLockText(x):x.how==='coin'?(x.state==='owned'?' · 보유':G('shop')?' · 구매 가능':' · 🔒 Lv.'+gate.levelOf('shop')+'에 열려요'):'')+'</li>');
+    items.push(...partNews.map(x=>'<li><i>🎁</i>'+esc(x.name)+(!G('parts')?' · 🔒 Lv.'+gate.levelOf('parts')+'에 열려요':'')+'</li>'));
+    const hasParts = parts.ownedParts().length > 0 && (partNews.length > 0 || newRewards.some(x => x.kind === 'part')) && G('parts');
+    const hasCustom = newRewards.some(x => ['paint','costume'].includes(x.kind) && !gate.rewardLock(x));
+    const rewardTab = hasParts ? 'parts' : hasCustom ? 'custom' : 'info';
     const nx = nextRewards({carId,level:n.to,n:1})[0];
-    const firstCoach = feats.map((f) => f.coach).find((id) => id && !gate.WAITING_COACHES.has(id) && !gate.coachStatus(id));
+    const firstCoach = feats.map((f) => f.coach).find((id) => id && !gate.WAITING_COACHES.has(id) && !gate.coachStatus(id) && (id !== 'upgrade' || parts.ownedParts().length > 0));
     const coachFeat = firstCoach && feats.find((f) => f.coach === firstCoach);
     const el = document.createElement('div');
     el.className = 'gx-news' + (feats.length ? ' fg-news' : '');
     el.innerHTML = `<div class="gx-newsbox" role="dialog" aria-modal="true"><div class="gx-burst">🎉</div><h3>${featOnly ? '새 기능이 열렸어요!' : giftOnly ? '새 부품을 받았어요' : `Lv.${n.to} 달성!`}</h3>
       ${feats.length ? `${featOnly ? '' : '<p class="fg-sub">🎉 새 기능이 열렸어요</p>'}<ul class="fg-feats">${feats.map((f) => `<li><i>${esc(f.icon)}</i><span>${esc(f.name)}<small>${esc(f.desc)}</small></span></li>`).join('')}</ul>` : ''}
       ${items.length ? `<p>새로 열렸어요</p><ul>${items.join('')}</ul>` : featOnly ? '' : '<p>계속 달리면 새 차와 색이 열려요</p>'}
+      ${feats.some(f => f.id === 'upgrade') && !parts.ownedParts().length ? '<p>먼저 부품을 하나 사 보세요</p>' : ''}
       ${nx && !featOnly ? `<div class="gx-nx">다음 보상 · Lv.${nx.level} ${esc(nx.name)}</div>` : ''}
-      <div class="gx-newsbtns">${coachFeat ? `<button class="gm-btn primary" data-gx="coach">🎓 ${esc(coachFeat.name)} 보러 가기</button>` : ''}${items.length && G('garage') ? `<button class="gm-btn${coachFeat ? '' : ' primary'}" data-gx="car">${hasParts ? '차고에서 끼우기' : '차고 보러 가기'}</button>` : ''}<button class="gm-btn" data-gx="ok">${coachFeat ? '나중에' : '확인'}</button></div></div>`;
+      <div class="gx-newsbtns">${coachFeat ? `<button class="gm-btn primary" data-gx="coach">${esc(coachFeat.icon)} ${esc(coachFeat.name)} 보러 가기</button>` : ''}${items.length && G('garage') && !(coachFeat?.id === 'garage' && rewardTab === 'info') ? `<button class="gm-btn${coachFeat ? '' : ' primary'}" data-gx="car">${hasParts ? '🔧 부품 끼우기' : hasCustom ? '🎨 꾸미기 보러 가기' : '🚗 차고 보러 가기'}</button>` : ''}<button class="gm-btn" data-gx="ok">${coachFeat ? '나중에' : '확인'}</button></div></div>`;
     const close = () => {
       if (!el.isConnected) return;
       el.remove();
@@ -1322,8 +1325,8 @@ export async function runHome() {
       const b = e.target.closest('[data-gx]');
       if (!b && e.target !== el) return;
       close();
-      if (b && b.dataset.gx === 'coach') coach.run(firstCoach);
-      if (b && b.dataset.gx === 'car') {garageReturn = 'main'; garageOnly = true; show('car');if (hasParts) setCarTab('parts');garageDetail(true);}
+      if (b && b.dataset.gx === 'coach') { if (firstCoach === 'upgrade') setCarTab('parts'); coach.run(firstCoach); }
+      if (b && b.dataset.gx === 'car') {garageReturn = 'main'; garageOnly = true; show('car');setCarTab(rewardTab);garageDetail(true);}
     });
     el.addEventListener('keydown', (e) => {
       if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); views.main.querySelector('.h-start')?.focus({ preventScroll: true }); }
@@ -1626,10 +1629,10 @@ export async function runHome() {
     };
     const oldFlow = views.season.querySelector('.hx-flow');
     views.season.innerHTML = '<section class="sx-season h-panel"><header><div><h2>🏆 시즌 맵 구성</h2><p>맵을 고르고 여러 경기를 이어 달려요 · ' + esc(carOf(carId).name) + '</p></div></header>' +
-      '<div class="sx-scroll"><div class="sx-kinds" data-coach="season.kinds" role="group" aria-label="시즌 구성 방식">' + [['default', '기본 시즌', '기존 9개 맵 순서 그대로'], ['random', '🎲 랜덤', '겹치지 않게 무작위로'], ['custom', '직접 고르기', '넣고 빼고 순서도 자유롭게']].map(([id, title, desc]) => '<button class="gm-btn ' + (seasonKind === id ? 'on' : '') + '" data-nav data-season-kind="' + id + '" data-season-key="kind-' + id + '" aria-pressed="' + (seasonKind === id) + '"><b>' + title + '</b><small>' + desc + '</small></button>').join('') + '</div>' +
+      '<div class="sx-scroll"><div class="sx-kinds" data-coach="season.kinds" role="group" aria-label="시즌 구성 방식">' + [['default', '기본 시즌', '전체 ' + pool.length + '개 맵 순서 그대로'], ['random', '🎲 랜덤', '겹치지 않게 무작위로'], ['custom', '직접 고르기', '넣고 빼고 순서도 자유롭게']].map(([id, title, desc]) => '<button class="gm-btn ' + (seasonKind === id ? 'on' : '') + '" data-nav data-season-kind="' + id + '" data-season-key="kind-' + id + '" aria-pressed="' + (seasonKind === id) + '"><b>' + title + '</b><small>' + desc + '</small></button>').join('') + '</div>' +
       '<div class="sx-presets"><span>추천 묶음</span><button class="gm-btn small" data-nav data-season-preset="easy" data-season-key="easy">짧은 시즌 3경기 · 쉬움 위주</button><button class="gm-btn small" data-nav data-season-preset="tour" data-season-key="tour">변신 여행 3경기 · 바다·달·우주</button></div>' +
-      (seasonKind === 'random' ? '<div class="sx-random"><b>경기 수</b>' + [3, 5, 7, 9].map(n => '<button class="gm-btn small ' + (seasonCount === n ? 'on' : '') + '" data-nav data-season-count="' + n + '" data-season-key="count-' + n + '" aria-pressed="' + (seasonCount === n) + '">' + n + '경기</button>').join('') + '<button class="gm-btn" data-nav data-season-shuffle data-season-key="shuffle">🎲 다시 섞기</button></div>' : '') +
-      '<div class="sx-layout"><div class="sx-order"><h3>달릴 순서 <small>' + seasonMaps.length + '경기 / 최대 9경기</small></h3><ol>' + seasonMaps.map((id, i) => '<li><span class="sx-num">' + (i + 1) + '</span><canvas width="160" height="90" data-season-thumb="' + id + '"></canvas><div><b>' + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></div>' + (seasonKind === 'custom' ? '<div class="sx-move"><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="-1" data-season-key="up-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 앞으로" ' + (i === 0 ? 'disabled' : '') + '>▲</button><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="1" data-season-key="down-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 뒤로" ' + (i === seasonMaps.length - 1 ? 'disabled' : '') + '>▼</button><button class="gm-btn small" data-nav data-season-map="' + id + '" data-season-key="remove-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 빼기">×</button></div>' : '') + '</li>').join('') + '</ol>' + (!seasonMaps.length ? '<p class="sx-empty">오른쪽 맵 칸에서 1~9개를 골라 주세요.</p>' : '') + '</div>' +
+      (seasonKind === 'random' ? '<div class="sx-random"><b>경기 수</b>' + [...new Set([3, 5, 7, 9, pool.length].filter(n => n <= pool.length))].map(n => '<button class="gm-btn small ' + (seasonCount === n ? 'on' : '') + '" data-nav data-season-count="' + n + '" data-season-key="count-' + n + '" aria-pressed="' + (seasonCount === n) + '">' + n + '경기</button>').join('') + '<button class="gm-btn" data-nav data-season-shuffle data-season-key="shuffle">🎲 다시 섞기</button></div>' : '') +
+      '<div class="sx-layout"><div class="sx-order"><h3>달릴 순서 <small>' + seasonMaps.length + '경기 / 최대 ' + pool.length + '경기</small></h3><ol>' + seasonMaps.map((id, i) => '<li><span class="sx-num">' + (i + 1) + '</span><canvas width="160" height="90" data-season-thumb="' + id + '"></canvas><div><b>' + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></div>' + (seasonKind === 'custom' ? '<div class="sx-move"><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="-1" data-season-key="up-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 앞으로" ' + (i === 0 ? 'disabled' : '') + '>▲</button><button class="gm-btn small" data-nav data-season-move="' + i + '" data-dir="1" data-season-key="down-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 뒤로" ' + (i === seasonMaps.length - 1 ? 'disabled' : '') + '>▼</button><button class="gm-btn small" data-nav data-season-map="' + id + '" data-season-key="remove-' + id + '" aria-label="' + esc(mapOf(id).title) + ' 빼기">×</button></div>' : '') + '</li>').join('') + '</ol>' + (!seasonMaps.length ? '<p class="sx-empty">오른쪽 맵 칸에서 1~' + pool.length + '개를 골라 주세요.</p>' : '') + '</div>' +
       (seasonKind === 'custom' ? '<div class="sx-pool"><h3>맵을 눌러 넣고 빼기</h3><div class="sx-mapgrid">' + pool.map(id => '<button class="gm-btn sx-map ' + (customMaps.includes(id) ? 'on' : '') + '" data-nav data-season-map="' + id + '" data-season-key="map-' + id + '" aria-pressed="' + customMaps.includes(id) + '"><canvas width="240" height="120" data-season-thumb="' + id + '"></canvas><b>' + (customMaps.includes(id) ? '✓ ' : '+ ') + esc(mapOf(id).title) + '</b><small>' + mapMeta(id) + '</small></button>').join('') + '</div></div>' : '<aside class="sx-note"><b>' + (seasonKind === 'default' ? '익숙한 순서로 한 시즌' : '매번 다른 맵, 새로운 순서') + '</b><p>첫 경기부터 목록 순서대로 달려요. 매 경기 점수를 더해 시즌 우승자를 정해요.</p><p>진행은 자동 저장돼요. 홈의 레이스 방식에서 이어 할 수 있어요.</p></aside>') + '</div></div>' +
       '<footer><div class="sx-total" role="status"><b>' + seasonMaps.length + '경기 · 총 약 ' + totalKm.toFixed(1) + ' km</b><small>' + (seasonMaps.length ? '예상 주행 시간 약 ' + minutes + '분 · 차와 실력에 따라 달라요' : '맵을 하나 이상 골라 주세요') + '</small></div><div><button class="gm-btn" data-go="mode" data-nav>‹ 방식</button><button class="gm-btn primary" data-act="start" data-nav ' + (!seasonMaps.length ? 'disabled' : '') + '>🏁 시즌 출발!</button></div></footer></section>';
     if (oldFlow) views.season.prepend(oldFlow);
@@ -1648,7 +1651,7 @@ export async function runHome() {
       customMaps = (b.dataset.seasonPreset === 'easy' ? ['starter', 'glacier', 'sea'] : ['sea', 'moon', 'gp']).filter(id => seasonPool().includes(id));
     } else if (b.dataset.seasonMap) {
       const id = b.dataset.seasonMap;
-      customMaps = customMaps.includes(id) ? customMaps.filter(m => m !== id) : [...customMaps, id].slice(0, 9);
+      customMaps = customMaps.includes(id) ? customMaps.filter(m => m !== id) : [...customMaps, id].slice(0, seasonPool().length);
     } else if (b.dataset.seasonMove != null) {
       const i = +b.dataset.seasonMove, j = i + +b.dataset.dir;
       if (j < 0 || j >= customMaps.length) return;
@@ -1897,7 +1900,7 @@ export async function runHome() {
       const cn = (carOf(car) && carOf(car).name) || car;
       if (!r.ok) toast(r.message || '조립을 바꾸지 못했어요');
       else if (r.same) toast(`🔧 ${nick}의 조립을 내 ${cn}에 끼웠어요`);
-      else if (r.sig === 'stock') toast(`🔧 아직 가진 부품이 없어 ${cn}은(는) 순정이에요 · 필요한 부품: ${r.missing.map((m) => m.name).join(', ')}`);
+      else if (r.sig === 'stock') toast(`🔧 ${cn} · 아직 가진 부품이 없어 순정이에요 · 필요한 부품: ${r.missing.map((m) => m.name).join(', ')}`);
       else toast(`🔧 가진 부품만 끼웠어요 · 없는 부품(순정 칸): ${r.missing.map((m) => m.name).join(', ')}`);
       // 강화 단계는 내 것 그대로 (online.copyBuildFrom levels = 단계가 다른 칸)
       if (r.ok && r.levels && r.levels.length) setTimeout(() => toast(`★ 강화 단계는 따라 할 수 없어요 · ${r.levels.map((x) => `${x.short || x.name} 내 ★${x.myLv} / 그 사람 ★${x.wantLv}`).join(', ')}`), 2700);
@@ -2063,7 +2066,7 @@ export async function runHome() {
   const MENU_GATE = { car: 'garage', records: 'records', ranking: 'records', meta: 'goals', achievements: 'goals', goals: 'goals', shop: 'shop' };
   const menuLocked = !!(menuParam && MENU_GATE[menuParam] && !G(MENU_GATE[menuParam]));
   const startView = menuLocked ? 'main' : menuParam === 'mode' && !G('time') ? 'map' : menuParam;
-  if (menuLocked) setTimeout(() => toast(`${gate.lockText(MENU_GATE[menuParam])} · ${gate.featureOf(MENU_GATE[menuParam]).name}은(는) 레이스를 달리면 열려요`), 300);
+  if (menuLocked) setTimeout(() => toast(`${gate.lockText(MENU_GATE[menuParam])} · 레이스를 달리면 '${gate.featureOf(MENU_GATE[menuParam]).name}' 기능이 열려요`), 300);
   if (startView === 'car' && (params.has('carTab') || params.has('car'))) garageDetail(true, false);
   if (startView === 'keys' || startView === 'pad') show('settings', true, startView);
   else if (['achievements', 'goals', 'shop'].includes(startView)) { show('meta'); metaPage.showTab(startView === 'achievements' ? 'achievements' : startView); }
