@@ -3,7 +3,7 @@
 //   예전 피트 코인 → 피트 조각 ⬡(차·부품) · 강화 조각 ◆(부품 강화) · 커스텀 조각 ✿(색·코스튬·세리머니), 세 조각 모두 0부터.
 //   지급표·가격은 metaCatalog.js ECON·CAR_SHOP·가격 함수. 예전 저장(wv 없음)은 불러올 때 한 번 옮김 (산 물건·열린 차·받은 업적 그대로).
 //   화면 호환: get().coins/earned/spent = 피트 조각, summary().coins/base/place/balance = 피트 조각, a.coins/g.coins = 피트 조각
-import { profile, xpFor } from './profile.js';
+import { profile, xpFor, levelStartXp } from './profile.js';
 import { academy, LESSONS, LICENSES } from './academyStore.js';
 import { listCostumes } from './carCostumes.js';
 import { PAINTS, getPaint, setPaint, isPaintUnlocked, getCostume, setCostume, isCarOwned as carOwned, carPrice as carPriceOf, carUnlockLevel, carLegacyOpen, isLegacySave, carUnlockList, carInfo } from './unlocks.js';
@@ -172,12 +172,16 @@ export function createMetaTracker(o){bootMeta();let sinceScan=0,lastMode=null,ha
  function allowed(){const g=window.game;return !o.excluded()&&!(g&&(g.paused||g.controlsOverride||g.tutorial||g.replay?.active||g.academy?.demo));}
  function sample(dt,c,place,total){if(!allowed()||o.phase()!=='racing'||!run||run.completed)return;dt=Math.max(0,Math.min(.05,dt));elapsed+=dt;if(c.events?.some(e=>['bump','respawn','lava','fall','sink'].includes(e)))hadBad=true;const speed=Math.abs(Number(c.speed)||0),distance=speed*dt;inc('distance',distance);state.stats.maxSpeed=Math.max(num(state.stats.maxSpeed),speed*3.6);if(c.mode==='boat')inc('boatDistance',distance);if(c.flying)inc('flyDistance',distance);if(!c.grounded&&!c.flying&&c.mode!=='boat')inc('jumpSeconds',dt);if(c.drs>.5)inc('drsSeconds',dt);if(c.draft>.15)inc('draftSeconds',dt);const form=c.flying?'fly':c.mode==='boat'?'boat':'land';if(distance>.01)modes.add(form);if(lastMode!==null&&lastMode!==c.mode)inc('transforms',1);lastMode=c.mode;if(total>2&&place===total&&elapsed>8)wasLast=true;sinceScan+=dt;if(sinceScan>=2){sinceScan=0;scan();}}
  function event(e,c){if(!allowed()||o.phase()!=='racing'||!run||run.completed)return;if(['bump','respawn','lava','fall','sink'].includes(e))hadBad=true;if(e==='perfectLaunch')inc('perfectLaunch',1);if(e==='apex'||e==='apexPerfect')inc('apex',1);}
- function finish(d){if(!allowed()||!run||run.completed||elapsed<10||!(d.time>10))return;run.completed=true;run.raceXp=xpFor(d);const firstMap=!num(state.maps[d.map]),firstCar=!num(state.cars[d.car]);inc('races',1);state.maps[d.map]=num(state.maps[d.map])+1;state.cars[d.car]=num(state.cars[d.car])+1;state.stats.uniqueMaps=Object.keys(state.maps).length;state.stats.uniqueCars=Object.keys(state.cars).length;
+ function finish(d){if(!allowed()||!run||run.completed||elapsed<10||!(d.time>10))return;run.completed=true;run.raceXp=xpFor(d);const firstStarter=d.map==='starter'&&d.mode==='race'&&profile.get().races===1&&!num(state.stats.races);const firstMap=!num(state.maps[d.map]),firstCar=!num(state.cars[d.car]);inc('races',1);state.maps[d.map]=num(state.maps[d.map])+1;state.cars[d.car]=num(state.cars[d.car])+1;state.stats.uniqueMaps=Object.keys(state.maps).length;state.stats.uniqueCars=Object.keys(state.cars).length;
  if(d.total>1&&d.place>0&&d.place<=3){inc('podiums',1);if(wasLast)inc('comebacks',1);}if(d.total>1&&d.place===1){inc('wins',1);if(['hard','master'].includes(o.level()))inc('hardWins',1);}if(!hadBad)inc('cleanRaces',1);if(modes.size===3)inc('threeForms',1);const hour=new Date().getHours();if(hour>=22||hour<5)inc('nightFinishes',1);
  // 완주 보상 (설계 3.2): 기본 ⬡40 + 30초마다 10(최대 60) · ◆6 · ✿3, 순위(상대가 없으면 '그 밖'), 깔끔한 완주 ◆3, 맵·차 첫 완주 ✿20·✿10
  const base={...ECON.finishBase,pit:ECON.finishBase.pit+Math.min(ECON.finishPitMax,Math.floor(d.time/30)*ECON.finishPitPer30s)};const pl=d.total>1&&d.place>0?(d.place===1?ECON.place.first:d.place<=3?ECON.place.podium:ECON.place.other):ECON.place.other;
  grant(base,'완주 · '+d.map);grant(pl,d.total>1?'순위 · '+d.place+'위':'완주 보너스');run.base=base.pit;run.place=pl.pit||0;if(!hadBad)grant(ECON.clean,'깔끔한 완주');if(firstMap)grant(ECON.firstMap,'첫 완주 · '+d.map);if(firstCar)grant(ECON.firstCar,'첫 완주 · '+carName(d.car));
- scan();state.recentXp=[...(Array.isArray(state.recentXp)?state.recentXp:[]),num(run.raceXp)+num(run.xp)].slice(-5);save();/* rewards1: 최근 5판 XP(완주+업적·목표) → rewardPath.racesToLevel '약 n판' */emit('gimmick:metaFinish',summary());}
+ scan();
+ // firstrace: 첫 변신 연습장 완주만 Lv3 부족분 보충. 순위·주행 업적·날짜 목표에 의존하지 않음.
+ // profile 완주 이벤트가 먼저 지급된 뒤라 races===1. 기존 XP 곡선과 이후 판 보상은 그대로.
+ if(firstStarter){const extra=Math.max(0,levelStartXp(3)-profile.get().xp);if(extra){bonusXP(extra);checkLevel();}}
+ state.recentXp=[...(Array.isArray(state.recentXp)?state.recentXp:[]),num(run.raceXp)+num(run.xp)].slice(-5);save();/* rewards1: 최근 5판 XP(완주+업적·목표) → rewardPath.racesToLevel '약 n판' */emit('gimmick:metaFinish',summary());}
  function summary(){if(!run?.completed)return null;const progress=ACHIEVEMENTS.filter(a=>!state.achievements[a.id]&&metricValue(a)>num(run.before[a.metric])&& !a.metric.startsWith('map:')).map(a=>({...a,value:metricValue(a),delta:metricValue(a)-num(run.before[a.metric])})).sort((a,b)=>b.value/b.goal-a.value/a.goal).filter((a,i,arr)=>arr.findIndex(b=>b.family===a.family)===i).slice(0,3);return {...run,gain:{...run.gain},lines:run.lines.slice(),profile:profile.get(),progress,celebration:meta.celebration(),title:meta.title(),balance:state.wallet.pit,wallet:{...state.wallet}};}
  window.addEventListener('gimmick:raceDone',e=>finish(e.detail||{}));reset();return {reset,sample,event,summary};
 }

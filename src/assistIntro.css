@@ -71,3 +71,14 @@ body:has(.assist-intro) > .hud, body:has(.assist-intro) :is(#menuBtn, #touchCtl,
 @media (prefers-reduced-motion: reduce) {
   .assist-intro, .assist-intro .ai-box, .assist-intro .ai-row { animation: none !important; transition: none !important; }
 }
+
+/* 첫 레이스 코스 요약: 도움 선택과 한 창에서 읽어요. */
+.assist-intro .ai-course { padding: 10px 12px; border-radius: 12px; background: rgba(64,196,255,.08); border: 1px solid rgba(64,196,255,.22); }
+.assist-intro .ai-course b { color: #b5eaff; font-size: 14px; }
+.assist-intro .ai-course p { margin: 5px 0 0; color: #c3cee2; font-size: 12.5px; line-height: 1.4; word-break: keep-all; }
+.assist-intro .ai-course .ai-start { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(181,234,255,.16); color: #ffe1a0; }
+@media (max-width: 520px) {
+  .assist-intro .ai-course { padding: 9px 10px; }
+  .assist-intro .ai-course b { font-size: 13.5px; }
+  .assist-intro .ai-box { gap: 9px; }
+}

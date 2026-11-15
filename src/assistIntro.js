@@ -4,7 +4,7 @@
 //     → 출발 신호 전에 무엇이 켜졌는지 보여 주고 스위치로 바로 끄게 함. 스위치 = settings.set (Esc 설정과 같은 값, 바로 적용)
 //   - 한 번 보면 localStorage 'gimmick.assistIntroSeen' = {v, choice}. 다음 rookie 레이스에서는 카드 없이 그 선택을 그대로 씀
 //   - 출발 신호는 카드가 닫힐 때까지 멈춤: main.js가 돌려받은 state.open을 보고 기다림 (courseGuide와 같은 방식).
-//     카드가 닫힌 뒤 코스 첫 안내(courseGuide)를 이어서 띄움 → 둘이 겹치지 않음
+//     변신 연습장 첫 레이스는 코스 요약을 합침. 다른 맵은 코스 첫 안내를 이어서 띄움
 //   - 안 뜨는 곳: 튜토리얼·아카데미·온라인(room)·자동화 브라우저(navigator.webdriver)·guide=0. 시험 강제 = ?assistintro=1 (0 = 끔)
 //     intro=0은 그리드 소개를 건너뛰는 뜻이라 막지 않음: 홈 첫 레이스(…&intro=0&guide=1)·튜토리얼 뒤 첫 레이스(…&intro=0) 모두 intro=0을 씀
 //   - 래퍼 class 'gm-confirm' → 패드 메뉴 이동·터치 버튼 숨김·Esc 메뉴 막기가 확인 창처럼 동작
@@ -101,7 +101,7 @@ function ensureCss() {
   document.head.appendChild(l);
 }
 
-function showCard() {
+function showCard(combinedCourse) {
   ensureCss();
   try {
     storedBase = JSON.parse(localStorage.getItem(SET_KEY) || '{}') || {};
@@ -120,9 +120,13 @@ function showCard() {
     wrap.className = 'gm-confirm assist-intro';
     const menuWay = touch ? '☰ 메뉴' : usingPad ? '메뉴 버튼' : esc(keybinds.label('menu') || 'Esc');
     const kOk = touch ? '' : usingPad ? padKbd(0) : '<kbd>Enter</kbd>';
+    const label = (id) => esc(usingPad ? pad.label(id) : keybinds.label(id));
+    const drive = touch ? '왼쪽 조향 · 오른쪽 ▲ 가속 / ▼ 감속 · ↺ 복귀' : `${label('throttle')} 가속 · ${label('brake')} 감속 · ${label('respawn')} 복귀`;
+    const fly = touch ? '비행: ⬆ 상승 · ⬇ 하강' : `비행: ${label('climb')} 상승 · ${label('dive')} 하강`;
     wrap.innerHTML = `<div class="box ai-box" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
       <div class="ai-head"><span class="ai-badge">🛟</span><div><h3 id="aiTitle">주행 도움이 켜져 있어요</h3>
       <p class="ai-sub">첫 레이스라 운전을 도와주는 기능을 켰어요. 직접 해 보고 싶으면 지금 끄세요.</p></div></div>
+      ${combinedCourse ? `<div class="ai-course"><b>변신 연습장 · 가속 → 배 → 비행</b><p>직선·물길·활주로에서 자동 변신! 비행 대신 오른쪽 땅길로 가도 돼요.</p><p>${drive}<br>${fly}</p><p class="ai-start">빨간불 5개가 모두 꺼지면 가속! 지금은 신호가 멈춰 있어요.</p></div>` : ""}
       <div class="ai-rows" role="group" aria-label="주행 도움">${rows
         .map(
           (r) => `<button type="button" class="ai-row" role="switch" data-k="${r.key}" aria-checked="true">
@@ -184,7 +188,7 @@ function showCard() {
       try {
         localStorage.setItem(SEEN_KEY, JSON.stringify({ v: 1, at: Date.now(), choice }));
       } catch {}
-      wrap.remove(); // 바로 지움: 다음 코스 안내가 document.querySelector('.gm-confirm')로 자기 창을 찾음
+      wrap.remove(); // 다른 맵에서 이어질 코스 안내가 자기 창을 찾을 수 있게 바로 지움
       uiSound('select');
       if (prevFocus && prevFocus.focus && prevFocus !== document.body) prevFocus.focus({ preventScroll: true });
       resolve(choice);
@@ -240,7 +244,7 @@ function esc(s) {
 }
 
 /**
- * main.js 훅: 카드가 필요하면 먼저 보이고, 닫히면 next()(= 코스 첫 안내)를 부름.
+ * main.js 훅: 변신 연습장 첫 레이스는 코스 요약까지 한 번에, 다른 맵은 닫히면 next()(= 코스 첫 안내).
  *   돌려주는 state.open = 카드 또는 코스 안내가 열려 있는 동안 true (main.js가 출발 신호·물리를 멈춤)
  *   onClose(choice) = 카드가 닫힐 때 (main.js가 입력·시간을 정리하고 race.assist를 다시 계산)
  */
@@ -253,14 +257,18 @@ export function withAssistIntro(params, next, onClose) {
       return this.card || !!(this.inner && this.inner.open);
     },
   };
-  showCard().then((choice) => {
+  const combinedCourse = rookieRace(params) && params.get('map') === 'starter';
+  showCard(combinedCourse).then((choice) => {
     try {
       onClose && onClose(choice);
     } catch (e) {
       console.warn('assistIntro onClose', e);
     }
     try {
-      st.inner = next();
+      if (combinedCourse) {
+        // 코스 요약을 함께 읽었으므로 두 번째 창 없이 출발. 다른 맵 안내는 그대로.
+        try { localStorage.setItem('gimmick.courseIntro.v1.starter', 'seen'); } catch {}
+      } else st.inner = next();
     } catch (e) {
       console.warn('courseGuide', e);
     }
