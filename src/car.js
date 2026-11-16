@@ -961,7 +961,10 @@ export class Car {
     //   고속 조향 한계 대신 느릴 때의 조향 속도(steerRate × impact.steerRecover × 핸들)까지 머리가 돎.
     //   늘어난 몫은 yawRate에 넣지 않고 slip이 0이 될 때까지만 → 진행 방향과 나란해지면 끝, 넘쳐서 반대로 돌 일 없음(스핀 없음).
     //   핸들을 안 꺾으면 0 (벽이 차를 저절로 돌리지 않음), 사람·봇 같은 규칙.
-    const steerFix = WALL_STEER && f > 2 && (this._impactGrip || wallSlide) && Math.abs(this.slip) > 0.01 && this.steerIn * this.slip < 0; // 앞으로 갈 때만 (뒤로 밀리는 중은 예전 그대로)
+    // 후진에서는 조향 회전과 타이어가 향하는 진행 방향이 함께 뒤집힌다.
+    // 차 머리만 보면, 뒤로 벽에서 나오는 타이어까지 막아 접선에 붙잡아 두게 된다.
+    const travelSign = Math.sign(f || 1);
+    const steerFix = WALL_STEER && Math.abs(f) > 2 && (this._impactGrip || wallSlide) && Math.abs(this.slip) > 0.01 && this.steerIn * this.slip * travelSign < 0;
     if (steerFix) {
       const rec = (cfg.impact?.steerRecover ?? 1) * cfg.steerRate * speedK * Math.abs(this.steerIn) * dt;
       const room = Math.abs(this.slip) - Math.abs(dYaw);
@@ -980,9 +983,9 @@ export class Car {
     this.slip -= dYaw; // 차는 돌았지만 이동 방향은 그대로 → 미끄러짐
 
     // 접지력: 이동 방향이 차 방향을 따라잡음
-    if ((wallSlide && this.fwd.dot(this._wallNormal) < -1e-5) || (steerFix && dYaw * this.slip > 0 && this._recoverOn && this._impactGrip && this.fwd.dot(this._recoverN) < -1e-5)) {
+    if ((wallSlide && travelSign * this.fwd.dot(this._wallNormal) < -1e-5) || (steerFix && dYaw * this.slip > 0 && this._recoverOn && this._impactGrip && travelSign * this.fwd.dot(this._recoverN) < -1e-5)) {
       // (steerlock) 벽에서 살짝 떨어진 순간에도, 벽 반대로 꺾어 머리를 맞추는 동안은 타이어가 진행 방향을 벽 쪽으로 다시 끌지 않음
-      // 머리가 벽 안쪽을 향하는 동안 접지력이 이동 방향을 다시 벽 쪽으로 끌지 않게 한다.
+      // 전진은 차 앞, 후진은 차 뒤가 벽 안쪽을 향하는 동안 접지력이 이동 방향을 다시 벽 쪽으로 끌지 않게 한다.
       // 위의 조향 회전(dYaw)은 이미 적용됨. 벽 바깥을 향해 꺾으면 즉시 정상 접지로 돌아간다.
     } else {
       let grip = cfg.grip * (1 - 0.4 * offK);
