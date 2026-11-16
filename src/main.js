@@ -741,7 +741,7 @@ function updateCamera(dt) {
   const tutCam = window.game?.tutorial;
   const special = intro.on || race.phase === 'finished' || window.game?.cameraOverride || tutCam?.phase === 'demo';
   const feel = settings.get('camFeel');
-  const wanted = !special && !car.flying && car.mode !== 'fly' && !['bonnet', 'cockpit'].includes(camViews.view) ? (feel === 'firm' ? 0 : feel === 'soft' ? 1.1 : 0.82) : 0;
+  const wanted = !special && !car.flying && car.mode !== 'fly' && !['bonnet', 'cockpit'].includes(camViews.view) ? (feel === 'firm' ? 0 : feel === 'soft' ? 0.6 : 0.3) : 0;
   chaseFeel.strength = THREE.MathUtils.lerp(chaseFeel.strength, wanted, 1 - Math.exp(-5 * dt));
   const strength = chaseFeel.strength * (car.mode === 'boat' ? 0.45 : 1);
   // 공중에서는 위쪽 방향을 세상 기준으로 천천히, 땅에서는 차 기준으로 빠르게
@@ -760,9 +760,9 @@ function updateCamera(dt) {
     const last = chaseFeel.lastFwd || car.fwd;
     const turnRate = Math.atan2(chaseSide.crossVectors(last, car.fwd).dot(camUp), last.dot(car.fwd)) / Math.max(dt, 0.001);
     chaseFeel.turn = THREE.MathUtils.lerp(chaseFeel.turn, turnRate, 1 - Math.exp(-10 * dt));
-    const lag = THREE.MathUtils.clamp(chaseFeel.turn * 0.95 * strength, -0.32 * strength, 0.32 * strength);
+    const lag = THREE.MathUtils.clamp(chaseFeel.turn * 0.6 * strength, -0.2 * strength, 0.2 * strength);
     f.applyAxisAngle(camUp, -lag);
-    const omega = 12.5; // camfeel4: 3차(11)가 너무 많이 꺾임 → 2차(14)와 중간 (사용자 '너무 많이 꺾여')
+    const omega = 18; // camfeel5: 사용자 '지금도 너무 많이 꺾여, 아주 많이 줄여봐' → 빨리 따라오게
     const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
     for (let i = 0; i < steps; i++) {
       const angle = Math.atan2(chaseSide.crossVectors(camFwd, f).dot(camUp), camFwd.dot(f));
@@ -771,8 +771,8 @@ function updateCamera(dt) {
     }
     // 회전 지연은 최대 약 26도: 급한 헤어핀에서도 앞길을 남김.
     const angle = Math.atan2(chaseSide.crossVectors(camFwd, f).dot(camUp), camFwd.dot(f));
-    if (Math.abs(angle) > 0.38) {
-      camFwd.applyAxisAngle(camUp, angle - Math.sign(angle) * 0.38);
+    if (Math.abs(angle) > 0.2) {
+      camFwd.applyAxisAngle(camUp, angle - Math.sign(angle) * 0.2);
       chaseFeel.yawVel = THREE.MathUtils.clamp(chaseFeel.yawVel, -1.5, 1.5);
     }
   } else {
@@ -782,7 +782,7 @@ function updateCamera(dt) {
   if (!chaseFeel.lastFwd) chaseFeel.lastFwd = car.fwd.clone();
   chaseFeel.lastFwd.copy(car.fwd);
   if (strength <= 0.001) chaseFeel.turn = 0;
-  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008, -0.13, 0.13) * strength;
+  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008, -0.06, 0.06) * strength;
   chaseFeel.side = THREE.MathUtils.lerp(chaseFeel.side, sideTarget, 1 - Math.exp(-6 * dt));
   camFwd.addScaledVector(camUp, -camFwd.dot(camUp)).normalize();
 
