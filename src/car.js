@@ -840,7 +840,10 @@ export class Car {
     } else {
       if (this.gear < 1) this.gear = 1;
       const g = this.gear;
-      const wheelRpm = (e.redline * v) / G[g - 1];
+      // towtop (2026-11-16): 견인·슬립스트림·DRS·아이템 부스터로 최고 속도가 오른 만큼 마지막 기어 회전수 한계도 같은 비율로 → 차마다 비례해서 빨라짐
+      //   (예전엔 기어 설정이 같은 차들이 모두 마지막 기어 리미터 약 290 km/h에서 멈췄음). 견인 등이 없으면 1이라 예전과 같음
+      const topBoost = g === G.length ? Math.max(1, this.aeroTopMul() * (this.itemBoostT > 0 ? cfg.items?.boostTop ?? 1.22 : 1)) : 1;
+      const wheelRpm = (e.redline * v) / (G[g - 1] * topBoost);
       // 1단 저속에서는 클러치가 미끄러지며 회전수를 유지
       const clutchRpm = g === 1 ? e.idleRpm + (e.launchRpm - e.idleRpm) * this.thr : e.idleRpm;
       const target = Math.min(Math.max(wheelRpm, clutchRpm), e.limiter + 200);

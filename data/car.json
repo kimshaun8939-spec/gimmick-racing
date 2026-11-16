@@ -107,7 +107,7 @@
     "leadShare": 1,
     "curve": 0.5,
     "dragCut": 0.6,
-    "topGain": 0.24,
+    "topGain": 0.1,
     "powerGain": 0.45,
     "rampIn": 0.65,
     "rampOut": 0.35,
