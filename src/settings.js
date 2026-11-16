@@ -27,7 +27,7 @@ export const SETTING_DEFS = [
     options: [[0, '끔'], [0.5, '약하게'], [1, '보통']], def: 1 },
   { group: '화면·그래픽', key: 'camView', label: '시점', desc: () => `달리는 중 ${keybinds.main('camView')} 키로도 바꿔요 · 보닛·운전석 = 1인칭 (흔들림이 줄어요)`, type: 'choice',
     options: [['chase', '기본'], ['near', '가까이'], ['far', '멀리'], ['bonnet', '보닛'], ['cockpit', '운전석']], def: 'chase' },
-  { group: '화면·그래픽', key: 'camFeel', label: '카메라 따라오기', desc: '추격 시점에서 코너를 돌 때 차가 살짝 옆으로 보여요. 단단하게 = 예전 느낌', type: 'choice', options: [['firm', '단단하게'], ['normal', '보통'], ['soft', '부드럽게']], def: 'normal' },
+  { group: '화면·그래픽', key: 'camFeel', label: '카메라 따라오기', desc: '코너에서 차가 먼저 돌고 카메라가 뒤따라와요. 가속·제동 거리감도 커져요. 단단하게 = 예전 느낌, 부드럽게 = 더 큰 시간차', type: 'choice', options: [['firm', '단단하게'], ['normal', '보통'], ['soft', '부드럽게']], def: 'normal' },
   { group: '화면·그래픽', key: 'fov', label: '시야 넓이', desc: '카메라가 보는 범위', type: 'choice',
     options: [[-6, '좁게'], [0, '보통'], [6, '넓게']], def: 0 },
 

@@ -623,7 +623,7 @@ const CAM = {
 };
 const cam = { sk: 0, acc: 0, pull: 0, prevSpeed: 0, boostK: 0, t: 0 };
 // 표시 자세에서만 계산: 물리/표시 보간의 이력에는 손대지 않음.
-const chaseFeel = { yawVel: 0, side: 0, strength: 0 };
+const chaseFeel = { yawVel: 0, side: 0, strength: 0, turn: 0, lastFwd: null };
 const chaseSide = new THREE.Vector3();
 
 // 화면만 직전/현재 물리 상태 사이에 그림 (물리·충돌·기록은 원래 Car 그대로).
@@ -727,7 +727,8 @@ function snapCamera(resetPoses = true) {
   camFwd.copy(car.fwd);
   camUp.copy(car.up);
   cam.pull = cam.acc = 0;
-  chaseFeel.yawVel = chaseFeel.side = 0;
+  chaseFeel.yawVel = chaseFeel.side = chaseFeel.turn = 0;
+  chaseFeel.lastFwd = car.fwd.clone();
   cam.sk = smoothK(Math.abs(car.forwardSpeed) * 3.6, CAM.fxFromKmh, CAM.topKmh);
   cam.prevSpeed = car.forwardSpeed;
   cameraTarget(camPos, camLook);
@@ -740,7 +741,7 @@ function updateCamera(dt) {
   const tutCam = window.game?.tutorial;
   const special = intro.on || race.phase === 'finished' || window.game?.cameraOverride || tutCam?.phase === 'demo';
   const feel = settings.get('camFeel');
-  const wanted = !special && !car.flying && car.mode !== 'fly' && !['bonnet', 'cockpit'].includes(camViews.view) ? (feel === 'firm' ? 0 : feel === 'soft' ? 1 : 0.65) : 0;
+  const wanted = !special && !car.flying && car.mode !== 'fly' && !['bonnet', 'cockpit'].includes(camViews.view) ? (feel === 'firm' ? 0 : feel === 'soft' ? 1 : 0.7) : 0;
   chaseFeel.strength = THREE.MathUtils.lerp(chaseFeel.strength, wanted, 1 - Math.exp(-5 * dt));
   const strength = chaseFeel.strength * (car.mode === 'boat' ? 0.45 : 1);
   // 공중에서는 위쪽 방향을 세상 기준으로 천천히, 땅에서는 차 기준으로 빠르게
@@ -755,11 +756,17 @@ function updateCamera(dt) {
       const slip = Math.acos(THREE.MathUtils.clamp(f.dot(moving), -1, 1));
       f.lerp(moving, strength * smoothK(slip, 0.06, 0.4) * 0.7).normalize();
     }
-    const omega = THREE.MathUtils.lerp(9, 4.2, strength) + smoothK(Math.abs(car.forwardSpeed), 25, 60) * 1.5;
+    // 코너 입구는 차가 먼저 돌고, 출구는 과감쇠로 출렁임 없이 뒤로 복귀.
+    const last = chaseFeel.lastFwd || car.fwd;
+    const turnRate = Math.atan2(chaseSide.crossVectors(last, car.fwd).dot(camUp), last.dot(car.fwd)) / Math.max(dt, 0.001);
+    chaseFeel.turn = THREE.MathUtils.lerp(chaseFeel.turn, turnRate, 1 - Math.exp(-10 * dt));
+    const lag = THREE.MathUtils.clamp(chaseFeel.turn * 0.8 * strength, -0.28 * strength, 0.28 * strength);
+    f.applyAxisAngle(camUp, -lag);
+    const omega = 14;
     const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
     for (let i = 0; i < steps; i++) {
       const angle = Math.atan2(chaseSide.crossVectors(camFwd, f).dot(camUp), camFwd.dot(f));
-      chaseFeel.yawVel += (omega * omega * angle - 2 * omega * chaseFeel.yawVel) * h;
+      chaseFeel.yawVel += (omega * omega * angle - 2.2 * omega * chaseFeel.yawVel) * h;
       camFwd.applyAxisAngle(camUp, chaseFeel.yawVel * h);
     }
     // 회전 지연은 최대 20도: 급한 헤어핀에서도 앞길을 남김.
@@ -772,8 +779,11 @@ function updateCamera(dt) {
     camFwd.lerp(f, 1 - Math.exp(-5 * dt));
     chaseFeel.yawVel = 0;
   }
-  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.012, -0.22, 0.22) * strength;
-  chaseFeel.side = THREE.MathUtils.lerp(chaseFeel.side, sideTarget, 1 - Math.exp(-3 * dt));
+  if (!chaseFeel.lastFwd) chaseFeel.lastFwd = car.fwd.clone();
+  chaseFeel.lastFwd.copy(car.fwd);
+  if (strength <= 0.001) chaseFeel.turn = 0;
+  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008, -0.12, 0.12) * strength;
+  chaseFeel.side = THREE.MathUtils.lerp(chaseFeel.side, sideTarget, 1 - Math.exp(-6 * dt));
   camFwd.addScaledVector(camUp, -camFwd.dot(camUp)).normalize();
 
   // 속도 비율 (fxFromKmh → topKmh에서 0 → 1), 가속 쏠림
@@ -783,7 +793,8 @@ function updateCamera(dt) {
   cam.sk = THREE.MathUtils.lerp(cam.sk, smoothK(kmh, CAM.fxFromKmh, CAM.topKmh), 1 - Math.exp(-2 * dt));
   // 앞뒤 가속도 (부딪힘처럼 순간적으로 확 바뀐 속도는 잘라냄) → 세게 밟으면 카메라가 살짝 뒤로, 브레이크면 살짝 앞으로
   // 가속도는 고정 물리 스텝에서 측정 (렌더 간격의 1~3스텝 오차를 미분하지 않음).
-  const pullT = THREE.MathUtils.clamp(cam.acc * CAM.accelPull, -CAM.brakePullMax, CAM.accelPullMax);
+  const pullGain = 1 + strength * 0.8;
+  const pullT = THREE.MathUtils.clamp(cam.acc * CAM.accelPull * pullGain, -CAM.brakePullMax * pullGain, CAM.accelPullMax * pullGain);
   cam.pull = THREE.MathUtils.lerp(cam.pull, pullT, 1 - Math.exp(-3 * dt));
 
   const tPos = new THREE.Vector3(), tLook = new THREE.Vector3();
