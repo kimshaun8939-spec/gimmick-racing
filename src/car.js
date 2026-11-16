@@ -697,6 +697,7 @@ export class Car {
     if (this.launchSpin > 0) this.launchSpin -= dt;
     if (this.hitT > 0) this.hitT -= dt;
 
+    if (this.drivingFeel === 'new') this.feel2Beta = this.feel2Delta = 0;
     if (this.grounded) this.updateGround(dt, c);
     else this.updateAir(dt, c);
 
@@ -723,6 +724,36 @@ export class Car {
 
     this.forwardSpeed = this.speed;
     this.steerVisual = this.steerIn;
+  }
+
+  // main.js가 플레이어 인스턴스에만 켠다. 특수 도로·충돌 회복은 기존 경로.
+  feel2Allowed() {
+    if (this.drivingFeel !== 'new' || !this.cfg.feel2 || !this.grounded || this.magnet || this.form || this.hitT > 0 || this._impactGrip || this.wallSliding()) return false;
+    if (this.mode !== 'normal' && this.mode !== 'accel') return false;
+    const n = this.trackInfo, s = n?.sample, i = n?.index;
+    return this.up.y > 0.8 && !s?.roll && !s?.magnet && !s?.gap && !(this.track.tubeK?.[i] > 0) && !respawnMask(this.track)[i];
+  }
+
+  // 속도별 조향비는 기존 코너 성능에 맞춤. 차 길이 약 65%를 축간거리로 쓴다.
+  // yaw = v/L * tan(delta) * cos(beta), beta = atan(lr/L * tan(delta)).
+  feel2Turn(dt, want, v, f) {
+    const F = this.cfg.feel2;
+    if (!this._feel2Wheelbase) {
+      const b = this.hitbox;
+      this._feel2Wheelbase = Math.max(1.2, (b.front + b.back) * F.wheelbaseRatio);
+    }
+    const L = this._feel2Wheelbase;
+    const signedV = Math.max(0.5, v) * Math.sign(f || 1);
+    const delta = Math.atan(want * L / signedV);
+    const beta = Math.atan(F.rearFraction * Math.tan(delta));
+    const target = v / L * Math.sign(f || 1) * Math.tan(delta) * Math.cos(beta);
+    const fast = THREE.MathUtils.clamp(v / this.cfg.maxSpeed, 0, 1);
+    const tau = THREE.MathUtils.lerp(F.yawLow, F.yawHigh, fast);
+    this.yawRate += (target - this.yawRate) * (1 - Math.exp(-dt / tau));
+    this.feel2Delta = delta;
+    // 저속에서는 뒷바퀴 쪽 회전축. 고속에서는 각도가 작아져 자연 미끄러짐을 남긴다.
+    this.feel2Beta = -Math.atan(F.rearFraction * L * this.yawRate / (Math.max(2, Math.abs(f)) * Math.sign(f || 1))) * F.pivotGain;
+    return this.yawRate;
   }
 
   updateGround(dt, c) {
@@ -880,6 +911,8 @@ export class Car {
     // 일반 경사(자석 도로 아님)에서는 오르막에서 느려지고 내리막에서 빨라짐
     if (!this.magnet) f -= cfg.gravity * this.gravityScale() * this.moveDirTo(_md).y * 0.5 * dt;
 
+    const feel2 = this.feel2Allowed();
+    this.feel2Beta = 0;
     // 방향 전환
     const speedK = THREE.MathUtils.clamp(Math.abs(f) / 8, 0, 1);
     const vNow = Math.abs(f);
@@ -914,8 +947,11 @@ export class Car {
       // 차체는 무게가 있어서 회전도 서서히 붙음
       // 빠를수록 차체가 묵직하게 늦게 돎
       const yawResp = tire.yawResponse * (1 - (tire.yawResponseHighSpeed || 0) * fastK);
-      this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-yawResp * dt));
-      turn = this.yawRate;
+      if (feel2) turn = this.feel2Turn(dt, want, vNow, f);
+      else {
+        this.yawRate = THREE.MathUtils.lerp(this.yawRate, want, 1 - Math.exp(-yawResp * dt));
+        turn = this.yawRate;
+      }
     }
     let dYaw = -turn * dt;
     // 벽·레일·물체에 부딪힌 뒤 머리가 진행 방향과 어긋난 채(slip)일 때 그 어긋남을 줄이는 쪽으로 꺾으면(= 벽 반대로 꺾기)
@@ -948,7 +984,7 @@ export class Car {
     } else {
       let grip = cfg.grip * (1 - 0.4 * offK);
       if (spike) grip *= cfg.booster.gripFactor;
-      const natural = this.slip * (1 - Math.exp(-grip * dt));
+      const natural = (feel2 ? this.slip - this.feel2Beta : this.slip) * (1 - Math.exp(-grip * dt));
       // 뒷바퀴 한계: 브레이크로 앞에 쏠리거나, 바퀴가 헛돌면 뒤가 약해짐
       //   + 파워 오버스티어: 뒷바퀴 굴림이 코너에서 힘을 많이 쓰면(powerUse) 뒤가 옆으로 덜 버팀 (tire.powerSlide)
       //   + 리프트오프 오버스티어: 코너에서 액셀을 확 떼면 잠깐 뒤가 가벼워짐 (tire.liftOff)
@@ -989,7 +1025,7 @@ export class Car {
     this.sliding = THREE.MathUtils.clamp((Math.abs(this.slip) - 0.12) / 0.35, 0, 1);
     {
       // 옆으로 미끄러지면 느려짐 (tire.slipDrag = 예전 drift.slipDrag 값 그대로)
-      f -= (wallSlide ? 0 : f) * Math.abs(Math.sin(this.slip)) * (tire.slipDrag ?? 0.6) * dt;
+      f -= (wallSlide ? 0 : f) * Math.abs(Math.sin(feel2 ? this.slip - this.feel2Beta : this.slip)) * (tire.slipDrag ?? 0.6) * dt;
     }
     // 타이어 소리 크기 (0~1): 가장 심한 것 하나. 잔디 위에서는 비명 대신 흙 소리(offroadFx)라 줄임
     {

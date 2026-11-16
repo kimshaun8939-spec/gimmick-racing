@@ -31,6 +31,8 @@ export const SETTING_DEFS = [
   { group: '화면·그래픽', key: 'fov', label: '시야 넓이', desc: '카메라가 보는 범위', type: 'choice',
     options: [[-6, '좁게'], [0, '보통'], [6, '넓게']], def: 0 },
 
+  { group: '주행', key: 'drivingFeel', label: '운전 감각', desc: '새로운 = 앞바퀴가 끌고 뒤가 따라오는 느낌 · 시험 중이라 온라인 순위표에 안 올라가요', type: 'choice',
+    options: [['default', '기본'], ['new', '새로운(시험)']], def: 'default' },
   { group: '주행', key: 'gearbox', label: '변속 방식', desc: () => `게임 중 ${keybinds.main('gearbox')} 키로도 바꿔요 (수동: ${keybinds.main('shiftUp')} 올림 · ${keybinds.main('shiftDown')} 내림)`, type: 'choice',
     options: [['auto', '자동'], ['manual', '수동']], def: 'auto' },
   { group: '주행', key: 'racingLine', label: '레이싱 라인', desc: () => `초록 = 가속 · 노랑 = 속도 줄일 준비 · 빨강 = 브레이크 (${keybinds.main('racingLine')} 키)`, type: 'toggle', def: true },
@@ -566,6 +568,7 @@ export function createControlsPage(opts = {}) {
       ${row(K('throttle'), '가속', '꾹 누르면 페달이 서서히 끝까지')}
       ${row(K('brake'), '브레이크 · 후진', '서 있을 때 누르면 뒤로 가요')}
       ${row(slotKeys('left', 'right'), '방향 바꾸기', '빠를수록 핸들이 덜 꺾여요')}
+      ${row('🧪', '새 운전 감각(시험)', '설정 → 운전·도움에서 선택 · 앞바퀴가 끌고 뒤가 따라오는 느낌 · 시험 중이라 온라인 순위표에 안 올라가요')}
       ${actionVisible('booster') ? row(K('booster'), '아이템 사용', '파워업 레이스에서 가진 아이템 쓰기') : ''}
     </section>
     <section><h3>레이스</h3>

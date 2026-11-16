@@ -1,5 +1,6 @@
 {
   "_설명": "자동차 성능 수치. 단위: 거리 m, 시간 s. 이 값만 바꿔서 손맛을 조절할 수 있어요.",
+  "feel2": { "wheelbaseRatio": 0.65, "rearFraction": 0.48, "yawLow": 0.13, "yawHigh": 0.19, "pivotGain": 1 },
   "maxSpeed": 58,
   "maxReverse": 12,
   "brake": 34,

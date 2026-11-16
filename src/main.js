@@ -446,6 +446,7 @@ const sceneSave = createSceneSave({ car, raceSys, race, hud, meta: { map: mapNam
 const metaRun = createMetaTracker({ phase: () => race.phase, level: () => raceSys.level, excluded: () => !!(FREE || params.get('academy') || params.get('tutorial')) });
 
 function resetRace() {
+  race.feel2Used = false;
   metaRun.reset();
   if (replay.active) replay.stop();
   replay.reset();
@@ -909,6 +910,7 @@ function handleEvents() {
 
 /** 물리 한 스텝: 차 → 건물/나무 충돌 → 소품 */
 function stepWorld(controls) {
+  if (car.drivingFeel === 'new' && race.phase === 'racing') race.feel2Used = true;
   if (race.phase === 'countdown') {
     // 출발 전: 차를 출발선에 묶어 둠. W로 올린 회전수(소리)는 그대로 두고, 바퀴로는 힘이 안 감
     const rpm = car.rpm, thr = car.thr;
@@ -1067,6 +1069,7 @@ function autoResTick(dt) {
 }
 function applySettings(key) {
   const s = settings.values;
+  car.drivingFeel = s.drivingFeel === 'new' ? 'new' : 'default';
   setMix({ master: s.masterVol, engine: s.engineVol, fx: s.fxVol, muted: s.muted });
   setModuleMute(!!s.muted);
   if (lineFx.line && lineFx.visible !== !!s.racingLine) lineFx.toggle();
@@ -1204,7 +1207,7 @@ function showFinish() {
   if (ghost) ghost.raceDone(total, canSaveRecords());
   // 온라인 순위표에 올리기 (서버 설정이 있을 때, 내 온라인 기록보다 빠를 때만 서버가 바꿈)
   //   봇·온라인 상대와 같이 달린 레이스는 안 올림 (사용자 요청 2026-11-12: 슬립스트림·견인·몸싸움이 있어 혼자 달린 기록과 비교가 안 됨)
-  const uploadOnline = !FREE && online.enabled && canSaveRecords();
+  const uploadOnline = !FREE && online.enabled && canSaveRecords() && !race.feel2Used;
   // 레이스 순위 (봇·온라인 상대가 있을 때)
   const position = raceSys.active() ? raceSys.playerFinished(race.clock, race.lapTimes, race.best) : null;
   const standings = raceSys.active() ? raceSys.results(race.clock) : null;
@@ -1281,6 +1284,8 @@ function showFinish() {
         console.warn('온라인 순위표', err);
         hud.setOnline('🌐 온라인 순위표에 못 올렸어요 (인터넷 확인)');
       });
+  } else if (race.feel2Used) {
+    hud.setOnline('🧪 새 운전 감각(시험)');
   } else if (!FREE && withRivals()) {
     const who = ONLINE ? '온라인 상대와' : '봇과';
     hud.setOnline(who + ' 함께 달린 기록은 내 기록·고스트' + (online.enabled ? '·온라인 순위표' : '') + '에 안 남아요');
