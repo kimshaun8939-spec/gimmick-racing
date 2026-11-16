@@ -622,6 +622,9 @@ const CAM = {
   ...(carCfg.camera || {}),
 };
 const cam = { sk: 0, acc: 0, pull: 0, prevSpeed: 0, boostK: 0, t: 0 };
+// 표시 자세에서만 계산: 물리/표시 보간의 이력에는 손대지 않음.
+const chaseFeel = { yawVel: 0, side: 0, strength: 0 };
+const chaseSide = new THREE.Vector3();
 
 // 화면만 직전/현재 물리 상태 사이에 그림 (물리·충돌·기록은 원래 Car 그대로).
 // 고주사율 화면의 60 제한은 1/120초 스텝 수가 매번 달라지므로 같은 alpha를 모든 차와 카메라에 사용.
@@ -703,10 +706,12 @@ function cameraTarget(outPos, outLook) {
   const back = (CAM_BACK + CAM.speedBack * cam.sk) * vk.back + cam.pull;
   const up = (CAM_UP + CAM.speedUp * cam.sk) * vk.up;
   outPos.copy(car.pos).addScaledVector(camFwd, -back).addScaledVector(camUp, up);
+  chaseSide.crossVectors(camUp, camFwd).normalize();
+  outPos.addScaledVector(chaseSide, chaseFeel.side);
   // 보는 곳: 빠를수록 조금 더 멀리, 미끄러질 때는 차가 실제로 가는 쪽을 조금 더 봄
   _lookDir.copy(camFwd);
   if (car.grounded && Math.abs(car.speed) > 3) {
-    const md = car.moveDir;
+    const md = car.moveDir.clone();
     md.addScaledVector(camUp, -md.dot(camUp)).normalize();
     _lookDir.lerp(md, CAM.lookSlip).normalize();
   }
@@ -722,6 +727,7 @@ function snapCamera(resetPoses = true) {
   camFwd.copy(car.fwd);
   camUp.copy(car.up);
   cam.pull = cam.acc = 0;
+  chaseFeel.yawVel = chaseFeel.side = 0;
   cam.sk = smoothK(Math.abs(car.forwardSpeed) * 3.6, CAM.fxFromKmh, CAM.topKmh);
   cam.prevSpeed = car.forwardSpeed;
   cameraTarget(camPos, camLook);
@@ -731,11 +737,43 @@ function snapCamera(resetPoses = true) {
 }
 function updateCamera(dt) {
   const car = renderCar;
+  const tutCam = window.game?.tutorial;
+  const special = intro.on || race.phase === 'finished' || window.game?.cameraOverride || tutCam?.phase === 'demo';
+  const feel = settings.get('camFeel');
+  const wanted = !special && !car.flying && car.mode !== 'fly' && !['bonnet', 'cockpit'].includes(camViews.view) ? (feel === 'firm' ? 0 : feel === 'soft' ? 1 : 0.65) : 0;
+  chaseFeel.strength = THREE.MathUtils.lerp(chaseFeel.strength, wanted, 1 - Math.exp(-5 * dt));
+  const strength = chaseFeel.strength * (car.mode === 'boat' ? 0.45 : 1);
   // 공중에서는 위쪽 방향을 세상 기준으로 천천히, 땅에서는 차 기준으로 빠르게
   camUp.lerp(car.up, 1 - Math.exp(-(car.grounded ? 5 : 2.5) * dt)).normalize();
   // 앞 방향은 차가 바라보는 방향을 부드럽게 따라감 (위쪽 방향과 직각으로 유지)
   const f = car.fwd.clone().addScaledVector(camUp, -car.fwd.dot(camUp)).normalize();
-  camFwd.lerp(f, 1 - Math.exp(-5 * dt));
+  if (strength > 0.001 && camUp.y > 0.65 && f.lengthSq() > 0.5) {
+    // 도로 면 안의 각도만 지연. 감쇠 스프링을 작은 시간 간격으로 적분해 느린 프레임에서도 안정.
+    const moving = car.vel.clone().addScaledVector(camUp, -car.vel.dot(camUp));
+    if (car.forwardSpeed > 5 && moving.lengthSq() > 25) {
+      moving.normalize();
+      const slip = Math.acos(THREE.MathUtils.clamp(f.dot(moving), -1, 1));
+      f.lerp(moving, strength * smoothK(slip, 0.06, 0.4) * 0.7).normalize();
+    }
+    const omega = THREE.MathUtils.lerp(9, 4.2, strength) + smoothK(Math.abs(car.forwardSpeed), 25, 60) * 1.5;
+    const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      const angle = Math.atan2(chaseSide.crossVectors(camFwd, f).dot(camUp), camFwd.dot(f));
+      chaseFeel.yawVel += (omega * omega * angle - 2 * omega * chaseFeel.yawVel) * h;
+      camFwd.applyAxisAngle(camUp, chaseFeel.yawVel * h);
+    }
+    // 회전 지연은 최대 20도: 급한 헤어핀에서도 앞길을 남김.
+    const angle = Math.atan2(chaseSide.crossVectors(camFwd, f).dot(camUp), camFwd.dot(f));
+    if (Math.abs(angle) > 0.35) {
+      camFwd.applyAxisAngle(camUp, angle - Math.sign(angle) * 0.35);
+      chaseFeel.yawVel = THREE.MathUtils.clamp(chaseFeel.yawVel, -1.5, 1.5);
+    }
+  } else {
+    camFwd.lerp(f, 1 - Math.exp(-5 * dt));
+    chaseFeel.yawVel = 0;
+  }
+  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.012, -0.22, 0.22) * strength;
+  chaseFeel.side = THREE.MathUtils.lerp(chaseFeel.side, sideTarget, 1 - Math.exp(-3 * dt));
   camFwd.addScaledVector(camUp, -camFwd.dot(camUp)).normalize();
 
   // 속도 비율 (fxFromKmh → topKmh에서 0 → 1), 가속 쏠림
