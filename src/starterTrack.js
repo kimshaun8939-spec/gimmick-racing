@@ -7,7 +7,7 @@
 //   - 비행 루트 (sky): 그랑프리(gpTrack.js)와 같은 형식·같은 API (runway·apron·rings·skyPath·thermals·thermalAt·inSkyCorridor·onAltPath)
 //       → car.js 자동 비행 모드·비행 구역, bots.js flightPlan(봇도 날아감), gpFlight.js(상승 기류·착지계)가 그대로 동작
 //       활주로는 땅길 S자가 시작되는 곳에서 왼쪽으로 살짝 틀어 곧게 뻗음 = 핸들을 그대로 두면 활주로 → 날아감, 오른쪽으로 꺾으면 땅길
-//   - 틈 없는 작은 점프대 (jumps): 립까지 살짝 들고 바로 뒤 원래 도로로 내려감 → 빠르면 뜨고 느리면 그냥 넘어감 (떨어질 곳 없음)
+//   - 점프대: 발사대 끝을 낮은 착지판과 분리, 아래 겹친 안전 바닥으로 모든 속도를 받음
 // 돌려주는 객체는 glacierTrack.js와 같은 모양 (car.js, main.js, hud 미니맵, racingLineFx, gpCorners, 봇이 그대로 씀)
 import * as THREE from 'three';
 import { computeRacingLine, edgeFraction } from './racingLine.js';
@@ -249,30 +249,34 @@ export function buildStarterTrack(data, scene) {
   const sideN = (side) => (side < 0 ? 0 : 1);
   const edgeAt = (i, side) => edgeT[sideN(side)][wrapI(i)];
 
-  // ---------------------------------------------------------------- 틈 없는 점프대: 립까지 lift m 들고(립 각도 kick°), 립 뒤 dropLen m 만에 원래 도로로
+  // ---------------------------------------------------------------- 안전 점프대: 발사대 끝과 낮은 착지판 분리 + 아래 겹친 안전 바닥
   const jumps = (data.jumps || []).map((j) => {
     const lipI = indexAt(j.lip);
     let landI = indexAt(j.land);
     if (landI < lipI) landI += SAMPLES;
-    const kickN = mS(j.kickLen || 22), dropN = mS(j.dropLen || 7);
-    const L = kickN * ds;
-    const lift = j.lift ?? 1.2;
-    const want = Math.tan(THREE.MathUtils.degToRad(j.kick ?? 7));
-    // 기본 도로 기울기를 빼고, 덧붙인 높이 f(u) = lift·u^p 의 립 기울기가 want가 되게 p를 고름
+    const kickN = mS(j.kickLen || 28), dropN = mS(j.dropLen || 65);
+    const L = kickN * ds, lift = j.lift ?? 2.6;
+    const baseY = S(lipI).pos.y;
+    const want = Math.tan(THREE.MathUtils.degToRad(j.kick ?? 12));
     const base0 = (S(lipI + 1).pos.y - S(lipI - 1).pos.y) / (2 * ds);
     const p = Math.max(1.2, ((want - base0) * L) / lift);
     for (let k = 0; k <= kickN; k++) S(lipI - kickN + k).pos.y += lift * Math.pow(k / kickN, p);
-    const drop = j.drop ?? lift;
+    // 바닥 레이가 닿으면 차는 내리막에 붙는다. 발사대 끝을 낮은 착지판과 분리한다.
+    // 립 아래까지 겹치는 안전 바닥이 느린 차도 받으며, 착지판은 원래 길에 매끈하게 합류한다.
     for (let k = 1; k <= dropN; k++) {
-      const v = k / dropN;
-      S(lipI + k).pos.y += drop * (1 - v) * (1 - v); // 립 바로 뒤 가파르게 → 원래 도로
+      const u = k / dropN;
+      S(lipI + k).pos.y -= (j.floorDrop ?? 0.4) * (1 - u) ** 2;
       S(lipI + k).jumpFace = true;
     }
+    S(lipI + 1).jumpDrop = true;
     for (let k = -kickN - 3; k <= dropN + 3; k++) {
       const s = S(lipI + k);
-      s.tan3 = S(lipI + k + 1).pos.clone().sub(S(lipI + k - 1).pos).normalize();
+      const prev = k === 1 ? s.pos : S(lipI + k - 1).pos;
+      const next = k === 0 ? s.pos : S(lipI + k + 1).pos;
+      s.tan3 = next.clone().sub(prev).normalize();
       s.jump = true;
     }
+    S(lipI).jumpFloorY = baseY - (j.floorDrop ?? 0.4);
     return { ...j, lipI: wrapI(lipI), landI: wrapI(landI), lip: S(lipI), landS: S(landI), gapLen: 0, lipY: S(lipI).pos.y, landY: S(landI).pos.y, kickN, botSpeed: j.botSpeed || 46 };
   });
 
@@ -344,7 +348,7 @@ export function buildStarterTrack(data, scene) {
           pos[o + 2] = v.z;
           uv[(r * P + k) * 2] = uScale ? acc / uScale : k / (P - 1);
           uv[(r * P + k) * 2 + 1] = s.dist / vScale;
-          if (r < rows - 1 && k < P - 1) {
+          if (r < rows - 1 && k < P - 1 && !list[a + r + 1].jumpDrop) {
             const A = r * P + k, B = A + 1, C = A + P, D = C + 1;
             idx.push(A, B, C, B, D, C);
           }
@@ -438,6 +442,10 @@ export function buildStarterTrack(data, scene) {
   const curbMat = new THREE.MeshStandardMaterial({ map: curbTexture('#f4f4f4', '#e8463a'), roughness: 0.7 });
   const landRun = (i) => !samples[i].water;
   for (const [a, b] of runsOf(landRun)) strip(spanList(a, b), (s) => [[-s.hw, 0], [s.hw, 0]], roadMat, { vScale: 12, surface: 'ground' });
+  for (const j of jumps) {
+    const floor = spanList(j.lipI - 3, j.lipI + 1).map((s) => ({ ...s, pos: s.pos.clone().setY(j.lip.jumpFloorY), up: UP, jumpDrop: false }));
+    strip(floor, (s) => [[-s.hw - 5, 0], [s.hw + 5, 0]], roadMat, { vScale: 12, surface: 'ground', name: 'starterJumpSafety' });
+  }
   for (const side of [-1, 1]) {
     for (const [a, b] of runsOf(landRun)) {
       const L = spanList(a, b);

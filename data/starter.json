@@ -881,16 +881,16 @@
   {
    "name": "HOP",
    "lip": 0.43257,
-   "land": 0.45274,
-   "kick": 7,
-   "kickLen": 22,
-   "lift": 1.25,
-   "drop": 1.25,
-   "dropLen": 7,
+   "land": 0.47112,
+   "kick": 12,
+   "kickLen": 28,
+   "lift": 2.6,
+   "floorDrop": 0.4,
+   "dropLen": 65,
    "botSpeed": 46
   }
  ],
- "_jumps": "틈 없는 점프대: 립까지 kickLen m 동안 lift m 들고(kick° 립 각도), 립 뒤 dropLen m 만에 원래 도로로 내려감 = 빠르면 뜨고 느리면 그냥 넘어감 (떨어질 곳 없음)",
+ "_jumps": "starterjump: kickLen m 발사대 끝 kick°에서 이륙. 끝면은 착지판과 분리하고 아래 안전 바닥을 겹침. floorDrop m 낮춘 착지판은 dropLen m에 걸쳐 원래 길과 부드럽게 연결",
  "bank": [
   {
    "t0": 0.82441,

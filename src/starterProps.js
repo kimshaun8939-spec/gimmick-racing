@@ -9,7 +9,7 @@ import { buildGrandPrixProps } from './gpProps.js';
 const CARDS = {
   accel: { icon: '⚡', text: '쭉 밟아요!', sub: '150 km/h를 넘기면 가속 모드로 변신' },
   water: { icon: '🚤', text: '곧 물길!', sub: '그대로 들어가면 배로 변신해요' },
-  jump: { icon: '🦘', text: '작은 점프대', sub: '빠르면 붕 떠요 · 핸들은 똑바로' },
+  jump: { icon: '🦘', text: '점프!', sub: '앞쪽 화살표를 따라 똑바로 · 넓은 착지판이 받아 줘요' },
   runway: { icon: '✈️', text: '직진하면 활주로!', sub: '끝에서 저절로 날아요 · 고리를 지나 착륙장으로 · 오른쪽은 땅길' },
   final: { icon: '🏁', text: '마지막 코너!', sub: '기울어진 길이라 빠르게 돌 수 있어요' },
 };
@@ -19,6 +19,21 @@ export function buildStarterProps(track, scene) {
   const gp = buildGrandPrixProps(track, scene);
   const S = track.samples, N = S.length - 1;
   const signs = (track.data && track.data.signs) || {};
+  // 발사대 표시는 바뀐 노면을 따라 놓음 (충돌 없음). 기존 JUMP 아치도 kickN을 따라 이동한다.
+  const arrow = new THREE.Shape();
+  arrow.moveTo(-0.55, -1.5); arrow.lineTo(0.55, -1.5); arrow.lineTo(0.55, 0);
+  arrow.lineTo(1.15, 0); arrow.lineTo(0, 1.5); arrow.lineTo(-1.15, 0); arrow.lineTo(-0.55, 0); arrow.closePath();
+  const arrowGeo = new THREE.ShapeGeometry(arrow);
+  const arrowMat = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4 });
+  for (const j of track.jumps || []) for (const back of [22, 14, 6]) {
+    const s = S[(j.lipI - Math.round(back / (track.length / N)) + N) % N];
+    const mesh = new THREE.Mesh(arrowGeo, arrowMat);
+    const mat = new THREE.Matrix4().makeBasis(s.rightB, s.tan3, s.up);
+    mesh.quaternion.setFromRotationMatrix(mat);
+    mesh.position.copy(track.surf(s, 0, 0.055));
+    gp.group.add(mesh);
+  }
+
   const qs = new URLSearchParams(location.search);
   const quiet = !!(qs.get('tutorial') || qs.get('academy') || qs.get('stcards') === '0');
 
