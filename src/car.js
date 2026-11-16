@@ -176,6 +176,7 @@ export class Car {
     this.hitT = 0; // 세게 부딪힌 뒤 차가 자세를 되찾는 남은 시간 (이 동안은 꼬리가 더 돌아가지 않음)
     this.hitTurn = 0; // 예전 디버그 값 호환: 벽 충돌로 차 머리를 강제로 돌리지 않음
     this._wallNormal = null;
+    this._departSpeed = 0;
     this._wallAt = -Infinity;
     this._impactGrip = false;
     this._recoverOn = false; // steerlock: 벽 반대로 꺾어 머리를 맞추는 중 (_recoverN = 그 벽 방향)
@@ -240,6 +241,7 @@ export class Car {
     this.launchTime = this.launchSpin = 0;
     this.hitT = this.hitTurn = 0;
     this._impactGrip = this._recoverOn = false;
+    this._departSpeed = 0;
     this._wallNormal = null;
     this._wallAt = -Infinity;
     this.jumpStall = 0; // 부정 출발로 시동 꺼진 남은 시간
@@ -759,9 +761,22 @@ export class Car {
   updateGround(dt, c) {
     const cfg = this.cfg;
     const wallSlide = this.wallSliding();
+    const departN = WALL_STEER && this._recoverOn ? this._recoverN : null;
+    const departTi = this.trackInfo;
+    const departLim = departTi && this.track.railLimit?.(departTi);
+    const departSide = departTi ? Math.sign(departTi.lateral) * this.fwd.dot(departTi.sample.right) : 0;
+    const departBox = this.hitbox;
+    const departReach = Math.max(departBox.front * departSide, -departBox.back * departSide) +
+      departBox.half * Math.abs(this.right.dot(departTi?.sample.right || this.right));
+    const departNear = !!departN && (wallSlide || (departLim != null && this.hitT > 0 &&
+      Math.abs(this.pos.y - departTi.sample.pos.y) < 4 &&
+      Math.abs(departTi.lateral) + departReach > departLim - 0.8 &&
+      -Math.sign(departTi.lateral) * departTi.sample.right.dot(departN) > 0.7));
+    const departing = departNear && this.steerIn * this.right.dot(departN) > 0;
+
     // 벽이 끝나도 충돌로 생긴 옆 미끄럼이 가라앉기 전에는 꼬리 회전을 다시 켜지 않는다.
     if (this._impactGrip) {
-      if (!wallSlide && Math.abs(this.slip) < 0.12) this._impactGrip = this._recoverOn = false;
+      if (!wallSlide && !departing && Math.abs(this.slip) < 0.12) this._impactGrip = this._recoverOn = false;
       else this.hitT = Math.max(this.hitT, dt * 2);
     }
     const spike = this.form === 'spike';
@@ -1028,6 +1043,22 @@ export class Car {
       }
       this.slip = THREE.MathUtils.clamp(this.slip, -1.3, 1.3);
     }
+    // wallstick2: preserve steering away from a wall while the nose realigns.
+    // Work in the curved wall's frame: repeated tangent clipping must not reset
+    // the driver's departure effort. Free driving and neutral impacts stay unchanged.
+    if (departing && Math.abs(f) > 2) {
+      const dir = this.moveDir.multiplyScalar(Math.sign(f));
+      const vn = dir.dot(departN) * Math.abs(f);
+      // Accumulate only the requested lateral acceleration; cap departure angle at 0.12 rad.
+      const target = this._departSpeed = Math.min(Math.abs(f) * 0.12 * Math.abs(this.steerIn),
+        Math.max(0, this._departSpeed || 0, vn) + Math.min(latCap, lat) * Math.abs(this.steerIn) * dt);
+      if (vn < target) {
+        const tangent = dir.addScaledVector(departN, -dir.dot(departN)).normalize();
+        const angle = Math.asin(THREE.MathUtils.clamp(target / Math.abs(f), -0.95, 0.95));
+        tangent.multiplyScalar(Math.cos(angle)).addScaledVector(departN, Math.sin(angle)).multiplyScalar(Math.sign(f));
+        this.slip = Math.atan2(this.up.dot(_v.crossVectors(this.fwd, tangent)), this.fwd.dot(tangent));
+      }
+    } else this._departSpeed = 0;
     this.sliding = THREE.MathUtils.clamp((Math.abs(this.slip) - 0.12) / 0.35, 0, 1);
     {
       // 옆으로 미끄러지면 느려짐 (tire.slipDrag = 예전 drift.slipDrag 값 그대로)
