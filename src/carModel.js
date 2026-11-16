@@ -724,7 +724,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
     steer.add(spin);
     const wall = buildWheel(add, spin, steer, M, look, r, wd, side);
     // 오프로드 타이어: 둘레에 울퉁불퉁한 돌기
-    if (look.tire === 'knobby') add(knobGeometry(r, wd), rubber, 0, 0, 0, spin);
+    // 돌기는 buildWheel 안에서 함께 그림.
     // 평소 서스펜션 (검은 막대)
     const susp = new THREE.Mesh(wishboneGeo, carbon);
     susp.position.set(side * inner, r, z);
@@ -736,11 +736,29 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
     wheels.push({ steer, spin, front, susp, side, ax: Math.abs(x), r, z, inner, wall });
   }
 
+  // 실제 타이로드가 있는 차만 연결. 움직이는 바퀴 안에 두어 차체 묶음이 매 프레임 풀리지 않음.
+  const linkDir=new THREE.Vector3(),linkStart=new THREE.Vector3(),linkUp=new THREE.Vector3(0,1,0),linkInv=new THREE.Quaternion();
+  for(const link of shell.steeringLinks||[]){
+    link.wheel=wheels.find(w=>w.front&&w.side===link.side);
+    link.wheel.steer.add(link.mesh);
+  }
+  function poseSteeringLinks(){
+    for(const l of shell.steeringLinks||[]){const w=l.wheel;
+      linkInv.copy(w.steer.quaternion).invert();
+      linkStart.copy(l.chassis).applyQuaternion(body.quaternion).add(body.position).sub(w.steer.position).applyQuaternion(linkInv);
+      linkDir.copy(l.hub).sub(linkStart);const length=linkDir.length();
+      l.mesh.position.copy(linkStart);l.mesh.quaternion.setFromUnitVectors(linkUp,linkDir.multiplyScalar(1/Math.max(length,1e-6)));
+      l.mesh.scale.set(1,length,1);l.mesh.visible=w.susp.visible;
+    }
+  }
+
   const accelRims = wheels.map((w,i) => {
     const ring = new THREE.Mesh(new THREE.RingGeometry(w.r*.71,w.r*.77,16).rotateY(Math.PI/2),rimLight);
     ring.position.x=w.side*(WHEELS[i][4]*.5+.012);ring.userData.accelMoving=true;
     w.steer.add(ring);return ring;
   });
+
+  poseSteeringLinks();
 
   // ------------------------------------------------------------------ 효과
   // 부스트 불꽃 (가운데 배기구). 부스터(스파이크)가 펼쳐지면 대신 엔진 부스터의 초록 불꽃이 남
@@ -795,7 +813,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
   }
 
   // ------------------------------------------------------------------ 상태
-  let wheelAngle = 0;
+  let visualSteer = 0;
   let lean = 0, leanV = 0, pitchNow = 0, pitchV = 0;
   let spikeP = 0; // 스파이크(부스터) 변신 진행도 0~1
   let lastForm = null;
@@ -1195,11 +1213,24 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       body.rotation.x = pitchNow;
 
       // 접힌 바퀴(배 모드, 비행 중)는 멈추고 조향도 풀림
-      wheelAngle += (car.forwardSpeed / 0.4) * dt * (1 - wheelQ);
+      const speed = Math.abs(car.forwardSpeed || 0);
+      const steerTarget = -(car.steerVisual || 0) * .42 / (1 + (speed / 24) ** 2) * (1 - wheelQ);
+      visualSteer = instant ? steerTarget : THREE.MathUtils.lerp(visualSteer, steerTarget, 1 - Math.exp(-dt / .085));
       poseWheels(wheelQ, boatP);
       for (const w of wheels) {
-        w.spin.rotation.x = wheelAngle;
-        if (w.front) w.steer.rotation.y = -car.steerVisual * 0.42 * (1 - wheelQ);
+        const feel=w.spin.userData.wheelFeel;
+        const omega=(car.forwardSpeed || 0)/w.r*(1-wheelQ);
+        // 한 프레임에 바큇살 간격의 1/5까지만 움직여 역회전 착시를 막음.
+        const maxStep=2*Math.PI/feel.count*.20;
+        const step=omega*dt;
+        w.spin.rotation.x=(w.spin.rotation.x+Math.sign(step)*Math.min(Math.abs(step),maxStep))%(Math.PI*2);
+        const b=THREE.MathUtils.smoothstep(speed*3.6,35,100)*(1-wheelQ);
+        feel.blur.value=b;
+        if (w.front) {
+          // 바퀴 중심은 유지하고 안쪽 바퀴만 조금 더 깊이 꺾음.
+          const inner=Math.sign(visualSteer)===w.side;
+          w.steer.rotation.y=visualSteer*(1+(inner?1:-1)*Math.min(.16,Math.abs(visualSteer)*.38));
+        }
       }
 
       // --- 변신 ---
@@ -1239,7 +1270,8 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
         sweep.material.opacity = 0.7 * Math.sin(Math.PI * sweepT);
       }
 
-      cockpit.wheel.rotation.z = -(car.steerVisual || 0) * 0.55;
+      poseSteeringLinks();
+      cockpit.wheel.rotation.z = visualSteer * 7;
 
       // 가속 모드는 차체에 주황빛이 맥박처럼, 비행 모드는 하늘색이 은은하게 (부스터는 초록 부품이 빛나므로 차체 색은 유지)
       if (accelP > 0) paint.emissive.copy(MODE_COLORS.accel).multiplyScalar(accelP * (0.014 + 0.004 * Math.sin(time * 3)) * glowK);

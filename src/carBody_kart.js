@@ -8,6 +8,7 @@ import { V, orient, ribbon } from './carBody_buggy.js';
 
 export function buildKart({ add, body, M, look }) {
   const { paint, accent, trim, carbon, dark, metal } = M;
+  const steeringLinks = [];
   const W = [
     [-0.72, 1.0, true, 0.25, 0.2, 0.2],
     [0.72, 1.0, true, 0.25, 0.2, 0.2],
@@ -27,7 +28,9 @@ export function buildKart({ add, body, M, look }) {
     T([s * 0.34, 0.12, 0.35], [s * 0.2, 0.13, 1.22]);
     T([s * 0.27, 0.13, 0.98], [s * 0.58, 0.2, 1.0], 0.03); // 앞 차축 팔
     add(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 8), metal, s * 0.58, 0.22, 1.0); // 킹핀
-    T([0, 0.2, 0.72], [s * 0.56, 0.22, 0.9], 0.012, metal); // 타이로드
+    const link=T([0,0,0],[0,1,0],.012,metal);
+    link.userData.wheelJoint=true;
+    steeringLinks.push({mesh:link,side:s,chassis:new THREE.Vector3(0,.2,.72),hub:new THREE.Vector3(-s*.16,-.03,-.1)});
     box(0.05, 0.12, 0.1, metal, s * 0.34, 0.24, -0.98); // 뒤 차축 베어링
     add(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 10).rotateZ(Math.PI / 2), metal, s * 0.58, 0.28, -0.98); // 허브
     T([s * 0.34, 0.12, 0.3], [s * 0.5, 0.14, 0.3], 0.018); // 옆 포드 받침
@@ -154,7 +157,7 @@ export function buildKart({ add, body, M, look }) {
   const helmet = makeHelmet(add, body, M);
   helmet.position.set(0, 0.92, -0.36);
   return {
-    helmet, fWing, spoiler, drs,
+    helmet, fWing, spoiler, drs, steeringLinks,
     A: {
       wheels: W,
       tuck: { f: [0.6, 0.4], r: [0.62, 0.44] },
