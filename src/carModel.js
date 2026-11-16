@@ -1217,6 +1217,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
       const steerTarget = -(car.steerVisual || 0) * .42 / (1 + (speed / 24) ** 2) * (1 - wheelQ);
       visualSteer = instant ? steerTarget : THREE.MathUtils.lerp(visualSteer, steerTarget, 1 - Math.exp(-dt / .085));
       poseWheels(wheelQ, boatP);
+      const wheelBlur=THREE.MathUtils.smoothstep(speed*3.6,35,100)*(1-wheelQ);
       for (const w of wheels) {
         const feel=w.spin.userData.wheelFeel;
         const omega=(car.forwardSpeed || 0)/w.r*(1-wheelQ);
@@ -1224,8 +1225,7 @@ export function createCarModel(lookOrColor = '#e8463a', options = {}) {
         const maxStep=2*Math.PI/feel.count*.20;
         const step=omega*dt;
         w.spin.rotation.x=(w.spin.rotation.x+Math.sign(step)*Math.min(Math.abs(step),maxStep))%(Math.PI*2);
-        const b=THREE.MathUtils.smoothstep(speed*3.6,35,100)*(1-wheelQ);
-        feel.blur.value=b;
+        if(feel.blur.value!==wheelBlur)feel.blur.value=wheelBlur;
         if (w.front) {
           // 바퀴 중심은 유지하고 안쪽 바퀴만 조금 더 깊이 꺾음.
           const inner=Math.sign(visualSteer)===w.side;

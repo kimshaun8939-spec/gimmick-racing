@@ -1,5 +1,8 @@
 // 부드러운 타이어 단면은 유지하고, 눈에 거의 보이지 않는 안쪽 링·볼트의 면을 줄인 휠.
 import * as THREE from 'three';
+// 한 차의 바퀴는 같은 흐림 값을 쓰고, 같은 크기의 좌우 바퀴는 재질도 공유.
+// 차 사이에는 공유하지 않아 서로 다른 속도/색과 dispose 수명을 분리한다.
+const wheelMaterials = new WeakMap();
 export function buildWheel(add,spin,steer,M,look,r,width,side){
   const formula=['f1','proto'].includes(look.style),classic=look.style==='roadster',kart=look.style==='kart',offroad=look.tire==='knobby';
   const R=r*(offroad?.55:formula?.65:.69),h=width/2, seg=(offroad||look.style==='rally')?12:14;
@@ -39,7 +42,12 @@ export function buildWheel(add,spin,steer,M,look,r,width,side){
     }if(f!==g)f.dispose();g.dispose();
   }
   const geo=new THREE.BufferGeometry();for(const [key,a]of Object.entries(attrs))geo.setAttribute(key,new THREE.Float32BufferAttribute(a,3));
-  const blur={value:0},mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,metalness:1,transparent:true,depthWrite:true});
+  let shared=wheelMaterials.get(M);
+  if(!shared){shared={blur:{value:0},materials:new Map()};wheelMaterials.set(M,shared);}
+  const blur=shared.blur,key=R+'|'+h;
+  let mat=shared.materials.get(key);
+  if(!mat){
+  mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,metalness:1,transparent:true,depthWrite:true});
   mat.userData.live=true;
   mat.onBeforeCompile=sh=>{
     sh.uniforms.wheelBlur=blur;
@@ -57,8 +65,12 @@ export function buildWheel(add,spin,steer,M,look,r,width,side){
       .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\n metalnessFactor=vWheelSurface.y;');
   };
   mat.customProgramCacheKey=()=> 'wheelfeel-2-'+M.rimMat.color.getHexString()+'-'+R+'-'+h;
+  shared.materials.set(key,mat);
+  }
   const wheel=add(geo,mat,0,0,0,spin);wheel.userData.wheelBlur=blur;
-  spin.userData.wheelFeel={blur,count:classic?12:kart?3:offroad?6:formula?8:5,r};
+  // 돌기 타이어는 16개씩 엇갈린 두 줄(32칸)이 가장 촘촘한 무늬다.
+  // 바큇살 6개만 기준으로 제한하면 30~60 km/h에서 돌기가 뒤로 흐르는 착시가 난다.
+  spin.userData.wheelFeel={blur,count:offroad?32:classic?12:kart?3:formula?8:5,r};
   if(!formula&&!kart)add(new THREE.BoxGeometry(width*.18,R*.5,R*.2),M.trim,side*h*.7,0,-R*.66,steer).castShadow=false;
   if(look.wall){const mat=new THREE.MeshStandardMaterial({color:look.wall,roughness:.65});const wall=add(merge([-1,1].map(s=>torus(r*.84,r*(classic?.045:.012),s*h*1.01))),mat,0,0,0,spin);wall.castShadow=false;
     // stockcalls: 이름·noBatch를 붙이면 묶음에서 빠져 순정 차가 바퀴마다 그림 호출 +1 → 표시만 해 두고 참조를 돌려줌 (부품 타이어가 숨길 때 carParts3d가 묶음을 다시 만듦)

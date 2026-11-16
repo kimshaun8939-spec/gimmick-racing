@@ -12,7 +12,8 @@
 //     'first' = 처음 연결 (이 기기 진행은 주인 없음) → 산 물건·해금·업적 = 합집합, 강화·레벨 = 큰 쪽, 조각 = 큰 쪽(더하지 않음), 기록 = 빠른 쪽
 //               이 기기에 진행이 거의 없으면(새 브라우저) 서버 것을 그대로
 //     이 기기 진행이 다른 계정 것이면 합치지 않음: 그 계정에 먼저 올리고 → 이 기기를 비우고 → 새 계정 저장으로 바꿈
-//   올리기: 진행이 바뀌면(이벤트 + 30초마다 확인) 4초 모아서, 15초에 한 번까지. 페이지를 닫을 때 한 번 시도(keepalive)
+//   올리기: 이벤트를 4초 모아서, 15초에 한 번까지. 주행 중에는 표시만 기억하고 결과/홈/숨김 때 처리 (30초 확인도 주행 중 생략).
+//   페이지를 닫을 때 한 번 시도(keepalive). 각 기능의 로컬 진행 저장·로그인/로그아웃의 명시적 저장은 그대로.
 //   서버에 v6 함수가 없으면(SQL 전) 10분 동안 다시 안 부름, 인터넷이 없으면 다음 기회에. 오류는 화면·콘솔에 안 냄
 //   끄기: 주소 &cloud=0
 const SYNC_KEY = 'gimmick.saveSync'; // { id, version, hashes:{키:해시}, base:{지갑 기준}, at, missingAt }
@@ -395,7 +396,7 @@ export function mergeSaves(local, server, opts = {}) {
 let api = null; // online.js가 attach: { rpc, readId, enabled(), syncXp(), clearId() }
 let metaMod = null;
 let lock = Promise.resolve();
-let timer = 0, lastPut = 0, booted = false;
+let timer = 0, lastPut = 0, booted = false, deferred = false;
 const qflag = (k) => {
   try {
     return new URLSearchParams(location.search).get(k);
@@ -404,6 +405,14 @@ const qflag = (k) => {
   }
 };
 const off = () => qflag('cloud') === '0';
+// 주행 중에는 저장 전체 읽기·해시·문자열화를 미룸. 로컬 진행은 각 기능이 그대로 저장함.
+// 로딩/출발 대기 중에도 미루고, 결과 화면·홈·페이지 숨김 때 다시 확인함.
+function driving() {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || document.hidden) return false;
+  const phase = window.game?.race?.phase;
+  if (phase) return phase !== 'finished';
+  return !!(qflag('map') || qflag('join'));
+}
 function readSync() {
   try {
     const j = JSON.parse(sget(SYNC_KEY) || 'null');
@@ -576,13 +585,21 @@ export function pull(acct = account()) {
   return serialize(() => connectCore(acct).catch(fail));
 }
 function schedule(delay = DEBOUNCE) {
-  if (!account() || missingNow()) return;
+  deferred = true;
   clearTimeout(timer);
+  if (driving()) return;
+  if (!account() || missingNow()) return;
   const wait = Math.max(delay, lastPut + MIN_GAP - Date.now());
-  timer = setTimeout(() => pushNow(), wait);
+  timer = setTimeout(() => {
+    // 예약 뒤 다시 출발했을 수 있음 (결과 화면 Enter 등).
+    if (driving()) return;
+    deferred = false;
+    pushNow();
+  }, wait);
 }
 /** 바뀐 게 있는지 (해시 비교만, 서버 안 부름) */
 function changed() {
+  if (driving()) return (deferred = true);
   const s = readSync();
   return !isObj(s.hashes) || !sameHashes(hashes(collect()), s.hashes);
 }
@@ -813,15 +830,21 @@ export function attach(o) {
   window.addEventListener('online', kick);
   window.addEventListener('pagehide', flushOnExit);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && account() && changed()) pushNow();
+    if (document.hidden && account() && (deferred || changed())) pushNow();
   });
   setInterval(() => {
-    if (account() && !missingNow() && changed()) schedule(0);
+    // account/missingNow도 저장소 JSON을 읽으므로 주행 여부를 먼저 확인.
+    if (driving()) { deferred = true; return; }
+    if (account() && !missingNow() && (deferred || changed())) schedule(0);
   }, 30000);
   const start = () => {
     showToast();
     loadMeta();
-    setTimeout(() => (isHome() ? homePull() : account() && changed() && schedule()), 1200);
+    setTimeout(() => {
+      if (driving()) { deferred = true; return; }
+      if (isHome()) homePull();
+      else if (account() && changed()) schedule();
+    }, 1200);
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
