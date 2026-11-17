@@ -1,3 +1,4 @@
+import { volcanoVisuals } from './gfxVolcano.js';
 // 화산 지대 맵 모듈 (data/volcano.json 의 "module": "volcanoMap" → main.js가 이 파일을 불러 씀)
 //   buildTrack   → volcanoTrack.js   (도로·폭·낭떠러지·바위벽·용암 바다·점프·분화구)
 //   buildScenery → volcanoScenery.js (붉은 하늘·화산·연기·바위·출발 게이트·표지판)
@@ -7,5 +8,5 @@ import { buildVolcanoScenery } from './volcanoScenery.js';
 import { buildVolcanoProps } from './volcanoProps.js';
 
 export const buildTrack = (data, scene) => buildVolcanoTrack(data, scene);
-export const buildScenery = (track, scene) => buildVolcanoScenery(track, scene);
+export const buildScenery = (track, scene) => { const scenery = buildVolcanoScenery(track, scene); volcanoVisuals(track, scenery, scene); return scenery; };
 export const buildProps = (track, scene) => buildVolcanoProps(track, scene);

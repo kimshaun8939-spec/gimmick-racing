@@ -1,7 +1,9 @@
 ﻿// Map-owned visual presets; unknown maps never opt in implicitly.
 import { settings } from './settings.js';
-export const GFX_MAPS = new Set(['glacier', 'starter', 'sea', 'jungle', 'neon', 'mirage', 'foundry']);
+export const GFX_MAPS = new Set(['moon', 'volcano', 'glacier', 'starter', 'sea', 'jungle', 'neon', 'mirage', 'foundry']);
 export const MAP_GRADES = {
+ moon: {contrast:1.002,saturation:1,vignette:.015,bloom:.018,cool:[1,1,1],warm:[1,1,1]},
+ volcano: {contrast:1.003,saturation:1.004,vignette:.02,bloom:.035,cool:[1,1,1],warm:[1,1,1]},
  mirage: {contrast:1.003,saturation:1.006,vignette:.025,bloom:.025,cool:[1,1,1],warm:[1.002,1,1]},
  foundry: {contrast:1.004,saturation:1.006,vignette:.03,bloom:.07,cool:[1,1,1],warm:[1.003,1.001,1]},
  jungle: {contrast:1.003,saturation:1.006,vignette:.025,bloom:.025,cool:[1,1,1],warm:[1,1,1]},
