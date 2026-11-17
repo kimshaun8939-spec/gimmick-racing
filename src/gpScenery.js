@@ -15,6 +15,7 @@
 // 배치 위치(t)는 data/grandprix.json 의 "places" 에 있음 (코스를 바꾸면 거기만 고치면 됨)
 // 큰 물체는 충돌체(원, 높이 범위)가 있어 차가 통과하지 못합니다.
 import * as THREE from 'three';
+import { gpVisualTrack, gpVisualScenery } from './gfxGp.js';
 import { seededRandom } from './track.js';
 import * as A from './gpAssets.js';
 import { createSky, islandUnderside, floatingRock, waterfall, createFlora } from './gpSky.js';
@@ -1045,6 +1046,9 @@ export function buildGrandPrixScenery(track, scene) {
   });
 
   flora.build(group);
+  gpVisualTrack(track);
+  gpVisualScenery(group);
+  gpVisualScenery(sky.group);
   group.updateMatrixWorld(true);
 
   // ---------------------------------------------------------------- 우주 차원 (포털, 우주 풍경, 세계 전환)

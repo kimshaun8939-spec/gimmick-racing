@@ -1,3 +1,4 @@
+import { gpPlantGeometry } from './gfxGp.js';
 // 구름섬 그랑프리 · Sky Harbor — 하늘 / 자연 레이어
 // 하늘 돔, 해, 구름 바다(평면 2장 + 뭉게구름 무리), 높은 구름, 지평선의 먼 섬들, 새 떼,
 // 그리고 맵 세션이 쓰는 도우미: 섬 밑면(islandUnderside), 작은 떠 있는 바위섬(floatingRock),
@@ -791,8 +792,9 @@ export function createFlora() {
         if (!list.length) continue;
         const crystal = type === 'crystal';
         const mat = crystal ? cached('mat:crystal', () => toonMat({ vertexColors: true, glow: 0.85, key: 'gpCrystal' })) : vcMat();
-        const im = new THREE.InstancedMesh(floraGeo(type), mat, list.length);
+        const im = new THREE.InstancedMesh(gpPlantGeometry(type) || floraGeo(type), mat, list.length);
         im.name = 'flora:' + type;
+        if (gpPlantGeometry(type)) { im.material=mat.clone(); im.material.onBeforeCompile=mat.onBeforeCompile; im.material.customProgramCacheKey=mat.customProgramCacheKey; im.material.flatShading=false; }
         const col = new THREE.Color();
         list.forEach(([x, y, z, s, ry], i) => {
           im.setMatrixAt(i, _m4.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, ry), _s.set(s, s, s)));

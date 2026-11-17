@@ -1,3 +1,4 @@
+import { gpSpaceRock, gpPlanetMaterial, gpRockDetail } from './gfxGp.js';
 // 구름섬 그랑프리 · 우주 차원
 //
 //   코스 중간의 포털 A를 지나면 "우주 차원"으로 들어가고, 포털 B를 지나면 구름섬으로 돌아옵니다.
@@ -167,7 +168,7 @@ function sweep(track, list, profile, mat, { vScale = 8 } = {}) {
 /** 울퉁불퉁한 바위 모양 (소행성, 작은 행성) */
 function rockGeometry(seed, detail = 1, amt = 0.28, palette = ['#7d7486', '#5d566a', '#8f7f72', '#4b4558']) {
   const rnd = seededRandom(seed);
-  const geo = new THREE.IcosahedronGeometry(1, detail); // 원래 인덱스 없는 도형
+  const geo = new THREE.IcosahedronGeometry(1, gpRockDetail(detail)); // 원래 인덱스 없는 도형
   const p = geo.attributes.position;
   const ph = [rnd() * 9, rnd() * 9, rnd() * 9];
   const key = (x, y, z) => `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
@@ -190,7 +191,7 @@ function rockGeometry(seed, detail = 1, amt = 0.28, palette = ['#7d7486', '#5d56
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.computeVertexNormals();
-  return geo;
+  return gpSpaceRock(geo);
 }
 
 /** 행성 표면 텍스처: 줄무늬(가스 행성) 또는 얼룩(암석/얼음) */
@@ -842,6 +843,7 @@ export function buildSpace(track, scene, { cloudObjects = [], skyFog = null } = 
     g.position.copy(dir).multiplyScalar(1700 + r * 0.6);
     const banded = k % 2 === 0;
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 32), new THREE.MeshStandardMaterial({ map: planetTexture(color, 100 + k, banded), roughness: 1, metalness: 0, emissive: color, emissiveIntensity: 0.08, fog: false }));
+    gpPlanetMaterial(mesh.material);
     mesh.rotation.z = R(-0.4, 0.4);
     g.add(mesh);
     const atm = glowSprite(glowTex, color, r * 2.9, 0.35);
@@ -1110,6 +1112,7 @@ export function buildSpace(track, scene, { cloudObjects = [], skyFog = null } = 
     g.position.set(x, y, z);
     const geo = rockGeometry(31, 4, 0.08, ['#8d7aa8', '#6e5e8c', '#a091b8', '#5b4d78']);
     const ball = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }));
+    gpPlanetMaterial(ball.material);
     ball.scale.setScalar(r);
     ball.castShadow = true;
     ball.receiveShadow = true;
@@ -1171,6 +1174,7 @@ export function buildSpace(track, scene, { cloudObjects = [], skyFog = null } = 
       const im = new THREE.InstancedMesh(geo, mat, L.length);
       im.castShadow = true;
       im.receiveShadow = true;
+      gpPlanetMaterial(im.material);
       world.add(im);
       const set = (t) => {
         L.forEach((a, i) => {
