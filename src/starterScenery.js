@@ -1,3 +1,7 @@
+import { gfxSurface } from './gfxTextures.js';
+import { gfxEnabled } from './gfxConfig.js';
+import { buildVisualForest } from './gfxTrees.js';
+import { buildLandscapeRanges, landscapeMaterial } from './gfxTerrain.js';
 // 변신 연습장 풍경 (starterMap.js의 buildScenery) — 맑은 날의 놀이공원 같은 시험장 "TRANSFORM PARK"
 //   - 하늘: 파란 하늘 돔(해·해무리) + 뭉게구름(인스턴스 하나, 천천히 흘러감), 밝은 햇빛
 //   - 출발: 빨간불 5개 게이트(race.lights), 관중석 2개(바깥), 피트 건물(안쪽), 깃대·깃발 줄, 큰 "TRANSFORM PARK" 간판
@@ -923,6 +927,7 @@ export function buildStarterScenery(track, scene) {
   lap('before:나무·꽃');
   // ---------------------------------------------------------------- 나무·꽃 (인스턴스)
   const flora = createFlora();
+  const gfx5=gfxEnabled(), visualTrees=[];
   let nTree = 0, nLow = 0;
   const TREES = 520, LOW = 240; // 삼각형: 나무 한 그루 약 100~420, 꽃·덤불 약 320 → 다른 맵보다 가볍게
   for (let k = 0; k < 9000 && (nTree < TREES || nLow < LOW); k++) {
@@ -940,7 +945,9 @@ export function buildStarterScenery(track, scene) {
       // 가까운 나무는 둥근 나무·벚꽃, 먼 나무는 가벼운 전나무 (삼각형 약 100)
       const type = rc > 80 ? (rand() < 0.8 ? 'pine' : 'round') : rand() < 0.5 ? 'round' : rand() < 0.45 ? 'pine' : 'blossom';
       const s = R(0.8, 1.35);
-      flora.add(type, x, y - 0.2, z, s, R(0, TAU));
+      const yaw=R(0,TAU);
+      if(gfx5) visualTrees.push({type,x,y:y-.2,z,s,yaw,variant:nTree%4});
+      else flora.add(type,x,y-.2,z,s,yaw);
       if (rc < 45) circle(x, z, 0.65 * s, y, y + 9 * s);
       nTree++;
     } else if (nLow < LOW && rc > 3.5 && rc < 70) {
@@ -951,6 +958,12 @@ export function buildStarterScenery(track, scene) {
     }
   }
   flora.build(group);
+  if(gfx5){
+   group.traverse(o=>{if(o.name==='flora:rock'){const geo=new THREE.SphereGeometry(1,10,6);geo.scale(1.5,.85,1.15);geo.translate(0,.65,0);o.geometry=geo;o.material=gfxSurface(new THREE.MeshLambertMaterial({color:'#8e8a75'}),'rock',{snow:false});o.castShadow=false;}});
+   buildVisualForest(group,visualTrees,{near:115,far:850,snow:false});
+   buildLandscapeRanges(group,{center:{x:cx,z:cz},radius:{x:(tb.max.x-tb.min.x)*.61,z:(tb.max.y-tb.min.y)*.61},noise,material:landscapeMaterial({grass:'#6c8a64',rock:'#89918b',waterLevel:-30}),height:110});
+   // Preserve the original sky palette.
+  }
   stats.trees = nTree;
   stats.low = nLow;
 

@@ -262,11 +262,7 @@ export function buildGlacierScenery(track, scene) {
 
   // ---------------------------------------------------------------- 하늘 (차를 따라다님)
   const skyMat = glacierSkyMaterial({ fogColor: scene.fog.color, sunDir: SUN_DIR, moonDir: MOON_DIR });
-  if (gfx2) {
-    skyMat.uniforms.cTop.value.set('#070f2b');
-    skyMat.uniforms.cMid.value.set('#244674');
-    skyMat.uniforms.fogSRGB.value.copy(scene.fog.color); // 후처리 타깃에서는 선형 색으로 섞는다.
-  }
+  // Keep the screen-path sky palette and its sRGB fog blend.
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2750, 48, 24), skyMat);
   sky.name = 'glacierSky';
   sky.frustumCulled = false;

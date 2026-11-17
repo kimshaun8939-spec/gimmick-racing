@@ -1,3 +1,7 @@
+import {buildLandscapeRanges,landscapeMaterial,smoothVisualGeometry} from './gfxTerrain.js';
+import {gfxEnabled} from './gfxConfig.js';
+import {buildVisualForest,coastalPalmGeometry} from './gfxTrees.js';
+import {gfxSurface} from './gfxTextures.js';
 // 노을 해안 서킷 풍경 (seaMap.js가 부름)
 //   노을 하늘·해·구름, 조명(따뜻한 노을빛, 낮은 해 → 긴 그림자), 출발 게이트(F1 빨간불), 관중석·피트,
 //   항구(방파제 산책로·부두·요트·크레인·화물선), 산토리니풍 하얀 마을, 곶 위 소나무·풍차·빌라, 사장교 주탑·케이블,
@@ -382,7 +386,8 @@ export function buildSeaScenery(track, scene) {
       if (groundY(x, z) !== null && groundY(x, z) > -2) continue;
       list.push({ x, y: -8, z, sx: R(120, 320), sy: R(40, 120), sz: R(100, 260), ry: R(0, 3) });
     }
-    instanced(rockGeometry(3), mat, list, { shadow: false, name: 'farIslands' });
+    if(gfxEnabled()){mat.flatShading=false;}
+    instanced(gfxEnabled()?new THREE.SphereGeometry(1,20,12):rockGeometry(3), mat, list, { shadow: false, name: 'farIslands' });
   }
 
   // ---------------------------------------------------------------- 그랑프리 글자 바꾸기
@@ -1094,7 +1099,10 @@ export function buildSeaScenery(track, scene) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    const caveMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+    const caveVisual=gfxEnabled()?smoothVisualGeometry(geo):geo;
+    if(gfxEnabled())caveVisual.setAttribute('color',geo.attributes.color.clone());
+    const caveMat=new THREE.MeshLambertMaterial({vertexColors:true,flatShading:!gfxEnabled(),side:THREE.DoubleSide});
+    const caveMesh = new THREE.Mesh(caveVisual,gfxEnabled()?gfxSurface(caveMat,'rock',{snow:false}):caveMat);
     caveMesh.castShadow = true;
     caveMesh.receiveShadow = true;
     group.add(caveMesh);
@@ -1501,11 +1509,12 @@ export function buildSeaScenery(track, scene) {
   buildSeaLife(track, group, animators, rand);
 
   // ---------------------------------------------------------------- 인스턴스 만들기
-  instanced(palmGeometry(), vcMat, palms, { name: 'palms' });
-  instanced(pineGeometry(), vcMat, pines, { name: 'pines' });
-  instanced(cypressGeometry(), vcMat, cypress, { name: 'trees' });
+  instanced(gfxEnabled()?coastalPalmGeometry():palmGeometry(), gfxEnabled()?new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}):vcMat, palms, { name: 'palms' });
+  const gfx6=gfxEnabled();
+  if(gfx6)buildVisualForest(group,[...pines.map(it=>({...it,type:'pine',width:8,height:8,yaw:it.ry,variant:1})),...cypress.map(it=>({...it,type:'leaf',width:5,height:8,yaw:it.ry,variant:2}))],{near:300,far:1100,snow:false,shadows:true});
+  else {instanced(pineGeometry(),vcMat,pines,{name:'pines'});instanced(cypressGeometry(),vcMat,cypress,{name:'trees'});}
   instanced(bushGeometry(), vcMat, bushes, { shadow: false, name: 'bushes' });
-  instanced(rockGeometry(11), new THREE.MeshLambertMaterial({ flatShading: true }), rocks, { name: 'rocks' });
+  instanced(gfx6?coastalRockGeometry():rockGeometry(11), (gfx6?gfxSurface(new THREE.MeshLambertMaterial({}),'rock',{snow:false}):new THREE.MeshLambertMaterial({ flatShading: true })), rocks, { name: 'rocks' });
   instanced(houseGeo, new THREE.MeshLambertMaterial({ map: winTex }), houses, { name: 'houses' });
   instanced(new THREE.ConeGeometry(0.75, 1, 4).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ flatShading: true }), roofs, { name: 'roofs' });
   instanced(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: '#f4f1ea' }), flatRoofs, { name: 'flatRoofs' });
@@ -1548,4 +1557,6 @@ export function buildSeaScenery(track, scene) {
       for (const a of animators) a(time, dt, car);
     },
   };
-}
+}// Weathered coastal stone: smooth, asymmetric ridges instead of round balls.
+function coastalRockGeometry(){const g=new THREE.SphereGeometry(1,10,6),p=g.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),r=1+.12*Math.sin(x*4.1+z*2.7)+.075*Math.cos(z*6.2-y*3.);p.setXYZ(i,x*r,y*(.92+.08*Math.cos(x*5.)),z*r);}g.computeVertexNormals();return g;}
+

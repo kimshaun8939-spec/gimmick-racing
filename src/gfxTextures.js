@@ -1,17 +1,20 @@
-﻿// 빙하 시험판 전용: 이미지와 난수 소비 없이 실제 미터 단위로 표면을 새긴다.
-export const gfx2Enabled = () => {
- const params = new URLSearchParams(location.search);
- return params.get('map') === 'glacier' && params.get('gfx') === '2';
-};
+import * as THREE from 'three';
+import { gfxEnabled } from './gfxConfig.js';
+﻿// 공용 표면: 실제 미터 단위의 공유 잡음 텍스처. glacierSurface/gfx2Enabled는 기존 호출 호환 이름.
+export const gfx2Enabled = gfxEnabled;
 
+let noiseMap;
+function surfaceNoise(){
+ if(noiseMap)return noiseMap;
+ const n=128,d=new Uint8Array(n*n*4);for(let y=0;y<n;y++)for(let x=0;x<n;x++){let h=Math.imul(x,374761393)^Math.imul(y,668265263);h=Math.imul(h^(h>>>13),1274126177);let v=((h^(h>>>16))>>>0)>>>24;let i=(y*n+x)*4;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+ noiseMap=new THREE.DataTexture(d,n,n);noiseMap.wrapS=noiseMap.wrapT=THREE.RepeatWrapping;noiseMap.magFilter=THREE.LinearFilter;noiseMap.minFilter=THREE.LinearMipmapLinearFilter;noiseMap.generateMipmaps=true;noiseMap.needsUpdate=true;return noiseMap;
+}
 const common = /* glsl */ `
 varying vec3 vGfxWorld;
 varying vec3 vGfxNormal;
 float gfxHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-float gfxNoise(vec2 p) {
- vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
- return mix(mix(gfxHash(i),gfxHash(i+vec2(1,0)),f.x),mix(gfxHash(i+vec2(0,1)),gfxHash(i+vec2(1,1)),f.x),f.y);
-}
+uniform sampler2D gfxNoiseMap;uniform vec3 gfxTint;uniform float gfxSnow;
+float gfxNoise(vec2 p) { vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);return texture2D(gfxNoiseMap,(i+f+.5)/128.).r; }
 vec3 gfxBump(vec3 n, vec3 surface, float h) {
  vec3 sx=dFdx(surface), sy=dFdy(surface);
  vec3 r1=cross(sy,n), r2=cross(n,sx);
@@ -22,6 +25,10 @@ vec3 gfxBump(vec3 n, vec3 surface, float h) {
 }
 `;
 const finishes = {
+ coast: 'float dry=smoothstep(.2,2.7,vGfxWorld.y); float slope=1.-smoothstep(.6,.85,abs(vGfxNormal.y)); float grain=gfxNoise(p*mix(22.,3.,dry)); float broad=gfxNoise(p*.08); diffuseColor.rgb*=1.+(grain-.5)*mix(.045,.09,dry)*nearFade+(broad-.5)*.06*dry; diffuseColor.rgb*=1.-slope*.025; diffuseColor.rgb*=mix(vec3(.92,.94,.96),vec3(1.),smoothstep(.05,.6,vGfxWorld.y));',
+ grass: 'float g=gfxNoise(p*3.); float patchNoise=gfxNoise(p*.025); diffuseColor.rgb*=.88+patchNoise*.18+(g-.5)*.10*nearFade;',
+ dirt: 'diffuseColor.rgb*=.82+gfxNoise(p*.13)*.24+(gfxNoise(p*9.)-.5)*.14*nearFade;',
+ sand: 'diffuseColor.rgb*=.92+gfxNoise(p*.11)*.10+(gfxNoise(p*22.)-.5)*.06*nearFade;',
  asphalt: /* glsl */ `
  // Keep the two edge lines, but replace metre-sized frost flecks with fine aggregate.
  float edgePaint=step(0.025,vGfxUV.x)*step(vGfxUV.x,0.045)+step(0.955,vGfxUV.x)*step(vGfxUV.x,0.975);
@@ -48,7 +55,7 @@ const finishes = {
  float grain=gfxNoise(p*8.0+vGfxWorld.y);
  float snowCap=smoothstep(0.48,0.86,normalize(vGfxNormal).y);
  diffuseColor.rgb*=0.86+gfxNoise(p*0.17)*0.22+strata*0.065*midFade+(grain-0.5)*0.12*nearFade;
- diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.73,0.82,0.91),snowCap*0.13);
+ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.73,0.82,0.91),snowCap*0.13*gfxSnow);
 `,
  ice: /* glsl */ `
  vec2 cell=floor(p*2.4); vec2 local=fract(p*2.4)-0.5;
@@ -60,13 +67,16 @@ const finishes = {
 };
 
 /** Works with Standard and Lambert, including the existing fog material callback. */
-export function glacierSurface(material, kind = 'snow') {
+export function gfxSurface(material, kind = 'snow', options = {}) {
  if (!gfx2Enabled() || material.userData.gfxSurface) return material;
  const oldCompile=material.onBeforeCompile;
  const oldKey=material.customProgramCacheKey();
  material.userData.gfxSurface=kind;
  material.onBeforeCompile=function(shader, renderer) {
   oldCompile.call(this,shader,renderer);
+  shader.uniforms.gfxNoiseMap={value:surfaceNoise()};
+  shader.uniforms.gfxTint={value:new THREE.Color(options.tint??0xffffff)};
+  shader.uniforms.gfxSnow={value:options.snow===false?0:1};
   shader.vertexShader='varying vec3 vGfxWorld;\nvarying vec3 vGfxNormal;\n'+(kind==='asphalt'?'varying vec2 vGfxUV;\n':'')+shader.vertexShader;
   if(kind==='asphalt') shader.vertexShader=shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nvGfxUV=uv;');
   shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>', /* glsl */ `
@@ -84,7 +94,7 @@ export function glacierSurface(material, kind = 'snow') {
    float gfxDist=length(cameraPosition-vGfxWorld);
    float nearFade=1.0-smoothstep(9.0,48.0,gfxDist);
    float midFade=1.0-smoothstep(45.0,180.0,gfxDist);
-  `+(finishes[kind] || finishes.snow));
+  `+(finishes[kind] || finishes.snow)+'\ndiffuseColor.rgb*=gfxTint;');
   if(material.isMeshStandardMaterial) {
    const amplitude=kind==='rock'?'0.055':kind==='ice'?'0.012':kind==='asphalt'?'0.003':'0.007';
    shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',/* glsl */ `
@@ -110,3 +120,5 @@ export function glacierSurface(material, kind = 'snow') {
  return material;
 }
 
+
+export const glacierSurface = gfxSurface;

@@ -1,3 +1,4 @@
+import { gfxEnabled } from './gfxConfig.js';
 // 게임 진입점: 씬 구성, 게임 루프, 레이스 진행(카운트다운 → 주행 → 완주)
 //   주소에 ?map= 이 없으면 홈 화면(home.js)을 띄우고 게임은 시작하지 않음. ?map=<맵>&car=<차> 이면 바로 게임
 //   ESC = 일시정지 메뉴(pauseMenu.js), 설정(settings.js)은 바꾸는 즉시 아래 applySettings로 적용
@@ -174,7 +175,7 @@ const mapTitle = mapMeta().title || trackData.name || mapName;
 document.title = `${mapTitle} · 트랜스폼 레이서`;
 
 // --- 렌더러와 씬 ---
-const gfx2 = mapName === 'glacier' && params.get('gfx') === '2';
+const gfx2 = gfxEnabled(mapName);
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !gfx2 && settings.get('quality') !== 'low' }); // 안티에일리어싱은 다음 시작부터 적용
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -197,8 +198,8 @@ scene.add(sun, sun.target);
 const SUN_OFFSET = new THREE.Vector3(60, 110, 40);
 
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 3000);
-const postFx = gfx2 ? (await import('./postFx.js')).createPostFx(renderer, scene, camera, () => settings.get('quality')) : null;
-const drawScene = () => postFx ? postFx.render() : renderer.render(scene, camera);
+const postFx = gfx2 ? (await import('./postFx.js')).createPostFx(renderer, scene, camera, () => settings.get('quality'), mapName) : null;
+const drawScene = () => postFx && gfxEnabled(mapName) && !(settings.get('quality') === 'auto' && autoRes.postOff) ? postFx.render() : renderer.render(scene, camera);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -952,7 +953,7 @@ function setModuleMute(m) {
  *  2026-11-14 (p0): 예전엔 로딩·출발 때 잠깐 느린 1초만으로 해상도를 내리고, 다시 올리려면 거의 완벽한 60이 8초 이어져야 해서
  *  보통 PC도 0.6배(흐림)에 갇혔음. 지금: 느린 프레임 몇 개는 빼고 재고(trimmed), 2초 이어서 느릴 때만,
  *  그리고 CPU(물리·봇·그림 호출)가 막는 경우엔 해상도를 안 내림(내려도 안 빨라짐) → 그림 호출 단계(tier)만. 저장 형식 v2(예전 저장값은 무시). */
-const autoRes = { scale: 1, min: 0.55, tier: 0, workMs: 0, startAt: 0, acc: 0, frames: 0, slowT: 0, goodT: 0, cpuT: 0, resBlock: 0, probe: null, smallShadow: false, log: [], win: [], work: [], lastCost: 0, last: null };
+const autoRes = { postOff: false, scale: 1, min: 0.55, tier: 0, workMs: 0, startAt: 0, acc: 0, frames: 0, slowT: 0, goodT: 0, cpuT: 0, resBlock: 0, probe: null, smallShadow: false, log: [], win: [], work: [], lastCost: 0, last: null };
 try {
   const saved = JSON.parse(localStorage.getItem('gimmick.autoRes') || 'null');
   if (saved && saved.v === 2 && Number.isFinite(saved.scale) && saved.scale > 0) {
@@ -1026,7 +1027,9 @@ function autoResTick(dt) {
     autoRes.goodT = 0;
     autoRes.slowT++;
     if (autoRes.slowT >= 2) {
-      if (!cpuBound && !autoRes.resBlock && autoRes.scale > autoRes.min + 0.01) {
+      if (postFx && !autoRes.postOff) {
+        autoRes.postOff = true; autoRes.slowT = 0; changed = true;
+      } else if (!cpuBound && !autoRes.resBlock && autoRes.scale > autoRes.min + 0.01) {
         // 그래픽카드가 못 따라옴 → 해상도를 내림
         next = Math.max(autoRes.min, autoRes.scale * Math.max(0.75, Math.min(0.95, Math.sqrt(fps / (target * 0.9)))));
         autoRes.probe = { fps, scale: autoRes.scale, n: 0 };

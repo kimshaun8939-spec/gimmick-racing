@@ -11,7 +11,7 @@ function rockTexture(){
  alpineTexture.magFilter=THREE.LinearFilter;alpineTexture.minFilter=THREE.LinearMipmapLinearFilter;alpineTexture.generateMipmaps=true;alpineTexture.needsUpdate=true;
  return alpineTexture;
 }
-export function alpineMaterial(layer=0) {
+export function alpineMaterial(layer=0, options={}) {
  const m=new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide});
  m.onBeforeCompile=s=>{
   s.uniforms.alpineLayer={value:layer};
@@ -74,7 +74,7 @@ export function smoothVisualGeometry(source,heightAt){
  }
  g.deleteAttribute('color');return g;
 }
-export function buildAlpineRanges(group,M,noise){
+export function buildAlpineRanges(group,M,noise,options={}){
  // Radial bands about 16 / 34 / 76 m; shared vertices give smooth shading.
  for(let layer=0;layer<3;layer++){
   const n=[400,240,160][layer],jMax=[26,16,10][layer];
@@ -97,11 +97,28 @@ export function buildAlpineRanges(group,M,noise){
     const ridge=1-Math.abs(noise(x/125,z/125,2));
     const ravine=1-Math.abs(noise(s/130+d/310,d/460,2));
     h+=amp*((ridge-.65)*18+(ravine-.65)*46);
-    pos[pi++]=x;pos[pi++]=h;pos[pi++]=z;
+    pos[pi++]=x;pos[pi++]=base+(h-base)*(options.heightScale ?? 1);pos[pi++]=z;
    }
   }
   for(let k=0;k<n;k++)for(let j=0;j<jMax;j++){const a=k*(jMax+1)+j,b=a+jMax+1;idx[ii++]=a;idx[ii++]=b;idx[ii++]=b+1;idx[ii++]=a;idx[ii++]=b+1;idx[ii++]=a+1;}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(new THREE.BufferAttribute(idx,1));g.computeVertexNormals();
-  const mesh=new THREE.Mesh(g,alpineMaterial(layer));mesh.name='gfx3AlpineRange'+layer;mesh.userData.noBatch=true;group.add(mesh);
+  const mesh=new THREE.Mesh(g,options.material || alpineMaterial(layer,options));mesh.name='gfx3AlpineRange'+layer;mesh.userData.noBatch=true;group.add(mesh);
  }
+}
+export function landscapeMaterial(options={}) {
+ const m=new THREE.MeshLambertMaterial({color:options.preserveBelow?0xffffff:(options.grass||'#65934b'),vertexColors:!!options.preserveBelow});
+ m.onBeforeCompile=s=>{s.uniforms.landNoise={value:rockTexture()};s.uniforms.landGrass={value:new THREE.Color(options.grass||'#65934b')};s.uniforms.landRock={value:new THREE.Color(options.rock||'#8a8474')};s.uniforms.landWater={value:options.waterLevel??0};
+ s.vertexShader='varying vec3 landP; varying vec3 landN;\n'+s.vertexShader;s.vertexShader=s.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nlandP=position;landN=normal;');
+ s.fragmentShader='varying vec3 landP;varying vec3 landN;uniform sampler2D landNoise;uniform vec3 landGrass,landRock;uniform float landWater;\n'+s.fragmentShader;
+ s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+ vec3 originalLand=diffuseColor.rgb; float broad=texture2D(landNoise,landP.xz*.002).r;float detail=texture2D(landNoise,landP.xz*.9).r-.5;
+ vec3 c=landGrass*(.80+broad*.35);c=mix(c,c*vec3(1.12,1.025,.80),smoothstep(.4,.7,broad)*.35);c=mix(c,landRock*(.78+broad*.35),1.-smoothstep(.63,.88,abs(normalize(landN).y)));
+ c=mix(c,vec3(.67,.56,.35),1.-smoothstep(landWater+.4,landWater+2.7,landP.y));
+ c*=1.+detail*.11*(1.-smoothstep(35.,150.,length(cameraPosition-landP)));diffuseColor.rgb=c;`);if(options.preserveBelow)s.fragmentShader=s.fragmentShader.replace('diffuseColor.rgb=c;','diffuseColor.rgb=mix(originalLand,c,smoothstep(landWater,landWater+.5,landP.y));');};
+ m.customProgramCacheKey=()=> 'gfx5Landscape'+(options.preserveBelow?'Shore':'');const clone=m.clone;m.clone=function(){const o=clone.call(this);o.onBeforeCompile=this.onBeforeCompile;o.customProgramCacheKey=this.customProgramCacheKey;o.clone=this.clone;return o;};return m;
+}
+export function buildLandscapeRanges(group,{center,radius,noise,material,height=100,angleStart=0,angleSpan=Math.PI*2}) {
+ for(let layer=0;layer<3;layer++){const n=160,rows=12,p=[],idx=[];
+ for(let i=0;i<=n;i++){const a=angleStart+i/n*angleSpan,ridge=.5+.5*noise(Math.cos(a)*3+layer*7,Math.sin(a)*3,2);for(let j=0;j<=rows;j++){const u=j/rows,d=layer*240+u*380;p.push(center.x+Math.cos(a)*(radius.x+d),-8+Math.sin(u*Math.PI)*height*(.55+ridge*.75)*(1+layer*.38),center.z+Math.sin(a)*(radius.z+d));}}
+ for(let i=0;i<n;i++)for(let j=0;j<rows;j++){const a=i*(rows+1)+j,b=a+rows+1;idx.push(a,b,a+1,b,b+1,a+1);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(idx);g.computeVertexNormals();const mesh=new THREE.Mesh(g,material);mesh.name='gfx5LandscapeRange'+layer;mesh.userData.noBatch=true;group.add(mesh);}
 }

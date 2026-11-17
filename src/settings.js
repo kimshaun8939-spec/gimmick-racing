@@ -17,7 +17,7 @@ export const SETTING_DEFS = [
   { group: '소리', key: 'fxVol', label: '효과음', desc: '변신·바람·연석·메뉴 소리', type: 'slider', def: 1 },
   { group: '소리', key: 'muted', label: '소리 끄기', desc: () => `게임 중 ${keybinds.main('sound')} 키와 같아요`, type: 'toggle', def: false },
 
-  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 해상도·그림자를 차례로 줄여요. 낮음 = 낮은 해상도, 햇빛 그림자 끔. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
+  { group: '화면·그래픽', key: 'quality', label: '그래픽 품질', desc: '자동 = 끊기면 새 그래픽의 후처리부터 줄이고 해상도·그림자를 조절해요. 낮음 = 기존 풍경, 낮은 해상도, 햇빛 그림자 끔. 풍경 변경은 다음 시작부터 적용돼요. 차 모양·코스·운전 도움은 같아요. 그래도 끊기면 봇 수를 3대로 줄여 보세요', type: 'choice',
     options: [['auto', '자동'], ['low', '낮음'], ['medium', '보통'], ['high', '높음']], def: 'auto' },
   { group: '화면·그래픽', key: 'fpsCap', label: '프레임 제한', desc: '낮추면 발열과 배터리 소모가 줄어요', type: 'choice',
     options: [[30, '30'], [60, '60'], [0, '제한 없음']], def: 60 }, // 2026-11-12 기본 0 → 60 (사용자 요청: 발열)

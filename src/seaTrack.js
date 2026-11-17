@@ -1,3 +1,6 @@
+import {gfxEnabled} from './gfxConfig.js';
+import {smoothVisualGeometry} from './gfxTerrain.js';
+import {gfxSurface} from './gfxTextures.js';
 // 노을 해안 서킷 (data/sea.json, "module": "seaMap") — 도로·지형·바다
 //
 // 구름섬 그랑프리(gpTrack.js)처럼 도로에 높이가 있습니다 (points = [x, y, z]). 다른 점:
@@ -676,7 +679,11 @@ export function buildSeaTrack(data, scene) {
   const cSand = new THREE.Color('#e8d3a2'), cWetSand = new THREE.Color('#bfa77a'), cGrassA = new THREE.Color('#79b84e'), cGrassB = new THREE.Color('#a3c95b');
   const cGrassC = new THREE.Color('#5f9c45'), cRock = new THREE.Color('#a08670'), cRock2 = new THREE.Color('#7d6858'), cShoulder = new THREE.Color('#8a9a62');
   const cDry = new THREE.Color('#a8aa5e'), cSeaFloor = new THREE.Color('#c9b98a'), cDeepFloor = new THREE.Color('#5d7f7a'), cTmp = new THREE.Color();
+  const gfx6=gfxEnabled();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const visualTerrainMat=gfx6?gfxSurface(new THREE.MeshLambertMaterial({vertexColors:true}),'coast',{snow:false}):null;
+  const visualHeight=(x,z)=>groundY(x,z)??natural(x,z);
+  function visualTerrain(geo){const g=smoothVisualGeometry(geo,visualHeight),p=g.attributes.position,n=g.attributes.normal,c=geo.attributes.color.clone();for(let i=0;i<p.count;i++){const col=colorAt(p.getX(i),p.getY(i),p.getZ(i),n.getY(i));c.setXYZ(i,col.r,col.g,col.b);}g.setAttribute('color',c);return new THREE.Mesh(g,visualTerrainMat);}
   const nrm = new THREE.Vector3();
   function colorAt(x, y, z, ny) {
     const n1 = noise(x / 23, z / 23, 2);
@@ -732,7 +739,7 @@ export function buildSeaTrack(data, scene) {
         const m = new THREE.Mesh(geo, terrainMat);
         m.receiveShadow = true;
         m.userData.terrain = true;
-        group.add(m);
+        if(gfx6){m.visible=false;m.name='gfx3CollisionTerrain';const v=visualTerrain(geo);v.receiveShadow=true;group.add(v);} group.add(m);
       }
   }
   // 먼 땅 (격자 밖, 40 m 칸, 도로 영향 없음): 지평선까지 이어진 땅·바다 밑
@@ -762,7 +769,7 @@ export function buildSeaTrack(data, scene) {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
       geo.computeVertexNormals();
-      group.add(new THREE.Mesh(geo, terrainMat));
+      group.add(gfx6?visualTerrain(geo):new THREE.Mesh(geo, terrainMat));
     }
   }
 

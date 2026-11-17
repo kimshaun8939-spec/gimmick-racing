@@ -1,3 +1,6 @@
+import { gfxEnabled } from './gfxConfig.js';
+import { smoothVisualGeometry, landscapeMaterial } from './gfxTerrain.js';
+import { gfxSurface } from './gfxTextures.js';
 // 변신 연습장 코스 (data/starter.json, "module": "starterMap") — 처음 온 사람의 첫 레이스, 2바퀴 · 한 바퀴 약 40초
 //
 // 빙하 하이웨이(glacierTrack.js)를 바탕으로, 한 바퀴에 이 게임의 변신을 다 맛보게 세 가지를 더함
@@ -843,6 +846,9 @@ export function buildStarterTrack(data, scene) {
   const cA = new THREE.Color('#7cc45a'), cB = new THREE.Color('#5fae47'), cY = new THREE.Color('#b5cf55');
   const cRock = new THREE.Color('#8a7f72'), cRock2 = new THREE.Color('#a39684'), cShoulder = new THREE.Color('#93cc66');
   const cSand = new THREE.Color('#ead9a6'), cSandW = new THREE.Color('#b9d9c6'), cDeep = new THREE.Color('#7fc2c4'), cTmp = new THREE.Color();
+  const gfx5 = gfxEnabled();
+  const terrainVisualMat = gfx5 ? landscapeMaterial({waterLevel:WL,preserveBelow:true}) : null;
+  if(gfx5) gfxSurface(roadMat,'dirt');
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const terrainColor = (x, y, z, ny, nd) => {
     const n1 = noise(x / 80, z / 80, 3), n2 = noise(x / 12, z / 12, 2);
@@ -897,6 +903,7 @@ export function buildStarterTrack(data, scene) {
       m.receiveShadow = true;
       m.userData.starterTerrain = true; // 이름을 안 붙여야 staticBatch가 칸별로 합침
       addGround(m, 'ground');
+      if(gfx5){m.visible=false;m.name='gfx3CollisionTerrain';const vg=smoothVisualGeometry(geo,heightAt);vg.setAttribute('color',geo.attributes.color.clone());for(let k=0;k<vg.attributes.position.count;k++)if(vg.attributes.position.getY(k)<=WL){vg.attributes.normal.setXYZ(k,geo.attributes.normal.getX(k),geo.attributes.normal.getY(k),geo.attributes.normal.getZ(k));}const visual=new THREE.Mesh(vg,terrainVisualMat);visual.receiveShadow=true;visual.userData.starterTerrain=true;group.add(visual);}
     }
 
   // ---------------------------------------------------------------- 석호 물 면 (surface 'water', 지형이 물보다 낮은 칸만)
