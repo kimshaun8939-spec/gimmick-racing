@@ -1578,7 +1578,7 @@ export async function runHome() {
       if (last && last.finished && champMod.champStandings) {
         const tbl = champMod.champStandings(last);
         const pos = tbl.findIndex((d) => d.isPlayer) + 1;
-        el.innerHTML = pos ? `<div class="last">지난 시즌: <b>${pos === 1 ? '🏆 챔피언!' : `${pos}위`}</b> · ${tbl[pos - 1].points}점</div>` : '';
+        el.innerHTML = ''; // '지난 시즌' 줄은 없앰 (사용자 요청 2026-11-17: 봇 레이스 화면에 보여서 헷갈림)
       } else el.innerHTML = '';
       return;
     }
@@ -2110,7 +2110,7 @@ export async function runHome() {
       if (!f) { f = document.createElement('nav'); f.className = 'hx-flow'; f.setAttribute('aria-label', '레이스 준비 단계'); views[v].prepend(f); }
       f.hidden = v === 'car';
       f.innerHTML = [...(withMode ? [['mode', '방식']] : []), [lastStep, raceMode === 'champ' ? '시즌 맵 구성' : '맵']]
-        .map(([id, t], i) => '<button class="' + (i + 1 === n ? 'on' : i + 1 < n ? 'done' : '') + '" data-go="' + id + '" ' + (i + 1 > n ? 'disabled tabindex="-1"' : 'data-nav') + (i + 1 === n ? ' aria-current="step"' : '') + '><b>' + (i + 1 < n ? '✓' : i + 1) + '</b>' + t + '</button>').join('<i>›</i>') + '<i>›</i><span class="end">🏁 출발</span>';
+        .map(([id, t], i) => '<button class="' + (i + 1 === n ? 'on' : i + 1 < n ? 'done' : '') + '" data-go="' + id + '" ' + (i + 1 > n ? 'disabled tabindex="-1"' : 'tabindex="-1"') + (i + 1 === n ? ' aria-current="step"' : '') + '><b>' + (i + 1 < n ? '✓' : i + 1) + '</b>' + t + '</button>').join('<i>›</i>') + '<i>›</i><span class="end">🏁 출발</span>';
     }
   }
   refreshFlow();

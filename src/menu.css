@@ -3455,3 +3455,12 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 #home#home .h-maps .head h2{font-family:'Pretendard','Malgun Gothic',sans-serif;font-style:normal;font-weight:900}
 #home#home .h-maps .bar>.f3-ride>img{object-fit:contain;transform:scale(1.6)}
 #home#home .h-maps .bar>.f3-ride>img{transform:none;flex-shrink:0}
+
+/* 시즌 결과: 점수 합계 칸 (2026-11-17) — 순위표가 넓게 보이게 줄 전체 */
+#results .res-dashboard .res-grid > .res-season { grid-column:1 / -1; }
+#results .res-dashboard .res-season .champ { margin:4px 0 0; }
+#results .res-dashboard .res-season .cst { width:100%; }
+#results .res-dashboard .res-season .cst td { padding:5px 8px; }
+#results .res-dashboard .res-season .cst tr.me td { color:var(--gm-accent, #ffcf3f); font-weight:700; }
+#results .res-dashboard .res-season .cst td:nth-child(n+3) { text-align:right; white-space:nowrap; }
+#results .res-dashboard .res-season .champ > .ct { display:none; }

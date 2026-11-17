@@ -608,7 +608,9 @@ export function createHud(track) {
           ? info.standings.slice(0, 3)
           : null;
       const champMe = ch?.table.find(r => r.isPlayer);
-      const champBlock = ch ? '<details class="res-detail res-champ"><summary>🏆 시즌 ' + (champMe?.pos || '—') + '위 · ' + (champMe?.points || 0) + '점' + (ch.final ? ' · 최종' : ' · ' + ch.no + '/' + ch.total + '경기') + '</summary>' + champHtml(ch) + '</details>' : '';
+      // 시즌 점수 합계는 접지 않고 따로 보이는 칸으로 (사용자 요청 2026-11-17: 그 라운드까지 모두의 점수 합)
+      const champBlock = '';
+      const seasonPanel = ch ? '<section class="res-panel res-season"><h3>🏆 시즌 순위<small>' + (ch.final ? '최종' : ch.no + '/' + ch.total + '경기 뒤') + ' · 나 ' + (champMe?.pos || '—') + '위 ' + (champMe?.points || 0) + '점</small></h3>' + champHtml(ch) + '</section>' : '';
       // 보상 띠 (rewards1): 완주 시간 아래 XP·코인·다음 보상, 레벨이 오르면 스크롤 맨 위에 레벨 업 카드. 못 만들면 예전 칸 그대로
       let rw = null;
       try { rw = info.meta ? prepareRewards(info.meta, { carId: route.get('car') || 'f1', room: route.has('room') }) : null; } catch (err) { console.warn('보상 띠', err); }
@@ -623,6 +625,7 @@ export function createHud(track) {
         <div class="res-scroll">
         ${rw ? levelUpHtml(rw) : ''}
         <div class="res-grid">
+          ${seasonPanel}
           <section class="res-panel res-records"><h3>주행 기록 <small>${lapTimes.length} LAP</small></h3>${lapHtml}${firstNext}</section>
           ${info.meta ? '<section class="res-panel res-rewards"><h3>' + (rw ? '업적 · 목표' : '경험치 · 보상') + '</h3>' + (rw ? rewardDetailsHtml(info.meta) : metaResultsHtml(info.meta)) + '</section>' : ''}
           ${standHtml || ch ? '<section class="res-panel res-rank"><h3>레이스 결과' + (info.position ? '<small>' + info.position + '위 / ' + (info.standings?.length || '') + '</small>' : '') + '</h3>' + (podRows ? podiumHtml(podRows, ch?.final ? 'season' : '') : '') + standHtml + champBlock + '</section>' : ''}
