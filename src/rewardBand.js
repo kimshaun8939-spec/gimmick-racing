@@ -1,3 +1,4 @@
+import { medalIcon, MEDAL_NAMES, medalTime } from './medals.js';
 // 결과 화면 '보상 띠' + '레벨 업 카드' (rewards1, 2026-11-15, 점검 .debug/agents/rewards-review.md 제안 A·C)
 //   보상 띠 (완주 시간 바로 아래 한 줄, 휴대폰도 첫 화면 안):
 //     [Lv·티어 + XP 막대(이번 판 전 = 진한 색, 이번 판 증가분 = 밝은 색, 차오름) + '+n XP' · 다음 레벨까지 n XP (약 n판)]
@@ -109,7 +110,7 @@ export function prepareRewards(meta, opts = {}) {
   const wallet = { pit: 0, up: 0, custom: 0, ...(meta.wallet || { pit: num(meta.balance) }) };
   const lvBonus = { pit: 0, up: 0, custom: 0 };
   for (const l of meta.lines || []) if (/^레벨 업/.test(l.reason || '')) for (const k of CUR_KINDS) lvBonus[k] += num(l[k]);
-  return { carId, room: !!opts.room, after, before, gained, coins: num(meta.coins), balance: num(meta.balance), gain, wallet, lvBonus, levelUp, tierUp: levelUp && before.title !== after.title, newsFrom, max, toNext, next, toReward, mineNext, gifts, unlocked };
+  return { medal:meta.medal, carId, room: !!opts.room, after, before, gained, coins: num(meta.coins), balance: num(meta.balance), gain, wallet, lvBonus, levelUp, tierUp: levelUp && before.title !== after.title, newsFrom, max, toNext, next, toReward, mineNext, gifts, unlocked };
 }
 
 // ───────── 보상 띠 ─────────
@@ -146,7 +147,7 @@ export function rewardBandHtml(m) {
   } else {
     next = `<div class="rw-next rw-done"><div class="rw-art"><span class="rw-emoji">🏁</span></div><div class="rw-ntext"><small>다음 보상</small><b class="rw-nname">모든 레벨 보상 달성</b><span>피트 샵에서 조각으로 차·부품·꾸미기를 사 보세요</span></div></div>`;
   }
-  return `<section class="rw-band${m.levelUp ? ' lvup' : ''}${m.max ? ' max' : ''}" data-rw-band aria-label="이번 판 보상">${xp}${coin}${next}</section>`;
+  return `${m.medal?'<div class="ms-result-medal">'+medalIcon(m.medal.tier)+MEDAL_NAMES[m.medal.tier-1]+'메달 달성!'+(m.medal.next?' · 다음 '+MEDAL_NAMES[m.medal.tier]+' '+medalTime(m.medal.next):' · 모든 메달을 모았어요')+'</div>':''}<section class="rw-band${m.levelUp ? ' lvup' : ''}${m.max ? ' max' : ''}" data-rw-band aria-label="이번 판 보상">${xp}${coin}${next}</section>`;
 }
 
 // ───────── 레벨 업 카드 ─────────

@@ -1,3 +1,5 @@
+import { startPlaytime } from './playtime.js';
+import { medalTier, medalTargets, MEDAL_REWARDS } from './medals.js';
 // night-meta · 업적/목표/상점. 저장은 이 브라우저. 온라인 XP만 기존 profile.bonus로 합침.
 // 재화 개편 (upgradeB, 2026-11-15, 설계 .debug/design/upgrade-design.md 3장, API .debug/agents/wallet-contract.md):
 //   예전 피트 코인 → 피트 조각 ⬡(차·부품) · 강화 조각 ◆(부품 강화) · 커스텀 조각 ✿(색·코스튬·세리머니), 세 조각 모두 0부터.
@@ -67,11 +69,12 @@ const dayKey=(date=new Date())=>date.getFullYear()+'-'+String(date.getMonth()+1)
 function calendar(date=new Date()){
  const d=new Date(date.getFullYear(),date.getMonth(),date.getDate(),12);const serial=Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000);const day=dayKey(d);d.setDate(d.getDate()-((d.getDay()+6)%7));return {daily:day,weekly:dayKey(d),serial};
 }
-function periods(){const now=Date.now();const c=now-calendarAt<1000&&calendarCache?calendarCache:(calendarAt=now,calendarCache=calendar());for(const type of ['daily','weekly'])if(state.periods[type]?.key!==c[type]){const pool=GOAL_POOLS[type],seed=type==='daily'?c.serial:Math.floor(Date.parse(c.weekly+'T12:00:00Z')/86400000/7);const ids=type==='daily'?[seed%pool.length,(seed+3)%pool.length,(seed+5)%pool.length]:[0,1,2+seed%4];state.periods[type]={key:c[type],goals:ids.map((id,i)=>{const reward=goalReward(type,i);return {...pool[id],id:type+'-'+id,progress:0,claimed:false,coins:reward.pit,reward,xp:type==='daily'?35:120};})};dirty=true;}
+function periods(){const now=Date.now();const c=now>=calendarAt&&now-calendarAt<1000&&calendarCache?calendarCache:(calendarAt=now,calendarCache=calendar());for(const type of ['daily','weekly'])if(!state.periods[type]?.key||state.periods[type].key<c[type]){const pool=GOAL_POOLS[type],seed=type==='daily'?c.serial:Math.floor(Date.parse(c.weekly+'T12:00:00Z')/86400000/7);const ids=type==='daily'?[seed%pool.length,(seed+3)%pool.length,(seed+5)%pool.length]:[0,1,2+seed%4];state.periods[type]={key:c[type],goals:ids.map((id,i)=>{const reward=goalReward(type,i);return {...pool[id],id:type+'-'+id,progress:0,claimed:false,coins:reward.pit,reward,xp:type==='daily'?35:120};})};dirty=true;}
 // 드리프트 목표를 없앰 (2026-11-15): 이번 기간에 이미 뽑힌 드리프트 목표는 같은 칸의 새 목표로 바꿈 (받은 보상은 그대로)
 for(const type of ['daily','weekly']){const p=state.periods[type];if(p&&Array.isArray(p.goals)&&p.goals.some(g=>g&&g.metric==='driftDistance')){p.goals=p.goals.map(g=>g&&g.metric==='driftDistance'?{...g,...(GOAL_POOLS[type][+String(g.id).split('-')[1]]||GOAL_POOLS[type][0]),progress:g.claimed?g.progress:0}:g);dirty=true;}}
 return c;}
-function checkGoals(){for(const type of ['daily','weekly'])state.periods[type].goals.forEach((g,i)=>{if(!g.claimed&&g.progress>=g.goal){g.claimed=true;const reward=g.reward||goalReward(type,i);grant(reward,g.name);bonusXP(g.xp);const d={...g,reward,kicker:type==='daily'?'일일 목표 완료':'주간 목표 완료'};if(run)run.goals.push(d);announce(d);}});}
+function checkGoals(){} // missions: 보상은 직접 받기
+
 function inc(metric,delta){delta=num(delta);if(!delta)return;periods();state.stats[metric]=num(state.stats[metric])+delta;for(const type of ['daily','weekly'])for(const g of state.periods[type].goals)if(g.metric===metric)g.progress=Math.min(g.goal,num(g.progress)+delta);dirty=true;}
 function metricValue(a){if(a.metric.startsWith('map:'))return num(state.maps[a.metric.slice(4)]);return num(state.stats[a.metric]);}
 function scan(){if(scanning)return;scanning=true;try{periods();checkTutorial();checkLevel();for(const a of ACHIEVEMENTS){if(state.achievements[a.id]||metricValue(a)<a.goal)continue;state.achievements[a.id]={at:Date.now(),coins:a.coins,reward:{...a.reward},xp:a.xp};if(a.costume)state.owned['costume:'+a.costume]={at:Date.now(),source:'achievement'};grant(a.reward,'업적 · '+a.name);bonusXP(a.xp);if(run)run.achievements.push(a.id);announce({...a,icon:['','🥉','🥈','🥇'][a.tier]});}checkGoals();checkLevel();if(dirty)save();emit('gimmick:meta');}finally{scanning=false;}}
@@ -80,8 +83,16 @@ function reconcileAcademy(){const all=academy.all();let done=0,gold=0;for(const 
  state.stats.lessons=Math.max(num(state.stats.lessons),done);state.stats.goldLessons=Math.max(num(state.stats.goldLessons),gold);
  for(const l of LICENSES)if(all.licenses[l.id]&&!state.academyPaid['license:'+l.id]){state.academyPaid['license:'+l.id]=1;grant(ECON.license[l.id],'라이선스 '+l.id);}
  if(all.licenses.S)state.stats.licenseS=1;scan();}
+// 예전 자동 체크인을 이미 받은 날은 오늘 다시 받지 않음. 놓친 날에도 달력은 유지.
+function attendance(){
+ const today=calendar().daily;
+ if(!state.attendance){state.attendance={count:num(state.login.total)||num(state.login.streak),day:state.login.day||''};dirty=true;}
+ if(!state.playtime?.day||state.playtime.day<today){state.playtime={day:today,seconds:0,claimed:[]};dirty=true;}
+ if(dirty)save();
+}
 export function bootMeta(){if(started)return;started=true;ensureMetaStyle();periods();if(!state.welcome){state.welcome=true;grant(ECON.welcome,'피트에 온 걸 환영해요');}
- const today=calendar(),login=state.login;if(login.day!==today.daily){const prev=login.day?Math.floor(Date.parse(login.day+'T12:00:00Z')/86400000):0;login.streak=today.serial-prev===1?num(login.streak)+1:1;login.day=today.daily;login.total=num(login.total)+1;const r=ECON.login(login.streak);login.rewards=r;login.reward=r.pit;grant(r,'오늘의 피트 체크인');state.stats.loginDays=login.total;}
+ attendance();
+ startPlaytime((sec,from,to)=>{const oldDay=state.playtime?.day,oldSeconds=num(state.playtime?.seconds);const midnight=new Date(to);midnight.setHours(0,0,0,0);if(from<midnight.getTime())sec=Math.min(sec,(to-midnight.getTime())/1000);periods();attendance();state.playtime.seconds=Math.min(3600,num(state.playtime.seconds)+sec);if(sec>0){dirty=true;save();}if(oldDay!==state.playtime.day||[900,1800,3600].some(t=>oldSeconds<t&&state.playtime.seconds>=t))emit('gimmick:meta');emit('gimmick:playtime');});
  // 초기 로딩에서는 작은 완료 알림을 몰아서 띄우지 않음. 보상·업적 자체는 지급.
  silent=true;reconcileAcademy();silent=false;save();
  window.addEventListener('gimmick:resultsOpen',()=>{notifyQueue=[];document.querySelectorAll('.mt-notice').forEach(el=>el.remove());});
@@ -126,7 +137,11 @@ const carName=id=>carInfo(id)?.name||carUnlockList().find(c=>c.id===id)?.name||i
 export const meta={
  migrationNotice(){bootMeta();return state.legacy&&state.migratedAt&&!state.migrationNoticeSeen?{coins:num(state.legacy.coins)}:null;},
  acknowledgeMigration(){state.migrationNoticeSeen=true;return save();},
- get(){bootMeta();periods();return structuredClone(state);},
+ get(){bootMeta();periods();attendance();return structuredClone(state);},
+ claimMission(type,id){periods();const g=state.periods[type]?.goals.find(g=>g.id===id);if(!g||g.claimed||g.progress<g.goal)return false;g.claimed=true;grant(g.reward,g.name);bonusXP(g.xp);checkLevel();save();emit('gimmick:meta');return true;},
+ reroll(id){periods();const p=state.periods.daily,g=p.goals.find(g=>g.id===id);if(p.rerolled||!g||g.claimed||g.progress>=g.goal)return false;const pool=GOAL_POOLS.daily,alt=pool.find(x=>!p.goals.some(y=>x.metric===y.metric));if(!alt)return false;Object.assign(g,alt,{id:'daily-reroll',progress:0});p.rerolled=true;save();emit('gimmick:meta');return true;},
+ claimAttendance(){attendance();const a=state.attendance;if(a.day>=calendar().daily)return false;const r=ECON.attendance[a.count%7];a.count++;a.day=calendar().daily;state.login={...state.login,day:a.day,streak:a.count,total:num(state.login.total)+1,rewards:r,reward:r.pit};state.stats.loginDays=state.login.total;grant(r,'출석 달력 · '+((a.count-1)%7+1)+'일');save();emit('gimmick:meta');return true;},
+ claimPlaytime(i){attendance();const p=state.playtime;if(!Number.isInteger(i)||i<0||i>2||p.claimed.includes(i)||p.seconds<[900,1800,3600][i])return false;p.claimed.push(i);grant(ECON.playtime[i],'오늘 플레이 · '+[15,30,60][i]+'분');save();emit('gimmick:meta');return true;},
  achievements(){bootMeta();return ACHIEVEMENTS.map(a=>({...a,value:metricValue(a),done:!!state.achievements[a.id],at:state.achievements[a.id]?.at||null}));},
  owns(key){if(key==='celebration:stock')return true;if(String(key).startsWith('car:'))return carOwned(String(key).slice(4))||!!state.owned[key];return !!state.owned[key];},
  title(){const a=[...ACHIEVEMENTS,...RETIRED_ACHIEVEMENTS].find(a=>a.id===state.title&&state.achievements[a.id]);return a?.title||'';},
@@ -179,6 +194,12 @@ export function createMetaTracker(o){bootMeta();let sinceScan=0,lastMode=null,ha
  // 완주 보상 (설계 3.2): 기본 ⬡40 + 30초마다 10(최대 60) · ◆6 · ✿3, 순위(상대가 없으면 '그 밖'), 깔끔한 완주 ◆3, 맵·차 첫 완주 ✿20·✿10
  const base={...ECON.finishBase,pit:ECON.finishBase.pit+Math.min(ECON.finishPitMax,Math.floor(d.time/30)*ECON.finishPitPer30s)};const pl=d.total>1&&d.place>0?(d.place===1?ECON.place.first:d.place<=3?ECON.place.podium:ECON.place.other):ECON.place.other;
  grant(base,'완주 · '+d.map);grant(pl,d.total>1?'순위 · '+d.place+'위':'완주 보너스');run.base=base.pit;run.place=pl.pit||0;if(!hadBad)grant(ECON.clean,'깔끔한 완주');if(firstMap)grant(ECON.firstMap,'첫 완주 · '+d.map);if(firstCar)grant(ECON.firstCar,'첫 완주 · '+carName(d.car));
+ state.medals ||= {};
+ const g=window.game,params=new URLSearchParams(location.search);
+ if(['solo','time','free'].includes(d.mode)&&d.total<=1&&!params.has('room')&&!params.has('join')&&!g?.raceSys?.active?.()){
+  const cls=carInfo(d.car)?.class||'A',old=num(state.medals[d.map]?.tier),tier=medalTier(d.map,d.time,cls);
+  if(tier>old){for(let i=old;i<tier;i++)grant(MEDAL_REWARDS[i],'기록 메달 · '+d.map+' · '+['동','은','금'][i]);state.medals[d.map]={tier,car:d.car,time:d.time,at:Date.now()};run.medal={map:d.map,tier,next:medalTargets(d.map,cls)[tier]||null};}
+ }
  scan();
  // firstrace: 첫 변신 연습장 완주만 Lv3 부족분 보충. 순위·주행 업적·날짜 목표에 의존하지 않음.
  // profile 완주 이벤트가 먼저 지급된 뒤라 races===1. 기존 XP 곡선과 이후 판 보상은 그대로.

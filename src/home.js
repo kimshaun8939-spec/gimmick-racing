@@ -1,3 +1,4 @@
+import { medalHtml } from './medals.js';
 ﻿// 홈 화면: 주소에 ?map= 이 없으면 게임 대신 이 화면이 뜸
 //   메인 메뉴(레이스 시작 / 차 고르기 / 맵 고르기 / 기록 / 설정 / 조작법)
 //   차 고르기: 직접 돌려 보는 3D 차 미리보기(작은 Three.js 장면) + 성능 막대 + 변신 미리보기
@@ -901,7 +902,7 @@ export async function runHome() {
       <div class="mp-facts"><span><small>길이</small><b>${len}</b></span><span><small>바퀴</small><b>${info.free ? '—' : `${info.laps}바퀴`}</b></span>
         <span><small>내 기록 · ${esc(carOf(carId).name)}</small><b class="${mine && mine.race ? 'gold' : 'none'}">${mine && mine.race ? fmtTime(mine.race) + (mine.raceAssist ? ' 🛟' : '') : '없음'}</b></span>
         <span><small>내 맵 최고</small><b class="${best ? '' : 'none'}">${best ? fmtTime(best.race) + (bestRec && bestRec.raceAssist ? ' 🛟' : '') : '없음'}</b>${best ? `<em>${esc(carOf(best.car).name)}</em>` : ''}</span></div>
-      <p class="mp-desc">${esc(m.desc || '')}</p>
+      <div class="ms-map-medal">${medalHtml(m.id,meta.get().medals?.[m.id]?.tier||0,carOf(carId).class)}</div><p class="mp-desc">${esc(m.desc || '')}</p>
       <div class="mp-tags">${(m.tags || []).map((t) => `<span>${esc(t)}</span>`).join('')}</div>
       ${online.enabled && G('ranking') && !info.free ? '<div class="mp-online"><div class="mp-ot">🌐 온라인 1~3등</div><div class="mp-olist"><span class="none">불러오는 중…</span></div></div>' : ''}`;
     drawTrackThumb(mapInfoBox.querySelector('canvas'), info.pts, m.theme);
@@ -931,6 +932,7 @@ export async function runHome() {
       const el = card.querySelector('.rec');
       el.textContent = mapInfo[id].free ? '자유 주행' : best ? `내 기록 ${fmtTime(best.race)}` : '내 기록 · 아직 없음';
       el.title = '이 맵 내 최고 기록 (완주 시간, 어느 차든)';
+      if(!mapInfo[id].free)el.innerHTML=medalHtml(id,meta.get().medals?.[id]?.tier||0,carOf(carId).class);
     });
     renderMapInfo(); // 차가 바뀌었을 수 있음 (내 기록 · 차 이름)
   }
@@ -1306,7 +1308,8 @@ export async function runHome() {
     views.main.querySelector('.hm-garage small').textContent = fresh.length ? '새 부품 ' + fresh.length + ' · 이 차에 아직 안 끼웠어요' : '차 구경 · 조립 · 꾸미기';
     views.car.querySelector('.ct-parts .ct-badge').textContent = fresh.length ? '● ' + fresh.length : '';
     const next = nextRewards({carId,n:1})[0];
-    views.main.querySelector('.hm-rewards small').textContent = next ? '다음 보상 Lv.' + next.level + ' · ' + next.name + ' · ' + meta.achievements().length + '개 업적' : meta.achievements().length + '개 업적 · 일일·주간 목표';
+    const goals=Object.values(s.periods).flatMap(p=>p.goals),pt=s.playtime;const claimable=goals.filter(g=>!g.claimed&&g.progress>=g.goal).length+(s.attendance.day!==s.periods.daily.key?1:0)+[900,1800,3600].filter((v,i)=>pt.seconds>=v&&!pt.claimed.includes(i)).length;
+    const line=views.main.querySelector('.hm-rewards');line.querySelector('small').textContent='오늘 남은 미션 '+s.periods.daily.goals.filter(g=>!g.claimed).length+' · 받을 보상 '+claimable;line.classList.toggle('ms-has-reward',G('goals')&&claimable>0);
   }
   // 해금 잠금 표시는 refreshMetaHome이 홈 줄 글자를 다시 쓸 때마다 (show()도 이걸 부름)
   const refreshMetaHome0 = refreshMetaHome;

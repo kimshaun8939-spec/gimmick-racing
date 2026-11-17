@@ -24,6 +24,8 @@ export const ECON = {
   secret: { pit: 50, up: 20, custom: 50 },
   daily: [{ pit: 30, up: 15 }, { pit: 40, up: 20 }, { pit: 50, up: 25 }],
   weekly: [{ pit: 100, up: 40, custom: 60 }, { pit: 150, up: 60, custom: 90 }, { pit: 200, up: 80, custom: 120 }],
+  playtime: [{pit:10,up:3},{pit:15,up:4},{pit:20,up:6,custom:5}],
+  attendance: [1,2,3,4,5,6,7].map(day=>({pit:20,custom:day===7?35:8+2*day})),
   login: (streak) => ({ pit: 20, custom: 8 + 2 * Math.min(7, Math.max(1, streak)) }),
   levelUp: (lv, tierUp) => ({ pit: 40 + 10 * lv, up: 15, custom: 10 + (tierUp ? 40 : 0) }),
   levelUpMaxJump: 5,                     // 한 번에 5레벨 넘게 오르면(계정 합치기·서버 동기화) 레벨 업 보상 안 줌
