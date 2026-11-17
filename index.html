@@ -342,6 +342,7 @@
     #results .res-identity .who { word-break:keep-all; text-wrap:balance; }
   }
   </style>
+  <link rel="stylesheet" href="src/hudLayout.css" />
   <script type="importmap">
     { "imports": {
       "three": "./src/vendor/three-0.160.0/build/three.module.js",
@@ -382,7 +383,7 @@
   </div>
 
   <!-- 왼쪽 아래 조작법 안내는 없앰 (사용자 요청 2026-11-09). 조작법은 Esc 메뉴·홈 화면의 "조작법"에서 봄 -->
-  <button id="menuBtn" title="메뉴 (Esc)">☰ 메뉴 · Esc</button>
+  <button id="menuBtn" title="메뉴 (Esc)"><span aria-hidden="true">☰</span> 메뉴 <kbd>Esc</kbd></button>
   <div id="fps"></div>
 
   <div id="sinkWarn" class="hud">🌊 가라앉는 중! 가속해서 물을 건너세요</div>

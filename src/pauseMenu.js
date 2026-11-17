@@ -21,16 +21,16 @@ export function createPauseMenu(o) {
         <div class="pm-head"><div><h2>일시정지</h2><small></small></div></div>
         <div class="h-panel pm-info"></div>
         <div class="pm-list">
-          <button class="gm-btn primary" data-act="resume" data-nav>계속하기<kbd>Esc</kbd></button>
-          <button class="gm-btn" data-act="restart" data-nav>다시 시작</button>
+          <button class="gm-btn primary" data-act="resume" data-nav><span class="pm-icon" aria-hidden="true">▶</span><span class="pm-label">계속하기<small>레이스로 돌아가기</small></span><kbd>Esc</kbd></button>
+          <button class="gm-btn" data-act="restart" data-nav><span class="pm-icon" aria-hidden="true">↻</span><span class="pm-label">다시 시작<small>출발선부터 새로</small></span></button>
           
-          <button class="gm-btn" data-act="settings" data-nav>설정</button>
-          <button class="gm-btn" data-act="keys" data-nav>조작키 바꾸기</button>
-          <button class="gm-btn" data-act="controls" data-nav>조작법</button>
+          <button class="gm-btn" data-act="settings" data-nav><span class="pm-icon" aria-hidden="true">⚙</span><span class="pm-label">설정<small>소리 · 화면 · 운전 도움</small></span></button>
+          <button class="gm-btn" data-act="keys" data-nav><span class="pm-icon" aria-hidden="true">⌨</span><span class="pm-label">조작키 바꾸기<small>키보드 · 게임패드</small></span></button>
+          <button class="gm-btn" data-act="controls" data-nav><span class="pm-icon" aria-hidden="true">?</span><span class="pm-label">조작법<small>운전과 변신 알아보기</small></span></button>
           
-          <button class="gm-btn" data-act="car" data-nav>차 바꾸기</button>
-          <button class="gm-btn" data-act="map" data-nav>맵 바꾸기</button>
-          <button class="gm-btn danger" data-act="home" data-nav>홈으로</button>
+          <button class="gm-btn" data-act="car" data-nav><span class="pm-icon" aria-hidden="true">🏎</span><span class="pm-label">차 바꾸기<small>다른 차로 출발</small></span></button>
+          <button class="gm-btn" data-act="map" data-nav><span class="pm-icon" aria-hidden="true">◈</span><span class="pm-label">맵 바꾸기<small>새로운 코스 고르기</small></span></button>
+          <button class="gm-btn danger" data-act="home" data-nav><span class="pm-icon" aria-hidden="true">⌂</span><span class="pm-label">홈으로<small>레이스 나가기</small></span></button>
         </div>
       </div>
       <div class="h-panel pm-page">
@@ -50,6 +50,7 @@ export function createPauseMenu(o) {
 
   function renderInfo() {
     const i = o.getInfo();
+    root.classList.toggle('pm-online', !!i.online);
     const resumeKey = root.querySelector('[data-act="resume"] kbd');
     if (resumeKey) resumeKey.outerHTML = pad.usingPad() ? padKbd(1) : '<kbd>Esc</kbd>';
     root.querySelector('.pm-head h2').textContent = i.online ? '온라인 메뉴' : '일시정지';
@@ -70,6 +71,7 @@ export function createPauseMenu(o) {
   }
   function showPage(name) {
     page = name;
+    root.classList.toggle('pm-detail', !!name);
     pageBody.innerHTML = '';
     side.querySelectorAll('[data-act]').forEach((b) => b.classList.toggle('cur', b.dataset.act === name));
     closePageBtn.style.display = name ? '' : 'none';

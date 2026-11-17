@@ -211,25 +211,28 @@ export function createHud(track) {
   const g = mm.getContext('2d');
   const xs = track.outline.map((p) => p[0]), zs = track.outline.map((p) => p[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
-  const pad = 16;
-  const scale = Math.min((mm.width - pad * 2) / (maxX - minX), (mm.height - pad * 2) / (maxZ - minZ));
-  // 화면에서 보는 방향과 맞추기 위해 x는 뒤집음 (카메라 기준 오른쪽 = -x 쪽)
-  const toMap = (x, z) => [mm.width - pad - (x - minX) * scale - ((mm.width - pad * 2) - (maxX - minX) * scale) / 2,
-    mm.height - pad - (z - minZ) * scale - ((mm.height - pad * 2) - (maxZ - minZ) * scale) / 2];
-
-  // 렉 줄이기 2: 코스 그림(바뀌지 않음)은 한 번만 그려 두고 매 화면은 그 그림 + 차 점만 그림
-  //   (예전엔 매 화면 코스 점 수백 개를 다시 계산하고 선 4번을 새로 그렸음). 크기가 바뀌면 다시 그림
-  let trackLayer = null;
-  function drawMinimap(pos, yaw, others) {
-    if (!trackLayer || trackLayer.width !== mm.width || trackLayer.height !== mm.height) {
-      trackLayer = document.createElement('canvas');
-      trackLayer.width = mm.width;
-      trackLayer.height = mm.height;
-      drawTrackLayer(trackLayer.getContext('2d'));
-    }
-    g.clearRect(0, 0, mm.width, mm.height);
-    g.drawImage(trackLayer, 0, 0);
-    drawCars(pos, yaw, others);
+  // 코스 그림은 한 번 저장하고 차 주변만 잘라 사용한다. 북쪽 고정.
+  const radius = Math.max(250, Math.min(400, Math.max(maxX-minX,maxZ-minZ)*.18));
+  const scale = (mm.width-16)/(radius*2);
+  const cacheScale = Math.min(scale*2,4096/Math.max(maxX-minX+40,maxZ-minZ+40));
+  let centerX=0, centerZ=0, paintingCache=true;
+  const toMap=(x,z)=>paintingCache ? [(maxX+20-x)*cacheScale,(maxZ+20-z)*cacheScale] :
+    [mm.width/2-(x-centerX)*scale,mm.height/2-(z-centerZ)*scale];
+  const trackLayer=document.createElement('canvas');
+  trackLayer.width=Math.ceil((maxX-minX+40)*cacheScale);
+  trackLayer.height=Math.ceil((maxZ-minZ+40)*cacheScale);
+  drawTrackLayer(trackLayer.getContext('2d'));
+  paintingCache=false;
+  function drawMinimap(pos,yaw,others) {
+    if(document.body.classList.contains('noMinimap')) return;
+    centerX=pos.x+Math.sin(yaw)*65;
+    centerZ=pos.z+Math.cos(yaw)*65;
+    g.clearRect(0,0,mm.width,mm.height);
+    const sourceWidth=mm.width*cacheScale/scale, sourceHeight=mm.height*cacheScale/scale;
+    const sourceX=(maxX+20-centerX)*cacheScale-sourceWidth/2;
+    const sourceY=(maxZ+20-centerZ)*cacheScale-sourceHeight/2;
+    g.drawImage(trackLayer,sourceX,sourceY,sourceWidth,sourceHeight,0,0,mm.width,mm.height);
+    drawCars(pos,yaw,others);
   }
   function drawTrackLayer(g) {
     g.lineJoin = 'round';
@@ -246,10 +249,10 @@ export function createHud(track) {
       g.fillRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b));
     }
     g.strokeStyle = 'rgba(255,255,255,0.25)';
-    g.lineWidth = 9;
+    g.lineWidth = 9 * cacheScale / scale;
     g.stroke();
     g.strokeStyle = 'rgba(255,255,255,0.85)';
-    g.lineWidth = 3;
+    g.lineWidth = 3 * cacheScale / scale;
     g.stroke();
     // 다른 차원 구간 (정글 지하 세계 등, track.minimapParts가 있을 때만): 본 코스 위에 겹쳐 보이지 않게 어둡게 지우고 색 점선으로
     if (track.minimapParts)
@@ -262,11 +265,11 @@ export function createHud(track) {
         });
         g.setLineDash([]);
         g.strokeStyle = 'rgba(8,10,18,0.85)';
-        g.lineWidth = 6;
+        g.lineWidth = 6 * cacheScale / scale;
         g.stroke();
-        g.setLineDash(part.dash || [5, 4]);
+        g.setLineDash((part.dash || [5, 4]).map(n => n * cacheScale / scale));
         g.strokeStyle = part.color || '#b98cff';
-        g.lineWidth = 4;
+        g.lineWidth = 4 * cacheScale / scale;
         g.stroke();
         g.setLineDash([]);
       }
@@ -305,7 +308,13 @@ export function createHud(track) {
       const usePad = gamepad.usingPad();
       const menuLabel = '☰ 메뉴 · ' + (usePad ? gamepad.label('menu') : keybinds.label('menu'));
       const menuButton = document.getElementById('menuBtn');
-      if (menuButton && menuButton.textContent !== menuLabel) menuButton.textContent = menuLabel;
+      if (menuButton && menuButton.dataset.label !== menuLabel) {
+        menuButton.dataset.label = menuLabel;
+        menuButton.replaceChildren();
+        const icon = document.createElement('span'); icon.textContent = '☰'; icon.setAttribute('aria-hidden','true');
+        const key = document.createElement('kbd'); key.textContent = usePad ? gamepad.label('menu') : keybinds.label('menu');
+        menuButton.append(icon, document.createTextNode(' 메뉴 '), key);
+      }
       writeText(el.lap, s.label || `LAP ${s.lap}/${s.laps}`);
       writeText(el.time, fmtTime(s.time));
       // 내 최고 기록 = 완주 시간 (여러 바퀴면 합). 아직 없으면 이번 레이스 최고 랩
