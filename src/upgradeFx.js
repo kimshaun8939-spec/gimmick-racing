@@ -202,6 +202,7 @@ export function playUpgradeFx(o) {
   };
   function frame(now) {
     if (done) return;
+    if (use3d) o.preview.invalidate?.();
     const t = el.pausedAt ?? now - t0, dt = el.pausedAt != null ? 0.016 : Math.min(0.05, (now - last) / 1000); last = now;
     rect = place();
     gauge.style.left = cx + 'px'; gauge.style.top = cy + 'px';
@@ -224,7 +225,7 @@ export function playUpgradeFx(o) {
     if (!hit) { reduced = true; strike(); }
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey, true); window.removeEventListener('pointerdown', onPtr, true); window.removeEventListener('click', onPtr, true); removeEventListener('resize', onResize);
-    if (scene) scene.onBeforeRender = prevRender;
+    if (scene) { scene.onBeforeRender = prevRender; o.preview.invalidate?.(); }
     el.classList.add('ufx-out');
     setTimeout(() => el.remove(), skipped ? 0 : 260);
     resolveFn({ skipped, success });

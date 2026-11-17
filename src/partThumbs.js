@@ -7,13 +7,19 @@ export {PART_VIEW} from './carParts3d.js';
 import {PART_VIEW,isolatedPart} from './carParts3d.js';
 
 const VERSION=12,STORE='gimmick.partThumbs',mem=new Map();
-let studio,queue=Promise.resolve(),source;
-const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0).toString(36);};
+let studio,queue=Promise.resolve(),source,storeCache,saveTimer,releaseTimer;
+const idle=()=>new Promise(resolve=>window.requestIdleCallback?requestIdleCallback(resolve,{timeout:350}):setTimeout(resolve,16));
+function readStore(){if(!storeCache){try{storeCache=JSON.parse(localStorage.getItem(STORE)||'{}')||{};}catch{storeCache={};}}return storeCache;}
+function saveSoon(key,url){const old=readStore();old[key]=url;storeCache=Object.fromEntries(Object.entries(old).slice(-60));clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await idle();try{localStorage.setItem(STORE,JSON.stringify(storeCache));}catch{}},400);}
+function encode(canvas){return new Promise(resolve=>canvas.toBlob(blob=>{if(!blob){resolve(canvas.toDataURL('image/webp',.88));return;}const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>resolve('');reader.readAsDataURL(blob);},'image/webp',.88));}
+const hash=(s,seed=2166136261)=>{let h=seed;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return (h>>>0).toString(36);};
 async function sourceHash(){
  source??=(async()=>{
-  const files=['partThumbs','carParts3d','carModel','carWheels','carLighting','carCostumes','staticBatch','carBody_clearance','carBody_boat','carBody_accel','carBody_wheels','carBody_cockpit',...['f1','gt','rally','proto','rocket','buggy','hatch','muscle','hyper','kart','roadster','truck','ev','wedge','van'].map(s=>'carBody_'+s)];
+  // 사진 모양은 같으므로 기존 v12의 partThumbs 소스 접두 해시를 유지.
+  // 구도·조명·촬영 방법을 바꾸면 VERSION을 올릴 것. 모델 파일은 계속 자동 감지.
+  const files=['carParts3d','carModel','carWheels','carLighting','carCostumes','staticBatch','carBody_clearance','carBody_boat','carBody_accel','carBody_wheels','carBody_cockpit',...['f1','gt','rally','proto','rocket','buggy','hatch','muscle','hyper','kart','roadster','truck','ev','wedge','van'].map(s=>'carBody_'+s)];
   const texts=await Promise.all(files.map(f=>fetch(new URL('./'+f+'.js',import.meta.url)).then(r=>{if(!r.ok)throw Error(f);return r.text();})));
-  return hash(texts.join('|'));
+  return hash(texts.join('|'),11181864);
  })();return source;
 }
 async function getStudio(){
@@ -40,17 +46,21 @@ const fake=()=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0
  * size는 가로 폭, 세로는 2/3. {width,height}도 가능. 순정은 'stock' + slot 옵션.
  * 동시 요청은 차례로 처리하며 실패는 reject. UI 연결은 호출하는 쪽에서 담당.
  */
-export function partThumb(partId,{carId='f1',size=400,slot='engine',lv}={}){
+export function partThumb(partId,{carId='f1',size=400,slot='engine',lv,isRelevant}={}){
  // upgradeD1: lv = 강화 단계 모양 (없으면 내 단계). 캐시 키에 들어감
  lv=Math.max(1,Math.min(5,Math.floor(Number(lv??(partOf(partId)?partLevel(partId):1)))||1));
+ clearTimeout(releaseTimer);
  const job=queue.then(async()=>{
+  if(isRelevant&&!isRelevant())return '';
   const p=partOf(partId);if(!p&&partId!=='stock')throw new Error('알 수 없는 부품: '+partId);
   slot=p?.slot||slot;if(!PART_VIEW[slot])throw new Error('알 수 없는 부품 칸: '+slot);
   const cars=await listCars(),car=cars.find(c=>c.id===carId);if(!car)throw new Error('알 수 없는 차: '+carId);
   const width=Math.max(64,Math.min(1024,Math.round(typeof size==='number'?size:size.width)||400)),height=Math.max(64,Math.min(1024,Math.round(typeof size==='number'?size*2/3:size.height)||267));
   const key=hash(JSON.stringify([VERSION,partId,carId,slot,width,height,await sourceHash(),car.look,p?.look,lv]));
   if(mem.has(key))return mem.get(key);
-  try{const old=JSON.parse(localStorage.getItem(STORE)||'{}');if(old[key]){mem.set(key,old[key]);return old[key];}}catch{}
+  const old=readStore();if(old[key]){mem.set(key,old[key]);return old[key];}
+  await idle();
+  if(isRelevant&&!isRelevant())return '';
   const st=await getStudio();
   if(st.carId!==carId){st.model?.dispose();st.model=createCarModel(car.look);st.carId=carId;}
   // partfit: 배기·날개 순정 카드도 실제 교체되는 부분을 그대로 촬영한다.
@@ -73,12 +83,15 @@ export function partThumb(partId,{carId='f1',size=400,slot='engine',lv}={}){
    for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){q.set(x,y,z).applyMatrix4(inv);q.z+=1;distance=Math.max(distance,q.z+Math.abs(q.x)/(tan*cam.aspect),q.z+Math.abs(q.y)/tan);}
    cam.position.copy(direction).multiplyScalar(distance*1.14);cam.lookAt(0,0,0);cam.updateProjectionMatrix();
    st.product=product;
+   await idle();
+   if(st.renderer.compileAsync)try{await st.renderer.compileAsync(st.scene,cam);}catch{}
+   await idle();
    st.renderer.setSize(width,height,false);st.renderer.render(st.scene,cam);
-   const url=st.renderer.domElement.toDataURL('image/webp',.88);mem.set(key,url);
-   try{const old=JSON.parse(localStorage.getItem(STORE)||'{}');old[key]=url;const entries=Object.entries(old).slice(-60);localStorage.setItem(STORE,JSON.stringify(Object.fromEntries(entries)));}catch{}
+   const url=await encode(st.renderer.domElement);mem.set(key,url);
+   saveSoon(key,url);
    return url;
   }finally{st.shadow.visible=false;if(st.product){st.product.traverse(o=>{if(o.userData.photoGeometry)o.geometry.dispose();});st.scene.remove(st.product);st.product=null;}}
- });queue=job.catch(()=>{});return job;
+ });queue=job.catch(()=>{});queue.then(()=>{clearTimeout(releaseTimer);releaseTimer=setTimeout(()=>disposePartThumbs(),15000);});return job;
 }
 /** 메뉴 종료 시 GPU 자원 반환. 진행 중인 촬영이 끝난 뒤 실행. */
 export function disposePartThumbs(){const job=queue.then(()=>{if(studio){studio.model?.dispose();studio.shadow.geometry.dispose();studio.shadow.material.dispose();studio.shadowMap.dispose();studio.env.dispose();studio.renderer.dispose();studio.renderer.forceContextLoss();studio=null;}});queue=job.catch(()=>{});return job;}

@@ -976,3 +976,14 @@ body.touch-on #home .h-qe { display:none; }
  #home#home .g2-detail .ct-head h2{font-size:28px}
  #home#home .g2-detail .ct-tabs .ct-tab{min-height:36px}
 }
+
+/* homeperf: 배지의 반복 box-shadow 페인트 대신 같은 빛 테두리를 합성만 함. */
+.ct-tab:not(.on) .ct-badge { position:relative; animation:none; }
+.ct-tab:not(.on) .ct-badge::after { content:''; position:absolute; inset:0; border-radius:inherit; box-shadow:0 0 0 4px rgba(255,207,63,.18); opacity:0; pointer-events:none; animation:hpBadge 2.8s ease-in-out infinite; }
+@keyframes hpBadge { 0%,70%,100% { opacity:0; transform:scale(.8); } 82% { opacity:1; transform:scale(1); } }
+@media(prefers-reduced-motion:reduce) { .ct-tab:not(.on) .ct-badge::after { animation:none; } }
+
+/* homeperf: loading placeholders use opacity, never repaint background-position. */
+#home .h-carcard .ph { animation:hpThumbWait 1.1s ease-in-out infinite; }
+@keyframes hpThumbWait { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+@media(prefers-reduced-motion:reduce) { #home .h-carcard .ph { animation:none; } }

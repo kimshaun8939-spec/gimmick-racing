@@ -77,7 +77,7 @@ export function createPartsUI(box, o) {
   }
 
   function render() {
-    if (!car) return;
+    if (!car || box.hidden || !box.closest('.h-view.on')) return;
     const build = parts.getBuild(car.id), all = parts.listParts(slot, { stock: true, carId: car.id });
     const p = all.find((p) => p.id === chosen) || all[0];
     chosen = p.id;
@@ -102,7 +102,7 @@ export function createPartsUI(box, o) {
     }
     const t = ++token;
     for (const img of box.querySelectorAll('[data-thumb]')) {
-      partThumb(img.dataset.thumb, { carId: car.id, slot, size: 320 }).then((url) => { if (t !== token || !img.isConnected) return; img.src = url; img.hidden = false; img.nextElementSibling.hidden = true; }).catch(() => {});
+      partThumb(img.dataset.thumb, { carId: car.id, slot, size: 320, isRelevant: () => t === token && img.isConnected && !!box.offsetParent }).then((url) => { if (!url || t !== token || !img.isConnected) return; img.src = url; img.hidden = false; img.nextElementSibling.hidden = true; }).catch(() => {});
     }
     buildStats(car.id, { ...build, [slot]: chosen }, { levels: 'mine' }).then((s) => {
       if (t !== token) return;
@@ -313,7 +313,7 @@ export function createPartsUI(box, o) {
   for (const ev of ['gimmick:wallet', 'gimmick:partLv']) window.addEventListener(ev, () => { if (car && !busy && !modal && box.isConnected && box.offsetParent) render(); });
   return {
     show(c, unlocked) { if (!car || car.id !== c.id) picked = false; car = c; open = unlocked; if (!picked || slotLockLv(slot)) slot = firstSlot(); chosen = parts.getBuild(c.id)[slot]; render(); },
-    activate() { meta.claimPartsBox?.(); render(); o.preview?.(parts.getBuild(car.id)); const pv = window.home?.preview; if (pv && upOpen()) setTimeout(() => warmLevelShaders(pv.renderer, pv.scene, pv.camera).catch(() => {}), 400); },
+    activate() { meta.claimPartsBox?.(); render(); o.preview?.(parts.getBuild(car.id)); const pv = window.home?.preview; if (pv && upOpen()) setTimeout(async () => { if (!box.offsetParent || document.hidden) return; const release = pv.hold?.(); try { await warmLevelShaders(pv.renderer, pv.scene, pv.camera); } catch {} finally { release?.(); } }, 400); },
     openUpgrade,
     get upgradeOpen() { return !!modal; },
   };

@@ -55,7 +55,8 @@ let saveTimer = 0;
 function saveStoreSoon() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    const items = {};
+    const saved = readStore();
+    const items = saved.v === THUMB_VER ? { ...saved.items } : {};
     for (const [id, v] of mem) items[id] = v;
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({ v: THUMB_VER, items }));
@@ -318,6 +319,8 @@ export function loadCarThumbs(cars, { first, onThumb } = {}) {
         }
         const timing = { busy: 0, total: 0 };
         while (queue.length && !cancelled) {
+          await new Promise(resolve => window.requestIdleCallback ? requestIdleCallback(resolve, { timeout: 350 }) : setTimeout(resolve, 16));
+          if (cancelled) break;
           const c = queue.shift();
           let url = '';
           try {
