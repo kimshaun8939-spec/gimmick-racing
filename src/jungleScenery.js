@@ -12,6 +12,8 @@
 //   어디나        : 큰 열대 나무·야자·대나무·고사리·덤불·꽃 (인스턴스), 반딧불, 안개, 햇살 줄기
 // 큰 물체는 충돌체(원, 높이 범위)가 있어 차가 통과하지 못합니다 (gpScenery.js와 같은 방식).
 import * as THREE from 'three';
+import { gfxEnabled } from './gfxConfig.js';
+import { junglePlants, jungleRanges, mossStone } from './gfxJungle.js';
 import * as A from './gpAssets.js';
 import { templeGantry, templeStand, templePit } from './jungleStart.js';
 import { buildTempleGate } from './jungleTrap.js';
@@ -429,8 +431,10 @@ export function buildJungleScenery(track, scene) {
     group.add(floor);
   }
   const plants = plantGeos(seededRandom(99));
+  if (gfxEnabled()) junglePlants(plants);
   const plantMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const plantMat2 = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+  if (gfxEnabled()) { plantMat.flatShading=false; plantMat2.flatShading=false; }
   /**
    * 거리에 따라 모양을 바꾸는 인스턴스 (LOD): 카메라에서 near m 안 = 자세한 모양(hi), far m 안 = 가벼운 모양(lo, 없으면 안 그림).
    * 카메라가 15 m 넘게 움직일 때만 다시 나눔 (행렬 복사만 하므로 가벼움)
@@ -537,7 +541,7 @@ export function buildJungleScenery(track, scene) {
         const h = R(h0, h1), w = R(260, 420);
         items.push({ x: lbC.x + Math.cos(a) * rad, y: FLOOR_Y - 20 + h / 2, z: lbC.y + Math.sin(a) * rad, sx: w, sy: h, sz: w, ry: R(0, TAU) });
       }
-      const im = instanced(new THREE.ConeGeometry(1, 1, 6), mat, items, { name: 'farMountains' });
+      const im = instanced(gfxEnabled() ? jungleRanges() : new THREE.ConeGeometry(1, 1, 6), mat, items, { name: 'farMountains' });
       im.renderOrder = -5;
     }
   }
@@ -673,6 +677,7 @@ export function buildJungleScenery(track, scene) {
   const stoneTex = stoneTexture('#9a917c');
   const stoneMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.95 });
   const stoneDark = new THREE.MeshStandardMaterial({ map: stoneTexture('#7d7666'), roughness: 0.95 });
+  if (gfxEnabled()) { mossStone(stoneMat); mossStone(stoneDark); }
   const mossMat = new THREE.MeshLambertMaterial({ color: '#4c7a30', flatShading: true });
   const goldMat = new THREE.MeshStandardMaterial({ color: '#e6b84a', metalness: 0.8, roughness: 0.3, emissive: '#5a3a00', emissiveIntensity: 0.4 });
   const runeGlow = new THREE.MeshBasicMaterial({ color: '#7dffd8' });
@@ -1249,6 +1254,7 @@ export function buildJungleScenery(track, scene) {
     const iD = track.indexAt(mt('cave', 340));
     const list = track.spanList(iC, iD < iC ? iD + track.samples.length - 1 : iD);
     const rockMat = new THREE.MeshStandardMaterial({ color: '#6a665a', roughness: 1, flatShading: true, side: THREE.DoubleSide });
+    if (gfxEnabled()) { rockMat.flatShading=false; mossStone(rockMat); }
     const RAD = HW + CURB + 7.5;
     const N = 18;
     const P = [], idx = [];

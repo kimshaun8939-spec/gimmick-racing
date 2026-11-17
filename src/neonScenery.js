@@ -9,6 +9,7 @@
 //   - 글리치 차원은 neonGlitch.js (포털, 세계 전환, 글리치 풍경)
 // 충돌: 도로 양옆이 모두 방호벽이라 풍경과 부딪힐 일이 없음 (collideCar는 비어 있음)
 import * as THREE from 'three';
+import { neonVisualSurfaces } from './gfxNeon.js';
 import { seededRandom, canvasTexture } from './neonTrack.js';
 import { NEON, facadeTextures, signAtlas, signUV, SIGN_CELLS, quadBatch, hologramMaterial, adTexture, screenMaterial, createRain, neonGantry, glowTexture } from './neonAssets.js';
 import { buildGlitch } from './neonGlitch.js';
@@ -347,6 +348,7 @@ export function buildNeonScenery(track, scene) {
   const halfDiag = Math.hypot(bb.max.x - bb.min.x, bb.max.y - bb.min.y) / 2;
   const facades = [0, 1, 2, 3].map((k) => facadeTextures(k, k + 1));
   const facadeMats = facades.map((f, k) => new THREE.MeshStandardMaterial({ map: f.map, emissiveMap: f.glow, emissive: '#ffffff', emissiveIntensity: 0.75, metalness: k === 0 ? 0.55 : 0.2, roughness: k === 0 ? 0.25 : 0.7 }));
+  neonVisualSurfaces(track, facadeMats, city);
   const roofMat = new THREE.MeshStandardMaterial({ color: '#15141c', roughness: 0.8 });
   const bGeo = facadeMats.map(() => ({ pos: [], uv: [], idx: [] }));
   const roofGeo = { pos: [], idx: [] };
