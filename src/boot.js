@@ -1,3 +1,5 @@
+import { initLoadScreen } from './loadScreen.js';
+initLoadScreen();
 // launchqa3: 첫 방문은 필요한 화면만 받고, 재방문 업데이트 때만 옛 캐시를 갱신해요.
 const status = document.getElementById('ldStatus');
 const progress = document.getElementById('ldProgress');

@@ -1,3 +1,4 @@
+import { loadScreenMeta, loadScreenTips, loadScreenCar, loadScreenTrack, loadScreenCorners, loadScreenKeys } from './loadScreen.js';
 import { gfxEnabled } from './gfxConfig.js';
 // 게임 진입점: 씬 구성, 게임 루프, 레이스 진행(카운트다운 → 주행 → 완주)
 //   주소에 ?map= 이 없으면 홈 화면(home.js)을 띄우고 게임은 시작하지 않음. ?map=<맵>&car=<차> 이면 바로 게임
@@ -108,6 +109,7 @@ const ld = (id, text) => {
   if (e) e.textContent = text;
 };
 ld('ldMap', mapMeta().title);
+loadScreenMeta(mapName, mapMeta());
 const MAP_TIPS = {
   ...COURSE_TIPS,
   mirage: ['모래폭풍 안에서는 청록 안내등과 바닥 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요'],
@@ -116,6 +118,8 @@ const MAP_TIPS = {
   glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '긴 직선 끝 첫 코너에서는 빨간 라인을 보고 미리 브레이크!', '길이 넓어도 코너 앞에서는 감속하세요. 눈밭은 미끄럽고 느려요'],
 };
 const tipList = MAP_TIPS[mapName] || LOAD_TIPS;
+loadScreenTips(MAP_TIPS[mapName], [...LOAD_TIPS, '봇 레이스에서는 뒤처지면 자동 견인이 도와줘요. 직접 누를 버튼은 없어요']);
+loadScreenKeys(`${keybinds.label('throttle')} 가속 · ${keybinds.label('brake')} 브레이크 · ${keybinds.label('left')} ${keybinds.label('right')} 조향`);
 ld('ldTip', '💡 ' + (params.get('rookie') === '1' && mapName === 'starter'
   ? '한 바퀴에 변신을 다 해 봐요: 직선에서 가속 모드, 물길에서 배, 활주로에서 비행기!'
   : params.get('rookie') === '1' && mapName === 'glacier'
@@ -155,6 +159,7 @@ const buildText = (sig) => {
   return { sig: s, stock: s === 'stock', short, summary, label };
 };
 ld('ldCar', `🏎️ ${carName}`);
+loadScreenCar((await rosterMod?.listCars())?.find(c => c.id === carId), carCfg, partsMod);
 if (carParam) setLast({ map: mapName, car: carId });
 // 부스터를 꺼 두면(car.json booster.enabled false) 화면 아래 부스터 버튼도 숨김
 if (carCfg.booster && carCfg.booster.enabled === false) {
@@ -170,6 +175,7 @@ try {
   mapName = 'gp';
   trackData = await loadJSON(MAPS.gp);
 }
+loadScreenTrack(trackData);
 const FREE = !!trackData.pad; // 시험장: 카운트다운, 바퀴 수 없이 자유 주행
 const mapTitle = mapMeta().title || trackData.name || mapName;
 document.title = `${mapTitle} · 트랜스폼 레이서`;
@@ -307,6 +313,7 @@ const kerbFx = createKerbFx(); // 연석 드르륵 소리·떨림
 // 그랑프리: 브레이크 표시판(150/100/50)·코너 번호·에이펙스 표시 (레이싱 라인·속도 계획에서 자동 배치)
 const corners = track.grandprix && lineFx.line ? createGpCorners(scene, track, car, scenery) : null;
 /** 코너별 내 최고 기록 (브라우저에 기억). 맵 모양이 바뀌면(코너 수가 다르면) 새로 시작 */
+loadScreenCorners(car.cornerInfo);
 const cornerBest = (() => {
   const ci = car.cornerInfo;
   const key = `cornerBest:${mapName}:${ci ? ci.corners.length : 0}:${Math.round(track.length)}`;

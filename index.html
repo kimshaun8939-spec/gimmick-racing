@@ -349,6 +349,7 @@
       "three/addons/": "./src/vendor/three-0.160.0/examples/jsm/"
     } }
   </script>
+  <link rel="stylesheet" href="src/loadScreen.css">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -525,7 +526,7 @@
         smoke = qa('.wf-fx i'), sparks = qa('.wf-fx b'), bits = qa('.wf-fx u');
       var R1 = qa('.wf-rot'), R2 = qa('.wf-rot > div'), R3 = qa('.wf-rot > div > div');
       var D, cx, W, K;
-      function measure() { var rc = track.getBoundingClientRect(); D = rc.width || 300; cx = rc.left + D / 2; W = window.innerWidth || 1280; K = 360 / (Math.PI * D); }
+      function measure() { var rc = track.getBoundingClientRect(); D = root.classList.contains('ls') ? track.offsetWidth || 300 : rc.width || 300; cx = root.classList.contains('ls') ? track.offsetLeft + D / 2 : rc.left + D / 2; W = window.innerWidth || 1280; K = 360 / (Math.PI * D); }
       measure();
       var spins = [], rate = 1, done = false, endAt = 0, gone = false, enterMs = 0, hidden = false, prog = -1, dbg = {};
       function A(el, kf, o) { if (!el || !el.animate) return null; try { return el.animate(kf, o); } catch (e) { return null; } }
