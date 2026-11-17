@@ -1,4 +1,4 @@
-// 홈 화면: 주소에 ?map= 이 없으면 게임 대신 이 화면이 뜸
+﻿// 홈 화면: 주소에 ?map= 이 없으면 게임 대신 이 화면이 뜸
 //   메인 메뉴(레이스 시작 / 차 고르기 / 맵 고르기 / 기록 / 설정 / 조작법)
 //   차 고르기: 직접 돌려 보는 3D 차 미리보기(작은 Three.js 장면) + 성능 막대 + 변신 미리보기
 //   맵 고르기: 코스 모양 그림 카드 (길이·바퀴 수·특징·내 최고 기록)
@@ -152,7 +152,7 @@ export async function runHome() {
   // 홈에서는 주행 HUD가 키보드 탐색·화면 읽기에 섞이지 않게 숨겨요.
   document.querySelectorAll('body > .hud, #menuBtn, #slingFlash, #draftLines').forEach(el => { el.style.display = 'none'; el.style.animation = 'none'; el.inert = true; });
   home.innerHTML = `
-    <div class="h-glow"></div><div class="h-floor"></div><div class="h-streaks"></div>
+    <div class="m3-backdrop" aria-hidden="true"></div><div class="h-glow"></div><div class="h-floor"></div><div class="h-streaks"></div>
     <div class="h-top">
       <div class="h-logo"><div class="mark"><span>🏁</span></div><div><div class="name">트랜스폼 <em>레이서</em></div><div class="sub">TRANSFORM RACER</div></div></div>
       <div class="h-icons">
@@ -222,7 +222,7 @@ export async function runHome() {
   try { completedFirst = !!localStorage.getItem('gimmick.firstComplete'); completedTutorial = localStorage.getItem(TUT_KEY) === 'done'; } catch {}
   views.main.innerHTML = `
     <div class="h-main hx hm-menu">
-      <div class="hx-tagline"><b>달리고, 변신하고, 날아올라!</b></div>
+      <div class="hx-tagline m3-heading"><small class="m3-class">MY MACHINE</small><h1></h1><p></p></div>
       <button class="fg-chip" data-act="coachChip" data-coach="home.coachChip" data-nav hidden><i>🎓</i><span>새 안내</span></button>
       <button class="gm-btn primary h-start hx-hero" data-act="start" data-coach="home.play" data-nav>
         <span class="hx-thumb"><img alt="" draggable="false" hidden><span class="ph">🏎️</span></span>
@@ -1172,6 +1172,7 @@ export async function runHome() {
     home.classList.toggle('dim', !['main', 'car'].includes(name));
     home.classList.toggle('calm', name !== 'main');
     preview.setView(name);
+    if (name === 'mode') views.mode.querySelectorAll('[data-art]').forEach(el => el.style.setProperty('--mode-art', `url("${new URL(`./art/modes/${el.dataset.art}.webp`, import.meta.url).href}")`));
     if (name === 'records') {
       renderRecords();
       renderOnline();
@@ -1206,7 +1207,11 @@ export async function runHome() {
   function refreshSummary() {
     const c = carOf(carId), m = mapOf(mapId);
     const rm = RACE_MODES.find((x) => x.id === raceMode);
-    views.main.querySelector('.h-start .sel').textContent = `${m.title} · ${c.name}${rm ? ` · ${rm.icon} ${rm.name}` : ''}`;
+    home.style.setProperty('--m3-map', `url("${new URL(`./art/maps/${m.id}.webp`, import.meta.url).href}")`);
+    views.main.querySelector('.m3-heading h1').textContent = c.name;
+    views.main.querySelector('.m3-heading p').textContent = `오늘의 코스, ${m.title}`;
+    views.main.querySelector('.m3-class').textContent = `MY MACHINE / ${classOfId(c.class)?.name || c.class || ''}`;
+    views.main.querySelector('.h-start .sel').textContent = `${m.title} · ${rm?.name || '봇 레이스'} · ${c.name}`;
     {
       // 큰 시작 버튼: 고른 맵·차·방식 딱지 + 차 사진
       const chip = (k, t) => (views.main.querySelector(`.hx-chips [data-c="${k}"]`).textContent = t);
@@ -1452,7 +1457,7 @@ export async function runHome() {
         <div class="bar"><button class="gm-btn" data-go="main" data-nav>‹ 홈으로</button><button class="gm-btn primary" data-act="nextMode" data-coach="mode.next" data-nav>다음: 맵 고르기 › <kbd>Enter</kbd></button></div></div>
       <div class="h-modegrid">${RACE_MODES.map(
         (m) => `<div class="h-mode" data-mode="${m.id}">
-          <button class="gm-btn h-modecard" data-nav data-pick="${m.id}" data-coach="mode.${m.id}"${m.id !== 'race' ? ` data-gate="${gate.MODE_FEATURE[m.id] || 'play'}"` : ''}><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 부스터로 순위 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
+          <button class="gm-btn h-modecard" data-art="${m.id}" data-nav data-pick="${m.id}" data-coach="mode.${m.id}"${m.id !== 'race' ? ` data-gate="${gate.MODE_FEATURE[m.id] || 'play'}"` : ''}><b>${esc(m.id === 'champ' ? '그랑프리 · 시즌' : m.name)}</b><small>${esc(m.id === 'item' ? '아이템과 부스터로 순위 경쟁' : m.id === 'time' ? '고스트와 최고 기록 경쟁' : m.desc)}</small><span class="chk">✓</span></button>
           <div class="opts"></div></div>`,
       ).join('')}</div>
       <div class="h-modetip"></div>
@@ -2374,7 +2379,8 @@ function createPreview(home) {
   //   [가로 위치, 세로 위치, 원판이 화면에서 차지할 너비(px)]
   let spot = null, viewName = 'main';
   api.setView = (name) => {
-    viewName = name;
+    viewName = name; ring.visible = name !== 'main'; shadowCatcher.material.opacity = name === 'main' ? .22 : .55;
+    table.children.forEach(o => { if (o !== holder && o !== shadowCatcher) o.visible = name !== 'main'; });
     canvas.style.clipPath='';
     dirty = true;
   };
@@ -2387,17 +2393,10 @@ function createPreview(home) {
       const r = st && st.getBoundingClientRect();
       if (r && r.width > 40) { canvas.style.clipPath=`inset(${Math.max(0,r.top)}px ${Math.max(0,w-r.right)}px ${Math.max(0,h-r.bottom)}px ${Math.max(0,r.left)}px)`;return [(r.left + r.width / 2) / w, (r.top + r.height * 0.45) / h, Math.min(r.width * 0.95, r.height * 1.5)]; }
     }
-    // 메인 메뉴: 왼쪽 메뉴 칸 오른쪽 빈 곳 가운데
-    const menuEl = home.querySelector('.h-main');
-    const left = menuEl && menuEl.offsetWidth ? menuEl.getBoundingClientRect().right + 20 : w * 0.38;
-    const avail = Math.max(200, w - left - 20);
-    if (w < 720) {
-      const hero = home.querySelector('.h-start');
-      const top = hero?.getBoundingClientRect().top || h * 0.36;
-      const stage = Math.max(85, top - 76);
-      return [0.5, Math.min(.26, (76 + stage * .45) / h), Math.min(w * .78, stage * 2.05)];
-    } // 휴대폰: 시작 버튼 위 실제 빈 공간에 맞춰 차를 배치
-    return [(left + avail / 2) / w, 0.56, Math.min(avail * 0.95, h * 0.95, w * 0.5)];
+    // M3: 풍경 앞 왼쪽에 내 차를 세워요.
+    if (w < 600) return [.5,.34,Math.min(w*.76,h*.40)];
+    if (h < 480) return [.35,.50,Math.min(w*.48,h*1.05)];
+    return [.36,.53,Math.min(w*.57,h*1.22)];
   }
 
   // 마우스·터치로 수동 회전, 손을 떼면 정지
@@ -2766,3 +2765,4 @@ function seasonOverwriteDialog(text) {
     document.body.append(wrap); window.addEventListener('keydown', key, true); buttons[0].focus();
   });
 }
+

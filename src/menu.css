@@ -3297,3 +3297,97 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 }
 #lobby .lb-car { flex-shrink:0; min-height:116px; }
 #lobby .lb-car .pic { flex-shrink:0; }
+/* menuM3 · 풍경 위 내 머신, 여섯 장의 레이스 포스터. 다른 화면에는 적용하지 않아요. */
+#home .m3-backdrop{position:absolute;inset:0;pointer-events:none;display:none;background:linear-gradient(180deg,rgba(8,14,28,.25),rgba(8,14,28,.08) 35%,rgba(4,10,20,.9)),var(--m3-map) center/cover no-repeat}
+#home:has([data-view="main"].on) .m3-backdrop,#home:has([data-view="mode"].on) .m3-backdrop{display:block}
+#home:has([data-view="main"].on) :is(.h-glow,.h-floor),#home:has([data-view="mode"].on) :is(.h-glow,.h-floor){display:none}
+#home .h-main.hm-menu{position:absolute;inset:0;width:auto;max-width:none;height:100%;padding:0;overflow:visible;display:block}
+#home .hm-menu .m3-heading{position:absolute;left:4%;top:5%;display:block;text-shadow:0 2px 20px #071020}
+#home .m3-heading small{color:#ffdb66;font-size:12px;font-weight:800;letter-spacing:3px}
+#home .m3-heading h1{font-size:clamp(30px,3.3vw,58px);margin:12px 0;font-weight:900;line-height:1.1}
+#home .m3-heading p{font-size:15px;color:#d7e4f3;margin:0}
+#home .hm-menu .hx-hero{position:absolute;left:4%;bottom:9%;width:48%;height:clamp(105px,18vh,160px);min-height:0!important;border-radius:18px;padding:22px 30px;background:linear-gradient(110deg,#ffe887,#ffd23c 55%,#ff982e);box-shadow:0 14px 50px #ffca3026;display:flex;align-items:center;gap:12px;text-align:left}
+#home .hm-menu .hx-hero .hx-thumb,#home .hm-menu .hx-chips{display:none}
+#home .hm-menu .hx-hero .hx-htxt{display:block;flex:1;min-width:0}
+#home .hm-menu .hx-hero .big{font-size:clamp(34px,4vw,64px);font-weight:950;font-style:italic;line-height:1.1;color:#291d04}
+#home .hm-menu .hx-hero .sel{display:block;font-size:14px;color:#392c12;margin-top:12px;white-space:normal}
+#home .hm-menu .hx-hero .go{font-size:38px;color:#2c2008;position:static;transform:none}
+#home .hm-menu .hm-list{position:absolute;right:3%;top:12%;bottom:9%;width:24%;display:grid;grid-template-columns:1fr;grid-template-rows:repeat(6,minmax(0,1fr));gap:9px}
+#home .hm-menu .gm-btn.hx-tile{width:100%;height:100%;min-height:44px!important;padding:10px 18px;border:1px solid #b5d2ff30;border-radius:16px;background:linear-gradient(110deg,#101e31eb,#192639ed);box-shadow:0 8px 24px #040a1426;gap:14px}
+#home .hm-menu .hx-tile .ic{color:#ffd34e;font-size:25px;width:30px;flex-shrink:0}
+#home .hm-menu .hx-tile .t{align-items:flex-start;gap:3px;min-width:0}
+#home .hm-menu .hx-tile .t b{font-size:19px;line-height:1.3}
+#home .hm-menu .hx-tile .t small{font-size:12px;line-height:1.4;margin:0}
+#home [data-view="main"] .h-cartag{display:none}
+#home .hm-menu .fg-chip{position:absolute;left:4%;top:30%;max-width:230px}
+#home .h-modes{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;gap:12px;padding-bottom:76px;position:relative;overflow:hidden}
+#home .h-modes .head{margin:0;flex:none}
+#home .h-modes .head .bar{position:absolute;bottom:0;left:0;right:0;height:62px;display:flex;justify-content:space-between;align-items:center;background:#101c2de8;border:1px solid #a7c5e433;border-radius:16px;padding:8px 14px;box-sizing:border-box}
+#home .h-modes .h-modegrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));grid-auto-rows:auto;gap:12px;overflow:visible;align-content:stretch}
+#home .h-modes .h-mode{position:relative;display:flex;flex-direction:column;min-height:0;grid-column:auto;order:0;border-radius:16px;background:#101c2d;overflow:hidden;border:1px solid #b4d5ff42}
+#home .h-modes .h-mode.sel{border-color:#ffda4b;box-shadow:0 0 0 1px #ffda4b,0 0 28px #ffcf3f24}
+#home .h-modes .h-modecard{position:relative;flex:1;min-height:0!important;height:auto;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;text-align:left;padding:18px;border:0;border-radius:0;background:linear-gradient(0deg,#091322 1%,#0a1426b0 35%,#09132205 85%),var(--mode-art) center/cover no-repeat;overflow:hidden}
+#home .h-modes .h-modecard b{font-size:22px;line-height:1.3;color:#fff;text-shadow:0 2px 8px #000;margin:0}
+#home .h-modes .h-modecard small{font-size:12px;line-height:1.5;color:#d0dcea;margin-top:5px;max-width:95%}
+#home .h-modes .h-modecard .chk{position:absolute;top:12px;right:12px}
+#home .h-modes .h-mode .opts{flex:none;padding:6px 12px;gap:12px}
+#home .h-modes .h-mode:not(.sel) .opts{display:none}
+#home .h-modes .h-mopt{min-width:0;flex:1;font-size:12px}
+#home .h-modes .h-modesum{display:none}
+#home .h-modes .h-modetip{font-size:12px;line-height:1.5;min-height:18px;margin:0;color:#d0deec}
+#home .h-modes .h-mode.running{display:flex;grid-column:auto}
+#home .h-modes .h-champ{max-height:90px;overflow:auto;flex:none}
+@media(max-width:900px){
+ #home .hm-menu .hm-list{width:30%;right:2%}#home .hm-menu .hx-tile .t b{font-size:16px}#home .hm-menu .hx-tile .t small{font-size:11px}#home .hm-menu .gm-btn.hx-tile{padding:7px 10px;gap:7px}
+ #home .h-modes .h-modecard{padding:12px}#home .h-modes .h-modecard b{font-size:18px}
+}
+@media(max-width:599px){
+ #home .hm-menu .m3-heading{top:1%;left:5%}#home .m3-heading h1{font-size:28px;margin:7px 0}#home .m3-heading p{font-size:12px}#home .m3-heading small{font-size:10px}
+ #home .hm-menu .hx-hero{left:4%;width:92%;top:41%;bottom:auto;height:86px;padding:12px 20px}#home .hm-menu .hx-hero .big{font-size:34px}#home .hm-menu .hx-hero .sel{font-size:11px;margin-top:6px}#home .hm-menu .hx-hero .go{font-size:26px}
+ #home .hm-menu .hm-list{left:4%;right:4%;width:auto;top:calc(41% + 98px);bottom:2%;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(44px,1fr));gap:7px}
+ #home .hm-menu .hx-tile .t b{font-size:14px}#home .hm-menu .hx-tile .t small{font-size:10px}#home .hm-menu .hx-tile .ic{font-size:19px;width:20px}#home .hm-menu .fg-chip{top:27%;left:4%;font-size:11px}
+ #home .h-modes{gap:8px;padding-bottom:66px}#home .h-modes .h-modegrid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:8px}
+ #home .h-modes .h-modecard{padding:10px}#home .h-modes .h-modecard b{font-size:15px}#home .h-modes .h-modecard small{font-size:10px;line-height:1.4}#home .h-modes .head .bar{height:58px;padding:6px;gap:6px}#home .h-modes .head .bar button{font-size:12px;min-height:44px;padding:8px}
+ #home .h-modes .h-modetip{font-size:10px;line-height:1.4;max-height:44px;overflow:auto}#home .h-modes .h-mode .opts{padding:4px;gap:4px;flex-wrap:wrap}#home .h-modes .h-mopt{font-size:10px;gap:2px}#home .h-modes .h-mopt .v{gap:0}#home .h-modes .h-mopt button{min-width:28px;min-height:44px}
+}
+@media(max-height:480px) and (min-width:600px){
+ #home .hm-menu .m3-heading{top:0}#home .m3-heading h1{font-size:25px;margin:5px 0}#home .m3-heading p{font-size:11px}#home .m3-heading small{font-size:9px}
+ #home .hm-menu .hm-list{top:0;bottom:0;gap:4px;width:30%}#home .hm-menu .gm-btn.hx-tile{min-height:44px!important;padding:4px 8px;border-radius:9px}#home .hm-menu .hx-tile .t b{font-size:13px}#home .hm-menu .hx-tile .t small{display:none}
+ #home .hm-menu .hx-hero{bottom:0;height:65px;left:4%;width:53%;padding:8px 16px}#home .hm-menu .hx-hero .big{font-size:28px}#home .hm-menu .hx-hero .sel{font-size:10px;margin-top:4px}#home .hm-menu .fg-chip{top:32%}
+ #home .h-modes{gap:5px;padding-bottom:52px;grid-template-rows:auto minmax(0,1fr) auto}#home .h-modes .head h2{font-size:20px}#home .h-modes .head .who{display:none}#home .h-modes .h-modegrid{gap:5px}#home .h-modes .h-modecard{padding:6px 9px}#home .h-modes .h-modecard b{font-size:13px}#home .h-modes .h-modecard small{display:none}#home .h-modes .head .bar{height:48px;padding:2px 8px}#home .h-modes .head .bar button{min-height:44px;font-size:11px;padding:7px}#home .h-modes .h-modetip{display:none}#home .h-modes .h-mode .opts{padding:0 4px;gap:3px}#home .h-modes .h-mopt{font-size:10px}#home .h-modes .h-mopt button{min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){#home .m3-backdrop{transition:none}#home:has([data-view="main"].on) .h-streaks{display:none}}
+#home [data-view="main"],#home [data-view="mode"]{overflow:hidden;padding-bottom:0}
+#home .hm-menu .hx-hero .go{background:none;border:0;box-shadow:none}
+#home .m3-backdrop::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,#d3e9ff0b 36%,transparent 45%,transparent 60%,#d3e9ff08 61%,transparent 65%)}
+#home .h-modes .h-modecard.fg-locked{filter:saturate(.3)}
+@media(max-width:599px){#home .h-modes .h-modecard .fg-lockline{font-size:10px}#home .hm-menu .hx-tile .fg-lockline{font-size:10px}}
+#home .h-modes .h-modegrid{align-items:stretch}
+#home .h-modes .h-modecard b{align-self:flex-start;font-style:normal;font-weight:800;font-family:"Pretendard","Malgun Gothic",sans-serif}
+#home .h-modes .h-modecard small{align-self:flex-start}
+#home:has([data-view="mode"].on) .m3-backdrop{background:linear-gradient(180deg,#0611207a,#061120a6),var(--m3-map) center/cover no-repeat}
+/* 2차 다듬기: 옵션은 선택한 카드 아래 공용 한 줄, 포스터는 항상 여섯 장 모두 크게. */
+#home .h-modes{padding-bottom:134px;grid-template-rows:auto minmax(0,1fr) auto;box-sizing:border-box}
+#home .h-modes .h-mode{position:static;overflow:visible}
+#home .h-modes .h-modecard{border-radius:15px;overflow:hidden}
+#home .h-modes .h-mode.sel .opts{position:absolute;bottom:70px;left:0;right:0;display:flex;justify-content:flex-start;align-items:center;gap:20px;height:52px;padding:4px 14px;background:#101c2df2;border:1px solid #9cc0e537;border-radius:12px;box-sizing:border-box}
+#home .h-modes .h-mopt{display:flex;flex:0 1 280px;justify-content:space-between;align-items:center;gap:10px;white-space:nowrap}
+#home .h-modes .h-mopt .v{display:flex;align-items:center;gap:8px}
+#home .h-modes .h-mopt button{min-width:44px;min-height:44px;padding:0}
+#home .h-modes .h-champ{position:absolute;bottom:70px;left:0;right:0;max-height:56px;background:#101c2df2;border-radius:12px}
+#home .hm-menu .hx-tile .t{display:flex;flex-direction:column;align-items:flex-start;white-space:normal}
+#home .hm-menu .hx-tile .t small{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:599px){
+ #home .hm-menu .m3-heading{top:0;pointer-events:none}#home .m3-heading p{max-width:170px}#home .hm-menu .hx-tile .t small{font-size:9px}
+ #home .h-modes{padding-bottom:126px}#home .h-modes .h-mode.sel .opts{bottom:65px;gap:6px;padding:3px 6px;height:52px}#home .h-modes .h-mopt{font-size:10px;gap:3px}#home .h-modes .h-mopt .v{gap:1px}#home .h-modes .h-mopt button{min-width:32px}#home .h-modes .h-modetip{max-height:30px}
+}
+@media(max-height:480px) and (min-width:600px){
+ #home .h-modes{padding-bottom:101px;grid-template-rows:minmax(0,1fr)}#home .h-modes>.head{display:contents}#home .h-modes .head>div:first-child{display:none}#home [data-view="mode"]>.hx-flow{display:none}#home .h-modes .h-mode.sel .opts{bottom:51px;height:46px;padding:0 8px}#home .h-modes .h-modegrid{height:100%;grid-template-rows:repeat(2,minmax(0,1fr))}#home .h-modes .h-modecard .chk{top:5px;right:6px;width:20px;height:20px}#home .h-modes .h-modecard b{font-size:12px}
+}
+#home .h-modes .h-mode.sel .opts{flex-wrap:nowrap;overflow:visible}
+#home .h-modes .h-mopt{flex:1 1 0;max-width:280px;min-height:44px;height:44px;padding:0 6px;margin:0;box-sizing:border-box}
+@media(max-width:599px){#home .h-modes .h-mopt{padding:0;gap:2px}#home .h-modes .h-mopt .v{gap:0}#home .h-modes .h-mopt button{min-width:32px;width:32px;padding:0}#home .h-modes .h-mopt b{min-width:26px;font-size:10px}#home .h-modes .h-modetip{white-space:nowrap;overflow:auto;max-height:20px} }
+@media(max-width:599px){#home .h-modes .h-mopt button{min-width:44px;width:44px}#home .h-modes .h-mopt>span:first-child{font-size:9px}#home .h-modes .h-mopt .v{gap:0}}
+@media(min-width:1000px){#home .h-view[data-view="mode"]{bottom:64px}}
+@media(max-width:599px){#home [data-view="mode"] .h-modes .h-modecard small{font-size:10px;line-height:1.4}#home [data-view="mode"] .h-modes .h-modecard b{font-size:15px}}
+#home .h-modes .h-mode.running.sel .opts{display:none}
