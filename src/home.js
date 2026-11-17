@@ -2596,6 +2596,7 @@ function welcomeDialog({ first = false } = {}) {
     const prevFocus = document.activeElement;
     const wrap = document.createElement('div');
     wrap.className = 'gm-confirm gm-welcome';
+    if (!first) wrap.classList.add('wl-account');
     const cur = getNick();
     // 계정 저장 (2026-11-15): 지금 로그인한 계정 + [로그아웃], 다른 이름으로 들어갈 때 안내
     const meAcc = online.enabled ? online.me() : null;
@@ -2619,6 +2620,36 @@ function welcomeDialog({ first = false } = {}) {
     const inp = wrap.querySelector('input');
     const pinInp = wrap.querySelector('.wl-pin input');
     const errEl = wrap.querySelector('.wl-err');
+    let purpose = first ? 'first' : 'rename';
+    const actions = document.createElement('div');
+    actions.className = 'wl-actions';
+    if (!first) {
+      actions.innerHTML = '<button class="gm-btn small" data-r="rename" aria-pressed="true">✏ 이름 변경</button>' + (online.enabled ? '<button class="gm-btn small" data-r="login" aria-pressed="false">🔑 다른 계정으로 로그인</button>' : '');
+      wrap.querySelector('.wl-name').before(actions);
+    }
+    const setPurpose = (next) => {
+      purpose = next;
+      if (pinInp) { pinInp.value = ''; pinInp.closest('.wl-pin').hidden = next === 'rename'; }
+      if (!first) {
+        wrap.querySelector('h3').textContent = next === 'rename' ? '✏ 이름 변경' : '🔑 다른 계정으로 로그인';
+        wrap.querySelector('.box > p').textContent = next === 'rename'
+          ? (online.enabled && meAcc ? '기록·순위표·온라인 방 이름도 함께 바뀌어요. 레벨·조각·기록과 비밀번호는 그대로예요.' : online.enabled ? '이 기기에서 쓸 이름만 바꿔요. 온라인 계정은 로그인에서 연결해 주세요.' : '오프라인이에요. 이 기기에서 쓸 이름만 바뀌고 진행은 그대로예요.')
+          : '들어갈 계정의 이름과 비밀번호를 입력해 주세요. 처음 쓰는 이름이면 새 계정이 만들어져요.';
+        inp.setAttribute('aria-label', next === 'rename' ? '새 이름' : '로그인할 이름');
+        inp.placeholder = next === 'rename' ? '새 이름 (최대 12글자)' : '로그인할 이름';
+        wrap.querySelector('[data-r="ok"]').innerHTML = (next === 'rename' ? '이름 변경' : '로그인') + '<kbd>Enter</kbd>';
+        actions.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === next)));
+        inp.value = next === 'rename' ? cur : '';
+      }
+      if (errEl) { errEl.textContent = ''; errEl.classList.remove('on'); }
+    };
+    // 오류 안내는 비밀번호 칸을 숨겨도 보여야 해요.
+    if (errEl) wrap.querySelector('.btns').before(errEl);
+    const switchHint = wrap.querySelector('.wl-switch');
+    if (switchHint) switchHint.textContent = accCs.missing ? '서버가 아직 계정 저장을 지원하지 않아 계정 바꾸기를 막고 있어요.' : '지금 계정에 진행을 저장한 뒤, 들어갈 계정의 진행을 불러와요.';
+    const pinNote = wrap.querySelector('#wlPinNote');
+    if (pinNote) pinNote.textContent = '로그인할 계정의 비밀번호를 입력해 주세요';
+    setPurpose(purpose);
     const presetSelect = wrap.querySelector('#welcomeKeyPreset');
     if (presetSelect) {
       // 예전에 직접 정한 키도 보존하고, 처음 고르지 않으면 기본 WASD로 시작해요.
@@ -2648,6 +2679,7 @@ function welcomeDialog({ first = false } = {}) {
     };
     const done = async (r) => {
       if (busy) return;
+      if (r === 'rename' || r === 'login') { setPurpose(r); inp.focus(); inp.select(); return; }
       if (r === 'logout') {
         window.removeEventListener('keydown', onKey, true);
         wrap.remove();
@@ -2659,7 +2691,8 @@ function welcomeDialog({ first = false } = {}) {
         const n = cleanNick(inp.value) || cur || randomNick();
         // 온라인: 비밀번호를 넣었으면 이름 + 비밀번호로 시작/이어 하기, 안 넣었으면 이 기기 계정 이름만 바꿈
         if (pinInp && online.enabled) {
-          const pin = pinInp.value.trim();
+          const pin = purpose === 'rename' ? '' : pinInp.value.trim();
+          if (purpose === 'login' && !pin) return fail('비밀번호는 숫자 4자리예요', pinInp);
           if (pin && !/^[0-9]{4}$/.test(pin)) return fail('비밀번호는 숫자 4자리예요');
           busy = true;
           wrap.classList.add('busy');
@@ -2671,21 +2704,21 @@ function welcomeDialog({ first = false } = {}) {
             } else if (!(await online.rename(n))) {
               busy = false;
               wrap.classList.remove('busy');
-              return fail('이미 다른 사람이 비밀번호로 지킨 이름이에요 · 내 이름이면 비밀번호를 넣어 주세요');
+              return fail('이미 쓰는 이름이에요 · 다른 이름을 골라 주세요', inp);
             } else {
               wrap.dataset.msg = `👤 이름을 ${n}(으)로 바꿨어요 · 진행은 그대로예요`;
             }
           } catch (err) {
             busy = false;
             wrap.classList.remove('busy');
-            return fail(err.reason ? err.message : '서버에 연결하지 못했어요 (인터넷 확인)');
+            return fail(err.reason ? err.message : '서버에 연결하지 못했어요 (인터넷 확인)', purpose === 'rename' ? inp : pinInp);
           }
         }
         window.removeEventListener('keydown', onKey, true);
         wrap.remove();
         setNick(n);
         const m = online.me();
-        if (m && m.claimed && m.nick !== n) setNick(m.nick); // 서버의 이름(대소문자·띄어쓰기)을 따름
+        if (online.enabled && m && m.claimed && m.nick !== n) setNick(m.nick); // 서버의 이름(대소문자·띄어쓰기)을 따름
         uiSound('select');
         if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
         resolve({ name: getNick(), tutorial: r === 'tut', msg: wrap.dataset.msg || '', reload: wrap.dataset.reload === '1' });
@@ -2702,6 +2735,12 @@ function welcomeDialog({ first = false } = {}) {
       e.stopImmediatePropagation(); // 홈·게임은 키를 안 받음 (글자 입력은 그대로 됨)
       const a = document.activeElement;
       if (e.code === 'Escape') return e.preventDefault(), done(first ? 'skip' : null);
+      if (e.code === 'Tab') {
+        const items = [...wrap.querySelectorAll('input, select, button')].filter(el => el.getClientRects().length && !el.disabled);
+        e.preventDefault();
+        items[(items.indexOf(a) + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+        return;
+      }
       // 선택 상자에서는 화살표·Enter·Tab의 기본 동작을 그대로 써요.
       if (a === presetSelect) return;
       if (e.code === 'Enter' || e.code === 'NumpadEnter') {
@@ -2711,7 +2750,7 @@ function welcomeDialog({ first = false } = {}) {
       }
       if (['ArrowUp', 'ArrowDown'].includes(e.code) || (a !== inp && a !== pinInp && ['ArrowLeft', 'ArrowRight'].includes(e.code))) {
         e.preventDefault();
-        const items = [inp, ...(pinInp ? [pinInp] : []), ...(presetSelect ? [presetSelect] : []), ...wrap.querySelectorAll('button')];
+        const items = [...wrap.querySelectorAll('input, select, button')].filter(el => el.getClientRects().length && !el.disabled);
         const i = items.indexOf(a);
         const d = e.code === 'ArrowUp' || e.code === 'ArrowLeft' ? -1 : 1;
         items[(i + d + items.length) % items.length].focus();

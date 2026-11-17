@@ -3207,6 +3207,32 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
   .h-olme .ol-accbtns .gm-btn { flex: 1; min-height: 40px; }
 }
 
+/* 이름 변경 목적 선택 (namechange) */
+.gm-welcome [hidden] { display: none !important; }
+.gm-welcome .wl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.gm-welcome .wl-actions button { flex: 1 1 140px; min-height: 44px; white-space: normal; }
+.gm-welcome .wl-actions [aria-pressed="true"] { border-color: var(--gm-accent); background: rgba(255,207,63,.14); color: #ffe499; }
+.gm-welcome .box > p { word-break: keep-all; line-height: 1.5; }
+@media (max-height: 430px) {
+  .gm-welcome .wl-actions { margin: 8px 0; }
+  .gm-welcome .wl-acc { margin-top: 6px; padding: 6px 10px; }
+}
+@media (max-height: 430px) and (min-width: 600px) {
+  .wl-account .box { width: 700px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; padding: 12px 18px; }
+  .wl-account .box > * { grid-column: 1 / -1; min-width: 0; }
+  .wl-account h3 { margin: 0; font-size: 20px; }
+  .wl-account .box > p { margin: 4px 0; font-size: 12px; }
+  .wl-account .wl-acc { grid-column: 1; grid-row: 3; margin: 4px 0; }
+  .wl-account .wl-actions { grid-column: 2; grid-row: 3; margin: 4px 0; gap: 5px; }
+  .wl-account .wl-actions button { flex-basis: 0; min-width: 0; font-size: 12px; padding: 6px; }
+  .wl-account .wl-name { grid-column: 1; grid-row: 4; margin-top: 8px; align-self: start; }
+  .wl-account .wl-hint { grid-column: 1; grid-row: 5; }
+  .wl-account .wl-pin { grid-column: 2; grid-row: 4 / 6; margin-top: 8px; padding: 8px; }
+  .wl-account .wl-pin input { padding: 8px; }
+  .wl-account .wl-pin label { gap: 6px; }
+  .wl-account .wl-pinhint, .wl-account .wl-switch { font-size: 11px; margin-top: 4px; }
+  .wl-account .btns { margin-top: 8px; }
+}
 /* 이름 창: 휴대폰에서도 계정 안내를 끝까지 읽기 (namewin) */
 .gm-welcome { padding: 12px; }
 .gm-welcome .box { box-sizing: border-box; max-width: 100%; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
