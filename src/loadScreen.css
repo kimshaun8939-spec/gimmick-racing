@@ -68,3 +68,50 @@
 #loading.ls.out{background:transparent}
 #loading.ls .ls-carart img{animation-name:ls-photo}
 @keyframes ls-photo{from{transform:translateY(2px) rotate(-1deg) scale(1.18)}to{transform:translateY(-4px) rotate(1deg) scale(1.2)}}
+
+/* loadwheel3: 비교안만 적용, 기본값 유지 */
+#loading.ls[data-loadstyle="1"] .wf-track{transition:scale .58s cubic-bezier(.22,.7,.25,1),translate .58s cubic-bezier(.22,.7,.25,1)}
+#loading.ls[data-loadstyle="1"].ls-show:not(.out) .wf-track{transition-duration:.6s}
+#loading.ls[data-loadstyle="2"] .ls-content{grid-template-columns:1fr 1.65fr 1fr;grid-template-rows:auto 1fr auto auto;inset:5vh 4vw 4vh;gap:20px}
+#loading.ls[data-loadstyle="2"] .ls-heading{text-align:center}
+#loading.ls[data-loadstyle="2"] .ls-route{grid-column:1;grid-row:2;align-self:center;min-height:300px}
+#loading.ls[data-loadstyle="2"] .ls-car{grid-column:3;grid-row:2;align-self:center;min-height:300px}
+#loading.ls[data-loadstyle="2"] .ls-facts{flex-wrap:wrap}
+#loading.ls[data-loadstyle="2"] .ls-tips{grid-column:1 / -1;margin:0 auto;max-width:900px;min-height:120px;width:75%}
+#loading.ls[data-loadstyle="2"].ls-show:not(.out) .wf-track,#loading.ls[data-loadstyle="2"].out .wf-track{scale:.60;translate:0 0}
+#loading.ls[data-loadstyle="2"] .ld{left:50%!important;bottom:27vh!important;transform:translateX(-50%)!important}
+#loading.ls[data-loadstyle="3"].out .wf-track{scale:.26;translate:calc(-50vw + 6vw + 90px) calc(50vh - 4vh - 115px);transition:none}
+#loading.ls[data-loadstyle="3"].out .ls-content{opacity:1;transition:none}
+#loading.ls[data-loadstyle="3"].out .ls-content>*{opacity:0;transform:translateX(65px);transition:transform .36s ease,opacity .3s ease}
+#loading.ls[data-loadstyle="3"].out .ls-route{transform:translateX(-65px)}
+#loading.ls[data-loadstyle="3"].out .ls-back,#loading.ls[data-loadstyle="3"].out .ls-shade{transition:opacity .7s ease}
+@media(min-width:851px) and (min-height:801px){#loading.ls[data-loadstyle="3"].out .wf-track{scale:.20;translate:calc(-50vw + 6vw + 90px) calc(50vh - 4vh - 105px)}}
+@media(min-width:851px) and (max-height:800px){#loading.ls[data-loadstyle="3"].out .wf-track{scale:.22;translate:calc(-50vw + 6vw + 90px) calc(50vh - 4vh - 80px)}}
+@media(max-width:850px){
+#loading.ls[data-loadstyle="2"] .ls-content{grid-template-columns:1fr;grid-template-rows:auto 1fr auto auto;inset:5vh 6vw 4vh}
+#loading.ls[data-loadstyle="2"] .ls-tips{width:auto;min-height:160px;grid-row:3}
+#loading.ls[data-loadstyle="2"].ls-show:not(.out) .wf-track,#loading.ls[data-loadstyle="2"].out .wf-track{scale:.72;translate:0 1vh}
+#loading.ls[data-loadstyle="2"] .ld{bottom:30vh!important}
+#loading.ls[data-loadstyle="3"].out .wf-track{scale:.55;translate:0 8vh}
+}
+@media(max-height:500px) and (max-width:850px){
+#loading.ls[data-loadstyle="2"] .ls-content{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr auto;inset:5vh 5vw}
+#loading.ls[data-loadstyle="2"] .ls-heading{text-align:left}
+#loading.ls[data-loadstyle="2"] .ls-tips{grid-column:2;grid-row:1 / 3;width:auto;min-height:0}
+#loading.ls[data-loadstyle="2"].ls-show:not(.out) .wf-track,#loading.ls[data-loadstyle="2"].out .wf-track{scale:.48;translate:-25vw 10vh}
+#loading.ls[data-loadstyle="2"] .ld{left:25%!important;bottom:10vh!important}
+#loading.ls[data-loadstyle="3"].out .wf-track{scale:.37;translate:-26vw 12vh}
+}
+#loading.ls.ls-reduced[data-loadstyle].out .ls-content>*{transform:none}
+/* 1차 사진 검토: 크기 연결 중 사진을 유지하고, 작은 휠 뒤에서 게임을 공개. */
+#loading.ls[data-loadstyle="1"].out .ls-back,#loading.ls[data-loadstyle="1"].out .ls-shade{transition:opacity .48s ease .2s}
+#loading.ls[data-loadstyle="1"].out .ls-content{transition:opacity .32s ease .12s}
+#loading.ls[data-loadstyle="2"] .ls-route,#loading.ls[data-loadstyle="2"] .ls-car{padding:22px}
+#loading.ls[data-loadstyle="3"].out .ls-back,#loading.ls[data-loadstyle="3"].out .ls-shade{transition:opacity .18s ease .58s}
+/* 2차 사진 검토: 휠 앞에 카드 글자가 비치지 않도록 층 정리. */
+#loading.ls[data-loadstyle] .wf-track{z-index:1}
+#loading.ls[data-loadstyle="1"].out .ls-content{transition:opacity .18s ease}
+#loading.ls[data-loadstyle="1"].out .ls-back,#loading.ls[data-loadstyle="1"].out .ls-shade{transition:opacity .18s ease .48s}
+#loading.ls[data-loadstyle="2"] .ls-stats{gap:10px 14px}
+#loading.ls[data-loadstyle="3"].out .ls-tips{transform:translateX(40px)}
+@media(max-width:850px) and (min-height:501px){#loading.ls[data-loadstyle="2"] .ld{bottom:calc(4vh + 190px)!important}}

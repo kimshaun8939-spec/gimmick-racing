@@ -612,6 +612,14 @@
         var delay = Math.max(0, endAt - NOW());
         if (RM) { A(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 220, delay: delay, fill: 'forwards' }); setTimeout(finish, delay + 260); emit('out', { at: NOW() + delay, dur: 220, rm: true, main: !!main }); return; }
         measure();
+        if (root.dataset.loadstyle === '3') {
+          emit('out', { at: NOW() + delay, dur: 760, rm: true, main: !!main }); // 작은 휠: 회전음 종료, 큰 휠스핀 소리는 생략
+          var small = track.getBoundingClientRect(), distance = -(small.right + 60) / (small.width / D || 1);
+          A(track,[{transform:'translateX(0px)'},{transform:tx(distance)}],{duration:760,delay:delay,easing:'cubic-bezier(.4,0,.7,1)',fill:'forwards'});
+          each(R1,[{transform:'rotate(0deg)'},{transform:'rotate(-900deg)'}],{duration:760,delay:delay,fill:'forwards'});
+          A(text(),[{opacity:1},{opacity:0}],{duration:180,fill:'forwards'});
+          setTimeout(finish,delay+800); return;
+        }
         // 같은 요소에 앞 애니메이션(들어오기 fill·흐림 덮개)이 남아 있으면 크롬이 새 애니메이션을 그래픽 쪽에 못 올림(예전 wf-blur) → 지금 값으로 굳히고 지움
         if (delay < 30) [track, hop, wl, wr, veil, lines, ghost, blur, shadow, text()].concat(R1).forEach(function (el) {
           if (el && el.getAnimations) el.getAnimations().forEach(function (a) { try { a.commitStyles(); } catch (e) {} try { a.cancel(); } catch (e) {} });
@@ -704,6 +712,8 @@
       if (going) return false;
       going = true;
       try { document.documentElement.classList.add('wf-going'); } catch (e) {}
+      var target = new URL(url, location.href), chosen = new URLSearchParams(location.search).get('loadstyle');
+      if (chosen && !target.searchParams.has('loadstyle')) { target.searchParams.set('loadstyle', chosen); url = target.href; }
       var c = cover(o);
       setTimeout(function () {
         try { sessionStorage.setItem(KEY, JSON.stringify({ t: Date.now(), title: o.title || '', sub: o.sub || '', status: o.status || '' })); } catch (e) {}
