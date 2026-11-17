@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { glacierSurface, gfx2Enabled } from './gfxTextures.js';
 import { alpineMaterial, smoothVisualGeometry } from './gfxTerrain.js';
+import { photoMaterial } from './gfxPbr.js';
 import { computeRacingLine, edgeFraction } from './racingLine.js';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 
@@ -394,14 +395,20 @@ export function buildGlacierTrack(data, scene) {
 
   // ---------------------------------------------------------------- 도로, 연석
   // 살짝 젖은 듯 반들거리는 아스팔트, 파랑/흰 연석
-  const roadMat = glacierSurface(new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.55, metalness: 0.08 }), 'asphalt');
-  const curbMat = new THREE.MeshStandardMaterial({ map: curbTexture('#f4f8ff', '#1f6fd6'), roughness: 0.6 });
+  const roadMat = gfx2Enabled() ? photoMaterial('asphalt_track', { scale: 2.0, road: true, color:'#c1cbd8', roughness:.84, metalness:.025 }) : glacierSurface(new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.55, metalness: 0.08 }), 'asphalt');
+  const curbPaint = curbTexture('#f4f8ff', '#1f6fd6');
+  const curbMat = gfx2Enabled() ? photoMaterial('concrete_floor', {scale:2,paint:curbPaint,color:'#e6efff'}) : new THREE.MeshStandardMaterial({ map: curbPaint, roughness: 0.6 });
   for (const [a, b] of runsOf((i) => hasRoad(i))) strip(spanList(a, b), (s) => [[-s.hw, 0], [s.hw, 0]], roadMat, { vScale: 12, surface: 'ground' });
   for (const side of [-1, 1]) {
     for (const [a, b] of runsOf((i) => hasRoad(i))) {
       const L = spanList(a, b);
       const prof = side < 0 ? (s) => [[-s.hw - kerbAt(s.i, -1), 0.02], [-s.hw, 0.02]] : (s) => [[s.hw, 0.02], [s.hw + kerbAt(s.i, 1), 0.02]];
-      strip(L, prof, curbMat, { vScale: 4, surface: 'ground' });
+      const curbCollision=strip(L, prof, curbMat, { vScale: 4, surface: 'ground' });
+      if (gfx2Enabled()) {
+        // Original flat collision strip stays byte-for-byte intact. Only this copy is rounded.
+        curbCollision.forEach(m=>{m.visible=false;m.name='gfx8CurbCollision';});
+        strip(L,s=>{const w=kerbAt(s.i,side);const profile=[0,.12,.5,.88,1].map((u,k)=>[side*(s.hw+w*u),[.02,.065,.09,.065,.02][k]]);return side<0?profile.reverse():profile;},curbMat,{vScale:4});
+      }
     }
   }
   const edgeLat = (s, side) => s.hw + kerbAt(s.i, side);
@@ -430,7 +437,7 @@ export function buildGlacierTrack(data, scene) {
   const railMat = new THREE.MeshStandardMaterial({ color: '#d3d9e0', metalness: 0.6, roughness: 0.35, side: THREE.DoubleSide });
   const railGlowMat = new THREE.MeshBasicMaterial({ color: '#5fd0ff', toneMapped: false, side: THREE.DoubleSide });
   const iceTex = iceTexture(31);
-  const iceWallMat = glacierSurface(new THREE.MeshStandardMaterial({ map: iceTex, roughness: 0.25, metalness: 0.05, side: THREE.DoubleSide, emissive: '#2a78b0', emissiveIntensity: 0.25 }), 'ice');
+  const iceWallMat = gfx2Enabled() ? photoMaterial('cliff_side',{scale:5,ice:true,color:'#b6e5ff',roughness:.64,metalness:.06,side:THREE.DoubleSide,emissive:'#2a78b0',emissiveIntensity:.18}) : glacierSurface(new THREE.MeshStandardMaterial({ map: iceTex, roughness: 0.25, metalness: 0.05, side: THREE.DoubleSide, emissive: '#2a78b0', emissiveIntensity: 0.25 }), 'ice');
   const posts = [];
   const railRuns = [];
   for (const [n, side] of [[0, -1], [1, 1]]) {
@@ -454,7 +461,7 @@ export function buildGlacierTrack(data, scene) {
             { vScale: 6, uScale: 4, shadow: true },
           );
         } else {
-          strip(L, (s) => [[lat(s), 0.62], [lat(s), 1.0]], railMat, { vScale: 4 });
+          strip(L, (s) => gfx2Enabled() ? [[lat(s),.62],[lat(s)+side*.08,.68],[lat(s)-side*.07,.79],[lat(s)+side*.08,.92],[lat(s),1.0]] : [[lat(s), 0.62], [lat(s), 1.0]], railMat, { vScale: 4 });
           strip(L, (s) => [[lat(s), 0.4], [lat(s), 0.52]], railGlowMat, { vScale: 4 });
           const stepN = mS(3.2);
           for (let k = 0; k < L.length; k += stepN) {
@@ -737,7 +744,7 @@ export function buildGlacierTrack(data, scene) {
   const cA = new THREE.Color('#eef3f9'), cB = new THREE.Color('#d9e4ef'), cBlue = new THREE.Color('#b4c9de');
   const cRock = new THREE.Color('#5c6670'), cRock2 = new THREE.Color('#7d8894'), cShoulder = new THREE.Color('#c7d1dc'), cIce = new THREE.Color('#8fcff0'), cTmp = new THREE.Color();
   const terrainMat = glacierSurface(new (gfx2Enabled() ? THREE.MeshStandardMaterial : THREE.MeshLambertMaterial)({ vertexColors: true, flatShading: true, emissive: '#0b1624', side: THREE.DoubleSide }), 'snow');
-  const terrainVisualMat = gfx2Enabled() ? alpineMaterial(-1) : null;
+  const terrainVisualMat = gfx2Enabled() ? photoMaterial('cliff_side', {scale:10,snow:true,side:THREE.DoubleSide,color:'#bacde6'}) : null;
   const terrainColor = (x, y, z, ny, nd) => {
     const n1 = noise(x / 90, z / 90, 3), n2 = noise(x / 13, z / 13, 2);
     cTmp.copy(cA).lerp(cB, THREE.MathUtils.clamp(0.5 + n2 * 0.9, 0, 1));

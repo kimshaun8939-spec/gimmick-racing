@@ -7,6 +7,11 @@ import * as THREE from 'three';
 import { buildGlacierTrack } from './glacierTrack.js';
 import { buildGlacierScenery } from './glacierScenery.js';
 import { buildGlacierProps } from './glacierProps.js';
+import { gfxEnabled } from './gfxConfig.js';
+import { prepareGlacierPhotos } from './glacierDetail.js';
+
+// main awaits this map module: photo downloads stay inside its existing loading screen.
+if (gfxEnabled('glacier')) await prepareGlacierPhotos();
 
 /** 풍경이 없을 때 쓰는 가장 단순한 풍경: 밤하늘 색·안개·빛 (volcanoScenery와 같은 모양으로 돌려줌) */
 function basicScenery(track, scene) {

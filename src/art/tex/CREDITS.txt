@@ -1,0 +1,9 @@
+Poly Haven — CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Game derivatives only; original downloads kept outside game folder.
+asphalt_track: https://polyhaven.com/a/asphalt_track
+snow_02: https://polyhaven.com/a/snow_02
+cliff_side: https://polyhaven.com/a/cliff_side
+aerial_rocks_02: https://polyhaven.com/a/aerial_rocks_02
+gravel_floor_02: https://polyhaven.com/a/gravel_floor_02
+concrete_floor: https://polyhaven.com/a/concrete_floor
+snowy_field: https://polyhaven.com/a/snowy_field

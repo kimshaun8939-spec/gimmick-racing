@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { buildAlpineRanges } from './gfxTerrain.js';
 import { spruceGeometry } from './gfxTrees.js';
 import { gfx2Enabled, glacierSurface } from './gfxTextures.js';
+import { glacierPhotoDetail } from './glacierDetail.js';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 import { billboardCloud, smokeTexture, glowTexture, helicopterModel, gondolaGeo, pylonGeo, reflectorPostGeo, colorBoxes } from './volcanoAssets.js';
 import {
@@ -1553,6 +1554,7 @@ export function buildGlacierScenery(track, scene) {
   group.traverse((o) => {
     if (o.isInstancedMesh) o.userData.noBatch = true;
   });
+  if (gfx2) animators.push(glacierPhotoDetail(group, scene, track));
   const buildMs = Math.round(performance.now() - t0);
   return {
     colliders: allColliders,

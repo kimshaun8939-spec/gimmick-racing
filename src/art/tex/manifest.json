@@ -1,0 +1,135 @@
+[
+  {
+    "name": "asphalt_track",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 207074
+  },
+  {
+    "name": "asphalt_track",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 23774
+  },
+  {
+    "name": "asphalt_track",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 7878
+  },
+  {
+    "name": "snow_02",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 74368
+  },
+  {
+    "name": "snow_02",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 89294
+  },
+  {
+    "name": "snow_02",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 17556
+  },
+  {
+    "name": "cliff_side",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 172692
+  },
+  {
+    "name": "cliff_side",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 89570
+  },
+  {
+    "name": "cliff_side",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 27590
+  },
+  {
+    "name": "aerial_rocks_02",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 293360
+  },
+  {
+    "name": "aerial_rocks_02",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 106518
+  },
+  {
+    "name": "aerial_rocks_02",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 71210
+  },
+  {
+    "name": "gravel_floor_02",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 413102
+  },
+  {
+    "name": "gravel_floor_02",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 149574
+  },
+  {
+    "name": "gravel_floor_02",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 103918
+  },
+  {
+    "name": "concrete_floor",
+    "kind": "diff",
+    "width": 1024,
+    "height": 1024,
+    "bytes": 259668
+  },
+  {
+    "name": "concrete_floor",
+    "kind": "nor_gl",
+    "width": 512,
+    "height": 512,
+    "bytes": 29938
+  },
+  {
+    "name": "concrete_floor",
+    "kind": "arm",
+    "width": 512,
+    "height": 512,
+    "bytes": 11382
+  },
+  {
+    "name": "snowy_field",
+    "kind": "hdr",
+    "width": 512,
+    "height": 256,
+    "bytes": 524337
+  }
+]
