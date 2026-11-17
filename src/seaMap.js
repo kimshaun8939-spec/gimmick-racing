@@ -1,3 +1,6 @@
+import {prepareSeaKenney} from './seaKenney.js';
+import {prepareSeaPhotos} from './seaDetail.js';
+await Promise.all([prepareSeaPhotos(),prepareSeaKenney()]);
 // 노을 해안 서킷 (data/sea.json "module": "seaMap") — main.js가 이 파일의 세 함수를 씀
 //   buildTrack   → seaTrack.js  (도로·지형·바다·가드레일·레이싱 라인)
 //   buildScenery → seaScenery.js (노을 하늘, 항구 마을, 등대섬, 배, 갈매기, 바다 동굴, 출발 게이트…)

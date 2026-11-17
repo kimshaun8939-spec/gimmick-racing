@@ -1,3 +1,4 @@
+import {kenneySeaEnabled,seaKenneyGeometry} from './seaKenney.js';
 // 노을 해안 서킷의 움직이는 것들 (seaScenery.js가 부름)
 //   항구를 오가는 배, 하늘을 도는 수상비행기, 결승선 위 불꽃놀이와 노을빛 등불, 물에 들어갈 때·파도에서 떨어질 때 물보라
 //   모두 단단하지 않음 (부딪히지 않음). 무거운 계산 없이 인스턴스·점(Points) 몇 개로
@@ -38,6 +39,7 @@ function seaplaneGeometry() {
 
 /** 작은 모터보트 (앞 = +z) */
 function motorBoatGeometry(color) {
+  if(kenneySeaEnabled)return seaKenneyGeometry('speed',2.2,2.2,6.8,0,-.3);
   return mergeGeometries([
     colored(new THREE.BoxGeometry(2.2, 0.9, 6), color, M(0, 0.2, 0)),
     colored(new THREE.ConeGeometry(1.1, 2, 4).rotateX(Math.PI / 2).rotateZ(Math.PI / 4), color, M(0, 0.2, 3.9, 0, 0, 0, 1, 0.6, 1)),

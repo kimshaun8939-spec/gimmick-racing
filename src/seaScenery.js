@@ -1,3 +1,5 @@
+import {kenneySeaEnabled,seaKenneyGeometry,seaKenneyMaterial,seaKenneyObject} from './seaKenney.js';
+import {seaPhoto,seaPhotoScenery} from './seaDetail.js';
 import {buildLandscapeRanges,landscapeMaterial,smoothVisualGeometry} from './gfxTerrain.js';
 import {gfxEnabled} from './gfxConfig.js';
 import {buildVisualForest,coastalPalmGeometry} from './gfxTrees.js';
@@ -83,6 +85,7 @@ function rockGeometry(seed) {
 }
 /** 요트 (흰 선체 + 돛대 + 돛) */
 function yachtGeometry(sail = true) {
+  if(kenneySeaEnabled)return seaKenneyGeometry('sail',2.2,9.4,6.4,0,-.3);
   const hull = new THREE.CylinderGeometry(0.75, 1.15, 6.4, 10).rotateX(Math.PI / 2).scale(1, 0.55, 1);
   const parts = [colored(hull, '#ffffff', M(0, 0.35, 0)), colored(new THREE.BoxGeometry(1.9, 0.12, 5.6), '#c79a64', M(0, 0.62, 0)), colored(new THREE.BoxGeometry(1.4, 0.8, 1.8), '#f2f2f2', M(0, 1.05, -0.6))];
   if (sail) {
@@ -100,11 +103,13 @@ function yachtGeometry(sail = true) {
 }
 /** 작은 어선 (선실 + 색 띠) */
 function fishBoatGeometry() {
+  if(kenneySeaEnabled)return seaKenneyGeometry('fish',2.5,4.1,6.4,0,-.35);
   const hull = new THREE.CylinderGeometry(0.9, 1.3, 7, 8).rotateX(Math.PI / 2).scale(1, 0.6, 1);
   return mergeGeometries([colored(hull, '#ffffff', M(0, 0.45, 0)), colored(new THREE.BoxGeometry(2.3, 0.3, 6.4), '#2e6fd8', M(0, 0.95, 0)), colored(new THREE.BoxGeometry(1.7, 1.6, 2), '#f4f1ea', M(0, 1.9, -1)), colored(new THREE.BoxGeometry(1.9, 0.2, 2.3), '#e8463a', M(0, 2.8, -1)), colored(new THREE.CylinderGeometry(0.06, 0.06, 4, 4), '#555555', M(0, 3.5, 1.5))]);
 }
 /** 부표 (몸통 + 꼭대기 원뿔). 색은 인스턴스 색 */
 function buoyGeometry() {
+  if(kenneySeaEnabled)return seaKenneyGeometry('buoy',1.5,2.1,1.5,0,-.35);
   return mergeGeometries([colored(new THREE.CylinderGeometry(0.55, 0.8, 1.4, 10), '#ffffff', M(0, 0.25, 0)), colored(new THREE.ConeGeometry(0.34, 0.9, 8), '#f4f4f4', M(0, 1.4, 0)), colored(new THREE.TorusGeometry(0.72, 0.1, 5, 12), '#333333', M(0, -0.25, 0, Math.PI / 2))]);
 }
 /** 갈매기 (V자 날개) */
@@ -583,7 +588,7 @@ export function buildSeaScenery(track, scene) {
       g.fillRect(0, h * 0.75, w, h * 0.25);
     });
     wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
-    const promMat = new THREE.MeshLambertMaterial({ map: stoneTex });
+    const promMat = seaPhoto(new THREE.MeshLambertMaterial({map:stoneTex}),'concrete_floor',3,.4);
     const wallMat = new THREE.MeshLambertMaterial({ map: wallTex, side: THREE.DoubleSide });
     const sd = harborSide;
     const geoStrip = (prof, mat) => {
@@ -627,7 +632,7 @@ export function buildSeaScenery(track, scene) {
       const pL = track.surf(s, sd * (prom.inner + 2.5), 0);
       if (idx % 2 === 0) {
         const lp = A.lampPost();
-        add(lp.obj, pL.x, pL.y - 0.05, pL.z, yawOf(s) + (sd < 0 ? Math.PI / 2 : -Math.PI / 2));
+        add(lp.obj, /* Kenney 가로등은 장난감 같아서 원래 것 유지 (2026-11-17) */ pL.x, pL.y - 0.05, pL.z, yawOf(s) + (sd < 0 ? Math.PI / 2 : -Math.PI / 2));
         circle(pL.x, pL.z, 0.4, pL.y - 1, pL.y + 6);
       } else {
         const pp = track.surf(s, sd * (prom.inner + 9), 0);
@@ -692,7 +697,7 @@ export function buildSeaScenery(track, scene) {
         break;
       }
     }
-    boatSets.push({ list: yachts, geo: yachtGeometry(true) }, { list: fishing, geo: fishBoatGeometry() });
+    boatSets.push({ list: yachts, geo: yachtGeometry(true) }, ... (kenneySeaEnabled?[{list:fishing.filter((_,i)=>i%2===0),geo:fishBoatGeometry()},{list:fishing.filter((_,i)=>i%2===1),geo:seaKenneyGeometry('tug',2.5,4.1,6.4,0,-.35)}]:[{ list: fishing, geo: fishBoatGeometry() }]));
   }
   // ---------------------------------------------------------------- 관중석, 피트, 관제탑 (출발 직선 땅 쪽)
   const stands = [];
@@ -1441,6 +1446,11 @@ export function buildSeaScenery(track, scene) {
     const y = landY(q.x, q.z, 0.3);
     if (y === null || !roadClear(q.x, q.z, 1, 3) || !free(q.x, q.z, width / 2)) return;
     const b = A.signBoard({ title, sub, bg, accent, width });
+    if(kenneySeaEnabled){
+      // Keep the readable route panel; replace its two decorative supports only.
+      for(const support of b.obj.children.slice(0,10))b.obj.remove(support);
+      for(const side of [-1,1]){const post=seaKenneyObject('sign',1.6,7,.35);post.position.x=side*(width/2+.42);b.obj.add(post);}
+    }
     add(b.obj, q.x, y, q.z, Math.atan2(-s.tan.x, -s.tan.z));
     for (const u of [-width * 0.35, width * 0.35]) circle(q.x + s.right.x * u, q.z + s.right.z * u, 0.5, y, y + 8);
     occupy(q.x, q.z, width / 2);
@@ -1509,16 +1519,37 @@ export function buildSeaScenery(track, scene) {
   buildSeaLife(track, group, animators, rand);
 
   // ---------------------------------------------------------------- 인스턴스 만들기
-  instanced(gfxEnabled()?coastalPalmGeometry():palmGeometry(), gfxEnabled()?new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}):vcMat, palms, { name: 'palms' });
+  instanced(gfxEnabled()?coastalPalmGeometry():palmGeometry(), /* Kenney 야자는 원래 것보다 단순해서 안 씀 */ gfxEnabled()?new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}):vcMat, palms, { name: 'palms' });
   const gfx6=gfxEnabled();
   if(gfx6)buildVisualForest(group,[...pines.map(it=>({...it,type:'pine',width:8,height:8,yaw:it.ry,variant:1})),...cypress.map(it=>({...it,type:'leaf',width:5,height:8,yaw:it.ry,variant:2}))],{near:300,far:1100,snow:false,shadows:true});
   else {instanced(pineGeometry(),vcMat,pines,{name:'pines'});instanced(cypressGeometry(),vcMat,cypress,{name:'trees'});}
-  instanced(bushGeometry(), vcMat, bushes, { shadow: false, name: 'bushes' });
+  instanced(kenneySeaEnabled?seaKenneyGeometry('bush',3.6,2.1,3):bushGeometry(), vcMat, bushes, { shadow: false, name: 'bushes' });
   instanced(gfx6?coastalRockGeometry():rockGeometry(11), (gfx6?gfxSurface(new THREE.MeshLambertMaterial({}),'rock',{snow:false}):new THREE.MeshLambertMaterial({ flatShading: true })), rocks, { name: 'rocks' });
+  if(kenneySeaEnabled){
+    const lodSets=[];
+    for(let variant=0;variant<6;variant++){
+      const list=houses.filter((_,i)=>i%6===variant).map(it=>({...it,sy:it.sy*1.28,color:'#ffffff'}));
+      const im=instanced(seaKenneyGeometry('houses',1,1,1,variant),seaKenneyMaterial,list,{name:'kenneyHouses'});
+      if(im){const matrices=list.map((_,i)=>{const m=new THREE.Matrix4();im.getMatrixAt(i,m);return m;});lodSets.push({im,list,matrices});}
+    }
+    const far=instanced(houseGeo,new THREE.MeshLambertMaterial({color:'#d7c4ae'}),houses,{name:'kenneyFarHouses',shadow:false});
+    if(far){let last=-Infinity,lx=Infinity,lz=Infinity;
+      animators.push((time,dt,car)=>{
+        if(!car)return;
+        const x=car.pos.x,z=car.pos.z;
+        if(time>=last&&time-last<.5&&(x-lx)**2+(z-lz)**2<625)return;
+        last=time;lx=x;lz=z;let nf=0;
+        for(const set of lodSets){let n=0;set.list.forEach((it,i)=>{const d=(it.x-x)**2+(it.z-z)**2;if(d<650*650)set.im.setMatrixAt(n++,set.matrices[i]);else if(d<1100*1100)far.setMatrixAt(nf++,set.matrices[i]);});set.im.count=n;set.im.instanceMatrix.needsUpdate=true;}
+        far.count=nf;far.instanceMatrix.needsUpdate=true;
+      });
+    }
+
+  }else{
   instanced(houseGeo, new THREE.MeshLambertMaterial({ map: winTex }), houses, { name: 'houses' });
   instanced(new THREE.ConeGeometry(0.75, 1, 4).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ flatShading: true }), roofs, { name: 'roofs' });
   instanced(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshLambertMaterial({ color: '#f4f1ea' }), flatRoofs, { name: 'flatRoofs' });
   instanced(new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({}), domes, { name: 'domes' });
+  }
   {
     const um = mergeGeometries([colored(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 5), '#eeeeee', M(0, 1.2, 0)), colored(new THREE.ConeGeometry(1.5, 0.6, 10, 1, true), '#ffffff', M(0, 2.3, 0))]);
     instanced(um, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), umbrellas, { name: 'umbrellas' });
@@ -1545,6 +1576,7 @@ export function buildSeaScenery(track, scene) {
       }
   }
 
+  seaPhotoScenery(group,scene);
   group.updateMatrixWorld(true);
   return {
     colliders: allColliders,

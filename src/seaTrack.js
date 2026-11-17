@@ -1,3 +1,4 @@
+import {seaPhoto} from './seaDetail.js';
 import {gfxEnabled} from './gfxConfig.js';
 import {smoothVisualGeometry} from './gfxTerrain.js';
 import {gfxSurface} from './gfxTextures.js';
@@ -437,10 +438,10 @@ export function buildSeaTrack(data, scene) {
   const lineY = (i, d = 0) => roadYAt(samples[i], racingLine.offset[i] + d);
 
   // ---------------------------------------------------------------- 도로, 연석, 선착장
-  const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.88 });
-  const curbMat = new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.8 });
-  const curbBridgeMat = new THREE.MeshStandardMaterial({ map: curbTexture('#2e6fd8', '#f4f4f4'), roughness: 0.8 });
-  const slipMat = new THREE.MeshStandardMaterial({ map: slipTexture(), roughness: 0.95 });
+  const roadMat = seaPhoto(new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.88 }),'asphalt_track',3,0.65);
+  const curbMat = seaPhoto(new THREE.MeshStandardMaterial({ map: curbTexture(), roughness: 0.8 }),'concrete_floor',2,0.18);
+  const curbBridgeMat = seaPhoto(new THREE.MeshStandardMaterial({ map: curbTexture('#2e6fd8', '#f4f4f4'), roughness: 0.8 }),'concrete_floor',2,0.18);
+  const slipMat = seaPhoto(new THREE.MeshStandardMaterial({ map: slipTexture(), roughness: 0.95 }),'concrete_floor',3,0.35);
   for (const [a, b] of runsOf((i) => !samples[i].water)) {
     const L = spanList(a, b);
     strip(L, [[-HW, 0], [HW, 0]], roadMat, { vScale: 12, surface: 'ground' });
@@ -681,7 +682,7 @@ export function buildSeaTrack(data, scene) {
   const cDry = new THREE.Color('#a8aa5e'), cSeaFloor = new THREE.Color('#c9b98a'), cDeepFloor = new THREE.Color('#5d7f7a'), cTmp = new THREE.Color();
   const gfx6=gfxEnabled();
   const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  const visualTerrainMat=gfx6?gfxSurface(new THREE.MeshLambertMaterial({vertexColors:true}),'coast',{snow:false}):null;
+  const visualTerrainMat=gfx6?seaPhoto(gfxSurface(new THREE.MeshLambertMaterial({vertexColors:true}),'coast',{snow:false}),'coast_sand_01',5,.4,true):null;
   const visualHeight=(x,z)=>groundY(x,z)??natural(x,z);
   function visualTerrain(geo){const g=smoothVisualGeometry(geo,visualHeight),p=g.attributes.position,n=g.attributes.normal,c=geo.attributes.color.clone();for(let i=0;i<p.count;i++){const col=colorAt(p.getX(i),p.getY(i),p.getZ(i),n.getY(i));c.setXYZ(i,col.r,col.g,col.b);}g.setAttribute('color',c);return new THREE.Mesh(g,visualTerrainMat);}
   const nrm = new THREE.Vector3();
@@ -884,7 +885,7 @@ export function buildSeaTrack(data, scene) {
   }
   // 레일 아래 갓길: 연석 끝 ~ 레일 바깥까지 도로 높이의 포장면 (6 m 격자 지형이 절벽 쪽으로 처져서 연석과 레일 사이에 0.8 m 도랑이 생겼고,
   //   봇이 그 도랑에 바퀴가 빠져 멈췄음)
-  const shoulderMat = new THREE.MeshStandardMaterial({ color: '#b9ad9a', roughness: 0.95 });
+  const shoulderMat = seaPhoto(new THREE.MeshStandardMaterial({ color: '#b9ad9a', roughness: 0.95 }),'gravel_floor_02',2,0.45);
   for (const [n, side] of [[0, -1], [1, 1]]) for (const [a, b] of runsOf((i) => railSide[n][i] === 1 && !samples[i].bridge)) {
     // (다리 구간은 따로 끊음: 예전엔 다리 샘플만 빼고 이어서 다리 앞뒤를 잇는 긴 띠가 도로를 가로질렀음)
     const L = spanList(a, b);
@@ -916,7 +917,7 @@ export function buildSeaTrack(data, scene) {
     addRunoff(sideI(-ap.side), ap.i + mS(4), ap.i + mS(75), RUNOFF_W, mS(14)); // 탈출 바깥
     addRunoff(sideI(ap.side), ap.i - mS(40), ap.i + mS(30), 4, mS(10)); // 에이펙스 안쪽 (연석을 넘어 안쪽을 자른 차도 잔디에 안 걸림)
   }
-  const runoffMat = new THREE.MeshStandardMaterial({ color: '#8f8a84', roughness: 0.95 });
+  const runoffMat = seaPhoto(new THREE.MeshStandardMaterial({ color: '#8f8a84', roughness: 0.95 }),'concrete_floor',4,0.35);
   for (const [n, side] of [[0, -1], [1, 1]]) {
     for (const [a, b] of runsOf((i) => runoffW[n][i] > 0.05)) {
       const L = spanList(a - 1, b + 1);
