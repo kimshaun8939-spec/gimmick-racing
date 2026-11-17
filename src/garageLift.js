@@ -21,7 +21,7 @@ export function createGarageLift(table){
    s.scene.onBeforeRender=s.previousRender;s.preview.setMode(s.originalMode);
    s.robot?.dispose();s.out?.dispose();s.incoming?.dispose();s.donor?.dispose();
    s.root.removeFromParent();s.root.traverse(o=>{if(o.isLineSegments){o.geometry.dispose();o.material.dispose();}});
-   s.label.remove();s.curtain?.remove();sfx.stop();s.resolve();
+   s.label.remove();sfx.stop();s.resolve();
   }
  }
  function setup(holder){
@@ -43,12 +43,8 @@ export function createGarageLift(table){
   // 긴 배기 끝까지 합친 상자의 가운데(앞 엔진 차에서는 운전석)가 아닌 실제 블록을 잡음.
   if(s.slot==='engine'){const [x,y,z,k]=enginePosition(s.car.look?.style||'f1');s.center.set(x,y+.2*k,z);s.extent.set(1.2*k,.8*k,1.7*k);}
   s.robot=createPitRobot(s.root,s.center,s.extent,s.slot);sfx.start();
-  // Merged bodies: use a brief editorial cut during internal disconnection.
+  // The car itself screens internal work; no overlay or fade.
   s.internal=['engine','gearbox','water'].includes(s.slot);
-  if(s.internal){s.curtain=document.createElement('div');s.curtain.setAttribute('aria-hidden','true');
-   Object.assign(s.curtain.style,{position:'fixed',pointerEvents:'none',zIndex:'110',background:'#101820',opacity:'0',borderRadius:'12px'});document.body.append(s.curtain);}
-
-  // bigparts: 순정 칸은 움직일 메시가 없음(none) = 순정 부분은 제자리 그대로, 덧붙는 부품만 빠지고 들어옴.
   s.integrated=!!s.out.none;s.toStock=!!s.incoming.none;
   s.outline=new T.Group();s.root.add(s.outline);
   s.root.updateMatrixWorld(true);const local=s.root.matrixWorld.clone().invert();
@@ -61,9 +57,6 @@ export function createGarageLift(table){
  function render(renderer,scene,camera){
   const s=state;if(!s?.ready)return;s.previousRender?.call(scene,renderer,scene,camera);
   const p=s.progress,slot=s.slot;
-  if(s.curtain){const r=document.querySelector('.h-carstage')?.getBoundingClientRect();if(r)Object.assign(s.curtain.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
-   const pulse=(a,b,c,d)=>p<a||p>d?0:p<b?ease((p-a)/(b-a)):p<c?1:1-ease((p-c)/(d-c));
-   s.curtain.style.opacity=s.reduced?'0':String(Math.max(pulse(.16,.21,.345,.39),pulse(.665,.69,.825,.87)));}
   if(!s.applied&&p>.22)s.out.hide();
   const rect=document.querySelector('.h-carstage')?.getBoundingClientRect(),view=PART_VIEW[slot];
   const direction=new T.Vector3(...view.pos).sub(new T.Vector3(...view.look)).normalize();
@@ -74,7 +67,21 @@ export function createGarageLift(table){
   const fraction=Math.max(120,Math.min(rect?.height||innerHeight,rect?.width||innerWidth))/innerHeight;
   const distance=size/(2*Math.tan(T.MathUtils.degToRad(view.fov/2))*fraction)*(small?.86:1);
   const target=center.clone().addScaledVector(direction,Math.max(slot==='water'?6:3,distance));
-  camera.position.lerpVectors(s.startCamera,target,s.reduced?1:ease(p/.19));camera.fov=view.fov;camera.lookAt(center);camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
+  if(s.internal&&!s.reduced){
+   // Move before disconnection; reveal only after vertical clearance.
+   const shield=Math.max(1-ease((p-.34)/.16),ease((p-.51)/.15))*(1-ease((p-.82)/.18));
+   const localEye=s.center.clone();
+   localEye.x=10;localEye.z+=s.center.z<0?18:-18;localEye.y=slot==='water'?5.8:.30;
+   // Keep the same framing radius through the orbit (no abrupt zoom away).
+   const eye=localEye.applyMatrix4(s.holder.matrixWorld);
+   eye.sub(center).normalize().multiplyScalar(target.distanceTo(center)).add(center);
+   target.lerp(eye,shield);
+   const aim=s.center.clone();aim.y=slot==='water'?.1:1.9;
+   center.lerp(aim.applyMatrix4(s.holder.matrixWorld),shield);
+  }
+  camera.position.lerpVectors(s.startCamera,target,s.reduced?1:ease(p/.19));camera.fov=T.MathUtils.lerp(s.startFov,view.fov,s.reduced?1:ease(p/.19));camera.lookAt(center);
+  if(!s.reduced&&p<.19){const aimRotation=camera.quaternion.clone();camera.quaternion.slerpQuaternions(s.startRotation,aimRotation,ease(p/.19));}
+  camera.updateProjectionMatrix();camera.updateMatrixWorld(true);
   if(rect){
     // 3D 칸 위쪽 버튼(차 목록·비교·정면으로) 아래에 띄움 — 버튼과 겹치지 않게 (관제탑 2026-11-15)
     let top=rect.top+8;
@@ -88,7 +95,7 @@ export function createGarageLift(table){
    if(!c||!preview){callback();return Promise.resolve();}
    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,label=document.createElement('div');label.className='pu-swap-label';label.setAttribute('role','status');document.body.append(label);
    const scene=preview.scene,previousRender=scene.onBeforeRender,originalMode=document.querySelector('#hForms button.on')?.dataset.mode||'normal';preview.setMode(c.slot==='water'?'boat':'normal');
-   return new Promise(resolve=>{state={...c,preview,scene,previousRender,originalMode,label,resolve,apply:callback,at:performance.now(),duration:reduced?450:(c.duration||2800),reduced,applied:false,ready:false,progress:0,startCamera:preview.camera.position.clone(),root:new T.Group()};scene.onBeforeRender=render;});
+   return new Promise(resolve=>{state={...c,preview,scene,previousRender,originalMode,label,resolve,apply:callback,at:performance.now(),duration:reduced?450:(c.duration||2800),reduced,applied:false,ready:false,progress:0,startCamera:preview.camera.position.clone(),startRotation:preview.camera.quaternion.clone(),startFov:preview.camera.fov,root:new T.Group()};scene.onBeforeRender=render;});
   },
   update(holder){
    if(!state)return;setup(holder);const s=state;if(!s.ready)return;
