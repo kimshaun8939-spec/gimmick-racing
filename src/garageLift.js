@@ -21,7 +21,7 @@ export function createGarageLift(table){
    s.scene.onBeforeRender=s.previousRender;s.preview.setMode(s.originalMode);
    s.robot?.dispose();s.out?.dispose();s.incoming?.dispose();s.donor?.dispose();
    s.root.removeFromParent();s.root.traverse(o=>{if(o.isLineSegments){o.geometry.dispose();o.material.dispose();}});
-   s.label.remove();sfx.stop();s.resolve();
+   s.label.remove();s.curtain?.remove();sfx.stop();s.resolve();
   }
  }
  function setup(holder){
@@ -43,6 +43,11 @@ export function createGarageLift(table){
   // 긴 배기 끝까지 합친 상자의 가운데(앞 엔진 차에서는 운전석)가 아닌 실제 블록을 잡음.
   if(s.slot==='engine'){const [x,y,z,k]=enginePosition(s.car.look?.style||'f1');s.center.set(x,y+.2*k,z);s.extent.set(1.2*k,.8*k,1.7*k);}
   s.robot=createPitRobot(s.root,s.center,s.extent,s.slot);sfx.start();
+  // Merged bodies: use a brief editorial cut during internal disconnection.
+  s.internal=['engine','gearbox','water'].includes(s.slot);
+  if(s.internal){s.curtain=document.createElement('div');s.curtain.setAttribute('aria-hidden','true');
+   Object.assign(s.curtain.style,{position:'fixed',pointerEvents:'none',zIndex:'110',background:'#101820',opacity:'0',borderRadius:'12px'});document.body.append(s.curtain);}
+
   // bigparts: 순정 칸은 움직일 메시가 없음(none) = 순정 부분은 제자리 그대로, 덧붙는 부품만 빠지고 들어옴.
   s.integrated=!!s.out.none;s.toStock=!!s.incoming.none;
   s.outline=new T.Group();s.root.add(s.outline);
@@ -55,12 +60,17 @@ export function createGarageLift(table){
  }
  function render(renderer,scene,camera){
   const s=state;if(!s?.ready)return;s.previousRender?.call(scene,renderer,scene,camera);
-  const p=s.progress,slot=s.slot;if(!s.applied&&p>.22)s.out.hide();
+  const p=s.progress,slot=s.slot;
+  if(s.curtain){const r=document.querySelector('.h-carstage')?.getBoundingClientRect();if(r)Object.assign(s.curtain.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px'});
+   const pulse=(a,b,c,d)=>p<a||p>d?0:p<b?ease((p-a)/(b-a)):p<c?1:1-ease((p-c)/(d-c));
+   s.curtain.style.opacity=s.reduced?'0':String(Math.max(pulse(.16,.21,.345,.39),pulse(.665,.69,.825,.87)));}
+  if(!s.applied&&p>.22)s.out.hide();
   const rect=document.querySelector('.h-carstage')?.getBoundingClientRect(),view=PART_VIEW[slot];
   const direction=new T.Vector3(...view.pos).sub(new T.Vector3(...view.look)).normalize();
-  if(slot==='engine'){if(s.center.z>.4)direction.z=Math.abs(direction.z);direction.y=Math.max(.45,direction.y);direction.normalize();}
+  if(slot==='engine'||slot==='gearbox'){if(s.center.z>.4)direction.z=Math.abs(direction.z);direction.y=Math.max(.45,direction.y);direction.normalize();}
   const center=s.center.clone().applyMatrix4(s.holder.matrixWorld),small=rect&&rect.width<500;
-  const size=slot==='water'?Math.max(7,s.extent.length()*1.2):Math.max(s.extent.length()*1.15,5.4);
+  if(slot==='engine'||slot==='gearbox')center.y+=1.4;
+  const size=slot==='engine'||slot==='gearbox'?8.6:slot==='water'?Math.max(7,s.extent.length()*1.2):Math.max(s.extent.length()*1.15,5.4);
   const fraction=Math.max(120,Math.min(rect?.height||innerHeight,rect?.width||innerWidth))/innerHeight;
   const distance=size/(2*Math.tan(T.MathUtils.degToRad(view.fov/2))*fraction)*(small?.86:1);
   const target=center.clone().addScaledVector(direction,Math.max(slot==='water'?6:3,distance));
@@ -78,16 +88,25 @@ export function createGarageLift(table){
    if(!c||!preview){callback();return Promise.resolve();}
    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,label=document.createElement('div');label.className='pu-swap-label';label.setAttribute('role','status');document.body.append(label);
    const scene=preview.scene,previousRender=scene.onBeforeRender,originalMode=document.querySelector('#hForms button.on')?.dataset.mode||'normal';preview.setMode(c.slot==='water'?'boat':'normal');
-   return new Promise(resolve=>{state={...c,preview,scene,previousRender,originalMode,label,resolve,apply:callback,at:performance.now(),duration:reduced?450:(c.duration||2400),reduced,applied:false,ready:false,progress:0,startCamera:preview.camera.position.clone(),root:new T.Group()};scene.onBeforeRender=render;});
+   return new Promise(resolve=>{state={...c,preview,scene,previousRender,originalMode,label,resolve,apply:callback,at:performance.now(),duration:reduced?450:(c.duration||2800),reduced,applied:false,ready:false,progress:0,startCamera:preview.camera.position.clone(),root:new T.Group()};scene.onBeforeRender=render;});
   },
   update(holder){
    if(!state)return;setup(holder);const s=state;if(!s.ready)return;
    const p=Math.min(1,(performance.now()-s.at)/s.duration);s.progress=p;holder.position.y+=s.reduced?0:.10*Math.sin(Math.PI*p);
    const outgoing=ease((p-.22)/.25),arrival=ease((p-.55)/.22);
    const rack=s.robot.tray.clone().sub(s.center);rack.y+=s.extent.y*.5;
-   s.out.group.visible=!s.reduced&&p>.22;s.out.group.position.copy(rack).multiplyScalar(outgoing);s.out.group.position.y+=.44*Math.sin(outgoing*Math.PI);
+   s.out.group.visible=!s.reduced&&p>.22;s.incoming.group.visible=!s.reduced&&p>.49&&p<.82;
    const nextRack=rack.clone();nextRack.z+=.85;
-   s.incoming.group.visible=!s.reduced&&p>.49&&p<.82;s.incoming.group.position.copy(nextRack).multiplyScalar(1-arrival);s.incoming.group.position.y+=.44*Math.sin(arrival*Math.PI);
+   if(s.internal){
+    const lift=s.slot==='water'?-2.2:2.6;
+    // Move vertically to clearance before travelling sideways; reverse for insertion.
+    const path=(q,r)=>{const v=new T.Vector3();if(q<.4)v.y=lift*ease(q/.4);else if(q<.75){v.copy(r).multiplyScalar(ease((q-.4)/.35));v.y=lift;}else{v.copy(r);v.y=lift+(r.y-lift)*ease((q-.75)/.25);}return v;};
+    s.out.group.position.copy(path(T.MathUtils.clamp((p-.22)/.25,0,1),rack));
+    s.incoming.group.position.copy(path(1-T.MathUtils.clamp((p-.55)/.25,0,1),nextRack));
+   }else{
+    s.out.group.position.copy(rack).multiplyScalar(outgoing);s.out.group.position.y+=.44*Math.sin(outgoing*Math.PI);
+    s.incoming.group.position.copy(nextRack).multiplyScalar(1-arrival);s.incoming.group.position.y+=.44*Math.sin(arrival*Math.PI);
+   }
    const motion=s.robot.update(s.reduced?1:p,s.out.group.position,s.incoming.group.position),soundNow=performance.now(),soundDt=Math.max(1/240,(soundNow-(s.soundAt??soundNow))/1000);s.soundAt=soundNow;sfx.update(p,motion.speed/soundDt);
    s.outline.visible=p<.22;s.outline.traverse(o=>{if(o.material)o.material.opacity=.16+.10*Math.sin(p*25);});
    s.scan.visible=false; // 확인은 작업등·집게·볼트 동작으로 보여 준다.

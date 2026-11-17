@@ -3464,3 +3464,5 @@ body.touch-on #topLeft #best { white-space: nowrap; overflow: hidden; text-overf
 #results .res-dashboard .res-season .cst tr.me td { color:var(--gm-accent, #ffcf3f); font-weight:700; }
 #results .res-dashboard .res-season .cst td:nth-child(n+3) { text-align:right; white-space:nowrap; }
 #results .res-dashboard .res-season .champ > .ct { display:none; }
+/* classtabs · 맵 준비 카드도 등급 이름과 같은 색 선 */
+#home .f3-chips .ct-grade {color:var(--cc);border-left:2px solid var(--cc);border-radius:3px;background:color-mix(in srgb,var(--cc) 9%,#102031);}

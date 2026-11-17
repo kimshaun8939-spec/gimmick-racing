@@ -66,7 +66,7 @@ export const SCRIPTS = {
   parts: [
     { t: W, target: 'home.garage', title: '부품 조립이 열렸어요!', text: '차고에서 부품을 바꿔 끼울 수 있어요.' },
     { t: W, target: 'garage.card', title: '내 차 고르기', text: '부품을 끼울 차를 눌러요.' },
-    { t: W, target: 'garage.tab.parts', title: '🔧 조립 탭', text: '엔진 · 기어 · 타이어 · 날개 · 배 부품 칸이 있어요.' },
+    { t: W, target: 'garage.tab.parts', title: '🔧 조립 탭', text: '엔진 · 기어 · 타이어 · 윙 · 배 부품 칸이 있어요.' },
     { t: W, target: 'parts.slot.gearbox', title: '기어 칸', text: '바꿀 칸을 먼저 골라요.' },
     { t: W, target: 'parts.card.gear_short', title: '가속 기어', text: '부품마다 좋은 점 · 아쉬운 점이 있어요. 눌러서 비교해 보고, 마음에 들면 [끼우기]를 눌러요.' },
   ],

@@ -42,7 +42,7 @@
     { "id": "engine", "letter": "e", "name": "엔진", "icon": "🔥", "desc": "언제 힘이 세게 나오는지", "camera": "rearTop", "phase": 1 },
     { "id": "gearbox", "letter": "g", "name": "기어", "icon": "⚙️", "desc": "빠른 출발과 최고 속도 사이", "camera": "rearTop", "phase": 1 },
     { "id": "tire", "letter": "t", "name": "타이어", "icon": "🛞", "desc": "포장도로·잔디·연석·핸들 반응", "camera": "wheelLow", "phase": 1 },
-    { "id": "aero", "letter": "a", "name": "날개", "icon": "🪽", "desc": "직선 속도와 빠른 코너 사이", "camera": "rear", "phase": 1 },
+    { "id": "aero", "letter": "a", "name": "윙", "icon": "🪽", "desc": "직선 속도와 빠른 코너 사이", "camera": "rear", "phase": 1 },
     { "id": "water", "letter": "w", "name": "배 부품", "icon": "🚤", "desc": "물 위에서 배로 변신했을 때", "camera": "sideLow", "phase": 1 },
     { "id": "susp", "letter": "s", "name": "스프링", "icon": "🔩", "desc": "반응·연석·점프 (2차)", "camera": "wheelLow", "phase": 2 },
     { "id": "wing", "letter": "f", "name": "비행 부품", "icon": "✈️", "desc": "비행기로 변신했을 때 (2차)", "camera": "top", "phase": 2 }
@@ -140,8 +140,8 @@
       "look": { "sidewall": "#a04bff", "tread": "sharp", "label": "Q" }
     },
     {
-      "id": "aero_lowdrag", "slot": "aero", "no": 1, "name": "납작 날개", "short": "납작 날개",
-      "desc": "날개를 납작하게. 바람을 덜 받아 직선이 빠르지만 빠른 코너·빠를 때 브레이크가 약해져요.",
+      "id": "aero_lowdrag", "slot": "aero", "no": 1, "name": "납작 윙", "short": "납작 윙",
+      "desc": "윙을 납작하게. 바람을 덜 받아 직선이 빠르지만 빠른 코너·빠를 때 브레이크가 약해져요.",
       "pros": ["직선 최고 속도·빠를 때 가속 ↑"], "cons": ["빠른 코너·빠를 때 브레이크 약함"],
       "shines": { "maps": ["glacier", "neon"], "text": ["긴 직선"] },
       "level": 3, "price": 250,
@@ -150,8 +150,8 @@
       "look": { "kind": "lip", "color": "#cfd8e3" }
     },
     {
-      "id": "aero_highdf", "slot": "aero", "no": 2, "name": "꽉 붙는 큰 날개", "short": "큰 날개",
-      "desc": "날개를 두 장으로 크게. 바람이 차를 땅에 꾹 눌러 줘서 빠른 코너를 밟고 돌고 브레이크가 안정적이지만, 직선 최고 속도가 줄어요.",
+      "id": "aero_highdf", "slot": "aero", "no": 2, "name": "꽉 붙는 큰 윙", "short": "큰 윙",
+      "desc": "윙을 두 장으로 크게. 바람이 차를 땅에 꾹 눌러 줘서 빠른 코너를 밟고 돌고 브레이크가 안정적이지만, 직선 최고 속도가 줄어요.",
       "pros": ["빠른 코너를 밟고 돎", "브레이크 안정"], "cons": ["직선 최고 속도 ↓"],
       "shines": { "maps": ["gp", "moon"], "text": ["빠르고 긴 코너"] },
       "level": 8, "price": 350,
@@ -160,7 +160,7 @@
       "look": { "kind": "double", "color": "#1b1e24", "endplate": "big" }
     },
     {
-      "id": "aero_splitter", "slot": "aero", "no": 3, "name": "급커브 앞날개", "short": "앞날개",
+      "id": "aero_splitter", "slot": "aero", "no": 3, "name": "급커브 프론트 윙", "short": "프론트 윙",
       "desc": "차 앞 바닥에 납작한 판을 달아요. 느린 코너에서 앞이 잘 돌지만 뒤가 잘 미끄러져요.",
       "pros": ["느린 코너에서 앞이 잘 돎"], "cons": ["뒤가 잘 미끄러짐", "직선 조금 손해"],
       "shines": { "maps": ["volcano", "jungle"], "text": ["급커브", "지그재그"] },

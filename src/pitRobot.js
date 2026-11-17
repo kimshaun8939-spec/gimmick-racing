@@ -19,11 +19,11 @@ export function createPitRobot(parent,center,extent,slot='engine'){
  box(staticRoot,2.4,1.25,.10,dark,-1.5,.60,3.9);
  for(let i=0;i<9;i++){box(staticRoot,.05,.27,.04,steel,-2.45+i*.24,.75,3.81);add(staticRoot,new T.TorusGeometry(.055,.018,4,8),steel,-2.45+i*.24,.9,3.80);}
  for(const s of [-1,1]){box(staticRoot,.09,2.8,.09,steel,s*2.8,1.2,2.7);box(staticRoot,.55,.12,.15,light,s*2.8,2.6,2.7);}
- const trayX=slot==='tire'?2.0:-1.9,trayZ=center.z;
+ const trayX=slot==='tire'?2.0:slot==='water'?-4.5:-1.9,trayZ=center.z;
  for(const z of [-.5,.5])box(staticRoot,.07,.72,.07,steel,trayX,.23,trayZ+z);
  box(staticRoot,1.05,.10,1.35,steel,trayX,.64,trayZ);
  batchLocal(staticRoot,{pbr:true});
- const base=new T.Vector3(slot==='tire'?2.7:slot==='water'?-2.7:1.65,slot==='water'?.08:.25,center.z+(slot==='aero'?-1:.7));
+ const base=new T.Vector3(slot==='tire'?2.7:slot==='water'?-2.7:2.7,slot==='water'?.08:.25,center.z+(slot==='aero'?-1:(slot==='engine'||slot==='gearbox')&&center.z<0?-1.3:.7));
  add(root,new T.CylinderGeometry(.32,.4,.3,10),dark,...base.toArray());
  const segments=[add(root,new T.CylinderGeometry(.13,.18,1,8),orange),add(root,new T.CylinderGeometry(.105,.13,1,8),orange)];
  const joints=Array.from({length:3},()=>add(root,new T.SphereGeometry(.17,8,6),steel));

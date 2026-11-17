@@ -987,3 +987,45 @@ body.touch-on #home .h-qe { display:none; }
 #home .h-carcard .ph { animation:hpThumbWait 1.1s ease-in-out infinite; }
 @keyframes hpThumbWait { 0%,100% { opacity:.5; } 50% { opacity:1; } }
 @media(prefers-reduced-motion:reduce) { #home .h-carcard .ph { animation:none; } }
+/* classtabs · 등급 이름과 얇은 색 선으로 통일 */
+#home#home .h-ctab { display:flex;align-items:center;justify-content:center;gap:7px;position:relative;grid-template-columns:none;border:1px solid #cadcf126;border-bottom:2px solid color-mix(in srgb,var(--cc) 55%,transparent);background:#0b192680;color:#c8d6e5;box-shadow:none; }
+#home#home .g2-list .h-ctab.on {color:#f5f8ff;background:color-mix(in srgb,var(--cc) 13%,#102031);border-color:color-mix(in srgb,var(--cc) 35%,transparent);border-bottom-color:var(--cc);box-shadow:inset 0 -8px 16px color-mix(in srgb,var(--cc) 7%,transparent);}
+#home#home .h-ctab .nc-copy {display:block;}
+#home#home .h-ctab .nc-copy b {font-size:13px;line-height:1.3;color:inherit;text-decoration:none;}
+#home#home .h-ctab .nc-copy em {display:none;}
+#home#home .h-ctab > small {display:block;align-self:center;font-size:11px;line-height:1;color:#a9bed2;opacity:1;white-space:nowrap;}
+#home#home .h-ctab.on > small {color:var(--cc);}
+#home#home .h-carcard .cl {width:auto;height:auto;min-width:0;display:inline-flex;align-items:center;padding:4px 7px;border:0;border-left:2px solid var(--cc);border-radius:3px;background:#091725e8;color:var(--cc);font-size:11px;font-style:normal;box-shadow:none;line-height:1.2;}
+#home#home .ct-head .h-classchip {padding:5px 8px;border:0;border-left:2px solid var(--cc);border-radius:3px;background:color-mix(in srgb,var(--cc) 8%,#102031);}
+#home#home .gx-classinfo {border-left:2px solid var(--cc);padding-left:10px;}
+#home#home .cp-class {border:0;border-left:2px solid var(--cc);border-radius:3px;padding:3px 6px;white-space:nowrap;}
+#home#home .mt-carprod .mt-class {width:auto;height:auto;min-width:0;padding:4px 7px;border:0;border-left:2px solid var(--cc,#ffcf3f);border-radius:3px;font-size:11px;line-height:1.2;background:#091725e8;color:var(--cc,#ffcf3f);box-shadow:none;}
+#home#home .mt-carprod.cls-A {--cc:#ffcf3f;}#home#home .mt-carprod.cls-B {--cc:#529dff;}#home#home .mt-carprod.cls-C {--cc:#45cf86;}
+@media(max-width:599px){#home#home .g2-list .h-ctab {gap:4px;padding:4px;}#home#home .h-ctab .nc-copy b{font-size:12px;}#home#home .h-ctab>small{font-size:10px;}}
+/* 2차 사진 검토: 카드 색을 등급대로, 숫자는 옆에서 작게. */
+#home#home .g2-list .h-carcard .cl {color:var(--cc);border-left:2px solid var(--cc);border-radius:3px;font-weight:700;box-shadow:none;}
+#home#home .h-ctab .nc-copy b {font-weight:700;text-decoration:none;}
+#home#home .ct-head .h-classchip {border:0;border-left:2px solid var(--cc);border-radius:3px;padding:4px 8px;background:color-mix(in srgb,var(--cc) 9%,#102031);}
+#home#home .ct-head .h-classchip b{font-weight:700;letter-spacing:0;}
+/* 3차 사진 검토: 등급 이름과 대수 사이 간격을 확보한다. */
+#home#home .h-ctab > small {margin-left:2px;font-variant-numeric:tabular-nums;font-weight:500;}
+#home#home .h-ctab .nc-copy b {text-decoration:none!important;}
+#home#home .g2-list .h-carcard .cl {text-decoration:none!important;}
+
+/* classtint: existing class color, static light behind the car only. */
+#home#home .g2-list .h-carcard { --ct-light: 16%; --ct-floor: 10%; }
+#home#home .g2-list .h-carcard.gx-locked { --ct-light: 8%; --ct-floor: 5%; }
+#home#home .h-car.g2-list .h-carlist .list .h-carcard .pic {
+ background:
+  radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--cc,#95a2bb) var(--ct-light), transparent), transparent 80%),
+  radial-gradient(ellipse 48% 12% at 50% 85%, color-mix(in srgb, var(--cc,#95a2bb) var(--ct-floor), transparent), transparent),
+  radial-gradient(ellipse at 50% 90%, #0005, transparent 55%);
+}
+#home#home .g2-list .h-carcard .pic::before {
+ left: 12%; right: 12%; bottom: 13%; height: 7%;
+ background: radial-gradient(ellipse, color-mix(in srgb, var(--cc,#95a2bb) 8%, transparent), transparent 72%);
+ pointer-events: none;
+}
+#home#home .g2-list .h-carcard.gx-locked .pic::before { opacity: .5; }
+/* Leave a small gap between the class label and selection check. */
+#home#home .g2-list .h-carcard .chk { left: 54px; }

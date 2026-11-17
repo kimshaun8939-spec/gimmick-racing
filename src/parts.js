@@ -1,5 +1,5 @@
 // 부품 조립 뼈대 (2026-11-15, 부품 조립 1차 ①, 설계 .debug/design/parts-design.md, 약속 .debug/agents/parts-contract.md)
-//   차 = 칸(엔진·변속기·타이어·날개·물 모듈) 조립체. 부품은 장단점만 있는 '옆으로 바꾸기' (data/parts.json)
+//   차 = 칸(엔진·변속기·타이어·윙·물 모듈) 조립체. 부품은 장단점만 있는 '옆으로 바꾸기' (data/parts.json)
 //   - 얻는 건 모든 차 공용 (피트 조각 구매 = gimmick.meta owned['part:<id>'], 선물·업적·아카데미 = gimmick.partsExtra gifts)
 //   - 끼우는 건 차마다: localStorage 'gimmick.parts' = { 차 id: { 칸: 부품 id } } (순정 칸은 안 적음)
 //   - 프리셋·선물·알림: localStorage 'gimmick.partsExtra' = { v: 1, gifts: { 부품 id: { at, source } }, presets: { 차 id: [3칸] }, news: [] }

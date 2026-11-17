@@ -59,9 +59,11 @@ export function swapPart(root,slot,look,other){
   const copy=new T.Group();copy.add(c);copy.applyMatrix4(new T.Matrix4().multiplyMatrices(inv,source===kit.stock.engine?kit.body.matrixWorld:source.matrixWorld));group.add(copy);hidden.push([source,source.visible]);
  }
  const temporary=[];
- if(!look&&slot==='engine'){const e=createPitEngine(0),[x,y,z,k]=enginePosition(kit.style);e.position.set(x,y,z);e.scale.setScalar(k);group.add(e);e.traverse(o=>{if(o.isMesh)temporary.push([o.geometry,o.material]);});}
+ if(slot==='engine'){group.clear();const e=createPitEngine(look?(look.no||({v10:1,v8:2,turbo:3}[look.garage])||1):0),[x,y,z,k]=enginePosition(kit.style);e.position.set(x,y,z);e.scale.setScalar(k);group.add(e);e.traverse(o=>{if(o.isMesh)temporary.push([o.geometry,o.material]);});}
  restorePose();
- group.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.castShadow=false;}});
+ // Workshop copies must retain the baked PBR shader as well as vertex attributes.
+ const copyMaterial=m=>{const c=m.clone();c.onBeforeCompile=m.onBeforeCompile;c.customProgramCacheKey=m.customProgramCacheKey;return c;};
+ group.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();o.material=Array.isArray(o.material)?o.material.map(copyMaterial):copyMaterial(o.material);o.layers.set(0);o.castShadow=false;}});
  for(const [geo,mat]of temporary){geo.dispose();mat.dispose();}
  return {group,none:false,motors,hide(){if(!look&&slot==='engine')kit.hideEngine(true);else for(const [o]of hidden){if(o.userData.partMask)o.userData.partMask.value=0;else o.visible=false;}},restore(){if(!look&&slot==='engine')kit.hideEngine(false);else for(const [o,v]of hidden){if(o.userData.partMask)o.userData.partMask.value=1;else o.visible=v;}},dispose(){group.removeFromParent();group.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}};
 }

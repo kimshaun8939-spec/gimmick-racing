@@ -36,7 +36,7 @@ async function getStudio(){
  studio={renderer,scene,camera,env,shadow,shadowMap};return studio;
 }
 function stockIcon(slot,width,height){
- const labels={engine:'순정 엔진',gearbox:'순정 · 차체 일체형',tire:'순정 휠',aero:'순정 날개',water:'순정 추진 장치'};
+ const labels={engine:'순정 엔진',gearbox:'순정 · 차체 일체형',tire:'순정 휠',aero:'순정 윙',water:'순정 추진 장치'};
  const paths={gearbox:'M55 60L83 42H129L153 60V99L129 117H83L55 99ZM70 70H138M70 86H138M88 43V116M119 43V116',engine:'M55 62H145V98H55ZM68 98V117H83V98M116 98V117H131V98',aero:'M37 70H171V81H37ZM67 81V111M141 81V111',water:'M35 61H174L147 106H65ZM65 106L105 125L147 106'};
  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 210 160"><g fill="#344b60" stroke="#acc6d9" stroke-width="4" stroke-linejoin="round"><path d="'+(paths[slot]||paths.gearbox)+'"/></g><text x="105" y="150" text-anchor="middle" fill="#cee6ed" font-size="15" font-family="sans-serif">'+labels[slot]+'</text></svg>';
  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
@@ -63,7 +63,7 @@ export function partThumb(partId,{carId='f1',size=400,slot='engine',lv,isRelevan
   if(isRelevant&&!isRelevant())return '';
   const st=await getStudio();
   if(st.carId!==carId){st.model?.dispose();st.model=createCarModel(car.look);st.carId=carId;}
-  // partfit: 배기·날개 순정 카드도 실제 교체되는 부분을 그대로 촬영한다.
+  // partfit: 배기·윙 순정 카드도 실제 교체되는 부분을 그대로 촬영한다.
   if(!p&&!['tire','engine','aero','water'].includes(slot)){const url=stockIcon(slot,width,height);mem.set(key,url);return url;}
   const m=st.model;m.setParts(partLook(p?{[slot]:partId}:{},{levels:p?{[partId]:lv}:false}));
   try{

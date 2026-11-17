@@ -22,7 +22,7 @@ export function createCarCompare({ host, cars, classOf, isOpen, onPick, onVisibi
  const save = () => { try { localStorage.setItem(KEY,JSON.stringify(ids)); } catch {} };
  const btn = (action,text,extra='') => '<button type="button" class="gm-btn" data-nav data-cp="'+action+'" '+extra+'>'+text+'</button>';
  function photo(c) { const url=thumbUrl(c.id); return '<span class="cp-photo" data-photo="'+c.id+'">'+(url?'<img src="'+url+'" alt="'+esc(c.name)+'" draggable="false">':'<span class="cp-placeholder">🏎</span>')+'</span>'; }
- function badge(c) { const k=classOf(c.class); return '<span class="cp-class" style="--cc:'+esc(k?.color||'#b4c4df')+'">'+esc(c.class||'—')+' · '+esc(k?.name?.replace(/^[ABC]\s*/, '')||'차량')+'</span>'+(isOpen(c.id)?'':'<span class="cp-lock">🔒 Lv.'+c.unlockLevel+'</span>'); }
+ function badge(c) { const k=classOf(c.class); return '<span class="cp-class" style="--cc:'+esc(k?.color||'#b4c4df')+'">'+esc(k?.name?.replace(/^[ABC]\s*/, '')||'차량')+'</span>'+(isOpen(c.id)?'':'<span class="cp-lock">🔒 Lv.'+c.unlockLevel+'</span>'); }
  function updateThumb(id,url) { if(!overlay)return; for(const box of overlay.querySelectorAll('[data-photo="'+id+'"]')) { box.innerHTML='<img src="'+url+'" alt="'+esc(carOf(id)?.name)+'" draggable="false">'; } }
  function photos(list) { job?.cancel(); job=loadCarThumbs(list,{first:ids[0],channel:'compare',onThumb:updateThumb}); job.done.catch(()=>{}); }
  function focus(sel) { panel.querySelector(sel)?.focus({preventScroll:true}); }
