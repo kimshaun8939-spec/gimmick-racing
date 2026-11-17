@@ -2,7 +2,9 @@
 import {createCarModel} from './carModel.js';
 import {PART_VIEW,swapPart,partPoseReady} from './carParts3d.js';
 import {partLook,partOf,slotOf} from './parts.js';
-import {createPartSfx} from './partFx.js';
+import {createPitSfx} from './pitSfx.js';
+import {createPitRobot} from './pitRobot.js';
+import {enginePosition} from './pitEngine.js';
 // partsUI가 기존 replacePart 콜백에 전달하는 일회성 장면 정보.
 let pending;
 export function prepareGarageSwap(context){pending=context;}
@@ -10,14 +12,14 @@ const ease=x=>{x=T.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
 const fake=mode=>({pos:new T.Vector3(),up:new T.Vector3(0,1,0),fwd:new T.Vector3(0,0,1),vel:new T.Vector3(),mode,sink:0,forwardSpeed:0,thr:0,grounded:true,surface:mode==='boat'?'water':'road',steerVisual:0,load:0,form:null,flying:false,boostTime:0,brk:0});
 const partName=(id,slot)=>partOf(id)?.name||'순정 '+(slotOf(slot)?.name||'부품');
 export function createGarageLift(table){
- const sfx=createPartSfx();let state=null;
- function apply(s){if(s.applied)return;s.out?.restore();s.applied=true;s.apply();sfx.clack();}
+ const sfx=createPitSfx();let state=null;
+ function apply(s){if(s.applied)return;s.out?.restore();s.applied=true;s.apply();}
  function finish(skipped=false){
   if(!state)return;const s=state;state=null;
   if(skipped)s.onSkip?.();
   try{apply(s);}finally{
    s.scene.onBeforeRender=s.previousRender;s.preview.setMode(s.originalMode);
-   s.out?.dispose();s.incoming?.dispose();s.donor?.dispose();
+   s.robot?.dispose();s.out?.dispose();s.incoming?.dispose();s.donor?.dispose();
    s.root.removeFromParent();s.root.traverse(o=>{if(o.isLineSegments){o.geometry.dispose();o.material.dispose();}});
    s.label.remove();sfx.stop();s.resolve();
   }
@@ -28,7 +30,8 @@ export function createGarageLift(table){
   if(!partPoseReady(holder.children[0],s.slot)&&performance.now()-s.at<1600){s.wait=true;return;}
   if(s.wait)s.at=performance.now();s.ready=true;s.holder=holder;
   const live=holder.children[0];s.out=swapPart(live,s.slot,partOf(s.before[s.slot])?.look,partOf(s.after[s.slot])?.look);
-  s.donor=createCarModel(s.car.look);s.donor.setParts(partLook(s.after,{levels:'mine'})); // upgradeD1: 펼친 조립은 숨은 단계가 없어 내 강화 단계로s.donor.sync(fake(s.slot==='water'?'boat':'normal'),2,0);s.donor.root.updateMatrixWorld(true);
+  s.donor=createCarModel(s.car.look);s.donor.setParts(partLook(s.after,{levels:'mine'}));
+  s.donor.sync(fake(s.slot==='water'?'boat':'normal'),2,0);s.donor.root.updateMatrixWorld(true);
   s.incoming=swapPart(s.donor.root,s.slot,partOf(s.after[s.slot])?.look,partOf(s.before[s.slot])?.look);
   s.root=new T.Group();holder.add(s.root);s.root.add(s.out.group,s.incoming.group);s.incoming.group.visible=false;
   holder.updateMatrixWorld(true);const inv=holder.matrixWorld.clone().invert();
@@ -37,6 +40,9 @@ export function createGarageLift(table){
   if(b.isEmpty())b.copy(next);else if(!next.isEmpty())b.union(next);
   s.center=b.isEmpty()?new T.Vector3(...PART_VIEW[s.slot].look):b.getCenter(new T.Vector3());
   s.extent=b.isEmpty()?new T.Vector3(.4,.2,.3):b.getSize(new T.Vector3());s.out.group.visible=false;
+  // 긴 배기 끝까지 합친 상자의 가운데(앞 엔진 차에서는 운전석)가 아닌 실제 블록을 잡음.
+  if(s.slot==='engine'){const [x,y,z,k]=enginePosition(s.car.look?.style||'f1');s.center.set(x,y+.2*k,z);s.extent.set(1.2*k,.8*k,1.7*k);}
+  s.robot=createPitRobot(s.root,s.center,s.extent,s.slot);sfx.start();
   // bigparts: 순정 칸은 움직일 메시가 없음(none) = 순정 부분은 제자리 그대로, 덧붙는 부품만 빠지고 들어옴.
   s.integrated=!!s.out.none;s.toStock=!!s.incoming.none;
   s.outline=new T.Group();s.root.add(s.outline);
@@ -52,8 +58,9 @@ export function createGarageLift(table){
   const p=s.progress,slot=s.slot;if(!s.applied&&p>.22)s.out.hide();
   const rect=document.querySelector('.h-carstage')?.getBoundingClientRect(),view=PART_VIEW[slot];
   const direction=new T.Vector3(...view.pos).sub(new T.Vector3(...view.look)).normalize();
+  if(slot==='engine'){if(s.center.z>.4)direction.z=Math.abs(direction.z);direction.y=Math.max(.45,direction.y);direction.normalize();}
   const center=s.center.clone().applyMatrix4(s.holder.matrixWorld),small=rect&&rect.width<500;
-  const size=slot==='water'?Math.max(7,s.extent.length()*1.2):Math.max(s.extent.length()*1.15,slot==='tire'?2.5:slot==='aero'?3.7:2.2);
+  const size=slot==='water'?Math.max(7,s.extent.length()*1.2):Math.max(s.extent.length()*1.15,5.4);
   const fraction=Math.max(120,Math.min(rect?.height||innerHeight,rect?.width||innerWidth))/innerHeight;
   const distance=size/(2*Math.tan(T.MathUtils.degToRad(view.fov/2))*fraction)*(small?.86:1);
   const target=center.clone().addScaledVector(direction,Math.max(slot==='water'?6:3,distance));
@@ -76,15 +83,18 @@ export function createGarageLift(table){
   update(holder){
    if(!state)return;setup(holder);const s=state;if(!s.ready)return;
    const p=Math.min(1,(performance.now()-s.at)/s.duration);s.progress=p;holder.position.y+=s.reduced?0:.10*Math.sin(Math.PI*p);
-   const outgoing=ease((p-.22)/.23),arrival=ease((p-.51)/.18),seat=ease((p-.72)/.10);
-   const right=new T.Vector3().setFromMatrixColumn(s.preview.camera.matrixWorld,0);right.y=0;right.normalize();const reach=Math.max(.9,Math.min(2,s.extent.length()*.7));
-   s.out.group.visible=!s.reduced&&p>.22&&p<.51;s.out.group.position.copy(right).multiplyScalar(-reach*outgoing);s.out.group.position.y=.48*Math.sin(outgoing*Math.PI/2);s.out.group.position.z-=.35*outgoing;
-   s.incoming.group.visible=!s.reduced&&p>.51&&p<.82;s.incoming.group.position.copy(right).multiplyScalar(reach*(1-arrival));s.incoming.group.position.y=.48*(1-seat);
-   s.outline.visible=p<.82;s.outline.traverse(o=>{if(o.material)o.material.opacity=.55+.35*Math.sin(p*25);});
-   s.scan.visible=p>=.82&&p<.96;
+   const outgoing=ease((p-.22)/.25),arrival=ease((p-.55)/.22);
+   const rack=s.robot.tray.clone().sub(s.center);rack.y+=s.extent.y*.5;
+   s.out.group.visible=!s.reduced&&p>.22;s.out.group.position.copy(rack).multiplyScalar(outgoing);s.out.group.position.y+=.44*Math.sin(outgoing*Math.PI);
+   const nextRack=rack.clone();nextRack.z+=.85;
+   s.incoming.group.visible=!s.reduced&&p>.49&&p<.82;s.incoming.group.position.copy(nextRack).multiplyScalar(1-arrival);s.incoming.group.position.y+=.44*Math.sin(arrival*Math.PI);
+   const motion=s.robot.update(s.reduced?1:p,s.out.group.position,s.incoming.group.position),soundNow=performance.now(),soundDt=Math.max(1/240,(soundNow-(s.soundAt??soundNow))/1000);s.soundAt=soundNow;sfx.update(p,motion.speed/soundDt);
+   s.outline.visible=p<.22;s.outline.traverse(o=>{if(o.material)o.material.opacity=.16+.10*Math.sin(p*25);});
+   s.scan.visible=false; // 확인은 작업등·집게·볼트 동작으로 보여 준다.
    s.scan.traverse(o=>{if(!o.isLineSegments)return;const count=o.geometry.attributes.position.count,trace=ease((p-.82)/.14);o.geometry.setDrawRange(0,Math.floor(count*trace/2)*2);o.material.color.setHex(0xe0fff5);o.material.opacity=1-trace*.6;});
    if(p>=(s.reduced?.5:.82))apply(s);
-   const phase=s.reduced?(s.applied?'✓ 장착 완료':'교체 위치'):p<.22?'교체 위치':p<.51?(s.integrated?'① 순정 부분은 그대로':'① 기존 부품 빼기'):p<.72?(s.toStock?'② 순정으로 되돌리기':'② 새 부품 가져오기'):p<.82?(s.toStock?'③ 자리 정리':'③ 자리에 맞추기'):(s.toStock?'✓ 순정 복귀':'✓ 장착 완료');
+   const phase=s.reduced?(s.applied?'✓ 장착 완료':'교체 위치'):p<.13?'리프트 · 로봇 접근':p<.22?'① 볼트 풀기':p<.51?(s.integrated?'① 순정 부분은 그대로':'② 기존 부품 거치'):p<.77?(s.toStock?'③ 순정으로 되돌리기':'③ 새 부품 집어 넣기'):p<.91?'④ 볼트 조이기 · 철컥':(s.toStock?'✓ 순정 복귀':'⑤ 확인 완료 · 팔 복귀');
+   if(s.label.dataset.phase===phase){if(p>=1)finish();return;}s.label.dataset.phase=phase;
    s.label.replaceChildren();const title=document.createElement('b');title.textContent='🔧 '+(slotOf(s.slot)?.name||'부품')+' 교체 · '+phase;s.label.append(title);
    const keep=s.slot==='gearbox'?' · 차체 일체형, 그대로':' · 그대로 둠';
    for(const [cls,text]of [['pu-swap-old',(s.integrated?'기존  ':'빼기  ')+partName(s.before[s.slot],s.slot)+(s.integrated?keep:'')+(s.out.motors?' · 순정 선외기 2개':'')],['pu-swap-new',s.toStock?(s.applied?'완료  ':'되돌리기  ')+partName(s.after[s.slot],s.slot)+' · 추가 부품 없음':(s.applied?'장착!  ':'넣기  ')+partName(s.after[s.slot],s.slot)+(s.incoming.motors?' · 순정 선외기 2개 다시':'')]]){const line=document.createElement('span');line.className=cls;line.textContent=text;s.label.append(line);}

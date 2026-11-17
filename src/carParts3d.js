@@ -1,4 +1,6 @@
 ﻿import * as T from 'three';
+import {createPitEngine,enginePosition} from './pitEngine.js';
+import {createPitRobot} from './pitRobot.js';
 
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {batchLocal} from './staticBatch.js';
@@ -12,7 +14,12 @@ export function isolatedPart(model,slot,look){
   if(look?.hull!=='jet')sources.push(...kit.motors.map(m=>m.g),...kit.waterJets);
   for(const source of sources){const c=source.clone(true),drop=[];c.traverse(o=>{if(o!==c&&!o.visible)drop.push(o);});drop.forEach(o=>o.removeFromParent());c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;const copy=new T.Group();copy.add(c);copy.applyMatrix4(new T.Matrix4().multiplyMatrices(inv,source.matrixWorld));out.add(copy);}return out;
  }
- if(!look&&slot==='engine')kit.hideEngine(false);
+ if(slot==='engine'){
+  const e=createPitEngine(look?(look.no||({v10:1,v8:2,turbo:3}[look.garage])||1):0);
+  const lv=look?kit.engineHint?.lv||1:1;
+  if(lv>1){const mats=new Set();e.traverse(o=>{if(o.material)mats.add(o.material);});styleLevel(e,lv);for(const m of mats)m.dispose();}
+  out.add(e);return out;
+ }
  const source=slot==='tire'?kit.wheels[0].spin:look?model.root.getObjectByName('part-'+(slot==='aero'&&look.kind==='splitter'?'splitter':slot)):slot==='engine'?kit.stock.engine:slot==='aero'?kit.spoiler:slot==='water'?kit.hull:null;
  if(source){const c=(source.userData.partSource||source).clone(true),hidden=[];
   c.traverse(o=>{if(o!==c&&(!o.visible||Math.max(o.scale.x,o.scale.y,o.scale.z)<.01))hidden.push(o);});hidden.forEach(o=>o.removeFromParent());
@@ -51,8 +58,11 @@ export function swapPart(root,slot,look,other){
   c.position.set(0,0,0);c.quaternion.identity();c.scale.set(1,1,1);c.visible=true;
   const copy=new T.Group();copy.add(c);copy.applyMatrix4(new T.Matrix4().multiplyMatrices(inv,source===kit.stock.engine?kit.body.matrixWorld:source.matrixWorld));group.add(copy);hidden.push([source,source.visible]);
  }
+ const temporary=[];
+ if(!look&&slot==='engine'){const e=createPitEngine(0),[x,y,z,k]=enginePosition(kit.style);e.position.set(x,y,z);e.scale.setScalar(k);group.add(e);e.traverse(o=>{if(o.isMesh)temporary.push([o.geometry,o.material]);});}
  restorePose();
  group.traverse(o=>{if(o.isMesh){o.geometry=o.geometry.clone();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();o.castShadow=false;}});
+ for(const [geo,mat]of temporary){geo.dispose();mat.dispose();}
  return {group,none:false,motors,hide(){if(!look&&slot==='engine')kit.hideEngine(true);else for(const [o]of hidden){if(o.userData.partMask)o.userData.partMask.value=0;else o.visible=false;}},restore(){if(!look&&slot==='engine')kit.hideEngine(false);else for(const [o,v]of hidden){if(o.userData.partMask)o.userData.partMask.value=1;else o.visible=v;}},dispose(){group.removeFromParent();group.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}};
 }
 // 교체 장면을 시작해도 되는지: 물 모듈은 배 변신(선체·선외기)이 다 끝난 뒤에 실제 모양을 복사해야 같은 범위·크기.
@@ -155,10 +165,31 @@ export function levelWarmObjects(){
 }
 /** 차고 렌더러에서 단계 셰이더를 미리 만들어 둠 (첫 강화 때 멈칫 없게). 한 렌더러에 한 번 */
 const warmed=new WeakSet();
+const pitWarmMaterials=new WeakMap();
 export async function warmLevelShaders(renderer,scene,camera){
  if(!renderer||!scene||!camera||warmed.has(renderer))return false;warmed.add(renderer);
- const g=levelWarmObjects();scene.add(g);
- try{if(renderer.compileAsync)await renderer.compileAsync(scene,camera);else renderer.compile(scene,camera);}catch{}finally{g.userData.dispose();}
+ const g=levelWarmObjects();scene.add(g);const robot=createPitRobot(g,new T.Vector3(0,.5,-1),new T.Vector3(.7,.4,1));
+ let sample;
+ const target=new T.WebGLRenderTarget(32,32);
+ const compile=async()=>{
+  if(renderer.compileAsync)await renderer.compileAsync(scene,camera);else renderer.compile(scene,camera);
+  // GPU 드라이버의 첫 실제 그리기 준비도 작은 숨은 버퍼에서 끝낸다.
+  const prev=renderer.getRenderTarget(),vp=renderer.getViewport(new T.Vector4()),sc=renderer.getScissor(new T.Vector4()),test=renderer.getScissorTest();
+  try{renderer.setRenderTarget(target);renderer.setViewport(0,0,32,32);renderer.setScissorTest(false);renderer.render(scene,camera);}finally{renderer.setRenderTarget(prev);renderer.setViewport(vp);renderer.setScissor(sc);renderer.setScissorTest(test);}
+ };
+ try{
+  await compile();
+  // 로봇뿐 아니라 새 카메라 가림 셰이더도 실제 장착 때와 같은 키로 준비.
+  // 호출자는 차고 정지 프레임을 보관하므로 본보기 차는 화면에 그려지지 않음.
+  const {createCarModel}=await import('./carModel.js');sample=createCarModel('#cc3333');g.add(sample.root);
+  const keep=new Set();pitWarmMaterials.set(renderer,keep);
+  renderer.domElement.addEventListener('webglcontextlost',()=>{for(const m of keep)m.dispose();keep.clear();},{once:true});
+  for(const hints of [{engine:{no:3}},{engine:{no:3,lv:2}},{engine:{no:3},gearbox:{no:1}}]){
+   sample.setParts(hints);await compile();
+   // 셰이더 재질 3개만 보관. 본보기의 면은 전부 버리지만 프로그램은 첫 장착까지 유지.
+   sample.root.traverse(o=>{if(o.material?.userData.pitCamera){o.material.userData.lvShared=true;keep.add(o.material);}});
+  }
+ }catch{}finally{sample?.dispose();robot.dispose();g.userData.dispose();target.dispose();}
  return true;
 }
 const LV_GOLD=new T.Color('#c98410'),LV_GOLDGLOW=new T.Color('#3a2402');
@@ -266,7 +297,7 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
  // ????? ?? ???? ???? ?? ? ?? ???.
  function blockTread(width,r){const g=new T.BufferGeometry(),x=width*.49,z=r*.13,y=.015;g.setAttribute('position',new T.Float32BufferAttribute([-x,0,-z,x,0,-z,x,0,z,-x,0,z,-x,y,-z,x,y,-z,x,y,z,-x,y,z],3));g.setIndex([4,6,5,4,7,6,0,7,4,0,3,7,1,5,6,1,6,2]);g.computeVertexNormals();return g;}
  function setParts(parts={}){
-  const next=JSON.stringify(parts||{});if(next===signature)return;signature=next;clear();parts=parts||{};jet=parts.water?.hull==='jet';setWalls(!parts.tire);
+  const next=JSON.stringify(parts||{});if(next===signature)return;signature=next;clear();parts=parts||{};kitRef.engineHint=parts.engine;jet=parts.water?.hull==='jet';setWalls(!parts.tire);
   if(parts.tire){const p=parts.tire,mat=new T.MeshStandardMaterial({color:p.sidewall||'#ef3947',roughness:.7});mat.userData.partOwned=true;
    const rubber=new T.MeshStandardMaterial({color:'#24262b',roughness:.92});
    for(let i=0;i<wheels.length;i++){const w=wheels[i],width=A.wheels[i][4],g=group(w.spin,'tire-'+i),side=w.side,r=w.r,t=p.tread;
@@ -283,6 +314,7 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
   // 배기 끝만 교체한다. 차체 안으로 이어지는 짧은 목을 둬 공중에 매달리지 않게.
   if(parts.engine){
    hideEngine(true);const e=parts.engine,n=e.no||1,g=group(body,'engine');engine=g;
+   const block=createPitEngine(n),[ex,ey,ez,ek]=enginePosition(style);block.position.set(ex,ey,ez);block.scale.setScalar(ek);g.add(block);
    const metal=mat(e.exhaustColor||'#c3cbd7',{metal:.88,rough:.24}),tip=mat(n===3?'#c6995c':n===1?'#8076bd':'#aab1bb',{metal:.86,rough:.24}),dark=mat('#151b21',{metal:.25,rough:.6});
    // 터보 한 구는 원래 구멍 무리의 중심. 좌우로 멀리 떨어진 구멍은 각각 한 구로 유지.
    for(const [x,y,z,r0]of ports){const r=Math.max(.048,r0),raised=style==='buggy'||style==='rocket',len=style==='kart'?.16:raised?.22:.24;
@@ -414,6 +446,16 @@ export function createParts3d({body,spoiler,fWing,hull,wheels,A,M,drs,normalBoun
    }
    else{g.userData.noBatch=false;batchLocal(g,{pbr:true});collect();g.traverse(o=>{o.userData.noBatch=true;});}
   }
+  // 차고 카메라(0번 층)는 그대로 보이고, 게임의 1인칭 숨김 규칙을 따름.
+  // 카메라가 공용 5번 층을 쓰되 8번 층을 숨기는 순간만 엔진을 가린다.
+  // 엔진+기어 묶음을 유지하므로 새 그림 호출은 없다.
+  for(const g of nodes)if(g===engine||g.name==='part-drivetrain')g.traverse(o=>{
+   if(!o.isMesh)return;const old=o.material,compile=old.onBeforeCompile,key=old.customProgramCacheKey(),visible={value:1},m=keepShaderClone(old.clone());
+   m.userData={live:true,pitCamera:true};
+   m.onBeforeCompile=sh=>{compile.call(old,sh);sh.uniforms.uPitVisible=visible;sh.fragmentShader='uniform float uPitVisible;\n'+sh.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nif(uPitVisible<.5)discard;');};
+   m.customProgramCacheKey=()=>key+'-pit-camera1';o.material=m;materials.add(m);
+   const render=o.onBeforeRender;o.onBeforeRender=function(r,s,c,...args){render?.call(this,r,s,c,...args);visible.value=(c.layers.mask&(1<<5))&&!(c.layers.mask&(1<<8))?0:1;};
+  });
   for(const g of nodes)if(g.name==='part-aero')g.traverse(o=>{const tag=o.geometry?.attributes.partDRS;if(!tag)return;const indices=[];for(let i=0;i<tag.count;i++)if(tag.getX(i)>.5)indices.push(i);if(indices.length)drsBindings.push({o,indices,rest:g.userData.drsRest,p:new Float32Array(o.geometry.attributes.position.array),n:new Float32Array(o.geometry.attributes.normal.array)});});
  }
  return {setParts,dispose(){clear();for(const r of changed){r.removed.dispose();r.remain.dispose();}for(const w of wheels)if(w.wall)w.wall.visible=true;},mounts,pose(motors,accelP=0){

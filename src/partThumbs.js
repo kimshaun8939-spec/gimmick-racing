@@ -6,7 +6,7 @@ import {partOf,partLook,partLevel} from './parts.js';
 export {PART_VIEW} from './carParts3d.js';
 import {PART_VIEW,isolatedPart} from './carParts3d.js';
 
-const VERSION=12,STORE='gimmick.partThumbs',mem=new Map();
+const VERSION=13,STORE='gimmick.partThumbs',mem=new Map();
 let studio,queue=Promise.resolve(),source,storeCache,saveTimer,releaseTimer;
 const idle=()=>new Promise(resolve=>window.requestIdleCallback?requestIdleCallback(resolve,{timeout:350}):setTimeout(resolve,16));
 function readStore(){if(!storeCache){try{storeCache=JSON.parse(localStorage.getItem(STORE)||'{}')||{};}catch{storeCache={};}}return storeCache;}
@@ -17,7 +17,7 @@ async function sourceHash(){
  source??=(async()=>{
   // 사진 모양은 같으므로 기존 v12의 partThumbs 소스 접두 해시를 유지.
   // 구도·조명·촬영 방법을 바꾸면 VERSION을 올릴 것. 모델 파일은 계속 자동 감지.
-  const files=['carParts3d','carModel','carWheels','carLighting','carCostumes','staticBatch','carBody_clearance','carBody_boat','carBody_accel','carBody_wheels','carBody_cockpit',...['f1','gt','rally','proto','rocket','buggy','hatch','muscle','hyper','kart','roadster','truck','ev','wedge','van'].map(s=>'carBody_'+s)];
+  const files=['pitEngine','carParts3d','carModel','carWheels','carLighting','carCostumes','staticBatch','carBody_clearance','carBody_boat','carBody_accel','carBody_wheels','carBody_cockpit',...['f1','gt','rally','proto','rocket','buggy','hatch','muscle','hyper','kart','roadster','truck','ev','wedge','van'].map(s=>'carBody_'+s)];
   const texts=await Promise.all(files.map(f=>fetch(new URL('./'+f+'.js',import.meta.url)).then(r=>{if(!r.ok)throw Error(f);return r.text();})));
   return hash(texts.join('|'),11181864);
  })();return source;
@@ -36,7 +36,7 @@ async function getStudio(){
  studio={renderer,scene,camera,env,shadow,shadowMap};return studio;
 }
 function stockIcon(slot,width,height){
- const labels={engine:'순정 배기',gearbox:'순정 · 차체 일체형',tire:'순정 휠',aero:'순정 날개',water:'순정 추진 장치'};
+ const labels={engine:'순정 엔진',gearbox:'순정 · 차체 일체형',tire:'순정 휠',aero:'순정 날개',water:'순정 추진 장치'};
  const paths={gearbox:'M55 60L83 42H129L153 60V99L129 117H83L55 99ZM70 70H138M70 86H138M88 43V116M119 43V116',engine:'M55 62H145V98H55ZM68 98V117H83V98M116 98V117H131V98',aero:'M37 70H171V81H37ZM67 81V111M141 81V111',water:'M35 61H174L147 106H65ZM65 106L105 125L147 106'};
  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'" viewBox="0 0 210 160"><g fill="#344b60" stroke="#acc6d9" stroke-width="4" stroke-linejoin="round"><path d="'+(paths[slot]||paths.gearbox)+'"/></g><text x="105" y="150" text-anchor="middle" fill="#cee6ed" font-size="15" font-family="sans-serif">'+labels[slot]+'</text></svg>';
  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
@@ -90,7 +90,7 @@ export function partThumb(partId,{carId='f1',size=400,slot='engine',lv,isRelevan
    const url=await encode(st.renderer.domElement);mem.set(key,url);
    saveSoon(key,url);
    return url;
-  }finally{st.shadow.visible=false;if(st.product){st.product.traverse(o=>{if(o.userData.photoGeometry)o.geometry.dispose();});st.scene.remove(st.product);st.product=null;}}
+  }finally{st.shadow.visible=false;if(st.product){st.product.traverse(o=>{if(o.userData.photoGeometry){o.geometry.dispose();if(!o.material.userData?.lvShared)o.material.dispose();}});st.scene.remove(st.product);st.product=null;}}
  });queue=job.catch(()=>{});queue.then(()=>{clearTimeout(releaseTimer);releaseTimer=setTimeout(()=>disposePartThumbs(),15000);});return job;
 }
 /** 메뉴 종료 시 GPU 자원 반환. 진행 중인 촬영이 끝난 뒤 실행. */
