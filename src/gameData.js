@@ -253,12 +253,12 @@ export function loadRoster() {
       return {
         DEFAULT_CAR_ID: 'f1',
         async listCars() {
-          return [{ id: 'f1', name: '빨강 레이서', tag: '경주 머신 · 균형형', desc: '기본 차', stats: { speed: 3, accel: 4, handling: 4, grip: 4, boost: 3 }, look: '#e8463a' }];
+          return [{ id: 'f1', name: '적토마', tag: '경주 머신 · 균형형', desc: '기본 차', stats: { speed: 3, accel: 4, handling: 4, grip: 4, boost: 3 }, look: '#e8463a' }];
         },
         async loadCarConfig() {
           const cfg = await loadJSON('data/car.json');
           cfg.carId = 'f1';
-          cfg.carName = '빨강 레이서';
+          cfg.carName = '적토마';
           cfg.look = '#e8463a';
           return cfg;
         },
