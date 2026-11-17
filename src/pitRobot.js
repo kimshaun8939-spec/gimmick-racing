@@ -36,11 +36,12 @@ export function createPitRobot(parent,center,extent,slot='engine'){
  const up=new T.Vector3(0,1,0),tmp=new T.Vector3();
  const link=(o,a,b)=>{tmp.subVectors(b,a);o.position.copy(a).add(b).multiplyScalar(.5);o.scale.y=tmp.length();o.quaternion.setFromUnitVectors(up,tmp.normalize());};
  return {root,tray:new T.Vector3(trayX,.72,trayZ),top,
-  update(p,outOffset=new T.Vector3(),inOffset=new T.Vector3()){
-   const work=p<.22||p>.77&&p<.91,grip=p>.20&&p<.79;
+  update(p,outOffset=new T.Vector3(),inOffset=new T.Vector3(),hoodGrip=null){
+   const work=p>.16&&p<.22||p>.77&&p<.85,grip=p>.20&&p<.79||!!hoodGrip&&(p<.16||p>.85&&p<.975);
    target.copy(center).add(top);
    if(p>=.22&&p<.49)target.add(outOffset);else if(p>=.49&&p<.56)target.add(outOffset.clone().lerp(inOffset,smooth((p-.49)/.07)));else if(p>=.56&&p<.82)target.add(inOffset);
    if(p<.13)target.lerp(park,1-smooth(p/.13));if(p>.91)target.lerp(park,smooth((p-.91)/.09));
+   if(hoodGrip&&(p<.16||p>.85&&p<.975))target.copy(hoodGrip).add(new T.Vector3(0,.08,0));
    const d=target.clone().sub(base),length=d.length(),axis=d.clone().normalize();
    const normal=new T.Vector3(0,1,0).addScaledVector(axis,-axis.y).normalize();
    const elbow=base.clone().addScaledVector(d,.5).addScaledVector(normal,Math.sqrt(Math.max(.06,2.2*2.2-length*length/4)));
