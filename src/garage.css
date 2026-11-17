@@ -850,3 +850,129 @@ body.touch-on .ct-keys { display: none; }
 /* qafixB: 터치에서는 등급 키 안내 숨김 */
 body.touch-on #home .h-qe { display:none; }
 @media (pointer:coarse) { #home .h-qe { display:none; } }
+/* menuP3 · G1 차고 사진 목록과 D2 쇼룸 */
+#home#home:has([data-view=car].on){background:radial-gradient(ellipse at 38% 36%,#35485a88,transparent 60%),linear-gradient(118deg,#081321 46%,#9bb6d20a 46.3%,transparent 48%,transparent 62%,#a6c3e70a 62.3%,#07101d 76%)}
+#home#home:has([data-view=car].on) :is(.h-glow,.h-floor){display:none}
+#home#home [data-view=car]{overflow:hidden;padding-bottom:0}
+#home#home .h-car.g2-list{position:relative;padding-bottom:80px;box-sizing:border-box;gap:0}
+#home#home .g2-list .h-carlist{position:static;background:none;border:0;box-shadow:none;padding:0;gap:12px;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 44px minmax(0,1fr)}
+#home#home .g2-list .h-title{grid-column:1/-1;grid-row:1;position:relative;display:block;font-size:40px;line-height:1.2;margin:0 0 8px;padding:0}
+#home#home .g2-list .h-title .p3-eyebrow{margin-bottom:4px}
+#home#home .p3-fromhome .h-title .p3-eyebrow{display:none}
+#home#home .g2-list .h-title .cnt{font-size:14px;color:#99afc4;font-weight:400}
+#home#home .g2-list .h-qe{font-size:11px;margin-left:18px;vertical-align:middle}
+#home#home .g2-list .h-classtabs{grid-column:1;grid-row:2;display:flex;gap:7px;margin:0;align-self:stretch}
+#home#home .g2-list .h-ctab{flex:0 1 120px;min-height:44px;border-radius:10px;padding:6px 16px}
+#home#home .g2-list .cx-tools{grid-column:2;grid-row:2;display:flex;margin:0;gap:7px;align-items:stretch}
+#home#home .g2-list .cx-find{width:180px}#home#home .g2-list .cx-find input{min-height:44px}
+#home#home .g2-list .cx-sort{height:44px;min-height:44px;max-width:160px}
+#home#home .g2-list .cx-dense{height:44px;min-height:44px;width:44px}
+#home#home .h-car.g2-list .h-carlist .list{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:max-content;gap:14px;padding:2px 8px 2px 2px;align-content:start;overflow:auto;min-height:0;flex:1}
+#home#home .h-car.g2-list .h-carlist.dense .list{grid-template-columns:repeat(5,minmax(0,1fr))}
+#home#home .g2-list .cp-tile{position:relative;min-width:0}
+#home#home .g2-list .h-carcard{border:1px solid #c8deff38;background:linear-gradient(125deg,#263e50a8,#0d1a2be6);border-radius:16px;padding:0;overflow:hidden;box-shadow:0 6px 22px #0002;min-height:0}
+#home#home .g2-list .h-carcard.sel{border-color:#ffda60;box-shadow:0 0 0 1px #ffda6033,0 8px 26px #0003}
+#home#home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:clamp(100px,16vh,175px)!important;min-height:0!important;background:radial-gradient(ellipse at 50% 90%,#0005,transparent 55%);position:relative}
+#home#home .h-car.g2-list .h-carlist.dense .list .h-carcard .pic{height:clamp(80px,13vh,140px)!important}
+#home#home .g2-list .h-carcard .pic img{object-fit:contain;transform:scale(1.2);filter:drop-shadow(0 9px 8px #0005)}
+#home#home .g2-list .h-carcard .nm{display:flex;flex-direction:column;gap:6px;padding:10px 14px 14px!important;min-height:62px}
+#home#home .g2-list .h-carcard .nm b{font-size:18px;line-height:1.3}
+#home#home .g2-list .h-carcard .nm small{font-size:11px!important;line-height:1.4;color:#b9d5ed}
+#home#home .g2-list .h-carcard .cl{top:10px;left:10px;background:#081625d9;color:#ffdc6b;border:0;font-size:12px;border-radius:5px}
+#home#home .g2-list .h-carcard .gx-lock{position:absolute;top:12px;right:12px;bottom:auto;left:auto;background:#0a1727d9;color:#ffdb62;font-size:10px;padding:4px 7px;border-radius:6px;max-width:65%}
+#home#home .g2-list .h-carcard .chk{top:10px;left:44px;right:auto;border-radius:20px;background:#ffdc62;color:#231904}
+#home#home .g2-list .p3-owned{position:absolute;top:14px;right:14px;font-size:10px;color:#ffdc62}
+#home#home .g2-list .h-carlist .cp-quick{top:auto;bottom:8px;right:8px;width:44px;min-width:44px;min-height:44px;height:44px;border:0;background:#14283bbb;font-size:17px}
+#home#home .g2-list .h-carcard .nm{padding-right:58px!important}
+#home#home .p3-catalogbar{position:absolute;bottom:0;left:0;right:0;height:70px;box-sizing:border-box;border:1px solid #c8deff38;background:#102031e8;border-radius:18px;display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:10px 16px 10px 130px}
+#home#home .p3-catalogbar>span{flex:1;font-size:12px;color:#b6cadd}
+#home#home .p3-catalogbar .primary{min-height:48px;font-size:16px;padding:10px 28px;background:linear-gradient(110deg,#ffe78a,#ffca40,#ff9829);color:#261b05;border-radius:14px}
+#home#home .g2-list .hm-catalog-home{position:absolute;top:auto;bottom:12px;left:16px;right:auto;z-index:2;min-height:46px;height:46px;font-size:13px}
+#home#home .h-car.g2-detail{position:relative;grid-template-columns:minmax(0,1.13fr) minmax(450px,1fr);grid-template-rows:minmax(0,1fr);gap:28px;padding-bottom:86px;padding-top:62px;box-sizing:border-box}
+#home#home .g2-detail .h-carstage{position:static;grid-row:1;grid-column:1;display:flex;padding:0;min-height:0;border:0;border-bottom:1px solid #ffdc5d60;border-radius:0 0 32px 32px;background:radial-gradient(ellipse at 50% 80%,#9bb8cf18,transparent 62%)}
+#home#home .g2-detail .h-carstage:after{content:'';position:absolute;left:5%;right:53%;bottom:110px;height:45px;transform:perspective(200px) rotateX(55deg);border:1px solid #ffda5655;border-radius:50%;box-shadow:0 0 30px #a9d6ff12;pointer-events:none}
+#home#home .g2-detail .g2-stagebar{position:absolute;left:0;top:0;right:0;min-height:44px;gap:10px}
+#home#home .g2-detail .g2-stagebar .gm-btn{min-height:44px;font-size:12px}
+#home#home .g2-detail .g2-stagebar [data-act=carCompare]{margin-left:auto}
+#home#home .g2-detail .g2-stagebar .gm-btn:last-child{margin-left:0}
+#home#home .g2-detail .h-carinfo.ct{grid-row:1;grid-column:2;height:100%;padding:20px 24px;gap:12px;background:#102031e6;backdrop-filter:blur(12px);border:1px solid #c8deff38;border-radius:20px;transform:none;max-height:none;display:flex;flex-direction:column;min-height:0}
+#home#home .g2-detail .ct-head{display:flex;flex-direction:column;align-items:flex-start;gap:6px;flex:none;min-height:0}
+#home#home .g2-detail .ct-head .ihead{display:flex;width:100%}
+#home#home .g2-detail .ct-head .tg{display:block;letter-spacing:1px}
+#home#home .g2-detail .ct-head h2{font-size:clamp(28px,2.7vw,44px);line-height:1.15;margin:0}
+#home#home .g2-detail .ct-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px;flex:none;width:100%}
+#home#home .g2-detail .ct-tab{min-height:44px;padding:8px!important;border-radius:9px;font-size:13px!important}
+#home#home .g2-detail .ct-body{flex:1;min-height:0;overflow:auto}
+#home#home .g2-detail .btns{position:absolute;bottom:0;left:0;right:0;margin:0;padding:12px 16px;height:72px;box-sizing:border-box;border:1px solid #c8deff38;border-radius:18px;background:#102031eb;display:flex;justify-content:space-between;align-items:center}
+#home#home .g2-detail .btns .gm-btn{min-height:46px}
+#home#home .g2-detail .btns .primary{min-width:250px;background:linear-gradient(110deg,#ffe78a,#ffca40,#ff9829);color:#261b05;font-size:17px;border-radius:14px}
+#home#home .g2-detail .h-carstage .gm-seg{display:flex;position:absolute;left:12%;bottom:96px;gap:4px;padding:4px;border-radius:24px;border:1px solid #bdd5ef38;background:#c7d9ed12;z-index:2}
+#home#home .g2-detail #hForms button{min-height:44px;min-width:64px;border-radius:20px;font-size:12px}
+#home#home .g2-detail .h-drag{bottom:auto;top:15px;left:auto;right:10px;display:none}
+@media(max-width:999px){#home#home .g2-list .h-carlist{grid-template-columns:1fr;grid-template-rows:auto 44px 44px minmax(0,1fr);gap:7px}#home#home .g2-list .cx-tools{grid-column:1;grid-row:3}#home#home .g2-list .h-classtabs{grid-column:1;grid-row:2}#home#home .h-car.g2-list .h-carlist .list{grid-row:4;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}#home#home .h-car.g2-list .h-carlist.dense .list{grid-template-columns:repeat(3,minmax(0,1fr))}#home#home .g2-list .h-title{font-size:30px}#home#home .h-car.g2-detail{grid-template-columns:minmax(0,1fr) minmax(330px,1.1fr);gap:12px}#home#home .g2-detail .h-carinfo.ct{padding:12px;gap:7px}#home#home .g2-detail .ct-head h2{font-size:27px}#home#home .g2-detail .ct-head .tg{display:none}#home#home .g2-detail .h-carstage .gm-seg{left:2%;bottom:95px;gap:0}#home#home .g2-detail #hForms button{min-width:50px;font-size:10px;padding:4px}}
+@media(max-width:599px){
+ #home#home .h-car.g2-list{padding-bottom:72px}#home#home .h-car.g2-list .h-carlist .list{grid-template-columns:repeat(2,minmax(0,1fr))}#home#home .h-car.g2-list .h-carlist.dense .list{grid-template-columns:repeat(2,minmax(0,1fr))}#home#home .g2-list .h-title{font-size:28px;margin-bottom:3px}#home#home .g2-list .h-qe{display:none}#home#home .g2-list .h-ctab{font-size:11px;padding:5px;flex:1}#home#home .g2-list .cx-find{width:auto;flex:1;min-width:0}#home#home .g2-list .cx-sort{max-width:125px}#home#home .g2-list .h-carcard .nm b{font-size:14px}#home#home .g2-list .h-carcard .nm small{font-size:10px!important}#home#home .g2-list .h-carcard .nm{padding:8px 8px 48px!important;min-height:46px}#home#home .g2-list .p3-catalogbar{height:64px;padding:8px 8px 8px 75px;gap:4px}#home#home .p3-catalogbar>span{display:none}#home#home .p3-catalogbar .primary{font-size:12px;padding:8px;min-height:44px}#home#home .g2-list .hm-catalog-home{left:7px;bottom:10px;padding:7px;min-height:44px;height:44px}
+ #home#home .h-car.g2-detail{grid-template-columns:1fr;grid-template-rows:minmax(125px,.7fr) minmax(0,1.2fr);gap:10px;padding-top:52px;padding-bottom:68px}#home#home .g2-detail .h-carstage{grid-row:1;grid-column:1}#home#home .g2-detail .h-carinfo.ct{grid-row:2;grid-column:1;padding:10px 12px;gap:6px}#home#home .g2-detail .ct-head{flex-direction:row;gap:8px;align-items:center}#home#home .g2-detail .ct-head h2{font-size:24px}#home#home .g2-detail .ct-head .ihead{width:auto}#home#home .g2-detail .ct-head .tg,#home#home .g2-detail .ct-head .num{display:none}#home#home .g2-detail .ct-tabs{display:grid}#home#home .g2-detail .ct-tab{font-size:11px!important}#home#home .g2-detail .btns{height:60px;padding:7px 10px}#home#home .g2-detail .btns .primary{min-width:175px;font-size:13px}#home#home .g2-detail .btns .gm-btn{font-size:11px;padding:7px}#home#home .g2-detail .h-carstage .gm-seg{left:50%;transform:translateX(-50%);bottom:auto;top:calc(52px + (100% - 130px)*.368 - 48px);white-space:nowrap}#home#home .g2-detail #hForms button{min-width:56px}#home#home .g2-detail .h-carstage:after{display:none}#home#home .g2-detail .g2-stagebar{gap:4px}#home#home .g2-detail .g2-stagebar .gm-btn{font-size:11px;padding:6px}
+}
+@media(max-height:480px) and (min-width:600px){
+ #home#home .g2-list .h-title{display:none}#home#home .g2-list .h-carlist{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:44px minmax(0,1fr);gap:6px}#home#home .g2-list .h-classtabs{grid-column:1;grid-row:1;gap:4px}#home#home .g2-list .h-ctab{padding:4px;font-size:10px}#home#home .g2-list .cx-tools{grid-column:2;grid-row:1;gap:3px}#home#home .g2-list .cx-find{width:100px}#home#home .g2-list .cx-sort{max-width:100px;font-size:10px}#home#home .g2-list .cx-dense{display:none}#home#home .h-car.g2-list .h-carlist .list{grid-row:2;grid-template-columns:repeat(4,minmax(0,1fr))}#home#home .h-car.g2-list .h-carlist .list .h-carcard .pic{height:85px!important}#home#home .g2-list .h-carcard .nm b{font-size:12px}#home#home .g2-list .h-carcard .nm small{font-size:9px!important}#home#home .g2-list .h-carcard .nm{padding:6px 6px 48px!important}#home#home .h-car.g2-list{padding-bottom:56px}#home#home .p3-catalogbar{height:50px;padding:2px 8px 2px 100px}#home#home .p3-catalogbar .primary{min-height:44px;font-size:12px}#home#home .g2-list .hm-catalog-home{bottom:3px;height:44px;min-height:44px}#home#home .p3-catalogbar>span{font-size:10px}
+ #home#home .h-car.g2-detail{padding-top:0;padding-bottom:53px;gap:10px;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);grid-template-rows:minmax(0,1fr)}#home#home .g2-detail .h-carinfo.ct{padding:7px;gap:5px}#home#home .g2-detail .ct-head{display:none}#home#home .g2-detail .ct-tab{font-size:10px!important;padding:4px!important}#home#home .g2-detail .g2-stagebar{width:39%;top:0;gap:3px;flex-wrap:wrap}#home#home .g2-detail .g2-stagebar .gm-btn{font-size:10px;padding:5px}#home#home .g2-detail .g2-stagebar [data-act=carCompare]{margin-left:0}#home#home .g2-detail .g2-stagebar .gm-btn:last-child{display:none}#home#home .g2-detail .h-carstage .gm-seg{left:0;bottom:58px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:0;gap:0}#home#home .g2-detail #hForms button{min-width:44px;min-height:44px;font-size:10px}#home#home .g2-detail .btns{height:48px;padding:2px 8px}#home#home .g2-detail .btns .primary{font-size:12px;min-width:180px}#home#home .g2-detail .btns .gm-btn{min-height:44px}#home#home .g2-detail .h-carstage:after{display:none}
+}
+
+/* 1차 화면 검토: 목록 높이와 하단 줄 분리, 조명 절제 */
+#home#home:has([data-view=car].on) .h-streaks{display:none}
+#home#home .h-car.g2-list,#home#home .h-car.g2-detail{width:100%;max-width:none;max-height:none;margin:0;align-self:stretch}
+#home#home .g2-detail .h-carinfo.ct{position:static}
+#home#home .g2-detail .ct-head h2{width:100%;max-width:none;white-space:normal;overflow:visible;font-style:normal}
+#home#home .g2-detail .ct-head .num{display:none}
+#home#home .g2-list .h-carcard.gx-locked .pic{opacity:.72;filter:saturate(.65)}
+#home#home .g2-list .h-carcard.gx-locked .pic:after{display:none}
+#home#home .g2-list .h-carlist{box-sizing:border-box;min-height:0;height:100%}
+#home#home .g2-list .h-classtabs{background:none;border:0;padding:0}
+#home#home .g2-list .h-ctab.on{background:#ffda62;color:#201805;border-color:#ffda62}
+#home#home .g2-list .h-title{color:#f4f7ff}
+/* 2차 화면 검토: 필터가 고정 버튼 줄의 기준을 가두지 않도록 한다. */
+#home#home .g2-detail .h-carinfo.ct,#home#home .g2-list .h-carlist{backdrop-filter:none;filter:none;transform:none;contain:none;will-change:auto}
+#home#home .g2-detail .h-carinfo.ct{overflow:visible}
+#home#home .g2-detail .ct-body{overflow:auto}
+#home#home .g2-list .h-carlist{overflow:hidden;position:static}
+#home#home:has([data-view=car].on){background:radial-gradient(ellipse at 35% 30%,#263a4c,#091321 65%)}
+#home#home:has([data-view=car].on) .h-carmark{display:none}
+#home#home .g2-detail .h-carstage .gm-seg{flex-wrap:nowrap;width:auto;max-width:none}
+@media(max-width:599px){#home#home .g2-detail .h-carstage .gm-seg{top:auto;bottom:0;position:absolute;left:50%;transform:translateX(-50%);display:flex;flex-wrap:nowrap;width:max-content}#home#home .g2-detail .h-carstage{position:relative}#home#home .g2-detail .g2-stagebar{position:fixed;top:138px;left:16px;right:16px}#home#home .g2-detail .h-carinfo.ct{min-height:0}#home#home .g2-detail .ct-head .ihead{display:none}}
+@media(min-width:600px) and (max-height:480px){#home#home .g2-detail .h-carstage{position:static}#home#home .g2-detail .h-carstage #hForms{position:absolute;width:auto;left:0;bottom:56px;display:grid;grid-template-columns:repeat(2,1fr)}}
+/* 3차 검토: 아래 선택 버튼은 오른쪽, 조작 안내와 차 그림은 여유 있게. */
+#home#home .g2-detail .btns .primary{flex:0 1 310px;width:auto}
+#home#home .g2-detail .btns:after{content:'선택은 다음 화면에서도 바꿀 수 있어요';font-size:12px;color:#b5c9dd;margin-right:auto;order:0}
+#home#home .g2-detail .btns>[data-go]{order:-1}
+#home#home .g2-detail .btns>.primary{order:1}
+#home#home .g2-detail .h-carinfo.ct:before{display:none}
+#home#home .g2-detail .ct-tab.on{color:#251c06}
+#home#home .g2-list .h-carlist .list{scrollbar-gutter:stable}
+#home#home .g2-list .h-carcard.gx-locked{opacity:1}
+#home#home .g2-list .cx-find input{height:44px;padding:10px 12px}
+#home#home .g2-list .h-ctab{max-width:120px}
+@media(max-width:599px){#home#home .g2-detail .btns:after{display:none}#home#home .g2-detail .btns .primary{flex:0 1 230px}#home#home .g2-detail .ct-head h2{font-size:25px;color:#f3f6fb}}
+@media(max-height:480px){#home#home .g2-detail .btns:after{display:none}}
+@media(max-height:480px) and (min-width:600px){#home#home .g2-detail .g2-stagebar .gm-btn:last-child{display:inline-flex}}
+/* menuP3b: 넓은 PC 작업대, D2 쇼룸 유지 */
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .h-car.g2-detail{grid-template-columns:minmax(0,.7fr) minmax(700px,1.3fr);gap:20px;padding-top:52px;padding-bottom:80px}
+ #home#home .g2-detail .h-carinfo.ct{height:100%;margin:0;padding:12px 16px;gap:8px}
+ #home#home .g2-detail .ct-head{flex-direction:row;align-items:center;gap:10px}
+ #home#home .g2-detail .ct-head .ihead{width:auto}
+ #home#home .g2-detail .ct-head .tg{display:none}
+ #home#home .g2-detail .ct-head h2{font-size:30px}
+ #home#home .g2-detail .ct-tabs .ct-tab{min-height:38px;padding:6px!important}
+ #home#home .g2-detail .h-carinfo[data-tab=parts] .ct-head h2{font-size:28px}
+}
+/* 2차 사진 검토: 상단 동작은 쇼룸 위, 작업대는 이름부터 프리셋까지. */
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .h-car.g2-detail{padding-top:0;padding-bottom:78px}
+ #home#home .g2-detail .g2-stagebar{right:66%;gap:5px;flex-wrap:wrap}
+ #home#home .g2-detail .g2-stagebar .gm-btn{font-size:11px;padding:6px}
+ #home#home .g2-detail .h-carinfo.ct{padding:10px 14px;gap:6px}
+ #home#home .g2-detail .ct-head{min-height:30px;gap:8px}
+ #home#home .g2-detail .ct-head h2{font-size:28px}
+ #home#home .g2-detail .ct-tabs .ct-tab{min-height:36px}
+}

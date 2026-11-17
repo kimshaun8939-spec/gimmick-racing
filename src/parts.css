@@ -363,3 +363,96 @@
 /* partslock 2026-11-15: 모든 부품이 레벨 부족인 칸 = 잠금 (흐림 + 🔒 Lv.n), 누르면 짧은 안내 */
 #home .pu-slots button.pu-slotlock,.pu-slots button.pu-slotlock{opacity:.55;cursor:not-allowed;background:repeating-linear-gradient(135deg,#121c2c 0 7px,#162236 7px 14px);border-style:dashed}#home .pu-slots .pu-slotlock small,.pu-slots .pu-slotlock small{color:#ffcf81}#home .ct-pane[data-pane="parts"]{position:relative}.pu-slotmsg{position:absolute;left:0;z-index:6;box-shadow:0 6px 18px #0008;margin:0;padding:6px 9px;border-radius:8px;background:#2a1f0e;border:1px solid #ffcf8155;color:#ffdf9e;font-size:11px;line-height:1.35}.pu-slotmsg[hidden]{display:none}
 @media(max-width:600px){#home .ct-tab.ct-parts.fg-locked .fg-tabtag{display:none}#home .ct-tab.ct-parts.fg-locked>span::before{content:'🔒';margin-right:2px;font-size:.85em}}
+/* menuP3 · D2 부품은 두 열, 단독 그림과 조작 공간 */
+#home#home .g2-detail .pu-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#home#home .g2-detail .pu-cards>button{display:grid;grid-template-columns:84px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;text-align:left;padding:7px;min-height:82px;border-radius:11px;background:#c2ddff0b}
+#home#home .g2-detail .pu-cards>button.on{border-color:#ffda62;background:#ffda6210}
+#home#home .g2-detail .pu-art{grid-column:1;grid-row:1/3;height:74px;width:80px;min-height:0}
+#home#home .g2-detail .pu-cards b{grid-column:2;font-size:12px;white-space:normal;overflow-wrap:anywhere}
+#home#home .g2-detail .pu-cards>button>small{grid-column:2;font-size:10px;white-space:normal}
+#home#home .g2-detail .pu-slots button{min-height:44px}
+#home#home .g2-detail .pu-detail .gm-btn{min-height:44px}
+#home#home .g2-detail .pu-cardtrade{display:none}
+#home#home .g2-detail .pu-detail{display:block;grid-template-columns:none;padding:10px;background:#0b1726}
+#home#home .g2-detail .pu-acts{display:flex;gap:8px}
+#home#home .g2-detail .pu-acts>button{flex:1;margin:6px 0 0}
+#home#home .g2-detail .pu-acts [data-up]{background:linear-gradient(110deg,#ffe78a,#ffbd33);color:#261b05;border-color:#ffe18a}
+@media(max-width:599px),(max-height:480px){#home#home .g2-detail .pu-cards>button{grid-template-columns:55px minmax(0,1fr);min-height:66px;padding:4px;gap:3px}#home#home .g2-detail .pu-art{height:54px;width:52px}#home#home .g2-detail .pu-cards b{font-size:10px}#home#home .g2-detail .pu-cards{gap:5px}}
+/* D2: 구매·장착·강화는 항상 먼저, 자세한 수치와 프리셋은 펼쳐서 읽어요. */
+#home#home .g2-detail .ct-pane[data-pane=parts]{display:flex;flex-direction:column;gap:8px}
+#home#home .g2-detail .pu-head{display:none}
+#home#home .g2-detail .pu-detail{flex:none}
+#home#home .g2-detail .pu-detail .pu-acts{margin-top:4px}
+#home#home .g2-detail .pu-more{flex:none;border:1px solid #c7ddff26;border-radius:10px;background:#09172688}
+#home#home .g2-detail .pu-more>summary{min-height:44px;box-sizing:border-box;padding:13px 10px;font-size:11px;color:#c4dbef;cursor:pointer}
+#home#home .g2-detail .pu-more-body{padding:10px;display:flex;flex-direction:column;gap:10px;font-size:11px}
+#home#home .g2-detail .pu-more-body .pu-tools{flex-wrap:wrap}
+#home#home .g2-detail .pu-more-body .gm-btn{min-height:44px}
+#home#home .g2-detail .pu-more-body .pu-stats{display:grid;grid-template-columns:1fr 1fr}
+@media(min-width:1000px) and (max-height:760px){
+ #home#home .g2-detail .h-carinfo.ct{height:calc(100% + 50px);transform:translateY(-50px);padding:12px 16px;gap:7px}
+ #home#home .g2-detail .g2-stagebar{right:53%}
+ #home#home .g2-detail .ct-head{gap:4px}#home#home .g2-detail .ct-head h2{font-size:29px}
+ #home#home .g2-detail .pu-cards>button{min-height:58px;grid-template-columns:56px minmax(0,1fr);padding:4px}
+ #home#home .g2-detail .pu-art{width:52px;height:50px}
+ #home#home .g2-detail .ct-pane[data-pane=parts]{gap:6px}
+ #home#home .g2-detail .pu-detail{padding:7px}
+}
+@media(min-width:1000px) and (max-height:760px){#home#home .g2-detail .h-carinfo.ct{transform:none;margin-top:-50px}}
+#home#home .g2-detail .pu-detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;align-items:center}
+#home#home .g2-detail .pu-detail>.pu-acts{grid-column:2;grid-row:auto;max-width:none;align-self:center;margin:0;flex-direction:row}
+#home#home .g2-detail .pu-detail>.pu-acts>.gm-btn{min-height:44px;margin:0!important;min-width:0}
+#home#home .g2-detail .pu-more>summary{list-style:inside}
+@media(max-width:599px){#home#home .g2-detail .pu-detail{grid-template-columns:1fr}#home#home .g2-detail .pu-detail>.pu-acts{grid-column:1}}
+@media(min-width:1000px) and (max-height:760px){#home#home .g2-detail .ct-pane[data-pane=parts]{gap:3px}#home#home .g2-detail .pu-detail{padding:5px}}
+/* menuP3b: 그림·설명·강화·성능·프리셋을 펼친 작업대 */
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .g2-detail .ct-pane[data-pane=parts]{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:7px 12px;align-content:start}
+ #home#home .g2-detail .ct-pane[data-pane=parts][hidden]{display:none}
+ #home#home .g2-detail .pu-cards{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:7px}
+ #home#home .g2-detail .pu-cards>button{display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:2px;min-height:0;padding:5px;border-radius:10px}
+ #home#home .g2-detail .pu-art{width:100%;height:clamp(110px,15vh,158px);min-height:110px;margin:0;flex:none}
+ #home#home .g2-detail .pu-art img{width:100%;height:100%;object-fit:contain}
+ #home#home .g2-detail .pu-cards b{font-size:12px;white-space:nowrap}
+ #home#home .g2-detail .pu-cards>button>small{font-size:10px;margin:0;min-height:17px}
+ #home#home .g2-detail .pu-detail{grid-column:1;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:8px;min-width:0}
+ #home#home .g2-detail .pu-detail>p{display:block;margin:0!important;line-height:1.35!important}
+ #home#home .g2-detail .pu-detail>.pu-acts{margin-top:auto;display:flex;gap:6px;flex:none}
+ #home#home .g2-detail .pu-detail>.pu-acts>.gm-btn{min-height:40px;flex:1;padding:5px;font-size:11px}
+ #home#home .g2-detail .pu-trades{display:flex;flex-wrap:wrap;gap:2px 6px;font-size:10px}
+ #home#home .g2-detail .pu-detail>small{font-size:10px;line-height:1.3;margin:0}
+ #home#home .g2-detail .pu-stats{grid-column:2;grid-template-columns:1fr;gap:4px;align-content:start;margin:0}
+ #home#home .g2-detail .pu-stats>div{grid-template-columns:44px minmax(0,1fr) 32px;font-size:10px;min-height:13px}
+ #home#home .g2-detail .pu-stats>small{font-size:10px;margin:0;line-height:1.4}
+ #home#home .g2-detail .pu-tools{grid-column:1/-1;display:flex;flex-wrap:nowrap;gap:5px;margin:0}
+ #home#home .g2-detail .pu-tools .gm-btn{min-height:34px;padding:5px;font-size:11px}
+}
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .g2-detail .h-carinfo.ct{height:100%;margin:0;transform:none;padding:10px 14px;gap:7px}
+ #home#home .g2-detail .ct-pane[data-pane=parts]{gap:6px 10px}
+ #home#home .g2-detail .pu-detail>b{align-self:stretch;text-align:left}
+ #home#home .g2-detail .pu-detail>.pu-acts{align-self:stretch;width:100%;max-width:none}
+ #home#home .g2-detail .pu-tools{flex-shrink:0}
+}
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .g2-detail .pu-slots button{min-height:38px;padding:4px 2px}
+ #home#home .g2-detail .ct-pane[data-pane=parts]{gap:4px 10px}
+ #home#home .g2-detail .pu-stats{gap:2px}
+ #home#home .g2-detail .pu-stats>div{min-height:12px}
+ #home#home .g2-detail .pu-tools .gm-btn{min-height:32px}
+}
+@media(min-width:1000px) and (min-height:600px){
+ #home#home .g2-detail .h-carinfo.ct{padding:8px 14px;gap:4px}
+ #home#home .g2-detail .ct-head{height:30px;min-height:30px;flex-direction:row;align-items:center}
+ #home#home .g2-detail .ct-head .ihead{width:auto}
+ #home#home .g2-detail .ct-head h2{font-size:28px;line-height:1}
+ #home#home .g2-detail .ct-body{padding:0}
+ #home#home .g2-detail .g2-stagebar{right:66%}
+ #home#home .g2-detail .pu-slots small{margin-top:2px}
+}
+/* 긴 강화 설명도 자르지 않도록 낮은 PC에서는 프리셋을 비교 막대 아래에. */
+@media(min-width:1000px) and (min-height:600px) and (max-height:760px){
+ #home#home .g2-detail .pu-detail{grid-row:3/span 2}
+ #home#home .g2-detail .pu-tools{grid-column:2;grid-row:4;align-self:end}
+ #home#home .g2-detail .pu-tools .gm-btn{padding:4px 2px;font-size:10px;min-width:0}
+}

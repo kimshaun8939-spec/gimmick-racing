@@ -245,11 +245,11 @@ export async function runHome() {
   ];
   views.car.innerHTML = `
     <div class="h-car g2-list">
-      <div class="h-panel h-carlist"><div class="h-title">차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><button class="gm-btn hm-catalog-home" data-go="main" data-nav hidden>‹ 홈으로</button><div class="h-classtabs"></div>
+      <div class="h-panel h-carlist"><div class="h-title"><span class="p3-eyebrow">READY TO RACE</span>나의 차고 · <span class="cnt">${cars.length}대</span>${useClasses ? '<span class="h-qe"><kbd>Q</kbd><kbd>E</kbd> 등급</span>' : ''}</div><button class="gm-btn hm-catalog-home" data-go="main" data-nav hidden>‹ 홈으로</button><div class="h-classtabs"></div>
         <div class="cx-tools"><label class="cx-find"><input type="search" spellcheck="false" autocomplete="off" placeholder="차 이름 찾기" aria-label="차 이름 찾기"></label>
           <select class="cx-sort" aria-label="정렬"><option value="class">등급별</option><option value="speed">최고 속도 순</option><option value="accel">가속 순</option><option value="handling">핸들링 순</option><option value="grip">접지력 순</option><option value="name">이름 순</option><option value="unlock">해금 레벨 순</option></select>
           <button class="cx-btn cx-dense" type="button" title="작게 보기 / 크게 보기">▦</button></div>
-        <div class="list"></div></div>
+        <div class="list"></div><footer class="p3-catalogbar"><span>선택은 다음 화면에서도 바꿀 수 있어요</span><button class="gm-btn primary" data-act="carDetail" data-nav>선택한 차 상세 보기 ›</button></footer></div>
       <div class="h-carstage"><div class="g2-stagebar"><button class="gm-btn" data-act="carList" data-nav>‹ 차 목록</button><button class="gm-btn" data-act="carCompare" data-coach="garage.compareDetail" data-nav>⚖ 비교</button><button class="gm-btn" data-act="carFront" data-nav>정면으로</button></div>
         <div class="h-drag">↔ 끌어서 돌려 보기</div>
         
@@ -371,7 +371,7 @@ export async function runHome() {
   // 등급 탭: 전체 + 등급마다 (차가 있는 등급만). 차가 등급 없이 있으면 '기타'
   let classFilter = 'all';
   const classTabs = useClasses
-    ? [{ id: 'all', name: '전체', color: '#ffffff' }, ...classes.filter((k) => cars.some((c) => c.class === k.id)), ...(cars.some((c) => !classOfId(c.class)) ? [{ id: '_etc', name: '기타', color: '#95a2bb' }] : [])]
+    ? [{ id: 'all', name: '전체', color: '#ffffff' }, ...classes.filter((k) => cars.some((c) => c.class === k.id)).sort((a,b) => a.id.localeCompare(b.id)), ...(cars.some((c) => !classOfId(c.class)) ? [{ id: '_etc', name: '기타', color: '#95a2bb' }] : [])]
     : [];
   const inTab = (c, tab) => tab === 'all' || (tab === '_etc' ? !classOfId(c.class) : c.class === tab);
   const classMeaning = { all: '모든 스타일', C: '입문용', B: '균형 잡힌 성능', A: '최고 속도에 도전' };
@@ -458,7 +458,7 @@ export async function runHome() {
   syncCxTools();
   function renderCarList() {
     carList.innerHTML = '';
-    const grouped = classFilter === 'all' && useClasses && cx.sort === 'class';
+    const grouped = false; // G1: 등급은 카드 딱지로, 목록은 끊김 없는 네 열
     const groups = grouped ? classTabs.filter((k) => k.id !== 'all') : [null];
     let shown = 0;
     for (const g of groups) {
@@ -486,7 +486,7 @@ export async function runHome() {
         const locked = !isOpen(c.id);
         const st = carState(c.id); // 레벨이 됐는데 안 산 차 = ⬡ 가격 딱지, 아직이면 🔒 Lv.n
         const priceT = st.price.toLocaleString('ko-KR');
-        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? (st.buy ? `<span class="gx-lock gx-buy" title="⬡ ${priceT} 피트 조각으로 살 수 있어요 · 눌러서 보기">⬡ ${priceT}</span>` : `<span class="gx-lock" title="레벨 ${st.level}부터 살 수 있어요 · 눌러서 미리 보기">🔒 Lv.${st.level}</span>`) : ''}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? (st.buy ? `⬡ ${priceT} 구매` : `Lv.${st.level}부터`) : ko || en)}</small></span>`;
+        btn.innerHTML = `<span class="pic">${url ? `<img src="${url}" alt="" draggable="false">` : '<span class="ph"></span>'}${k ? `<i class="cl">${esc(k.id)}</i>` : ''}<span class="chk">✓</span>${locked ? (st.buy ? `<span class="gx-lock gx-buy" title="⬡ ${priceT} 피트 조각으로 살 수 있어요 · 눌러서 보기">⬡ ${priceT}</span>` : `<span class="gx-lock" title="레벨 ${st.level}부터 살 수 있어요 · 눌러서 미리 보기">🔒 Lv.${st.level}</span>`) : '<span class="p3-owned">보유</span>'}</span><span class="nm"><b>${esc(c.name)}</b><small>${esc(locked ? (st.buy ? `⬡ ${priceT} 구매` : `Lv.${st.level}부터`) : ko || en)}</small></span>`;
         btn.classList.toggle('gx-locked', locked);
         btn.classList.toggle('sel', c.id === carId);
         btn.addEventListener('click', () => { selectCar(c.id, true); garageDetail(true); });
@@ -717,10 +717,10 @@ export async function runHome() {
     const pick = info.querySelector('[data-act="pickCar"]');
     pick.classList.toggle('gx-off', !open && !garageOnly && !st.buy);
     pick.disabled = !open && !garageOnly && !st.buy;
-    info.querySelector('.btns [data-go]').hidden = garageOnly;
+    info.querySelector('.btns [data-go]').hidden = false;
     info.querySelector('.btns [data-go]').dataset.go = garageReturn;
-    info.querySelector('.btns [data-go]').textContent = '‹ 준비 화면으로';
-    pick.textContent = garageOnly ? '홈으로' : open ? '이 차로 타기 · 돌아가기 ›' : st.buy ? `⬡ ${st.price.toLocaleString('ko-KR')} 으로 사기` : `🔒 Lv.${st.level}에 살 수 있어요`;
+    info.querySelector('.btns [data-go]').textContent = garageReturn === 'main' ? '‹ 홈' : '‹ 맵';
+    pick.textContent = garageOnly ? '이 차로 선택하기 ✓' : open ? '이 차로 선택하기 ✓' : st.buy ? `⬡ ${st.price.toLocaleString('ko-KR')} 으로 사기` : `🔒 Lv.${st.level}에 살 수 있어요`;
     const box = info.querySelector('.gx-paint');
     const canPaint = open && c.look0 && typeof c.look0 === 'object';
     box.hidden = !canPaint;
@@ -798,7 +798,7 @@ export async function runHome() {
   //   오른쪽 = 고른 맵 자세히 (큰 코스 그림 · 난이도 · 설명 · 태그 · 길이 · 내 기록 · 온라인 1~3등)
   views.map.innerHTML = `
     <div class="h-maps">
-      <div class="head"><div><h2>맵 고르기</h2><div class="who"></div></div>
+      <div class="head"><div><span class="p3-eyebrow">READY TO RACE</span><h2>어디로 떠날까요?</h2><div class="who"></div></div>
         <div class="bar"><button class="gm-btn" data-go="mode" data-nav>‹ 방식 <kbd>Backspace</kbd></button><button class="gm-btn primary" data-act="start" data-nav>출발! <kbd>Enter</kbd></button></div></div>
       <div class="mp-layout">
         <div class="h-panel mp-list"><div class="mp-ltitle">코스 · ${maps.length}개</div><div class="h-mapgrid"></div></div>
@@ -833,6 +833,21 @@ export async function runHome() {
     if (!info.ok) card.classList.add('soon');
     grid.appendChild(card);
   }
+  const prepScenery = document.createElement('div');
+  prepScenery.className = 'p3-scenery'; prepScenery.setAttribute('aria-hidden', 'true');
+  prepScenery.innerHTML = '<div></div><div></div>'; home.prepend(prepScenery);
+  let prepImage = '', prepLayer = 0, prepRequest = 0;
+  function setPrepScenery(id) {
+    if (prepImage === id) return;
+    prepImage = id; const request = ++prepRequest;
+    const image = new Image(); image.onload = () => {
+      if (request !== prepRequest) return;
+      prepLayer = 1 - prepLayer;
+      const layers = prepScenery.children;
+      layers[prepLayer].style.backgroundImage = 'url("src/art/maps/' + id + '.webp")';
+      layers[prepLayer].classList.add('on'); layers[1-prepLayer].classList.remove('on');
+    }; image.src = 'src/art/maps/' + id + '.webp';
+  }
   function selectMap(id, sound = false) {
     const changed = mapId !== id;
     mapId = id;
@@ -849,6 +864,7 @@ export async function runHome() {
   function renderMapInfo() {
     const m = mapOf(mapId), info = mapInfo[m.id];
     mapInfoBox.dataset.map = m.id;
+    setPrepScenery(m.id);
     const mine = records.get(m.id, carId);
     const best = records.bestRaceOfMap(m.id);
     const bestRec = best ? records.get(m.id, best.car) : null;
@@ -887,7 +903,7 @@ export async function runHome() {
       // 최고 기록 = 완주 기록 (여러 바퀴 맵은 모든 바퀴 합) (사용자 요청 2026-11-10)
       const best = records.bestRaceOfMap(id);
       const el = card.querySelector('.rec');
-      el.textContent = mapInfo[id].free || !best ? '' : `🏆 ${fmtTime(best.race)}`;
+      el.textContent = mapInfo[id].free ? '자유 주행' : best ? `내 기록 ${fmtTime(best.race)}` : '내 기록 · 아직 없음';
       el.title = '이 맵 내 최고 기록 (완주 시간, 어느 차든)';
     });
     renderMapInfo(); // 차가 바뀌었을 수 있음 (내 기록 · 차 이름)
@@ -1183,7 +1199,7 @@ export async function runHome() {
     if (name === 'car') { startThumbs(); showGarage(carOf(carId));partsUI.show(carOf(carId),isOpen(carId));preview.setParts?.(parts.getBuild(carId)); }
     if (name === 'season') renderSeason();
     if (name === 'map' || name === 'season') { renderRideCard(); startThumbs(); }
-    if (name === 'car') { const back = views.car.querySelector('.hm-catalog-home'); back.hidden = false; back.dataset.go = garageReturn; back.textContent = garageReturn === 'main' ? '‹ 홈으로' : '‹ 준비 화면으로'; }
+    if (name === 'car') { const back = views.car.querySelector('.hm-catalog-home'); back.hidden = false; back.dataset.go = garageReturn; back.textContent = garageReturn === 'main' ? '‹ 홈' : '‹ 맵'; views.car.classList.toggle('p3-fromhome', garageReturn === 'main'); }
     refreshFlow();
     if (name === 'academy') renderAcademy();
     if (name === 'meta') metaPage.render();
@@ -1602,7 +1618,7 @@ export async function runHome() {
       const url = thumbUrl(carId);
       card.innerHTML = (url ? '<img alt="" src="'+esc(url)+'">' : '<span class="f3-photo">🏎️</span>') + '<div><small>지금 탈 차</small><strong>'+esc(c.name)+'</strong><span class="f3-chips"><small>'+esc(c.class || '기본')+' 등급</small>'+chips+(locked ? (carState(carId).buy ? '<small>⬡ '+carState(carId).price.toLocaleString('ko-KR')+' 으로 사야 해요</small>' : '<small>🔒 Lv.'+carState(carId).level+' 필요</small>') : '')+'</span></div><button class="gm-btn '+(locked?'primary':'')+'" data-act="prepGarage" data-gate="garage" data-coach="map.garageBtn" data-nav>'+(G('garage') ? '차고에서 바꾸기 <kbd>C</kbd>' : '<span class="fg-garagelock">'+gate.lockText('garage', true)+'</span> 차고')+'</button>';
       card.dataset.coach = 'map.ride';
-      if (name === 'map') { const bar = root.querySelector('.bar'); const go = bar?.querySelector('[data-act="start"]'); if (go) go.before(card); else root.querySelector('.head').after(card); } else root.querySelector('header').append(card);
+      if (name === 'map') { const bar = root.querySelector('.bar'); const go = bar?.querySelector('[data-act="start"]'); if (go) go.before(card); else root.querySelector('.head').after(card); } else root.querySelector('footer > div:last-child').insertBefore(card, root.querySelector('footer [data-act="start"]'));
       root.querySelectorAll('[data-act="start"]').forEach(btn => btn.disabled = locked || (name === 'season' && !seasonMaps.length));
     }
   }
@@ -1856,6 +1872,7 @@ export async function runHome() {
     else if (act === 'prevCar') stepCar(-1);
     else if (act === 'nextCar') stepCar(1);
     else if (act === 'carList') garageDetail(false);
+    else if (act === 'carDetail') garageDetail(true);
     else if (act === 'carCompare') compare.open(carId);
     else if (act === 'carFront') preview.resetView();
     else if (act === 'pickCar') nextCar();
