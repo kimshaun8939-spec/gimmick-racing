@@ -546,6 +546,7 @@ export class Car {
     const vn = v.dot(out);
     if (vn > 0) {
       v.addScaledVector(out, -vn);
+      this.slowWallImpact(v, vn);
       if (vn > 8) this.events.push('bump');
       this.setVelocityOnSurface(v, Math.PI / 2);
       this.afterImpact(-vn, out.clone().negate());
@@ -569,6 +570,13 @@ export class Car {
   addCharge() {}
 
   /** 벽의 안쪽 속도만 없앤 뒤 호출. 핸들·요 속도·머리 방향은 그대로 둔다. */
+  slowWallImpact(tangent, vn) {
+    // Static contact only: reduce speed without changing heading or yaw.
+    const speed = tangent.length();
+    const loss = Math.abs(vn) * (this.cfg.impact?.wallImpact ?? 0);
+    if (speed > 1e-8) tangent.multiplyScalar(Math.max(0, speed - loss) / speed);
+  }
+
   afterImpact(vn, normal = null) {
     const I = this.cfg.impact;
     if (!I || this.flying) return;
@@ -902,6 +910,8 @@ export class Car {
     dec += cfg.aero.drag * v * v * draftK + cfg.aero.rolling;
     f += drive * dt;
     f = Math.sign(f) * Math.max(0, Math.abs(f) - dec * dt); // 저항은 속도를 0까지만 줄임
+    // Once per step, including tangent-only contact. Release when steering away.
+    if (wallSlide && !departing) f *= Math.exp(-(cfg.impact?.wallRub ?? 0) * dt);
     // 무게 이동: 가속 → 뒤로, 감속 → 앞으로 쏠림
     const accelNow = drive - dec * Math.sign(f || 1);
     this.load = THREE.MathUtils.lerp(this.load, THREE.MathUtils.clamp(accelNow / tire.loadAccel, -1, 1), 1 - Math.exp(-6 * dt));
@@ -1097,6 +1107,7 @@ export class Car {
         const vn = v.dot(wall.normal);
         if (vn < 0) {
           v.addScaledVector(wall.normal, -vn);
+          this.slowWallImpact(v, vn);
           if (vn < -8) this.events.push('bump');
           this.setVelocityOnSurface(v, Math.PI / 2);
           this.afterImpact(vn, wall.normal);
