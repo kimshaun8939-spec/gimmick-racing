@@ -2054,6 +2054,19 @@ export async function runHome() {
         stepCar(dir === 'left' ? -1 : 1);
         return;
       }
+      // 맵 고르기: 방향키는 맵 목록 안에서만 (사용자 요청 2026-11-17: 위로 가면 재화, 아래로 가면 '방식' 버튼으로 빠졌음)
+      // 출발 = Enter, 방식 = Backspace, 차고 = C 그대로. 목록 밖(아래 버튼 줄)에서 ↑↓ = 고른 맵으로 돌아옴
+      if (view === 'map') {
+        const grid = views.map.querySelector('.h-mapgrid');
+        if (grid) {
+          if (act && grid.contains(act)) { if (spatialMove(grid, dir)) uiSound('move'); grid.__last = document.activeElement; return; }
+          if (dir === 'up' || dir === 'down' || !(act && views.map.contains(act))) {
+            const sel = (grid.__last && grid.contains(grid.__last) && grid.__last) || grid.querySelector('.h-map.sel') || grid.querySelector('[data-nav]');
+            if (sel) { sel.focus({ preventScroll: true }); sel.scrollIntoView({ block: 'nearest' }); uiSound('move'); }
+            return;
+          }
+        }
+      }
       const container = views[view];
       if (spatialMove(container, dir) || spatialMove(home.querySelector('.h-top'), dir)) uiSound('move');
       return;
