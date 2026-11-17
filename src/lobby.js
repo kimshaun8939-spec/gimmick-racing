@@ -33,7 +33,7 @@ export async function openLobby(opts = {}) {
   try {
     cars = await roster.listCars();
   } catch {}
-  if (!cars.length) cars = [{ id: 'f1', name: '적토마', tag: '경주 머신 · 균형형', look: '#e8463a' }];
+  if (!cars.length) cars = [{ id: 'f1', name: '블레이즈', tag: '경주 머신 · 균형형', look: '#e8463a' }];
   const carOf = (id) => cars.find((c) => c.id === id) || cars[0];
   let classes = [];
   try {

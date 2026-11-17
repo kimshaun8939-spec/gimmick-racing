@@ -14,7 +14,7 @@
     {
       "id": "f1",
       "class": "A",
-      "name": "적토마",
+      "name": "블레이즈",
       "tag": "경주 머신 · 균형형",
       "desc": "기본 차. 출발이 빠르고 빠를수록 땅에 눌려 붙어서 어디서나 무난하게 빨라요. 배로 변신했을 때 등급에서 가장 빨라서 노을 바닷가에 강해요!",
       "stats": {
@@ -62,7 +62,7 @@
     {
       "id": "proto",
       "class": "A",
-      "name": "청룡",
+      "name": "사파이어",
       "tag": "장거리 경주차 · 꽉 붙음",
       "desc": "하루 종일 달리는 대회용 경주차. 빠를수록 차를 땅에 꾹 누르는 힘이 아주 커서 코너에 딱 붙어 돌아요. 코너가 이어지는 정글 유적에서 등급 최강, 대신 출발은 조금 느려요.",
       "stats": {
@@ -115,7 +115,7 @@
     {
       "id": "hyper",
       "class": "A",
-      "name": "섬광",
+      "name": "팬텀",
       "tag": "초고속 슈퍼카 · 최고 속도",
       "desc": "엄청 큰 엔진을 단 슈퍼카. 긴 직선에서는 아무도 못 따라오지만, 무겁고 멈추는 데 오래 걸려서 코너가 많은 맵은 힘들어요.",
       "stats": {
@@ -169,7 +169,7 @@
     {
       "id": "rocket",
       "class": "A",
-      "name": "혜성",
+      "name": "제트",
       "tag": "로켓 경주차 · 출발 가속",
       "desc": "등에 로켓을 단 직선 경주차. 출발 가속이 가장 세고 직선이 길수록 빨라서 네온 도시에서 등급 최강! 대신 핸들이 예민하고 뒤가 잘 미끄러지는 까다로운 차예요.",
       "stats": {
@@ -330,7 +330,7 @@
     {
       "id": "rally",
       "class": "B",
-      "name": "태풍",
+      "name": "토네이도",
       "tag": "랠리카 · 가속·코너",
       "desc": "가볍고 날쌘 흙길 경주차. 출발과 코너가 빠르고 차를 눌러 주는 날개를 달아 그랑프리·달 기지처럼 긴 코스에서 꾸준히 빨라요. 최고 속도는 낮아요.",
       "stats": {
@@ -385,7 +385,7 @@
     {
       "id": "muscle",
       "class": "B",
-      "name": "흑표범",
+      "name": "바이퍼",
       "tag": "힘센 차 · 직선 가속·꼬리 미끄러짐",
       "desc": "힘을 더 짜내는 장치를 단 큰 엔진 차. 힘이 넘쳐서 바퀴가 잘 헛돌고 뒤가 쉽게 미끄러져요. 액셀을 부드럽게 다루면 직선에서 아무도 못 따라와요!",
       "stats": {
@@ -438,7 +438,7 @@
     {
       "id": "junior",
       "class": "B",
-      "name": "주니어",
+      "name": "스파크",
       "tag": "작은 경주 머신 · 코너·날쌤",
       "desc": "빨강 레이서의 작고 가벼운 동생. 힘은 작지만 코너에서 꽉 붙고 핸들이 날카로워요. 코너가 많은 맵에서 강하고, 가벼워서 비행기로 변신해도 빨라요.",
       "stats": {
@@ -493,7 +493,7 @@
     {
       "id": "trophy",
       "class": "B",
-      "name": "사막여우",
+      "name": "사하라",
       "tag": "험한 길 트럭 · 잔디·물",
       "desc": "사막 경주용 트럭. 잔디·연석·물 위에서도 거의 안 느려지고 배로 변신했을 때 가장 빨라서 노을 바닷가 최강! 대신 무겁고 힘이 약해 코너가 많은 맵은 힘들어요.",
       "stats": {
@@ -550,7 +550,7 @@
     {
       "id": "buggy",
       "class": "C",
-      "name": "흙먼지",
+      "name": "더스터",
       "tag": "모래 버기 · 흙길·배",
       "desc": "울퉁불퉁 큰 바퀴의 모래 버기. 가볍게 휙휙 돌고, 잔디 위에서도 거의 안 느려져요. 가벼워서 달 중력 기지에서 등급 최강!",
       "stats": {
@@ -603,7 +603,7 @@
     {
       "id": "kart",
       "class": "C",
-      "name": "제비",
+      "name": "스위프트",
       "tag": "카트 · 날쌤·꽉 붙음",
       "desc": "작고 낮은 경주용 카트. 핸들을 꺾는 대로 휙휙 돌아서 코너가 많은 정글 유적 최강. 가벼워서 비행도 날렵해요. 최고 속도는 가장 낮아요.",
       "stats": {
@@ -711,7 +711,7 @@
     {
       "id": "roadster",
       "class": "C",
-      "name": "클래식",
+      "name": "로드스타",
       "tag": "오픈카 · 가벼움·코너",
       "desc": "지붕 없는 1960년대 스타일 오픈카. 가볍고 뒤가 살짝 흘러서 코너를 경쾌하게 돌아요. 엔진이 세져서 직선이 긴 네온 도시에서 등급 최강!",
       "stats": {
@@ -763,7 +763,7 @@
     {
       "id": "pickup",
       "class": "C",
-      "name": "황소",
+      "name": "레인저",
       "tag": "짐칸 트럭 · 튼튼함·물",
       "desc": "농장에서 온 튼튼한 짐칸 트럭. 잔디와 연석을 신경 쓰지 않고, 배로 변신했을 때 빨라서 노을 바닷가에서 등급 최강. 무거워서 출발과 코너는 느려요.",
       "stats": {
@@ -844,7 +844,7 @@
         },
         "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
       }, "look": {"style": "van", "body": "#37b6c9", "accent": "#fff6e0", "trim": "#ff8a3c", "rim": "#fff6e0", "helmet": "#ff8a3c", "number": "12", "numberBg": "#fff6e0", "numberFg": "#37b6c9"}, "tune": {"_성격": "핫해치 바탕: 최고 속도·엔진 조금↓, 브레이크·옆 접지 조금↑, 키가 커서 많이 기움", "sound": {"cyl": 4, "amps": [1, 0.93, 0.97, 0.92], "offs": [0, 0.015, -0.01, 0.01], "fBase": 51.52, "fRange": 164.5, "pulse": 0.85, "saw": 1.1, "sub": 0.78, "grit": 2.6, "drive": 0.95, "bright": 1.035, "tex": 1.2, "eqFreq": 240, "eqGain": 4, "turbo": 0.6, "pops": 0.7, "volume": 0.95, "squeal": 1.0, "squealPitch": 1.2, "squealVib": 0.9, "squealNoise": 0.9}, "maxSpeed": 47.4, "brake": 37, "steerRate": 2.45, "steerLat": 19, "grip": 11, "offroad": {"maxSpeedFactor": 0.5, "drag": 0.22, "gripFactor": 0.72}, "drivetrain": "fwd", "engine": {"power": 293, "turbo": {"share": 0.3, "lag": 0.4}}, "gears": [13, 21.5, 29.5, 37, 44, 52], "aero": {"drag": 0.00134, "downforce": 0.66}, "feel": {"roll": 1.35, "pitch": 1.15, "spring": 60, "damp": 0.5}, "tire": {"traction": 18, "brakeGrip": 23, "lateral": 23.2, "rearGrip": 1.55, "rearSwing": 0.18, "yawResponse": 9, "powerPush": 0.35, "liftOff": 0.45, "tuckMax": 0.22}, "camera": {"topKmh": 220}}},
-    {"id": "scorpion", "class": "C", "unlockLevel": 4, "name": "전갈", "tag": "모래 버기 · 잔디·연석", "desc": "사막을 달리던 모래색 버기. 흙먼지 버기보다 직선이 조금 빠르고 묵직해요. 잔디와 연석을 겁내지 않고, 꼬리를 흔들며 코너를 돌아요.", "stats": {
+    {"id": "scorpion", "class": "C", "unlockLevel": 4, "name": "스콜피온", "tag": "모래 버기 · 잔디·연석", "desc": "사막을 달리던 모래색 버기. 흙먼지 버기보다 직선이 조금 빠르고 묵직해요. 잔디와 연석을 겁내지 않고, 꼬리를 흔들며 코너를 돌아요.", "stats": {
         "speed": 2,
         "accel": 2,
         "handling": 2,
@@ -902,7 +902,7 @@
         },
         "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
       }, "look": {"style": "gt", "body": "#2a1a4a", "accent": "#ff4fa3", "trim": "#35e0ff", "rim": "#35e0ff", "helmet": "#ff4fa3", "number": "77", "numberBg": "#ff4fa3", "numberFg": "#1a1030"}, "tune": {"_성격": "썬더 GT 바탕: 최고 속도·엔진 조금↓(공기 저항↑), 다운포스·옆 접지 조금↑, 꼬리 덜 흔들림", "sound": {"cyl": 8, "amps": [1, 0.55, 0.95, 0.5, 1, 0.6, 0.9, 0.52], "offs": [0, 0.1, -0.05, 0.08, 0.02, -0.09, 0.06, -0.04], "fBase": 38.88, "fRange": 125.08, "pulse": 1.15, "saw": 0.7, "sub": 1.5, "grit": 3.4, "drive": 1.15, "bright": 0.92, "eqFreq": 110, "eqGain": 8, "whine": 1, "whineMul": 7.5, "pops": 1.28, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.85, "squealVib": 1.2, "squealNoise": 1.0}, "maxSpeed": 63.4, "brake": 31, "steerRate": 2.3, "steerLat": 18.6, "steerLatDownforce": 0.2, "grip": 7.5, "engine": {"power": 415}, "gears": [16.2, 26.4, 36.5, 46.7, 56.8, 68.0], "aero": {"drag": 0.00086, "downforce": 0.72}, "feel": {"roll": 1.0, "pitch": 1.0, "spring": 80, "damp": 0.55}, "tire": {"traction": 12.4, "brakeGrip": 19, "lateral": 21.9, "rearGrip": 1.1, "rearSwing": 0.3, "yawResponse": 8, "powerSlide": 0.28, "liftOff": 0.4, "tuck": 2.0, "tuckMax": 0.28}, "input": {"steerRise": 3.0}, "camera": {"topKmh": 280}}},
-    {"id": "blizzard", "class": "B", "unlockLevel": 8, "name": "눈보라", "tag": "눈길 랠리카 · 코너·잔디", "desc": "눈길 대회에서 온 하얀 랠리카. 폭풍 랠리카보다 최고 속도가 조금 높고 출발은 살짝 느려요. 네 바퀴가 다 굴러서 코너에서 끈끈하게 붙어요.", "stats": {
+    {"id": "blizzard", "class": "B", "unlockLevel": 8, "name": "블리자드", "tag": "눈길 랠리카 · 코너·잔디", "desc": "눈길 대회에서 온 하얀 랠리카. 폭풍 랠리카보다 최고 속도가 조금 높고 출발은 살짝 느려요. 네 바퀴가 다 굴러서 코너에서 끈끈하게 붙어요.", "stats": {
         "speed": 2,
         "accel": 3,
         "handling": 5,
@@ -931,7 +931,7 @@
         },
         "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
       }, "look": {"style": "rally", "body": "#f4f8fb", "accent": "#1e6fd9", "trim": "#ff6a1a", "rim": "#1e2a3a", "helmet": "#ff6a1a", "number": "21", "numberBg": "#1e6fd9", "numberFg": "#ffffff"}, "tune": {"_성격": "스톰 랠리 바탕: 최고 속도 조금↑(공기 저항↓), 엔진·출발·조향 한계 조금↓, 터보 지연 조금 김", "sound": {"cyl": 4, "amps": [1, 0.9, 0.97, 0.88], "offs": [0, 0.02, -0.01, 0.015], "fBase": 54.52, "fRange": 196.8, "pulse": 0.9, "saw": 1.25, "sub": 0.6, "grit": 3.2, "drive": 1.1, "bright": 1.282, "tex": 1.5, "eqFreq": 260, "eqGain": 5, "turbo": 1.062, "turboMax": 1.3, "pops": 1.4, "squeal": 0.7, "squealPitch": 1.05, "squealVib": 1.5, "squealNoise": 1.8}, "maxSpeed": 44.2, "brake": 37, "steerRate": 2.9, "steerLat": 20.8, "grip": 11, "offroad": {"maxSpeedFactor": 0.62, "drag": 0.16, "gripFactor": 0.82}, "drivetrain": "awd", "engine": {"power": 310, "turbo": {"share": 0.28, "lag": 0.32}}, "gears": [11, 18, 25, 32, 39, 48], "aero": {"drag": 0.00144, "downforce": 1.05}, "feel": {"roll": 1.25, "pitch": 1.2, "spring": 60, "damp": 0.45}, "tire": {"traction": 17.0, "brakeGrip": 25, "lateral": 23.3, "rearGrip": 1.15, "yawResponse": 12, "liftOff": 0.4, "powerSlide": 0.4, "tuck": 2.0, "tuckMax": 0.3}, "input": {"steerRise": 4.0, "steerRiseHighSpeed": 0.35}, "camera": {"topKmh": 220}}},
-    {"id": "razor", "class": "A", "unlockLevel": 11, "name": "칼날", "tag": "각진 슈퍼카 · 직선·날카로움", "desc": "종이접기처럼 각진 슈퍼카. 낮고 뾰족한 코로 바람을 가르며 긴 직선에서 무섭게 빨라요. 직선 괴물보다 코너가 조금 편하지만 최고 속도는 살짝 낮아요.", "stats": {
+    {"id": "razor", "class": "A", "unlockLevel": 11, "name": "레이저", "tag": "각진 슈퍼카 · 직선·날카로움", "desc": "종이접기처럼 각진 슈퍼카. 낮고 뾰족한 코로 바람을 가르며 긴 직선에서 무섭게 빨라요. 직선 괴물보다 코너가 조금 편하지만 최고 속도는 살짝 낮아요.", "stats": {
         "speed": 5,
         "accel": 4,
         "handling": 2,
@@ -960,7 +960,7 @@
         },
         "_method": "v2: car.json+tune 평지 예상 / lineCarModel 가속·옆 한계·제동. 0→100 적분(0.002초), 최고=속도상한과 엔진/공기저항 평형 중 낮은 값. 핸들링=조향속도×.45+회전반응×.08+키입력반응×.2. 잔디=속도유지×.7+접지유지×.3. 21대 상대 점수 20~99, 실제 주행 기록 아님."
       }, "look": {"style": "wedge", "body": "#c81e3a", "accent": "#111317", "trim": "#ffb21a", "rim": "#d9dde3", "helmet": "#ffb21a", "number": "88", "numberBg": "#111317", "numberFg": "#ffb21a"}, "tune": {"_성격": "제니스 하이퍼 바탕: 뒷바퀴 굴림, 최고 속도·엔진·출발 조금↓, 다운포스·브레이크·핸들 조금↑", "sound": {"cyl": 12, "amps": [1, 0.97, 0.99, 0.96, 1, 0.98, 0.97, 0.99, 0.96, 1, 0.98, 0.97], "offs": [0, 0.01, -0.01, 0.005, 0, -0.005, 0.01, 0, -0.01, 0.005, 0, -0.005], "fBase": 55.0, "fRange": 225.5, "pulse": 0.6, "saw": 1.45, "sub": 1.1, "grit": 2.75, "drive": 1.05, "bright": 1.5, "tex": 1.1, "eqFreq": 170, "eqGain": 6, "turbo": 0.6, "turboMax": 1.4, "pops": 0.96, "volume": 1.05, "squeal": 1.15, "squealPitch": 0.88, "squealVib": 1.0, "squealNoise": 1.1}, "maxSpeed": 62.4, "brake": 32.5, "steerRate": 2.45, "steerLat": 18.1, "grip": 9.5, "engine": {"power": 408, "turbo": {"share": 0.22, "lag": 0.35}}, "gears": [15.8, 25.7, 36.6, 47.5, 57.4, 67.3], "aero": {"drag": 0.00089, "downforce": 1.12}, "feel": {"roll": 0.8, "pitch": 0.9, "spring": 120, "damp": 0.7}, "tire": {"traction": 13.2, "brakeGrip": 20, "lateral": 23.4, "rearGrip": 1.25, "yawResponse": 9, "liftOff": 0.35, "powerSlide": 0.3, "tuckMax": 0.18}, "input": {"steerRise": 3.1}, "drivetrain": "rwd", "camera": {"topKmh": 290}}},
-    {"id": "nova", "class": "A", "unlockLevel": 14, "name": "황룡", "tag": "황금 경주차 · 코너·끈끈함", "desc": "검정과 금빛의 장거리 경주차. 파랑 코너왕과 형제 차로, 직선이 조금 더 빠른 대신 급한 코너에서는 살짝 덜 붙어요. 가장 높은 레벨의 보상!", "stats": {
+    {"id": "nova", "class": "A", "unlockLevel": 14, "name": "노바", "tag": "황금 경주차 · 코너·끈끈함", "desc": "검정과 금빛의 장거리 경주차. 파랑 코너왕과 형제 차로, 직선이 조금 더 빠른 대신 급한 코너에서는 살짝 덜 붙어요. 가장 높은 레벨의 보상!", "stats": {
         "speed": 4,
         "accel": 4,
         "handling": 3,

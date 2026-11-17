@@ -64,7 +64,7 @@ export async function runHome() {
   } catch (e) {
     console.warn('차 목록 불러오기 실패', e);
   }
-  if (!cars.length) cars = [{ id: 'f1', name: '적토마', tag: '경주 머신 · 균형형', desc: '', stats: {}, look: '#e8463a' }];
+  if (!cars.length) cars = [{ id: 'f1', name: '블레이즈', tag: '경주 머신 · 균형형', desc: '', stats: {}, look: '#e8463a' }];
   // 차 등급: listCars()가 class를 주면 그것, 아니면 cars.json에서 직접
   const classes = carClasses.classes;
   for (const c of cars) c.class = c.class || carClasses.classOf[c.id] || null;
