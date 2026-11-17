@@ -174,8 +174,9 @@ const mapTitle = mapMeta().title || trackData.name || mapName;
 document.title = `${mapTitle} · 트랜스폼 레이서`;
 
 // --- 렌더러와 씬 ---
+const gfx2 = mapName === 'glacier' && params.get('gfx') === '2';
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.get('quality') !== 'low' }); // 안티에일리어싱은 다음 시작부터 적용
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !gfx2 && settings.get('quality') !== 'low' }); // 안티에일리어싱은 다음 시작부터 적용
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -196,13 +197,16 @@ scene.add(sun, sun.target);
 const SUN_OFFSET = new THREE.Vector3(60, 110, 40);
 
 const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 3000);
+const postFx = gfx2 ? (await import('./postFx.js')).createPostFx(renderer, scene, camera, () => settings.get('quality')) : null;
+const drawScene = () => postFx ? postFx.render() : renderer.render(scene, camera);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
+  postFx?.resize();
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  if (menuOpen()) renderer.render(scene, camera); // 일시정지 중에도 뒤 화면이 비지 않게
+  if (menuOpen()) drawScene(); // 일시정지 중에도 뒤 화면이 비지 않게
 }
 const menuOpen = () => !!(window.game && window.game.menu && window.game.menu.isOpen);
 addEventListener('resize', resize);
@@ -1092,7 +1096,7 @@ function applySettings(key) {
   if (!key || key === 'camView') camViews.setView(s.camView || 'chase'); // 시점 (V 키로도)
   // 고스트 (설정 ghost: off | best | bot). 봇 레이스에서는 끔
   if (ghost && (!key || key === 'ghost')) ghost.setKind(MODE === 'race' ? 'off' : s.ghost ?? 'best');
-  if (key && menuOpen()) renderer.render(scene, camera); // 메뉴 뒤 화면도 새 설정으로
+  if (key && menuOpen()) drawScene(); // 메뉴 뒤 화면도 새 설정으로
 }
 settings.onChange((k) => applySettings(k));
 applySettings();
@@ -1322,7 +1326,7 @@ if (scenery.prepare) await scenery.prepare(renderer);
 if (params.get('prewarm') !== '0') {
   try {
     window.__prewarm = await prewarm(renderer, scene, camera, [], { shadowLight: settings.values.quality === 'auto' ? sun : null,
-      originals: batcher ? batcher.batches.flatMap(b => b.items.map(it => it.o)) : [] });
+      postFx, originals: batcher ? batcher.batches.flatMap(b => b.items.map(it => it.o)) : [] });
   } catch (e) {
     console.warn('미리 데우기 실패 (괜찮음)', e);
   }
@@ -1337,7 +1341,7 @@ if (params.get('prewarm') !== '0') {
 }
 
 // 출발 전 설명 뒤에도 준비된 코스가 보이도록 첫 장면을 한 번 그려요.
-renderer.render(scene, camera);
+drawScene();
 // 첫 레이스(rookie=1)면 주행 도움 카드 → 닫히면 코스 첫 안내. 둘 중 하나라도 열려 있으면 courseGuide.open = true (출발 신호 멈춤)
 const courseGuide = withAssistIntro(params, () => showCourseGuide({ map: mapName, title: mapTitle, mode: ITEM ? 'item' : MODE, championship: !!CHAMP, params,
   onClose() { input.clear(); last = performance.now(); acc = 0; }, onHome: () => goHome(),
@@ -1388,7 +1392,7 @@ function frame(now, manual = false) {
     if (items) items.setVisible(false);
     camViews.neutral(); // 리플레이는 자기 카메라 (내 차 부품 모두 보이게)
     replay.frame(dt, elapsed);
-    renderer.render(scene, camera);
+    drawScene();
     input.endFrame();
     if (!manual) requestAnimationFrame(frame);
     return;
@@ -1609,7 +1613,7 @@ function frame(now, manual = false) {
   engineAudio.update(car);
 
   if (batcher) batcher.update();
-  renderer.render(scene, camera);
+  drawScene();
   for (const s of poses) s.snap = false; // 표시 자세 순간이동 표시는 한 프레임만
   input.endFrame();
   if (!manual) {
@@ -1623,7 +1627,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용 (브라우저 콘솔에서 사용 가능)
 window.game = {
-  car, race, track, scene, camera, model, renderer, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
+  car, race, track, scene, camera, model, renderer, postFx, scenery, props, mapName, offroadFx, engineAudio, lineFx, corners, kerbFx, speedFx, input, camCfg: CAM,
   carId, carName, carCfg, mapTitle, menu, settings, records, get batcher() { return batcher; }, autoRes, autoResTick: (dt) => autoResTick(dt),
   resetRace,
   mode: MODE, itemMode: ITEM, items, opponents, raceSys, ghost, sectors, champ: CHAMP, intro, replay, sceneSave, cornerRep, camViews,
@@ -1660,7 +1664,7 @@ window.game = {
   },
   /** 테스트용: 지금 화면(게임 + 속도선 레이어)을 한 장의 캔버스로 */
   grab(w = 640, h = 400) {
-    renderer.render(scene, camera);
+    drawScene();
     const c = document.createElement('canvas');
     c.width = w;
     c.height = h;
@@ -1710,7 +1714,7 @@ window.game = {
       camera.updateProjectionMatrix();
       sun.position.copy(car.pos).add(SUN_OFFSET);
       sun.target.position.copy(car.pos);
-      renderer.render(scene, camera);
+      drawScene();
       const cw = renderer.domElement.width, ch = renderer.domElement.height;
       const s = Math.max(w / cw, h / ch);
       g.drawImage(renderer.domElement, (cw - w / s) / 2, (ch - h / s) / 2, w / s, h / s, (i % cols) * w, Math.floor(i / cols) * h, w, h);
@@ -1737,7 +1741,7 @@ window.game = {
     track.animate(elapsed);
     scenery.animate(elapsed, 0, car);
     props.animate(elapsed);
-    renderer.render(scene, camera);
+    drawScene();
   },
 };
 // 튜토리얼 (?tutorial=1, src/tutorial.js), 멀티플레이 (?room=코드, src/netRace.js): 주소에 있을 때만 불러옴

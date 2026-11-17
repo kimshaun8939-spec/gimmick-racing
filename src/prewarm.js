@@ -10,6 +10,7 @@ export async function prewarm(renderer, scene, camera, extra = [], options = {})
   // 움직여 묶음이 풀릴 때의 원래 재질도 셰이더만 준비. 원본 메시/물리용 행렬은 건드리지 않음.
   const compileOnly = [], seen = new Set();
   for (const o of options.originals || []) {
+    if (o.name === 'gfx3CollisionTerrain') continue; // gfx3 render copy owns the shaders; original is ray-only.
     if (!o.geometry || !o.material || Array.isArray(o.material)) continue;
     const attrs = Object.entries(o.geometry.attributes).map(([k, a]) => k + a.itemSize).sort().join(',');
     const key = o.material.uuid + '|' + o.receiveShadow + '|' + attrs;
@@ -51,6 +52,7 @@ export async function prewarm(renderer, scene, camera, extra = [], options = {})
     for (const light of lightOff) light.visible = false;
     scene.traverse(o => {
       if (o.isLight) return;
+      if (o.name === 'gfx3CollisionTerrain') return; // Never render the hidden physics terrain, including prewarm.
       if (!o.visible) { o.visible = true; shown.push(o); }
       if (o.frustumCulled && (o.isMesh || o.isPoints || o.isLine || o.isSprite)) { o.frustumCulled = false; culled.push(o); }
     });
@@ -84,5 +86,6 @@ export async function prewarm(renderer, scene, camera, extra = [], options = {})
     renderer.setScissor(box);
     renderer.setScissorTest(scissorTest);
   }
-  return { ms: Math.round(performance.now() - t0), compileMs: Math.round(compileMs), renderMs: Math.round(renderMs), programs: renderer.info.programs.length, shown: shown.length, variants };
+  const postFx = options.postFx?.warm();
+  return { postFx, ms: Math.round(performance.now() - t0), compileMs: Math.round(compileMs), renderMs: Math.round(renderMs), programs: renderer.info.programs.length, shown: shown.length, variants };
 }

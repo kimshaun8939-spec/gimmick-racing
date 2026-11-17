@@ -5,6 +5,7 @@
 //   - 그림(캔버스 텍스처): 얼음 균열, 표지판 묶음(한 장에 여러 글자 = 재질 하나 → staticBatch가 합침), 광고판 묶음
 // 이름·회사는 모두 지어낸 것 (진짜 브랜드 없음)
 import * as THREE from 'three';
+import { glacierSurface, gfx2Enabled } from './gfxTextures.js';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 import { mergeSimple, colorBoxes, FONT } from './volcanoAssets.js';
 
@@ -112,7 +113,7 @@ export function glacierSkyMaterial({ fogColor, sunDir, moonDir }) {
 
 /** 안개를 fogScale만큼만 받는 Lambert (꼭짓점 색) — 먼 설산이 하늘에 묻히지 않게 */
 export function fogLambert({ fogScale = 1, key = 'glacierFog', ...opts } = {}) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, ...opts });
+  const m = new (gfx2Enabled() ? THREE.MeshStandardMaterial : THREE.MeshLambertMaterial)({ vertexColors: true, ...opts });
   m.userData.fogScale = { value: fogScale };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.fogScale = m.userData.fogScale;
@@ -124,7 +125,7 @@ export function fogLambert({ fogScale = 1, key = 'glacierFog', ...opts } = {}) {
       );
   };
   m.customProgramCacheKey = () => key;
-  return m;
+  return glacierSurface(m, 'rock');
 }
 
 // ---------------------------------------------------------------- 도우미

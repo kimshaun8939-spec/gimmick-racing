@@ -10,6 +10,9 @@
 //     움직이는 것은 이름을 붙임. 표지판·광고판은 그림 한 장(묶음)에 모아 재질 하나
 //   - 충돌: 원기둥 충돌체 격자 (collideCar, addCollider). 도로 가장자리(연석 끝)에서 3 m 안에는 충돌체를 두지 않음
 import * as THREE from 'three';
+import { buildAlpineRanges } from './gfxTerrain.js';
+import { spruceGeometry } from './gfxTrees.js';
+import { gfx2Enabled, glacierSurface } from './gfxTextures.js';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 import { billboardCloud, smokeTexture, glowTexture, helicopterModel, gondolaGeo, pylonGeo, reflectorPostGeo, colorBoxes } from './volcanoAssets.js';
 import {
@@ -27,6 +30,7 @@ const GC = 5; // 지형 격자 한 칸 (트랙 지형 메시와 같게)
 
 export function buildGlacierScenery(track, scene) {
   const t0 = performance.now();
+  const gfx2 = gfx2Enabled();
   const rand = seededRandom(4471);
   const noise = makeNoise(8123);
   const group = new THREE.Group();
@@ -196,12 +200,15 @@ export function buildGlacierScenery(track, scene) {
     warmGlow: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffc977').multiplyScalar(1.15), toneMapped: false }),
     wood: new THREE.MeshLambertMaterial({ color: '#6b4530' }),
   };
+  if (gfx2) M.spruce = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: '#101d19' });
+  if (gfx2) M.spruceNear = M.spruce; // Solid branch lobes: shared near/far shader, no subpixel needle mask.
+  if (gfx2) glacierSurface(M.snow, 'snow');
   const TX = { smoke: smokeTexture(5), glow: glowTexture(0.1) };
 
   // ---------------------------------------------------------------- 거리 줄이기 (LOD): 인스턴스 묶음은 카메라에서 range m 안의 것만 그림
   const ranged = [];
   const m4L = new THREE.Matrix4();
-  function rangeLOD(im, range) {
+  function rangeLOD(im, range, minRange = 0) {
     const n = im.count;
     const mats = new Float32Array(n * 16), px = new Float32Array(n), pz = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -210,7 +217,7 @@ export function buildGlacierScenery(track, scene) {
       px[i] = mats[i * 16 + 12];
       pz[i] = mats[i * 16 + 14];
     }
-    ranged.push({ im, range, mats, px, pz, n, lx: 1e9, lz: 1e9 });
+    ranged.push({ im, range, minRange, mats, px, pz, n, lx: 1e9, lz: 1e9 });
   }
   animators.push(() => {
     const cam = window.game && window.game.camera;
@@ -224,7 +231,7 @@ export function buildGlacierScenery(track, scene) {
       const arr = R.im.instanceMatrix.array;
       let c = 0;
       for (let i = 0; i < R.n; i++) {
-        if ((R.px[i] - cx) ** 2 + (R.pz[i] - cz) ** 2 > r2) continue;
+        if ((R.px[i] - cx) ** 2 + (R.pz[i] - cz) ** 2 > r2 || (R.px[i] - cx) ** 2 + (R.pz[i] - cz) ** 2 < R.minRange * R.minRange) continue;
         if (c !== i) arr.set(R.mats.subarray(i * 16, i * 16 + 16), c * 16);
         c++;
       }
@@ -234,7 +241,7 @@ export function buildGlacierScenery(track, scene) {
     }
   });
   /** 인스턴스 묶음 만들기: list = [{x,y,z, sx,sy,sz, ry}] */
-  function instanced(geo, mat, list, { name, shadow = false, lod = 0 } = {}) {
+  function instanced(geo, mat, list, { name, shadow = false, lod = 0, minLod = 0 } = {}) {
     if (!list.length) return null;
     const im = new THREE.InstancedMesh(geo, mat, list.length);
     const q = new THREE.Quaternion(), e = new THREE.Euler();
@@ -249,12 +256,17 @@ export function buildGlacierScenery(track, scene) {
     im.receiveShadow = false;
     im.userData.noBatch = true;
     group.add(im);
-    if (lod) rangeLOD(im, lod);
+    if (lod) rangeLOD(im, lod, minLod);
     return im;
   }
 
   // ---------------------------------------------------------------- 하늘 (차를 따라다님)
   const skyMat = glacierSkyMaterial({ fogColor: scene.fog.color, sunDir: SUN_DIR, moonDir: MOON_DIR });
+  if (gfx2) {
+    skyMat.uniforms.cTop.value.set('#070f2b');
+    skyMat.uniforms.cMid.value.set('#244674');
+    skyMat.uniforms.fogSRGB.value.copy(scene.fog.color); // 후처리 타깃에서는 선형 색으로 섞는다.
+  }
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2750, 48, 24), skyMat);
   sky.name = 'glacierSky';
   sky.frustumCulled = false;
@@ -318,7 +330,7 @@ export function buildGlacierScenery(track, scene) {
     const d = (x - q.bx) * q.nx + (z - q.bz) * q.nz;
     return { y: MTN.H(q.u, d, MTN.baseOf[bk]), d, k: bk };
   }
-  {
+  if (gfx2) { buildAlpineRanges(group, MTN, noise); } else {
     const { N, D, dirs, H, baseOf } = MTN;
     const pos = [];
     const P = (k, j) => {
@@ -755,8 +767,10 @@ export function buildGlacierScenery(track, scene) {
       color: '#a8dcff', map: iceTex, emissive: '#3f9fe0', emissiveMap: iceTex, emissiveIntensity: 0.35,
       roughness: 0.18, metalness: 0.05, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false,
     });
+    if (gfx2) glacierSurface(shellMat, 'ice');
     const portalMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
     const icicleMat = new THREE.MeshStandardMaterial({ color: '#cfefff', roughness: 0.15, metalness: 0.1, emissive: '#5fb8ff', emissiveIntensity: 0.25 });
+    if (gfx2) glacierSurface(icicleMat, 'ice');
     const icicles = [];
     const stripPos = [];
     const STRIP_TH = [0.3, 0.5, 0.7]; // 빛 띠 각도 (π 단위)
@@ -940,6 +954,7 @@ export function buildGlacierScenery(track, scene) {
       g.computeVertexNormals();
       const tex = lakeIceTexture(21);
       const lakeMat = new THREE.MeshPhongMaterial({ color: '#d9eefa', map: tex, shininess: 120, specular: '#d8f0ff', emissive: '#1a3a5a', emissiveIntensity: 0.45 });
+      if (gfx2) glacierSurface(lakeMat, 'ice');
       const lakeMesh = new THREE.Mesh(g, lakeMat);
       lakeMesh.receiveShadow = true;
       group.add(lakeMesh);
@@ -1339,10 +1354,32 @@ export function buildGlacierScenery(track, scene) {
       near.push(o);
       if (d < 30) solid(x, z, 0.6, gy - 1, gy + h);
     }
-    const g1 = snowPineGeo(3), g2 = snowPineGeo(11, 6);
-    const half = Math.floor(near.length / 2);
-    instanced(g1, M.vcol, near.slice(0, half), { name: 'glacierPinesA', shadow: true, lod: 560 });
-    instanced(g2, M.vcol, near.slice(half), { name: 'glacierPinesB', shadow: true, lod: 560 });
+    // 시각 전용 변형: 원래 난수·충돌체 크기와 위치는 그대로 둔다.
+    if (gfx2) near.forEach((o, i) => { o.rx = Math.sin(i * 2.17) * 0.035; o.rz = Math.cos(i * 1.73) * 0.04; o.sx *= 1.08 + 0.14 * (0.5 + 0.5 * Math.sin(i * 7.13)); o.sz *= 1.08 + 0.14 * (0.5 + 0.5 * Math.cos(i * 5.3)); });
+    if (gfx2) {
+      for(let v=0;v<4;v++) {
+        const list=near.filter((o,i)=>i%4===v);
+        // Visual grove children, never registered as solid or occupancy and no random calls.
+        for(let i=0;i<near.length;i++){
+          if(i%4!==v || Math.sin(near[i].x*.007+near[i].z*.004)<.15)continue;
+          const o=near[i],x=o.x+Math.cos(i*2.399)*6,z=o.z+Math.sin(i*2.399)*6;
+          if(roadClear(x,z)<12 || (lake&&Math.hypot(x-lake.x,z-lake.z)<lake.r+12))continue;
+          if(data.river){const r=data.river;if(Math.abs((x-r.x)*-r.dz+(z-r.z)*r.dx)<r.halfW+10&&Math.abs((x-r.x)*r.dx+(z-r.z)*r.dz)<r.halfLen+250)continue;}
+          list.push({...o,x,z,y:groundY(x,z)-.3,sx:o.sx*.72,sy:o.sy*.76,sz:o.sz*.72});
+        }
+        instanced(spruceGeometry(v,false),M.spruceNear,list,{name:'gfx3SpruceNear'+v,lod:170});
+        instanced(spruceGeometry(v,true),M.spruce,list,{name:'gfx3SpruceMid'+v,lod:560,minLod:170});
+      }
+      const saplings=near.filter((o,i)=>i%4===0 && roadClear(o.x,o.z)<32).map((o,i)=>{
+        const x=o.x+3,z=o.z+1,h=1.8+1.2*(.5+.5*Math.sin(i*7.13));
+        return {x,z,y:groundY(x,z)-.1,sx:h*.9,sy:h,sz:h*.9,ry:i*2.399};
+      }).filter(o=>roadClear(o.x,o.z)>8);
+      instanced(spruceGeometry(1,true),M.spruce,saplings,{name:'gfx3ForestEdge',lod:220});
+    } else {
+      const g1=snowPineGeo(3),g2=snowPineGeo(11,6),half=Math.floor(near.length/2);
+      instanced(g1,M.vcol,near.slice(0,half),{name:'glacierPinesA',shadow:true,lod:560});
+      instanced(g2,M.vcol,near.slice(half),{name:'glacierPinesB',shadow:true,lod:560});
+    }
     // 먼 숲: 상자 끝 안쪽 띠 + 산자락 (원뿔 하나)
     for (let k = 0; k < 5200; k++) {
       let x, z, y;
@@ -1363,7 +1400,7 @@ export function buildGlacierScenery(track, scene) {
       const h = 10 + rand() * 12;
       far.push({ x, y: y - 0.5, z, sx: h * 0.9, sy: h, sz: h * 0.9, ry: rand() * TAU });
     }
-    instanced(farPineGeo(), M.vcolFlat, far, { name: 'glacierFarPines' });
+    instanced(gfx2 ? spruceGeometry(2,true) : farPineGeo(), gfx2 ? M.spruce : M.vcolFlat, far, { name: 'glacierFarPines' });
     stats.pines = near.length;
     stats.farPines = far.length;
   }
@@ -1388,6 +1425,67 @@ export function buildGlacierScenery(track, scene) {
     instanced(snowRockGeo(5), M.vcolFlat, list.slice(0, half), { name: 'glacierRocksA', lod: 600 });
     instanced(snowRockGeo(17, 1, 0.55), M.vcolFlat, list.slice(half), { name: 'glacierRocksB', lod: 600 });
     stats.rocks = list.length;
+  }
+
+  // gfx2 전용 작은 풍경. 독립 난수, 충돌·점유·도로 레이와 연결하지 않는다.
+  if (gfx2) {
+    const detailRand = seededRandom(792461);
+    const savedRandom = Math.random;
+    Math.random = seededRandom(792462); // THREE uuid 생성도 물리 난수 흐름과 분리
+    try {
+    const banks = [], gravel = [], grass = [], stakes = [], hills = [];
+    const safeSample = (i) => !inTunnel(i, 22) && !onBridge(i, 22) && !S[i].gap &&
+      !(track.jumps || []).some(j => { let q = i, b = j.landI; if (b < j.lipI) b += NS; if (q < j.lipI - 30) q += NS; return q >= j.lipI - 30 && q <= b + 30; });
+    for (let k = 0; k < 4200; k++) {
+      const i = Math.floor(detailRand() * NS);
+      if (!safeSample(i)) continue;
+      const sd = detailRand() < 0.5 ? -1 : 1, s = S[i];
+      const d = 3.8 + Math.pow(detailRand(), 1.8) * 17;
+      const lat = sd * (edgeLat(i, sd) + d);
+      const x = s.pos.x + s.right.x * lat, z = s.pos.z + s.right.z * lat;
+      if (!inBox(x, z) || roadClear(x, z) < 3.1 || !free(x, z, 1.1)) continue;
+      if (lake && Math.hypot(x - lake.x, z - lake.z) < lake.r + 2) continue;
+      if (data.river) { const r = data.river, dx = x - r.x, dz = z - r.z; if (Math.abs(dx * -r.dz + dz * r.dx) < r.halfW + 5 && Math.abs(dx * r.dx + dz * r.dz) < r.halfLen + 25) continue; }
+      const y = groundY(x, z), a = detailRand() * TAU;
+      const o = { x, y, z, ry: a };
+      const type = detailRand();
+      if (type < 0.33) banks.push({ ...o, y: y - 0.1, sx: 0.7 + detailRand() * 1.9, sy: 0.18 + detailRand() * 0.43, sz: 0.5 + detailRand() * 0.9 });
+      else if (type < 0.62) gravel.push({ ...o, y: y + 0.03, sx: 0.12 + detailRand() * 0.4, sy: 0.1 + detailRand() * 0.22, sz: 0.2 + detailRand() * 0.5 });
+      else grass.push({ ...o, sx: 0.45 + detailRand() * 0.6, sy: 0.35 + detailRand() * 0.6, sz: 0.45 + detailRand() * 0.6, rz: (detailRand() - 0.5) * 0.25 });
+    }
+    for (let i = 20; i < NS; i += 23) {
+      if (!safeSample(i)) continue;
+      for (const sd of [-1, 1]) {
+        const s = S[i], lat = sd * (edgeLat(i, sd) + 3.4);
+        const x = s.pos.x + s.right.x * lat, z = s.pos.z + s.right.z * lat;
+        if (roadClear(x, z) > 3 && free(x, z, 0.8)) stakes.push({ x, y: groundY(x, z), z, ry: yawOf(s), rz: Math.sin(i) * 0.025 });
+      }
+    }
+    // 중간 크기 바위 언덕으로 도로와 먼 산 사이의 크기 차이를 잇는다.
+    for (let i = 45; i < NS; i += 73) {
+      if (!safeSample(i)) continue;
+      const s = S[i], sd = detailRand() < 0.5 ? -1 : 1;
+      const lat = sd * (edgeLat(i, sd) + 30 + detailRand() * 24);
+      const x = s.pos.x + s.right.x * lat, z = s.pos.z + s.right.z * lat;
+      if (!inBox(x, z) || roadClear(x, z) < 26 || !free(x, z, 9)) continue;
+      if (lake && Math.hypot(x - lake.x, z - lake.z) < lake.r + 20) continue;
+      hills.push({ x, y: groundY(x, z) - 1.1, z, sx: 5 + detailRand() * 7, sy: 2 + detailRand() * 4, sz: 4 + detailRand() * 5, ry: detailRand() * TAU });
+    }
+    const driftMat = glacierSurface(new THREE.MeshStandardMaterial({ color: '#d9e5ef', roughness: 0.92 }), 'snow');
+    const gravelMat = glacierSurface(new THREE.MeshStandardMaterial({ color: '#667784', roughness: 0.96 }), 'rock');
+    const grassGeo = new THREE.BufferGeometry();
+    const gp = [];
+    for (let k = 0; k < 5; k++) { const a = k * 2.399, x = Math.cos(a) * 0.18, z = Math.sin(a) * 0.18; gp.push(x - 0.018, 0, z, x + 0.018, 0, z, x + Math.sin(a) * 0.2, 0.45 + k * 0.055, z + Math.cos(a) * 0.17); }
+    grassGeo.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3)); grassGeo.computeVertexNormals();
+    const grassMat = new THREE.MeshLambertMaterial({ color: '#777362', side: THREE.DoubleSide });
+    const stakeGeo = colorBoxes([[0.065, 1, 0.065, 0, 0.5, 0, '#c8cfd2'], [0.075, 0.17, 0.075, 0, 0.9, 0, '#b64c43']]);
+    instanced(new THREE.SphereGeometry(1, 9, 5), driftMat, banks, { name: 'gfx2SnowDrifts', lod: 220 });
+    instanced(new THREE.IcosahedronGeometry(1, 0), gravelMat, gravel, { name: 'gfx2Gravel', lod: 150 });
+    instanced(grassGeo, grassMat, grass, { name: 'gfx2DryGrass', lod: 130 });
+    instanced(stakeGeo, M.vcol, stakes, { name: 'gfx2SnowStakes', lod: 300 });
+    instanced(snowRockGeo(51), M.vcolFlat, hills, { name: 'gfx2RockHills', lod: 650 });
+    stats.gfx2Details = { drifts: banks.length, gravel: gravel.length, grass: grass.length, stakes: stakes.length, hills: hills.length };
+    } finally { Math.random = savedRandom; }
   }
 
   // ---------------------------------------------------------------- 하늘을 나는 것: 헬리콥터 (코스 위를 크게 돎) + 새 떼

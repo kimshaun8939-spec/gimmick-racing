@@ -8,6 +8,8 @@
 //   - 경사 코너 (bank), 넓은 연석 (큰 스위퍼에도), 코스에서 멀어질수록 솟는 눈산 (지형 격자 끝을 가림)
 // 돌려주는 객체는 volcanoTrack.js / moonTrack.js와 같은 모양 (car.js, main.js, hud 미니맵, racingLineFx, gpCorners, 봇이 그대로 씀)
 import * as THREE from 'three';
+import { glacierSurface, gfx2Enabled } from './gfxTextures.js';
+import { alpineMaterial, smoothVisualGeometry } from './gfxTerrain.js';
 import { computeRacingLine, edgeFraction } from './racingLine.js';
 import { canvasTexture, seededRandom, makeNoise } from './moonTrack.js';
 
@@ -392,7 +394,7 @@ export function buildGlacierTrack(data, scene) {
 
   // ---------------------------------------------------------------- 도로, 연석
   // 살짝 젖은 듯 반들거리는 아스팔트, 파랑/흰 연석
-  const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.55, metalness: 0.08 });
+  const roadMat = glacierSurface(new THREE.MeshStandardMaterial({ map: roadTexture(), roughness: 0.55, metalness: 0.08 }), 'asphalt');
   const curbMat = new THREE.MeshStandardMaterial({ map: curbTexture('#f4f8ff', '#1f6fd6'), roughness: 0.6 });
   for (const [a, b] of runsOf((i) => hasRoad(i))) strip(spanList(a, b), (s) => [[-s.hw, 0], [s.hw, 0]], roadMat, { vScale: 12, surface: 'ground' });
   for (const side of [-1, 1]) {
@@ -428,7 +430,7 @@ export function buildGlacierTrack(data, scene) {
   const railMat = new THREE.MeshStandardMaterial({ color: '#d3d9e0', metalness: 0.6, roughness: 0.35, side: THREE.DoubleSide });
   const railGlowMat = new THREE.MeshBasicMaterial({ color: '#5fd0ff', toneMapped: false, side: THREE.DoubleSide });
   const iceTex = iceTexture(31);
-  const iceWallMat = new THREE.MeshStandardMaterial({ map: iceTex, roughness: 0.25, metalness: 0.05, side: THREE.DoubleSide, emissive: '#2a78b0', emissiveIntensity: 0.25 });
+  const iceWallMat = glacierSurface(new THREE.MeshStandardMaterial({ map: iceTex, roughness: 0.25, metalness: 0.05, side: THREE.DoubleSide, emissive: '#2a78b0', emissiveIntensity: 0.25 }), 'ice');
   const posts = [];
   const railRuns = [];
   for (const [n, side] of [[0, -1], [1, 1]]) {
@@ -508,7 +510,7 @@ export function buildGlacierTrack(data, scene) {
   const snowTex = snowTexture(77);
   {
     // 다져진 눈 갓길 (살짝 회색빛)
-    const skirtMat = new THREE.MeshLambertMaterial({ map: snowTex, color: '#d4dde8', side: THREE.DoubleSide });
+    const skirtMat = glacierSurface(new THREE.MeshLambertMaterial({ map: snowTex, color: '#d4dde8', side: THREE.DoubleSide }), 'snow');
     const OUT = [[0, 0], [1.5, -0.06], [3.2, -0.16], [SKW, -0.25], [SKW + 2.2, -1.0]];
     const v = new THREE.Vector3();
     const toBanked = (s, Lw, Yw) => {
@@ -734,7 +736,8 @@ export function buildGlacierTrack(data, scene) {
   // 색: 흰 눈, 푸른 그늘, 가파른 곳은 드러난 회청색 바위, 길가 다져진 눈, 강바닥은 푸른 얼음
   const cA = new THREE.Color('#eef3f9'), cB = new THREE.Color('#d9e4ef'), cBlue = new THREE.Color('#b4c9de');
   const cRock = new THREE.Color('#5c6670'), cRock2 = new THREE.Color('#7d8894'), cShoulder = new THREE.Color('#c7d1dc'), cIce = new THREE.Color('#8fcff0'), cTmp = new THREE.Color();
-  const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, emissive: '#0b1624', side: THREE.DoubleSide });
+  const terrainMat = glacierSurface(new (gfx2Enabled() ? THREE.MeshStandardMaterial : THREE.MeshLambertMaterial)({ vertexColors: true, flatShading: true, emissive: '#0b1624', side: THREE.DoubleSide }), 'snow');
+  const terrainVisualMat = gfx2Enabled() ? alpineMaterial(-1) : null;
   const terrainColor = (x, y, z, ny, nd) => {
     const n1 = noise(x / 90, z / 90, 3), n2 = noise(x / 13, z / 13, 2);
     cTmp.copy(cA).lerp(cB, THREE.MathUtils.clamp(0.5 + n2 * 0.9, 0, 1));
@@ -789,6 +792,15 @@ export function buildGlacierTrack(data, scene) {
       m.receiveShadow = true;
       m.userData.glacierTerrain = true; // 이름을 안 붙여야 staticBatch가 칸별로 합침 (그림 호출 줄임)
       addGround(m, 'ground');
+      if (terrainVisualMat) {
+        // Render-only copy; the original is kept in the ray/fastTrack arrays unchanged.
+        m.visible = false;
+        m.name = 'gfx3CollisionTerrain';
+        const visual = new THREE.Mesh(smoothVisualGeometry(geo, heightAt), terrainVisualMat);
+        visual.receiveShadow = true;
+        visual.userData.glacierTerrain = true;
+        group.add(visual);
+      }
     }
 
   // ---------------------------------------------------------------- 출발선 (체커) + 출발 그리드 칸
