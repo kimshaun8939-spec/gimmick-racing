@@ -5,6 +5,7 @@
   width: min(560px, calc(100vw - 28px)); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box;
   padding: 22px 24px 16px; text-align: left; display: flex; flex-direction: column; gap: 12px;
 }
+.assist-intro .ai-body { display: contents; }
 .assist-intro .ai-head { display: flex; gap: 14px; align-items: flex-start; }
 .assist-intro .ai-badge {
   flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 24px;
@@ -49,6 +50,17 @@ body:has(.assist-intro) > .hud, body:has(.assist-intro) :is(#menuBtn, #touchCtl,
   .assist-intro .ai-btns .gm-btn { flex: 1; min-width: 0; }
   .assist-intro .ai-state { display: none; }
   .assist-intro .ai-row { gap: 10px; }
+}
+/* 낮은 가로 화면에서는 안내만 스크롤하고 출발 버튼은 화면에 남겨요. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .assist-intro .ai-box { overflow: hidden; }
+  .assist-intro :is(.ai-head, .ai-btns, .ai-later) { flex: none; }
+  .assist-intro .ai-body {
+    display: flex; flex-direction: column; gap: inherit; min-height: 0;
+    overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+    padding: 4px; margin: -4px; scroll-padding-block: 4px;
+  }
+  .assist-intro .ai-body > * { flex-shrink: 0; }
 }
 /* 낮은 가로 화면 (휴대폰 가로 등): 도움을 두 줄로 나란히, 설명은 짧게 */
 @media (max-height: 520px) and (min-width: 600px) {

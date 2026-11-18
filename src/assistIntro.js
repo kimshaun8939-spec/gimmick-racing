@@ -126,6 +126,7 @@ function showCard(combinedCourse) {
     wrap.innerHTML = `<div class="box ai-box" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
       <div class="ai-head"><span class="ai-badge">🛟</span><div><h3 id="aiTitle">주행 도움이 켜져 있어요</h3>
       <p class="ai-sub">첫 레이스라 운전을 도와주는 기능을 켰어요. 직접 해 보고 싶으면 지금 끄세요.</p></div></div>
+      <div class="ai-body">
       ${combinedCourse ? `<div class="ai-course"><b>변신 연습장 · 가속 → 배 → 비행</b><p>직선·물길·활주로에서 자동 변신! 비행 대신 오른쪽 땅길로 가도 돼요.</p><p>${drive}<br>${fly}</p><p class="ai-start">빨간불 5개가 모두 꺼지면 가속! 지금은 신호가 멈춰 있어요.</p></div>` : ""}
       <div class="ai-rows" role="group" aria-label="주행 도움">${rows
         .map(
@@ -135,6 +136,7 @@ function showCard(combinedCourse) {
         )
         .join('')}</div>
       <p class="ai-note">🛟 브레이크·조향 도움을 켜고 달리면 결과에 '도움 켬'이 표시돼요</p>
+      </div>
       <div class="btns ai-btns"><button type="button" class="gm-btn" data-act="off">모두 끄기</button><button type="button" class="gm-btn primary" data-act="go">이대로 출발${kOk}</button></div>
       <p class="ai-later">나중에 ${menuWay} → 설정 → 운전·도움에서 바꿀 수 있어요</p></div>`;
     const rowEls = [...wrap.querySelectorAll('.ai-row')];
