@@ -8,7 +8,7 @@
 //   실수: 실수 동작 코드는 유지하지만 기본 단계에서는 의도적 실수를 끔 (접전 중 사고·복귀 줄이기).
 //   부스터(E): 앞에 브레이크 구간이 없는 긴 직선에서 씀 (보통·어려움)
 import * as THREE from 'three';
-import { lineCarModel } from './car.js';
+import { lineCarModel, STEER_OLD, steerLatCap, steerLatCapMax, steerLoadFor } from './car.js';
 import { hitboxFor, obbOverlap } from './carHitbox.js';
 import { createShortcutDriver } from './botShortcut.js'; // 그랑프리 판자 지름길 (2026-11-14)
 import { learnedLineFor } from './learnedLine.js'; // [learned hook 1] 학습 라인 (2026-11-14, &learned=0 = 예전)
@@ -133,13 +133,14 @@ try {
 function setCarHelp(car, c, t) {
   const cfg = car.cfg;
   const B = car._packBase || (car._packBase = {
-    lat: cfg.tire.lateral, steerLat: cfg.steerLat, steerRate: cfg.steerRate, trac: cfg.tire.traction, brake: cfg.tire.brakeGrip,
+    lat: cfg.tire.lateral, steerLat: cfg.steerLat, steerLatOld: cfg.steerLatOld, steerRate: cfg.steerRate, trac: cfg.tire.traction, brake: cfg.tire.brakeGrip,
     power: cfg.engine.power, maxSpeed: cfg.maxSpeed, gears: cfg.gears.slice(),
     boat: cfg.modes && cfg.modes.boat ? { thrust: cfg.modes.boat.thrust, maxSpeed: cfg.modes.boat.maxSpeed } : null,
   });
   const g = c * c; // 코너 속도 ∝ √접지
   cfg.tire.lateral = B.lat * g;
   cfg.steerLat = B.steerLat * g;
+  if (B.steerLatOld != null) cfg.steerLatOld = B.steerLatOld * g;
   cfg.steerRate = B.steerRate * c;
   cfg.tire.traction = B.trac * g;
   cfg.tire.brakeGrip = B.brake * g;
@@ -163,6 +164,11 @@ export function profileFor(line, cfg) {
 }
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+/** 차 물리의 surfGrip 중 봇이 아는 몫 (가속 모드 접지 배수) — steergrip 조향 한계 계산용 */
+function botSurf(car) {
+  const A = car.cfg.modes && car.cfg.modes.accel;
+  return A && car.mode === 'accel' ? A.gripFactor : 1;
+}
 
 // --- 비행 루트 (그랑프리 활주로 → 고리 4개 → 착륙장, 2026-11-10 bots-fly) ---
 //   사람처럼: 활주로로 들어가면 차가 저절로 비행 모드(car.js autoSwitch) → 활주로 끝에서 Space(climb)로 이륙
@@ -272,6 +278,13 @@ function gravityArray(track) {
 
 
 
+/** 마스터 그랑프리 계획 옆 가속 (예전 ×1.16/1.08). steergrip: 새 방식은 무게 이동 최대 한계의 99%까지만 */
+function circuitLat(cfg, aLat) {
+  if (STEER_OLD) return v => aLat(v) * (1.16 / 1.08);
+  const A = cfg.modes.accel;
+  return v => Math.min(aLat(v) * (1.16 / 1.08), 0.99 * steerLatCapMax(cfg, v, A && !cfg.modes.manualSelect && v >= A.autoSpeed / 3.6 ? A.gripFactor : 1));
+}
+
 function masterDriveModel(cfg) {
   const cm = lineCarModel(cfg), A = cfg.modes.accel;
   const df = v => cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
@@ -284,7 +297,9 @@ function masterDriveModel(cfg) {
     aAcc: () => 1e4,
     // 원래 물리는 가속 모드의 gripFactor를 타이어에만 적용한다.
     // 제동 무게 이동으로 더 도는 여유도 계획에만 반영한다 (cfg를 바꾸지 않음).
-    aLat: v => 1.08 * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), cfg.tire.lateral * (1 + df(v)) * grip(v)),
+    // steergrip: 새 방식은 핸들 한계 = 접지 × steerGripUse라 무게 이동으로 더 도는 여유가 뒤 접지(rearGrip)만큼만 → 그 최대값을 넘지 않게
+    aLat: STEER_OLD ? v => 1.08 * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), cfg.tire.lateral * (1 + df(v)) * grip(v))
+      : v => Math.min(1.08 * steerLatCap(cfg, v, 0, 0, grip(v)), 0.97 * steerLatCapMax(cfg, v, grip(v))),
     aBrake: v => .96 * Math.min(cfg.brake, cfg.tire.brakeGrip * (1 + df(v)) * grip(v)) + cfg.aero.drag * v * v + cfg.aero.rolling,
   };
 }
@@ -323,7 +338,7 @@ function aeroPlan(line, cfg, base, car, cache, master = false, circuit = false) 
     },
     aBrake: v => Math.max(.1, cm.aBrake(v) - cfg.aero.drag * v * v * (1 - drag)),
   };
-  const plan = line.profile(circuit ? {...model,aLat:v=>model.aLat(v)*(1.16/1.08)} : model);
+  const plan = line.profile(circuit ? {...model,aLat:circuitLat(cfg,model.aLat)} : model);
   if (cache.size >= 48) cache.delete(cache.keys().next().value);
   cache.set(key, plan);
   return plan;
@@ -401,7 +416,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   // 구름섬 마스터만 별도 코너 계획. 타이어·엔진·공통 공력 값은 바꾸지 않는다.
   const circuit = exactMaster && !!track.runway;
   // 제동/코스팅으로 앞 하중을 남기는 구간의 목표. 실제 가속과 회전은 Car가 제한한다.
-  const circuitProf = circuit ? L.profile({...cm,aLat:v=>cm.aLat(v)*(1.16/1.08)}) : null;
+  const circuitProf = circuit ? L.profile({...cm,aLat:circuitLat(car.cfg,cm.aLat)}) : null;
   const circuitAeroPlans = new Map();
   const thrK = level.thrK ? Math.min(1, (level.thrK * pace) / level.pace) : 1; // 봇마다 조금씩 다른 액셀 (실력 차이)
   let vTop = 0;
@@ -610,7 +625,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const hd=Math.atan2((car.fwd.x*tz-car.fwd.z*tx)/fl,(car.fwd.x*tx+car.fwd.z*tz)/fl);
       const side=(tx*(A[bi].z-car.pos.z)-tz*(A[bi].x-car.pos.x))/tl;
       const cfg=car.cfg, v=Math.max(8,speed), df=cfg.aero.downforce*Math.min(1.6,(v/cfg.maxSpeed)**2);
-      const lat=cfg.steerLat*(1+(cfg.steerLatDownforce||0)*df)*(1-(cfg.steerLatLoad||0)*(car.load||0));
+      const lat=steerLatCap(cfg,v,car.load||0,0,botSurf(car));
       const yaw=plan.kap[Math.min(A.length-1,bi+Math.round(v*.2))]*v+3*hd+.15*clamp(side,-6,6);
       const per=cfg.steerRate*Math.min(1,v/8)*Math.min(1,lat/(cfg.steerRate*v));
       c.steer=clamp((yaw+.3*(yaw-(car.yawRate||0))-.8*(car.slip||0))/Math.max(.05,per),-1,1);
@@ -1135,10 +1150,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const yawDes = windYaw -(Math.abs(lane) > 0.5 ? pathCurvature(kf, lane) : L.curvature[kf]) * v
         + 3 * (hd + (trafficPath?Math.atan2(laneV,v):0)) - lateralGain * (1 + hold) * latErr
         - .12 * hold * (latVel-laneV);
-      const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
       const bankLat = cfg.bankGrip && !car.magnet && car.up.y > .8 && car.up.y < .9995
         ? 9.81 * (car.up.y * car.up.dot(car.right) - car.right.y) * Math.sign(yawDes) * cfg.bankGrip : 0;
-      const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)) + bankLat);
+      const latCap = steerLatCap(cfg, v, car.load || 0, bankLat, botSurf(car)); // car.js와 같은 식 (steergrip)
       const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v)); // 핸들 1일 때 회전 속도 (car.js와 같은 식)
       // 원래 차의 꼬리 미끄러짐/핸들 지연을 보고 카운터. 성능값을 올리지 않고 조작으로 잡음.
       const yawNow = st.lastFx == null ? car.yawRate || 0 : Math.atan2(st.lastFx*fz-st.lastFz*fx,st.lastFx*fx+st.lastFz*fz)/Math.max(.001,dt);
@@ -1147,7 +1161,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       steerCmd = (yawDes + .45*(yawDes-st.actualYaw) - .8*(car.slip||0)) / Math.max(0.05, perSteer);
       // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
       st.cornerLoad = circuit && !trafficPath && Math.abs(car.slip||0)<.12 && cfg.steerLatLoad
-        ? clamp((1-(Math.abs(L.curvature[kf])*v*v-bankLat)/(cfg.steerLat*(1+(cfg.steerLatDownforce||0)*dfz)))/cfg.steerLatLoad,-.6,1) : 1;
+        ? steerLoadFor(cfg, v, Math.abs(L.curvature[kf])*v*v, bankLat) : 1;
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
       st.saturRoom = steerCmd > 0 ? myLat - L.lo[i0] : L.hi[i0] - myLat; // 도는 쪽 바깥 도로 끝까지 남은 거리 (m)
       { // 좁은 길(한쪽 7 m 아래)·바깥이 낭떠러지/용암이면 '멀다'로 치지 않음 (화산: 예전처럼 브레이크)
@@ -1165,8 +1179,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       dir.addScaledVector(side, clamp((want - myLat) * .09, -.35, .35));
       dir.addScaledVector(car.up, -dir.dot(car.up));
       const angle = dir.lengthSq() > 1e-6 ? -Math.atan2(magnetCross.crossVectors(car.fwd, dir).dot(car.up), car.fwd.dot(dir)) : 0;
-      const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
-      const latCap = cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0));
+      const latCap = steerLatCap(cfg, v, car.load || 0, 0, botSurf(car)); // car.js와 같은 식 (steergrip, &steer=old면 예전 식)
       const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v));
       steerCmd = (3 * angle - .8 * (car.slip || 0)) / Math.max(.05, perSteer);
       st.satur = 0;

@@ -919,7 +919,8 @@ export class Car {
     const powerUse = drive > 0 ? Math.min(1, drive / Math.max(1, tractionLimit)) : 0;
     // 리프트오프: 빠른 코너에서 액셀을 꽉 밟고 있다가(0.6초 이상) 확 떼면 무게가 앞으로 쏠려 뒤가 순간 가벼워짐
     //   (코너 중에 W를 톡톡 끊어 밟는 것으로는 안 생김 → 키보드로 속도 맞추기는 그대로 편함). 0.45초 동안 줄어듦
-    const latUse = THREE.MathUtils.clamp((Math.abs(this.yawRate) * v) / Math.max(1, tire.lateral), 0, 1);
+    // steergrip: 쓰는 비율 = 지금 뒤 접지(다운포스·노면 포함, rearGrip 1.25 기준) 대비 (예전 = tire.lateral 고정값 대비)
+    const latUse = THREE.MathUtils.clamp((Math.abs(this.yawRate) * v) / Math.max(1, STEER_OLD ? tire.lateral : (tire.lateral * (1 + df) * surfGrip * (tire.rearGrip ?? 1.25)) / 1.25), 0, 1);
     if (this.thr > 0.8) this.thrHeld = (this.thrHeld || 0) + dt;
     else if (this.thr < 0.3) {
       if (this.thrHeld > 0.6 && latUse > 0.5 && v > 15) this.liftKick = 1;
@@ -955,10 +956,13 @@ export class Car {
       const dir = Math.sign(this.steerIn * (f || 1)) || Math.sign(this.yawRate);
       bankLat = 9.81 * downSlopeRight * dir * cfg.bankGrip;
     }
-    const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df) * (1 - (cfg.steerLatLoad || 0) * this.load) + bankLat);
+    const lat = Math.max(0.5 * tire.lateral, tire.lateral * (1 + df) * surfGrip + bankLat * surfGrip); // 코너링 한계 (m/s², 경사 포함)
+    // steergrip: 핸들 끝 = 지금 접지 한계(앞·뒤 중 약한 쪽, 무게 이동 포함, 브레이크 쪽 뒤 감소는 빼고)의 steerGripUse배 (steerLatCap과 같은 식)
+    const sLold = cfg.steerLatOld ?? cfg.steerLat;
+    const latCap = STEER_OLD ? Math.max(0.5 * sLold, sLold * (1 + (cfg.steerLatDownforce || 0) * df) * (1 - (cfg.steerLatLoad || 0) * this.load) + bankLat)
+      : (cfg.steerGripUse ?? 0.96) * lat * Math.min(1 - (cfg.steerLatLoad || 0) * this.load, tire.rearGrip * (1 + tire.loadShift * steerRearLoad(cfg, this.load)));
     const highK = Math.min(1, latCap / (cfg.steerRate * Math.max(1, vNow)));
     const fastK = THREE.MathUtils.clamp(vNow / cfg.maxSpeed, 0, 1);
-    const lat = Math.max(0.5 * tire.lateral, tire.lateral * (1 + df) * surfGrip + bankLat * surfGrip); // 코너링 한계 (m/s², 경사 포함)
     let turn;
     this.understeer = 0;
     {
@@ -1861,7 +1865,8 @@ export function lineCarModel(cfg) {
   const hi = (v) => v >= autoV;
   return {
     vMax: autoV < Infinity ? cfg.maxSpeed * A.speedFactor : cfg.maxSpeed,
-    aLat: (v) => 0.94 * (hi(v) ? A.gripFactor : 1) * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), cfg.tire.lateral * (1 + df(v))),
+    // steergrip: 핸들 한계 = 접지 한계 × steerGripUse (차 물리와 같은 식, 무게 이동 0). &steer=old = 예전 min(steerLat 식, 타이어)
+    aLat: (v) => 0.94 * (STEER_OLD ? (hi(v) ? A.gripFactor : 1) * Math.min(steerLatCap(cfg, v), cfg.tire.lateral * (1 + df(v))) : steerLatCap(cfg, v, 0, 0, hi(v) ? A.gripFactor : 1)),
     // 그 속도에 맞는 기어의 엔진 힘 (토크 약 0.9) − 공기·구름 저항, 타이어 한계 안에서
     aAcc: (v) => {
       const gears = hi(v) ? cfg.gears.map((g) => g * A.gearFactor) : cfg.gears;
@@ -1884,4 +1889,65 @@ export function lineCarModel(cfg) {
     })() : null,
     aBrake: (v) => 0.85 * Math.min(cfg.brake, cfg.tire.brakeGrip * (1 + df(v))) + cfg.aero.drag * v * v,
   };
+}
+
+// steergrip (2026-11-23, 사용자 "이 속도에서 이 정도로 꺾으면 미끄러지지 않는 정도로 꺾이게"): 고속 조향 한계 = 그 차의 실제 옆 접지 한계
+//   예전엔 핸들 한계(steerLat)가 타이어 접지(tire.lateral × (1 + 다운포스))와 따로 정한 숫자였음 → 이제 끝까지 꺾으면
+//   지금 접지 한계(노면·가속 모드·경사·무게 이동 포함, 앞·뒤 중 약한 쪽)의 steerGripUse(0.96)배 = 핸들만으로는 안 미끄러짐.
+//   브레이크·액셀·리프트오프로 뒤가 가벼워지는 미끄러짐(powerSlide·liftOff·휠스핀)은 그대로. &steer=old = 예전 steerLat 방식
+export const STEER_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('steer') === 'old';
+/** 다운포스 배수 (접지력 × (1 + df)) */
+export function steerDf(cfg, v) {
+  return cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
+}
+/** 타이어 옆 접지 한계 (m/s², 노면·모드 배수 surf, 경사 몫 bankLat 포함) */
+export function gripLat(cfg, v, surf = 1, bankLat = 0) {
+  const L = cfg.tire.lateral;
+  return Math.max(0.5 * L, L * (1 + steerDf(cfg, v)) * surf + bankLat * surf);
+}
+/**
+ * 핸들을 끝까지 꺾었을 때 낼 수 있는 옆 가속 (m/s²) = 고속 조향 한계. 사람·봇·속도 계획 모두 이 식.
+ *   load = 무게 이동 (−1 브레이크 ~ +1 가속), bankLat = 경사 몫, surf = 노면·가속 모드 접지 배수
+ *   새 방식: steerGripUse × min(앞 한계, 뒤 한계)  (앞 = 접지 × (1 − steerLatLoad·load), 뒤 = 접지 × rearGrip × (1 + loadShift·max(0, load)))
+ *   (브레이크 쪽 뒤 하중 감소는 car.json steerBrakeRear 몫만 넣음: 지금 1 = 다 넣음(고속 브레이크 코너에서 꼬리 안 나감), 0 = 안 넣음)
+ */
+export function steerLatCap(cfg, v, load = 0, bankLat = 0, surf = 1) {
+  if (STEER_OLD) {
+    const sl = cfg.steerLatOld ?? cfg.steerLat;
+    return Math.max(0.5 * sl, sl * (1 + (cfg.steerLatDownforce || 0) * steerDf(cfg, v)) * (1 - (cfg.steerLatLoad || 0) * load) + bankLat);
+  }
+  // 브레이크 쪽(load < 0)의 뒤 몫은 steerBrakeRear만큼 (0이면 앞 한계만 봄)
+  return steerLatCapSafe(cfg, v, load, bankLat, surf, steerRearLoad(cfg, load));
+}
+/** 핸들 한계에 넣는 뒤 하중 (브레이크 쪽은 steerBrakeRear 몫만: 0 = 안 넣음, 1 = 다 넣음) */
+export function steerRearLoad(cfg, load) {
+  const k = cfg.steerBrakeRear === true ? 1 : +cfg.steerBrakeRear || 0;
+  return load < 0 ? load * k : load;
+}
+/** 뒤 한계도 지금 무게 이동으로 보는 '안전한' 조향 한계 (봇 계획: 브레이크하며 꺾어도 꼬리가 안 나가는 만큼만) */
+export function steerLatCapSafe(cfg, v, load = 0, bankLat = 0, surf = 1, rearLoad = load) {
+  if (STEER_OLD) return steerLatCap(cfg, v, load, bankLat, surf);
+  const t = cfg.tire, lat = gripLat(cfg, v, surf, bankLat);
+  return (cfg.steerGripUse ?? 0.96) * lat * Math.min(1 - (cfg.steerLatLoad || 0) * load, (t.rearGrip ?? 1.25) * (1 + (t.loadShift || 0) * rearLoad));
+}
+/** 무게 이동을 가장 잘 썼을 때(살짝 브레이크) 낼 수 있는 조향 한계 = steerLatCap의 최대값 (마스터 봇 계획용) */
+export function steerLatCapMax(cfg, v, surf = 1) {
+  if (STEER_OLD) return steerLatCap(cfg, v, -1, 0, surf);
+  const t = cfg.tire, a = cfg.steerLatLoad || 0, b = t.loadShift || 0, rg = t.rearGrip ?? 1.25;
+  // 1 − a·L = rg·(1 + b·L) 인 L (음수 = 브레이크 쪽), −1 ~ 0 사이로
+  const L = a + rg * b > 0 ? Math.max(-1, Math.min(0, (1 - rg) / (a + rg * b))) : 0;
+  return steerLatCapSafe(cfg, v, L, 0, surf);
+}
+/** 조향 한계가 need(m/s²)가 되려면 필요한 무게 이동 (봇: 코너 전에 액셀을 덜 밟아 앞 하중 남기기) */
+export function steerLoadFor(cfg, v, need, bankLat = 0) {
+  const a = cfg.steerLatLoad || 0;
+  if (!a) return 1;
+  if (STEER_OLD) {
+    const sl = cfg.steerLatOld ?? cfg.steerLat;
+    return Math.max(-0.6, Math.min(1, (1 - (need - bankLat) / (sl * (1 + (cfg.steerLatDownforce || 0) * steerDf(cfg, v)))) / a));
+  }
+  const base = (cfg.steerGripUse ?? 0.96) * gripLat(cfg, v);
+  const t = cfg.tire, b = t.loadShift || 0, rg = t.rearGrip ?? 1.25;
+  const lo = a + rg * b > 0 ? Math.max(-1, Math.min(0, (1 - rg) / (a + rg * b))) : -0.6;
+  return Math.max(Math.max(-0.6, lo), Math.min(1, (1 - (need - bankLat) / base) / a));
 }

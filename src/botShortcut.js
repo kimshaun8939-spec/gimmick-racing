@@ -4,7 +4,7 @@
 //   길 모양은 트랙마다 한 번 자동으로 찾음 (여러 진입·탈출 거리 중 차 폭이 도로/판자 안에 있고 가장 빠른 것)
 //   &plank=0 이면 끔
 import * as THREE from 'three';
-import { lineCarModel } from './car.js';
+import { lineCarModel, steerLatCap } from './car.js';
 
 const cache = new WeakMap();
 /** 시험용 통계: 시작·끝까지·놓침 */
@@ -315,8 +315,8 @@ export function createShortcutDriver(env) {
     const hd = Math.atan2(fx * dz - fz * dx, fx * dx + fz * dz);
     const yawDes = kf * v + (2 * v * Math.sin(hd)) / Math.max(6, dl);
     const cfg = car.cfg;
-    const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
-    const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)));
+    const accM = cfg.modes && cfg.modes.accel;
+    const latCap = steerLatCap(cfg, v, car.load || 0, 0, accM && car.mode === 'accel' ? accM.gripFactor : 1); // car.js와 같은 식 (steergrip)
     const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v));
     const yawNow = st.scFx == null ? car.yawRate || 0 : Math.atan2(st.scFx * fz - st.scFz * fx, st.scFx * fx + st.scFz * fz) / Math.max(0.001, ctx.dt);
     st.scYaw = (st.scYaw ?? yawNow) + (yawNow - (st.scYaw ?? yawNow)) * Math.min(1, ctx.dt * 14);

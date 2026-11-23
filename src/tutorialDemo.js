@@ -10,6 +10,7 @@ import { keybinds, codeLabel } from './keybinds.js';
 import { pad } from './gamepad.js';
 import { touchWanted } from './touch.js';
 import { smartProfile, needOf, coachSpeed } from './brakeNeed.js';
+import { steerLatCap } from './car.js'; // steergrip: 핸들 한계 = 차 물리와 같은 식
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -80,8 +81,8 @@ export function lineDriver(game, o = {}) {
       const latErr = clamp(lat - wantOff(i0, off), -6, 6);
       const kf = W(i0 + (v * 0.15) / ds);
       const yawDes = -L.curvature[kf] * v + (o.hdGain ?? 3) * hd - (o.latGain ?? 0.18) * latErr;
-      const dfz = cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
-      const latCap = Math.max(0.5 * cfg.steerLat, cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * dfz) * (1 - (cfg.steerLatLoad || 0) * (car.load || 0)));
+      const accM = cfg.modes && cfg.modes.accel;
+      const latCap = steerLatCap(cfg, v, car.load || 0, 0, accM && car.mode === 'accel' ? accM.gripFactor : 1);
       const perSteer = cfg.steerRate * Math.min(1, v / 8) * Math.min(1, latCap / (cfg.steerRate * v));
       const raw = yawDes / Math.max(0.05, perSteer);
       c.steer = clamp(raw, -1, 1);
