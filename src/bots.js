@@ -351,6 +351,46 @@ function aeroPlan(line, cfg, base, car, cache, master = false, circuit = false) 
  * @param seed  성격 씨앗
  */
 // 추월하다 막힌 봇이 다시 시도 (2026-11-14, 장면 1분41초: 추월 줄이 내 차와 겹친 채 3초 동안 8 m 뒤에 붙어 있었음). &stuck=0 = 예전
+// mastoff (steergrip 3차, 2026-11-24): 마스터 제동을 계획한 감속 곡선에 맞춤. 예전엔 목표보다 3 m/s 넘어야 꽉 밟아서(브레이크 = 넘은 만큼/3)
+//   + 페달이 차오르는 0.2초(input.brakeRise) 때문에 늘 곡선보다 약 10 km/h 빠르게 코너에 들어가 핸들 한계에 걸려 밖으로 나갔음.
+//   = 곡선 위에 있으면 곡선이 가정한 감속만큼 미리 밟고(앞먹임), 페달이 차오르는 거리만큼 일찍 봄. 차 물리·접지는 그대로. &mbrake=0 = 예전
+const MBRAKE = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mbrake') === '1'; // 시험해 보니 혼자 달리기 코스 밖은 그대로·레이스는 나빠져서 기본 끔 (&mbrake=1 = 켜기)
+// mastoff 2: 제동 거리 계산에 지금 공기 저항 배수(car.dragMul: 슬립스트림·기차·견인·DRS)를 넣음. 예전엔 계획의 aBrake가 늘 공기 저항 전부를 감속으로 쳐서,
+//   앞차 뒤(공기 저항 −50~70%)에서 브레이크를 밟으면 생각보다 덜 줄어 코너에 빠르게 들어갔음 (200 km/h에서 약 2~3 m/s² 차이). 모든 단계, &dragbrake=0 = 예전
+// mastoff 3: 마스터 계획은 코너를 '무게 이동 0' 한계보다 최대 8% 빠르게 잡음(앞이 눌려야 낼 수 있는 속도) → 액셀을 꽉 밟은 채(하중 +) 빠른 코너에 들어가면
+//   핸들 한계에 걸려 밖으로 나갔음. 구름섬(circuit)에만 있던 '코너 전에 액셀을 덜 밟아 앞 하중 남기기'를 모든 맵 마스터로 넓힘 (차 물리 그대로). &mload=0 = 예전
+const MLOAD = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mload') !== '0';
+// mastoff 4: 옆 오차 되돌리기 세기(lateralGain 0.15/m)가 속도와 상관없이 같아서 고속(200 km/h 넘음)에서는 출렁임(감쇠비 약 0.47) →
+//   라인으로 비스듬히 들어가다 지나쳐 반대편 잔디로 나갔음(구름섬 출발 뒤 240 km/h 굽이 등). 고속에서는 세기를 3.5/속도로 줄여 감쇠비 0.8 이상. &mgain=0 = 예전
+const MGAIN = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mgain') !== '0';
+// mastoff 5: 마스터가 코너에서 핸들 끝까지 꺾어도 모자랄 때(satur) '액셀만 떼기'(SAT_LIFT)를 하면 고속에서는 줄어드는 속도가 너무 작아 결국 밖으로 나갔음
+//   (레이스 코스 밖 사건 39개 중 24개가 직전에 saturLift). 마스터는 옆 차에 밀리는 중(hold·shove)일 때만 액셀 떼기, 아니면 바로 브레이크
+//   (A 차들은 앞이 눌리면 더 잘 돎). &msat=0 = 예전
+const MSAT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('msat') !== '0';
+// mastoff 6: 레이스 코스 밖 사건 34개 모두 옆 줄(추월·나란히·복귀)에서. 견인·슬립스트림으로 계획보다 30~40 km/h 빠르게 빠른 굽이에 들어가는데
+//   (1) 옆 줄일 땐 '코너 전 액셀 덜 밟기'(MLOAD)를 안 했고 (2) 옆 줄 커브 한계 속도를 앞이 눌린 상태의 계획 접지(무게 이동 0 한계의 최대 108%)로 계산했음
+//   → 마스터는 옆 줄에서도 그 줄의 곡률로 필요한 하중을 보고 액셀을 덜 밟고, 옆 줄 한계 속도는 무게 이동 0 한계의 97%로. &mlane=0 = 예전
+const MLANE = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mlane') !== '0';
+// mastoff 7: (1) 옆 줄 이동이 일정한 속도(슬링샷 6.5 m/s)로 가다 목표에서 딱 멈춤 → 고속에서 옆으로 움직이던 차가 못 멈추고 줄을 지나쳐 길 밖으로.
+//   마스터는 목표 줄에 가까워지면 옆 이동 속도를 sqrt(2 × 3.5 m/s² × 남은 거리)까지 줄임 (멈출 수 있는 만큼)
+//   (2) 코너 전 액셀 덜 밟기(MLOAD)가 0.15초 앞 곡률만 봐서 늦음(하중이 옮겨 가는 데 약 0.2초) → 0.15~0.5초 앞 중 가장 큰 곡률. &mlane2=0 = 예전
+const MLANE2 = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mlane2') === '1';
+// 시험 결과(m7): 앞 0.5초 곡률 보기는 평균 +1%·복귀 2번이라 기본 끔(&mlook=1 = 켜기), 옆 줄 멈춤 부드럽게만 기본
+const MLOOK = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mlook') === '1';
+// 3차 m9 (2026-11-24): 마스터 '도로 끝 지킴'. 0.45초 뒤 차 위치(지금 옆으로 움직이는 속도 그대로)가 라인 한계 + 0.6 m를 넘으면
+//   액셀을 떼고, 1 m 넘게 넘으면 그만큼 브레이크. 시험(m9b): 코스 밖 5.8→5.3초지만 평균 +6% 느림·강한 접촉 191→245 → 기본 끔 (&medge=1 = 켜기)
+const MEDGE_Q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+const MEDGE = MEDGE_Q.get('medge') === '1', MEDGE_T = +(MEDGE_Q.get('medget') || 0.45), MEDGE_M = +(MEDGE_Q.get('medgem') || 0.6), MEDGE_B = +(MEDGE_Q.get('medgeb') || 1);
+// 3차 실력 점검 (2026-11-24): 마스터가 그랑프리 밖에서는 어려움보다 1~3%만 빠름(gt는 같음) → 그랑프리에서 쓰던 '빈길 전용 계획'(앞에 차가 없고 라인 위일 때 무게 이동 최대 한계의 99%까지)을 모든 맵에. &mcirc=0 = 그랑프리만
+const MCIRC = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mcirc') === '1';
+// 3차 실력 점검 (2026-11-24) MTRAIL: 뒤 접지가 약한 차(gt·머슬·버기·로드스터·전갈·미드나잇)는 핸들 한계가 가장 큰 무게 이동 L*가 약 −0.5라
+//   코너 안에서 브레이크를 꽉 밟으면(−1) 오히려 핸들 한계가 내려감 → 마스터가 빨리 들어갔다가 꽉 밟고 더 밀려나 어려움보다 느렸음.
+//   코너 안(필요한 옆 힘이 L* 한계의 85% 넘음)에서는 브레이크를 L*만큼의 감속까지만 = 차 물리 그대로, 사람이 '살살 밟으며 도는 것'과 같음. &mtrail=0 = 끔
+//   시험: gt가 그랑프리 +4초·정글 출발 뒤 코스 밖에 갇힘(감속이 모자라 더 밀려남) → 기본 끔 (&mtrail=1 = 켜기)
+const MTRAIL = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mtrail') === '1';
+// MSATL: 위 MSAT(마스터는 핸들이 모자라면 바로 브레이크)를 뒤가 약한 차(L* > −0.95)가 이미 앞으로 쏠려 있을 때는 안 씀 = 예전처럼 도로 끝이 멀면 액셀만 뗌 (꽉 밟으면 핸들 한계가 더 내려가서). &msatl=0 = 끔
+const MSATL = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('msatl') === '1';
+const DRAG_BRAKE = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('dragbrake') !== '0';
 const STUCK_RETRY = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('stuck') !== '0';
 // 슬립스트림 추월 (2026-11-14, 사용자 "봇이 내 뒤 슬립스트림에서 옆으로 빠질 때 너무 느림, 내가 할 땐 슝"):
 //   예전엔 9~10 m 뒤에서 일찍 빠지기 시작해 옆으로 초당 약 3 m만 움직이고, 다 빠지기 전 '부딪힐 것 같다'고 살짝 브레이크 →
@@ -412,9 +452,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const exactMaster=!!level.master&&!RUBBER_BAND;
   if(exactMaster)prof=L.profile(masterDriveModel(car.cfg));
   const cm = exactMaster?masterDriveModel(car.cfg):lineCarModel(car.cfg); // 제동력 계산용
+  let trailL = -1; { let best = -1; for (let L = -1; L <= 0.001; L += 0.05) { const k = steerLatCap(car.cfg, 30, L, 0, 1); if (k > best + 1e-6) { best = k; trailL = L; } } } // 핸들 한계가 가장 큰 무게 이동 (MTRAIL)
   const aeroPlans = new Map();
   // 구름섬 마스터만 별도 코너 계획. 타이어·엔진·공통 공력 값은 바꾸지 않는다.
-  const circuit = exactMaster && !!track.runway;
+  const circuit = exactMaster && (!!track.runway || MCIRC); // MCIRC: 그랑프리 마스터의 '빈길 전용 계획'을 모든 맵에
   // 제동/코스팅으로 앞 하중을 남기는 구간의 목표. 실제 가속과 회전은 Car가 제한한다.
   const circuitProf = circuit ? L.profile({...cm,aLat:circuitLat(car.cfg,cm.aLat)}) : null;
   const circuitAeroPlans = new Map();
@@ -1080,7 +1121,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const evadeNow=!!(nfOK(leader)&&!NF_OFF.has('evade')&&!slingNow&&move&&move.phase==='pass'&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&!risky&&!narrowSoon&&!mergeHazard&&!beside.some(o=>o!==leader)&&fits(move.off,.6,!!move.wideRetry));
     const evadeRate=!evadeNow?0:!cornerSoon?SLING_RATE:speed<prof.speed[i0]*.85?4.5:0;
     const laneRate=slingNow?SLING_RATE:evadeRate?Math.max(evadeRate,2.6):cornerSoon&&speed>35?(bold?2:1.6):2.6;
-    st.lane+=clamp(st.laneTarget-st.lane,-laneRate*dt,laneRate*dt);
+    const laneRateS=MLANE2&&exactMaster?Math.min(laneRate,Math.sqrt(2*3.5*Math.abs(st.laneTarget-st.lane))+.3):laneRate;
+    st.lane+=clamp(st.laneTarget-st.lane,-laneRateS*dt,laneRateS*dt);
     let lane=st.lane;
 
     let evadeTc=Infinity;
@@ -1129,6 +1171,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const angTo = (dx, dz) => Math.atan2((fx * dz - fz * dx) / fl, (fx * dx + fz * dz) / fl); // + = 오른쪽으로 돌아야 함
     const noise = level.noise * (Math.sin(st.t * 1.7 + st.phase) + 0.5 * Math.sin(st.t * 4.3 + st.phase * 2));
     let steerCmd;
+    st.mNeed = 0;
     if (car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && speed > 3) {
       // 땅 위 (2026-11-10 hard2): '원하는 회전 속도' 방식. 라인 곡률 × 속도 + 방향 오차 + 옆 오차 → 이 차가 지금 핸들 1로 도는 회전 속도로 나눔
       //   예전 방식(20 m 앞 점을 향해 꺾기 + 곡률/24)은 빠른 코너에서 핸들이 늦게 풀려 안쪽 잔디로 파고들었음
@@ -1146,7 +1189,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const flowAngle = Math.atan2(fx*car.vel.z-fz*car.vel.x, fx*car.vel.x+fz*car.vel.z);
       const windYaw = crossForce && speed > 12 ? clamp(-1.8*flowAngle, -.18, .18) : 0;
       const trafficPath=!!st.overtake||hold>0;
-      const lateralGain=trafficPath?clamp(5/v,.05,.15):.15;
+      const lateralGain=trafficPath?clamp(5/v,.05,.15):MGAIN&&exactMaster?Math.min(.15,3.5/Math.max(1,v)):.15;
       const yawDes = windYaw -(Math.abs(lane) > 0.5 ? pathCurvature(kf, lane) : L.curvature[kf]) * v
         + 3 * (hd + (trafficPath?Math.atan2(laneV,v):0)) - lateralGain * (1 + hold) * latErr
         - .12 * hold * (latVel-laneV);
@@ -1160,14 +1203,29 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.lastFx=fx;st.lastFz=fz;
       steerCmd = (yawDes + .45*(yawDes-st.actualYaw) - .8*(car.slip||0)) / Math.max(0.05, perSteer);
       // 핸들을 끝까지 꺾어도 모자란 정도 (마스터 봇이 속도를 줄이는 데 씀). 라인에서 도는 쪽 반대로 1 m 넘게 밀려나 있을 때만 (달처럼 잠깐 꽉 꺾는 곳은 그냥 둠)
-      st.cornerLoad = circuit && !trafficPath && Math.abs(car.slip||0)<.12 && cfg.steerLatLoad
-        ? steerLoadFor(cfg, v, Math.abs(L.curvature[kf])*v*v, bankLat) : 1;
+      const mlTraffic = MLANE && exactMaster && trafficPath;
+      st.cornerLoad = (circuit || (MLOAD && exactMaster)) && (!trafficPath || mlTraffic) && Math.abs(car.slip||0)<.12 && cfg.steerLatLoad
+        ? steerLoadFor(cfg, v, (()=>{ if(!(MLANE2&&MLOOK&&exactMaster)) return Math.abs(mlTraffic ? pathCurvature(kf, lane) : L.curvature[kf])*v*v;
+            let kmax=0; const n1=Math.round((v*.5)/ds), step=Math.max(1,Math.round(n1/8));
+            for(let q=Math.round((v*.15)/ds);q<=n1;q+=step){const j=W(i0+q);const vj=Math.min(v,prof.speed[j]||v);kmax=Math.max(kmax,Math.abs(mlTraffic?pathCurvature(j,lane):L.curvature[j])*vj*vj);}
+            return kmax; })(), bankLat, MLOAD ? botSurf(car) : 1) : 1;
+      st.mNeed = Math.abs(Math.abs(lane) > 0.5 ? pathCurvature(kf, lane) : L.curvature[kf]) * v * v;
       st.satur = Math.sign(steerCmd) * -latErr > 1 ? Math.abs(steerCmd) - 1 : 0;
       st.saturRoom = steerCmd > 0 ? myLat - L.lo[i0] : L.hi[i0] - myLat; // 도는 쪽 바깥 도로 끝까지 남은 거리 (m)
       { // 좁은 길(한쪽 7 m 아래)·바깥이 낭떠러지/용암이면 '멀다'로 치지 않음 (화산: 예전처럼 브레이크)
         const hwN = S[i0].hw ?? (track.width || 16) / 2, E = track.EDGE, eo = track.edgeAt && E ? track.edgeAt(i0, steerCmd > 0 ? -1 : 1) : null;
         st.saturSafe = hwN >= 7 && !(E && (eo === E.cliff || eo === E.lava));
       }
+      st.edgeRisk = 0;
+      if (MEDGE && exactMaster && v > 20) {
+        // 라인·계획한 옆 이동(laneV)에서 벗어나는 속도만 봄 (라인 자체가 도로 끝으로 가는 것은 빼고)
+        const vRel = latVel - laneV;
+        st.edgeVy = (st.edgeVy ?? vRel) + (vRel - (st.edgeVy ?? vRel)) * Math.min(1, dt * 20);
+        const j = W(i0 + Math.round((v * MEDGE_T) / ds)), wantJ = clamp(L.offset[j] + lane, L.lo[j] + 0.2, L.hi[j] - 0.2), p = wantJ + (myLat - want) + st.edgeVy * MEDGE_T;
+        st.edgeRisk = st.edgeVy > 1 ? p - (L.hi[j] + MEDGE_M) : st.edgeVy < -1 ? (L.lo[j] - MEDGE_M) - p : 0;
+        if (st.edgeRisk < 0) st.edgeRisk = 0;
+      }
+      st.prevMyLat = myLat;
 
     } else if (car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && track.roll?.loop && (car.surface === 'magnet' || ti.sample?.magnet || ti.sample?.roll)) {
       // 루프·자석 도로는 현재 도로의 3D 접선을 차 바닥 면에 투영한다.
@@ -1223,6 +1281,11 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const kB = Math.min(1.03, (level.brakeK ?? 0.95) * Math.min(1, k) * (1 + 0.05 * lateBrake));
     const reach = Math.round(Math.min(500, (speed * speed) / (2 * kB * gHere * cm.aBrake(30)) + 10) / ds);
     let tgt = Infinity, tgtWhy = 'plan';
+    const mbOn = MBRAKE && exactMaster && car.grounded && car.mode !== 'fly' && car.mode !== 'boat';
+    const rampT = mbOn ? 0.5 * Math.max(0, 1 - (car.brk || 0)) / ((car.cfg.input && car.cfg.input.brakeRise) || 5) : 0; // 페달이 다 차오를 때까지 평균 걸리는 시간
+    let ffDec = 0;
+    const dragLoss = DRAG_BRAKE && exactMaster && car.dragMul ? (1 - car.dragMul()) * car.cfg.aero.drag : 0; // 줄어든 공기 저항 몫 (× v²)
+    const aBrk = (vq) => Math.max(0.5 * cm.aBrake(vq), cm.aBrake(vq) - dragLoss * vq * vq);
     // 슬립스트림(기차)·견인·슬링샷·DRS로 차 최고 속도가 올라가면 목표 속도도 같이 (사람과 똑같이 효과를 받게, 2026-11-12 drs)
     //   직선(계획 속도가 최고 속도의 75~95%)일수록 다 받고 코너는 그대로. 예전엔 계획 속도 × k가 직선 상한이라 봇은 슬립스트림을 받아도 직선에서 더 빨라지지 않았음
     const tailwind = windZones.some(w => w.type === 'tail' && w.dir > 0 && ti.t >= w.t0 && ti.t <= w.t1);
@@ -1247,7 +1310,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (Math.abs(lane) > 0.5 && car.mode !== 'boat' && car.surface !== 'magnet' && !S[iq].roll && !S[iq].gap) {
         const signedCurve = laneCurvature(iq, lane), curve = Math.abs(signedCurve);
         const bankLat = 9.81 * Math.sin(S[iq].bank || 0) * Math.sign(signedCurve) * (cm.bankGrip || 0);
-        const lat = cm.aLat(vq);
+        const A0 = car.cfg.modes && car.cfg.modes.accel;
+        const lat = MLANE && exactMaster ? Math.min(cm.aLat(vq), 0.97 * steerLatCap(car.cfg, vq, 0, 0, A0 && !car.cfg.modes.manualSelect && vq >= A0.autoSpeed / 3.6 ? A0.gripFactor : 1)) : cm.aLat(vq);
         if (curve > 0.001) {
           const cap = Math.sqrt(Math.max(lat*.5, lat+bankLat) / curve) * Math.min(1, k);
           vq = Math.min(vq, cap); legacyVq = Math.min(legacyVq, cap);
@@ -1257,8 +1321,9 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       // 원래 쓰던 공력 보너스 목표를 낮추지 않고, 가속 제한 때문에 못 쓰던 몫만 더 활용.
       if(!exactMaster)vq = Math.max(vq, legacyVq);
       if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq) * Math.min(jumpK, 1.12));
-      const allow = Math.sqrt(vq * vq + 2 * kB * gHere * cm.aBrake(vq) * q * ds);
-      if (allow < tgt) { tgt = allow; tgtWhy = vq < vqLine - 0.5 ? 'lane' : 'plan'; } // 장면 저장(F8) 진단: 옆 차선 커브 계산이 깎았는지
+      const dq = mbOn ? Math.max(0, q * ds - speed * rampT) : q * ds;
+      const allow = Math.sqrt(vq * vq + 2 * kB * gHere * aBrk(vq) * dq);
+      if (allow < tgt) { tgt = allow; tgtWhy = vq < vqLine - 0.5 ? 'lane' : 'plan'; ffDec = q > 0 ? kB * gHere * aBrk(vq) : 0; } // 장면 저장(F8) 진단: 옆 차선 커브 계산이 깎았는지
     }
     // 마스터(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
@@ -1269,9 +1334,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     //   도로 끝이 한참 남았는데 0.5~0.7초 풀 브레이크(−70 km/h)를 밟았음 → 바깥 도로 끝이 멀면 액셀만 뗌, 가까우면 예전처럼 브레이크 (&satlift=0 = 예전)
     let saturLift = false;
     if (sBrake && !straightPass && car.grounded && speed > 12 && st.satur > 0.05) {
-      if (SAT_LIFT && st.saturSafe && (st.saturRoom ?? 0) > 3 + speed * 0.04) { saturLift = true; tgtWhy = 'saturLift'; }
+      if (SAT_LIFT && st.saturSafe && (st.saturRoom ?? 0) > 3 + speed * 0.04 && !(MSAT && exactMaster && !hold && !shove && !(MSATL && trailL > -0.95 && (car.load || 0) < trailL + 0.1))) { saturLift = true; tgtWhy = 'saturLift'; }
       else if (speed - 1 - sBrake * st.satur < tgt) { tgt = speed - 1 - sBrake * st.satur; tgtWhy = 'satur'; }
     }
+    if (MEDGE && exactMaster && st.edgeRisk > MEDGE_B && car.grounded && speed > 20 && speed - 1 - 3 * (st.edgeRisk - MEDGE_B) < tgt) { tgt = speed - 1 - 3 * (st.edgeRisk - MEDGE_B); tgtWhy = 'edge'; }
     st.saturLast = st.satur;
     st.satur = 0;
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
@@ -1304,10 +1370,31 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       c.throttle = 0;
       c.brake = clamp((speed - tgt) / 3, 0, 1);
     }
+    if (mbOn && ffDec > 0 && (tgtWhy === 'plan' || tgtWhy === 'lane') && speed > tgt - 1.5) {
+      // 앞먹임 제동: 곡선이 가정한 감속(ffDec) 중 공기·구름 저항이 해 주는 몫을 뺀 만큼을 지금 브레이크 힘으로 나눔
+      const cf = car.cfg, dfv = cf.aero.downforce * Math.min(1.6, (speed / cf.maxSpeed) ** 2);
+      const gripK = car.mode === 'accel' && cf.modes.accel ? cf.modes.accel.gripFactor || 1 : 1;
+      const bF = Math.max(1, Math.min(cf.brake, cf.tire.brakeGrip * (1 + dfv) * gripK));
+      const need = ffDec - cf.aero.drag * speed * speed - (cf.aero.rolling || 0);
+      const ff = clamp(need / bF, 0, 1) * clamp((speed - tgt + 1.5) / 1.5, 0, 1);
+      if (ff > 0.05) { c.throttle = 0; c.brake = clamp(Math.max(c.brake || 0, ff + Math.max(0, speed - tgt) / 3), 0, 1); }
+    }
     if (saturLift) c.throttle = 0;
+    if (MTRAIL && exactMaster && trailL > -0.95 && c.brake > 0.05 && car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && speed > 12
+        && st.mNeed > 0.85 * steerLatCap(car.cfg, speed, trailL, 0, botSurf(car))) {
+      const cf = car.cfg, dfv = cf.aero.downforce * Math.min(1.6, (speed / cf.maxSpeed) ** 2);
+      const gripK = car.mode === 'accel' && cf.modes.accel ? cf.modes.accel.gripFactor || 1 : 1;
+      const bF = Math.max(1, Math.min(cf.brake, cf.tire.brakeGrip * (1 + dfv) * gripK));
+      const dStar = -trailL * cf.tire.loadAccel - cf.aero.drag * speed * speed - (cf.aero.rolling || 0);
+      c.brake = Math.min(c.brake, clamp(dStar / bF, 0.1, 1));
+    }
+    if (MEDGE && exactMaster && st.edgeRisk > 0 && car.grounded) c.throttle = Math.min(c.throttle, clamp(1 - 2 * st.edgeRisk, 0, 1));
     if (circuit && car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && st.cornerLoad < -.1 && speed > 25 && c.brake < .1) {
       // 코너 전에 액셀을 덜 밟아 앞 하중을 남긴다. 차 물리의 하중/접지는 그대로다.
       c.throttle=Math.min(c.throttle,clamp(.35+st.cornerLoad,0,.3));
+    } else if (MLOAD && exactMaster && !circuit && car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && st.cornerLoad < .5 && speed > 25 && c.brake < .1 && (car.load || 0) > st.cornerLoad - .05) {
+      // 다른 맵 마스터: 필요한 하중보다 뒤로 쏠려 있으면 액셀을 그만큼 덜 밟음 (필요 하중 0.2 → 액셀 0.55, −0.1 → 0.25)
+      c.throttle=Math.min(c.throttle,clamp(.35+st.cornerLoad,0,1));
     }
     if (car.grounded && car.mode !== 'boat' && car.surface !== 'magnet') c.throttle=Math.min(c.throttle,clamp(1-2.5*Math.max(0,Math.abs(car.slip||0)-.12),.45,1));
     if (st.mistake === 'lift') c.throttle = Math.min(c.throttle, 0.35);
@@ -1360,7 +1447,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.circuitClear = false;
       st.cornerLoad = 1;
       st.mistake = null;
-      st.prevLat = null;
+      st.prevLat = null; st.prevMyLat = null;
       st.lastFx=st.lastFz=st.actualYaw=null;
       st.prevCommandLane=null;st.commandLaneV=0;
       st.started = !grid; // 그리드에 새로 서면 출발 때 칸 줄을 지킴

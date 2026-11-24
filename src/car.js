@@ -331,6 +331,14 @@ export class Car {
     if (this.drs > 0) m *= 1 + (cfg.drs?.topGain ?? 0.04) * Math.min(1, this.drs);
     return m;
   }
+  /** 지금 공기 저항 배수 (슬립스트림·기차·견인·DRS; 물리 step의 draftK와 같은 식). 봇 제동 계산용 (mastoff 2026-11-24) */
+  dragMul() {
+    const cfg = this.cfg, DR = cfg.draft || {}, TW = cfg.tow || {};
+    const drK = Math.min(1, this.draft || 0), adK = Math.min(1, this.assistDraft || 0), twK = Math.min(1, this.tow || 0);
+    const trK = 1 + Math.min(2, this.draftTrain || 0) * (DR.trainGain ?? 0);
+    const drsK = this.drs > 0 ? 1 - (cfg.drs?.dragCut ?? 0.25) * Math.min(1, this.drs) : 1;
+    return (1 - Math.min(0.75, Math.max(drK * (DR.dragCut ?? 0.3) * trK, adK * (DR.assistDragCut ?? 0.3)))) * (twK > 0 ? 1 - (TW.dragCut ?? 0) * twK : 1) * drsK;
+  }
 
   respawnOnRoad() {
     const tr = this.track, S = tr.samples, M = S.length - 1, ds = tr.length / M;
@@ -1939,14 +1947,14 @@ export function steerLatCapMax(cfg, v, surf = 1) {
   return steerLatCapSafe(cfg, v, L, 0, surf);
 }
 /** 조향 한계가 need(m/s²)가 되려면 필요한 무게 이동 (봇: 코너 전에 액셀을 덜 밟아 앞 하중 남기기) */
-export function steerLoadFor(cfg, v, need, bankLat = 0) {
+export function steerLoadFor(cfg, v, need, bankLat = 0, surf = 1) {
   const a = cfg.steerLatLoad || 0;
   if (!a) return 1;
   if (STEER_OLD) {
     const sl = cfg.steerLatOld ?? cfg.steerLat;
     return Math.max(-0.6, Math.min(1, (1 - (need - bankLat) / (sl * (1 + (cfg.steerLatDownforce || 0) * steerDf(cfg, v)))) / a));
   }
-  const base = (cfg.steerGripUse ?? 0.96) * gripLat(cfg, v);
+  const base = (cfg.steerGripUse ?? 0.96) * gripLat(cfg, v, surf); // surf = 가속 모드 접지 배수 (mastoff: 예전엔 빠져서 가속 모드에서 필요한 하중을 적게 봤음)
   const t = cfg.tire, b = t.loadShift || 0, rg = t.rearGrip ?? 1.25;
   const lo = a + rg * b > 0 ? Math.max(-1, Math.min(0, (1 - rg) / (a + rg * b))) : -0.6;
   return Math.max(Math.max(-0.6, lo), Math.min(1, (1 - (need - bankLat) / base) / a));
