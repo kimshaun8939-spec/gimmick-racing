@@ -16,12 +16,15 @@ import { createCarModel } from './carModel.js';
 import { fakeCar } from './opponents.js';
 import { lineCarModel } from './car.js';
 import { ghostStart, matchingStart } from './ghostStart.js';
+import { recKey } from './mapVer.js';
 
 const HZ = 20;
 const STRIDE = 12; // 샘플 하나: 위치 x,y,z (Int32, cm) + 방향 쿼터니언 4개 + 속도 + 모드 (Int16) → Int16 12칸 = 24바이트
-const KEY = (map, car) => `gimmick.ghost.${map}.${car}`; // (예전) 달리는 바퀴 (2바퀴째부터)
-const KEY_START = (map, car) => `gimmick.ghost.${map}.${car}.start`; // (예전) 첫 바퀴 (출발 신호부터)
-const KEY_RUN = (map, car) => `gimmick.ghost.${map}.${car}.run`; // 레이스 전체 (출발 신호부터 결승까지)
+// 코스 버전 (mapver, 2026-11-24): 맵 자리 = recKey(맵) → 코스가 바뀐 맵은 'gimmick.ghost.glacier@2.f1.run', ver 1 맵은 예전 그대로.
+//   예전 코스 고스트('gimmick.ghost.glacier.f1.run')는 지우지 않고 안 읽음 (len 검사로도 걸러짐)
+const KEY = (map, car) => `gimmick.ghost.${recKey(map)}.${car}`; // (예전) 달리는 바퀴 (2바퀴째부터)
+const KEY_START = (map, car) => `gimmick.ghost.${recKey(map)}.${car}.start`; // (예전) 첫 바퀴 (출발 신호부터)
+const KEY_RUN = (map, car) => `gimmick.ghost.${recKey(map)}.${car}.run`; // 레이스 전체 (출발 신호부터 결승까지)
 const INDEX_KEY = 'gimmick.ghost.index';
 const MAX_SAVED = 12; // 저장해 두는 고스트 수 (오래된 것부터 지움)
 const MODES = ['normal', 'accel', 'boat', 'fly'];

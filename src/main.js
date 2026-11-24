@@ -26,6 +26,7 @@ import { createGpCorners } from './gpCorners.js';
 import { settings, dialogOpen, graphicsBudget } from './settings.js';
 import { createPauseMenu } from './pauseMenu.js';
 import { records, fmtTime } from './records.js';
+import { recKey } from './mapVer.js';
 import { loadMaps, loadRoster, setLast, raceUrl, homeUrl } from './gameData.js';
 import { createOpponents, lookColor } from './opponents.js';
 import { createRaceSystem } from './raceSystem.js';
@@ -112,10 +113,10 @@ ld('ldMap', mapMeta().title);
 loadScreenMeta(mapName, mapMeta());
 const MAP_TIPS = {
   ...COURSE_TIPS,
-  mirage: ['모래폭풍 안에서는 청록 안내등과 바닥 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요'],
-  foundry: ['25 m 고가는 다른 도로와 교차해요. 난간을 따라 공장 위를 가로지르세요', '민트 ↑ 벨트는 가속, 황색 ↓ 벨트는 감속해요. 160 m 앞 안내를 보고 민트 쪽을 골라요', '빙글 원판은 가운데를 곧게 지나면 빨라요. 가장자리는 도는 쪽으로 밀려요', '쇳물 그릇 코너는 18° 기울어져 있어요. 도로 안쪽을 따라 부드럽게 돌고 마지막 코너 전에 감속하세요', '옆으로 미는 노란 벨트는 오른쪽으로 밀어요. 큰 화살표를 보고 왼쪽 조향으로 중심을 잡아요'],
+  mirage: ['모래폭풍 안에서는 청록 안내등과 바닥 선을 따라가세요. 도로는 끊기지 않고 시야도 최소 180 m 남아요', '협곡 벽타기는 15°로 기울어진 넓은 도로예요. 청록 선 안쪽을 따라 부드럽게 돌면 빨라요', '바람의 협곡은 오른쪽으로 밀어요. 180 m 앞 안내와 깃발을 보고 왼쪽 조향을 준비하세요', '순풍 능선에서는 속도가 늘어요. 다음 코너 전에 제동하세요', '모래 파도는 매끈하게 이어져요. 급하게 꺾지 말고 능선을 넘으세요', '150·100·50 표지판이 보이면 브레이크! 모래 언덕 끝, 순풍 능선 끝, 모래폭풍 뒤 서쪽 아치는 급코너예요'],
+  foundry: ['25 m 고가는 다른 도로와 교차해요. 난간을 따라 공장 위를 가로지르세요', '민트 ↑ 벨트는 가속, 황색 ↓ 벨트는 감속해요. 160 m 앞 안내를 보고 민트 쪽을 골라요', '빙글 원판은 가운데를 곧게 지나면 빨라요. 가장자리는 도는 쪽으로 밀려요', '쇳물 그릇 코너는 18° 기울어져 있어요. 도로 안쪽을 따라 부드럽게 돌아요. 그 앞 고가 내리막 끝 급코너는 표지판 100 m에서 꽉 브레이크!', '옆으로 미는 노란 벨트는 오른쪽으로 밀어요. 큰 화살표를 보고 왼쪽 조향으로 중심을 잡아요', '노란 횡이송 벨트가 끝나면 바로 적재장 직각 코너예요. 벨트에서 나오면 브레이크 준비'],
   volcano: ['길에 빨간 고리가 보이면 화산탄이 떨어질 곳! 비어 있는 쪽으로 피하세요', '낭떠러지 끝은 연석이 좁아요. 길 끝 밖은 바로 추락!'],
-  glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '긴 직선 끝 첫 코너에서는 빨간 라인을 보고 미리 브레이크!', '길이 넓어도 코너 앞에서는 감속하세요. 눈밭은 미끄럽고 느려요'],
+  glacier: ['긴 직선이 많아요. 150 km/h를 넘기면 가속 모드로 변신!', '긴 직선 끝 코너 4곳(출발 헤어핀·터널 끝·다리 뒤·마지막)은 빨간 라인 전에 브레이크!', '길이 넓어도 코너 앞에서는 감속하세요. 눈밭은 미끄럽고 느려요'],
 };
 const tipList = MAP_TIPS[mapName] || LOAD_TIPS;
 loadScreenTips(MAP_TIPS[mapName], [...LOAD_TIPS, '봇 레이스에서는 뒤처지면 자동 견인이 도와줘요. 직접 누를 버튼은 없어요']);
@@ -316,7 +317,8 @@ const corners = track.grandprix && lineFx.line ? createGpCorners(scene, track, c
 loadScreenCorners(car.cornerInfo);
 const cornerBest = (() => {
   const ci = car.cornerInfo;
-  const key = `cornerBest:${mapName}:${ci ? ci.corners.length : 0}:${Math.round(track.length)}`;
+  // 코스 버전 (mapver): 코스가 바뀐 맵은 'cornerBest:glacier@2:…' (ver 1 맵은 예전 키 그대로)
+  const key = `cornerBest:${recKey(mapName)}:${ci ? ci.corners.length : 0}:${Math.round(track.length)}`;
   let best = {};
   try {
     best = JSON.parse(localStorage.getItem(key) || '{}') || {};

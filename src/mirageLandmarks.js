@@ -19,15 +19,17 @@ export function buildMirageLandmarks(track,parent){
  function beam(f,a,b,w,m=rust){const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av),o=add(f,tube,m,...av.add(bv).multiplyScalar(.5).toArray(),w,d.length(),w);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;}
  function site(t,lat,name){const s=track.sampleAt(t),p=track.surf(s,lat);p.y=track.heightAt(p.x,p.z);const f=new THREE.Group();f.position.copy(p);f.rotation.y=Math.atan2(s.tan.x,s.tan.z);f.name='mirage2'+name;f.userData.dynamic=true;parent.add(f);groups.push(f);return f;}
  // Navigator removed after three visual reviews: facial silhouette below quality bar.
- const ruins=site(.43,-135,'LostGate');ruins.scale.setScalar(1.4);ruins.rotation.y+=Math.PI/2;
+ // brakemaps (2026-11-24): 자리 t는 mirage.json scenery.sites에서 (없으면 예전 값)
+ const ST=Object.assign({lostGate:.43,mesa:.255,pumps:.385,derrick:.745,train:.52},track.data.scenery?.sites);
+ const ruins=site(ST.lostGate,-135,'LostGate');ruins.scale.setScalar(1.4);ruins.rotation.y+=Math.PI/2;
  for(const x of [-15,15]){add(ruins,cube,stone,x,1,0,11,2,12);for(let i=0;i<5;i++)add(ruins,cube,stone,x,4+i*5.2,0,8.5,5,9);add(ruins,cube,stone,x,28,0,11,2.4,11);
  for(let i=0;i<5;i++){add(ruins,cube,rust,x,5+i*4,4.53,3,.25,.12);add(ruins,cube,stone,x-1,6+i*4,4.7,.45,1.5,.4);}}
  add(ruins,cube,stone,-9,31,0,24,4,10);
  const broken=add(ruins,cube,stone,14,30,0,12,4,10);broken.rotation.z=-.17;
  for(let i=0;i<14;i++){const o=add(ruins,cube,stone,(i*17%55)-27,1.3,(i*13%30)-10,3+i%4,2+i%3,3+i%5);o.rotation.set(i*.2,i*1.7,i*.13);}
- const mesas=site(.255,-145,'SculptedMesa');for(let i=0;i<12;i++){const h=25+(i*23%55),o=add(mesas,desertRock(i%3),stone,(i%4)*30-40,h*.42,Math.floor(i/4)*27,10+(i*7%16),h,9+(i*3%13));o.rotation.y=i*1.71;}
+ const mesas=site(ST.mesa,-145,'SculptedMesa');for(let i=0;i<12;i++){const h=25+(i*23%55),o=add(mesas,desertRock(i%3),stone,(i%4)*30-40,h*.42,Math.floor(i/4)*27,10+(i*7%16),h,9+(i*3%13));o.rotation.y=i*1.71;}
  // Aircraft removed after three visual reviews: sheet-like wings and pristine body below quality bar.
- const pumps=site(.385,-105,'WindPumps');pumps.rotation.y+=Math.PI/2;
+ const pumps=site(ST.pumps,-105,'WindPumps');pumps.rotation.y+=Math.PI/2;
  for(let k=0;k<2;k++){const x=k*35;
  for(const sx of [-1,1])for(const sz of [-1,1])beam(pumps,[x+sx*5,0,sz*5],[x+sx*1.5,29,sz*1.5],.19,steel);
  for(let y=0;y<27;y+=5){const w=5-y*.12,w2=5-(y+5)*.12;for(const z of [-1,1]){beam(pumps,[x-w,y,z*w],[x+w2,y+5,z*w2],.09,steel);beam(pumps,[x+w,y,z*w],[x-w2,y+5,z*w2],.09,steel);}for(const xx of [-1,1])beam(pumps,[x+xx*w,y,-w],[x+xx*w2,y+5,w2],.09,steel);}
@@ -39,8 +41,8 @@ export function buildMirageLandmarks(track,parent){
  }
  add(pumps,tube,paint,-18,5,3,6,10,6);add(pumps,tube,rust,-18,10.2,3,6.3,.4,6.3);
  for(let y=1;y<10;y+=2) add(pumps,new THREE.TorusGeometry(6.03,.08,4,40),steel,-18,y,3,1,1,1).rotation.x=Math.PI/2;
- const derrick=site(.745,-150,'OilDerrick');for(const x of [-1,1])for(const z of [-1,1])beam(derrick,[x*9,0,z*9],[x*2,43,z*2],.55);for(let y=5;y<40;y+=7){for(const z of [-1,1]){beam(derrick,[-8,y,z*7],[5,y+7,z*4],.25);beam(derrick,[8,y,z*7],[-5,y+7,z*4],.25);}}add(derrick,cube,rust,0,43,0,8,2,8);beam(derrick,[0,43,0],[0,51,0],.6);
- const train=site(.52,-220,'FreightTrain');train.position.y=24;
+ const derrick=site(ST.derrick,-150,'OilDerrick');for(const x of [-1,1])for(const z of [-1,1])beam(derrick,[x*9,0,z*9],[x*2,43,z*2],.55);for(let y=5;y<40;y+=7){for(const z of [-1,1]){beam(derrick,[-8,y,z*7],[5,y+7,z*4],.25);beam(derrick,[8,y,z*7],[-5,y+7,z*4],.25);}}add(derrick,cube,rust,0,43,0,8,2,8);beam(derrick,[0,43,0],[0,51,0],.6);
+ const train=site(ST.train,-220,'FreightTrain');train.position.y=24;
  // Diesel locomotive and a mixed freight consist, local -Z is forward.
  for(let i=0;i<8;i++){const z=i*19;add(train,cube,steel,0,2,z,7.5,.8,17);add(train,cube,steel,0,2,z+9.2,1,.45,2.2);
  for(const dz of [-5.6,5.6]){add(train,cube,steel,0,1.3,z+dz,6.8,.8,3.7);for(const ax of [-1,1])for(const x of [-3.5,3.5]){const w=add(train,tube,steel,x,1.1,z+dz+ax*1.15,1.1,.65,1.1);w.rotation.z=Math.PI/2;add(train,tube,rust,x*1.03,1.1,z+dz+ax*1.15,.45,.7,.45).rotation.z=Math.PI/2;}}
@@ -54,8 +56,8 @@ export function buildMirageLandmarks(track,parent){
  else if(i%3===2){add(train,cube,rust,0,6,z,6.7,7,15.5);for(let zz=-7;zz<=7;zz+=.65)for(const x of [-1,1])add(train,cube,paint,x*3.4,6,z+zz,.12,6.7,.12);add(train,cube,steel,0,6,z-7.8,.12,6.5,.1);}
  else{add(train,cube,rust,0,6,z,7,5,14);for(let zz=-5;zz<=5;zz+=5){const hopper=add(train,cube,rust,0,3.4,z+zz,4,3,4);hopper.rotation.z=Math.PI/4;}add(train,cube,steel,0,8.55,z,6.2,.15,13);}
  }
- moving.push({o:train,kind:'train',base:train.position.clone(),dir:track.sampleAt(.52).tan.clone()});
- const rail=site(.52,-220,'DistantRail');rail.position.y=24;for(const x of [-3,3])add(rail,cube,steel,x,.3,0,.22,.45,640);for(let z=-318;z<320;z+=2.2)add(rail,cube,rust,0,-.1,z,8,.25,.65);add(rail,cube,stone,0,-1.4,0,10,2,640);
+ moving.push({o:train,kind:'train',base:train.position.clone(),dir:track.sampleAt(ST.train).tan.clone()});
+ const rail=site(ST.train,-220,'DistantRail');rail.position.y=24;for(const x of [-3,3])add(rail,cube,steel,x,.3,0,.22,.45,640);for(let z=-318;z<320;z+=2.2)add(rail,cube,rust,0,-.1,z,8,.25,.65);add(rail,cube,stone,0,-1.4,0,10,2,640);
  for(let z=-300;z<=300;z+=40){const p=rail.localToWorld(new THREE.Vector3(0,0,z)),h=Math.max(1,24-track.heightAt(p.x,p.z));add(rail,tube,stone,0,-h/2,z,2,h,2);}
  const lods=[];for(const f of groups){const far=f.clone(true);far.name=f.name+'Far';far.traverse(o=>{if(o.isMesh){if(o.geometry===ball)o.geometry=new THREE.SphereGeometry(1,7,5);else if(o.geometry===tube)o.geometry=new THREE.CylinderGeometry(1,1,1,5);}});parent.add(far);batchLocal(f);batchLocal(far);lods.push(far);}
  return {groups,animate(t,camera){for(let i=0;i<groups.length;i++){const f=groups[i],far=lods[i],d=camera?camera.position.distanceToSquared(f.position):0;f.visible=d<360*360;far.visible=d>=360*360&&d<900*900;far.position.copy(f.position);}for(const x of moving){if(!x.o.visible)continue;if(x.kind==='wheel')x.o.rotation.z=t*.16;else x.o.position.copy(x.base).addScaledVector(x.dir,Math.sin(t*.012)*160);}}};

@@ -1,6 +1,8 @@
 // 구간(섹터) 기록: 한 바퀴를 길이로 3등분 (S1·S2·S3), F1 색
 //   보라 = 이 맵 전체 최고 (어느 차든, 이번 레이스의 봇 포함) / 초록 = 내 최고 (이 맵 + 이 차) / 노랑 = 더 느림
 //   최고 구간 기록은 localStorage 'gimmick.sectors' = { 맵: { 차: [s1, s2, s3] } } (records.js와 같은 규칙으로 저장)
+//   코스 버전 (mapver, 2026-11-24): 맵 칸 = recKey(맵) (코스가 바뀐 맵은 'glacier@2', ver 1 맵은 맵 id 그대로)
+import { recKey } from './mapVer.js';
 const KEY = 'gimmick.sectors';
 const COUNT = 3;
 
@@ -12,7 +14,8 @@ function readAll() {
   }
 }
 
-export function createSectors({ mapName, carId }) {
+export function createSectors({ mapName: mapId, carId }) {
+  const mapName = recKey(mapId);
   const all = readAll();
   const mine = ((all[mapName] || {})[carId] || []).slice(); // 내 최고 (저장된 것)
   const overall = []; // 이 맵 전체 최고 (어느 차든)

@@ -13,6 +13,9 @@
 import { ONLINE_URL, ONLINE_KEY } from './onlineConfig.js';
 import { packVerified, unpackGhost } from './ghostPack.js';
 import * as cloudSave from './cloudSave.js'; // 계정 클라우드 저장 (2026-11-15, 서버 .debug/supabase_v6_save.sql)
+// 코스 버전 (mapver, 2026-11-24): 서버 map 칸 = recKey(맵) (코스가 바뀐 맵 'glacier@2', ver 1 맵은 맵 id 그대로).
+//   서버 SQL은 그대로 (map은 1~24글자 아무 글자). 예전 코스 기록은 서버 'glacier' 줄로 남고 순위표·고스트에는 안 나옴
+import { recKey } from './mapVer.js';
 
 // 부품 조립 (2026-11-15, 부품 조립 1차 ⑤, 서버 SQL .debug/supabase_v5_parts.sql):
 //   - 올릴 때 조립 표시 문자열(build sig, 예 'g1.t2' / 'stock')을 같이 보냄 (gr_submit p_build)
@@ -365,7 +368,7 @@ export const online = {
     const build = cleanSig(run.build);
     try {
       const body = {
-        p_id: me.id, p_secret: me.secret, p_map: run.map, p_car: run.car,
+        p_id: me.id, p_secret: me.secret, p_map: recKey(run.map), p_car: run.car,
         p_total: +run.total.toFixed(3), p_laps: run.laps.map((x) => +x.toFixed(3)),
         p_best_lap: run.bestLap ? +run.bestLap.toFixed(3) : null, p_assist: !!run.assist, p_ghost: ghostTxt,
       };
@@ -400,8 +403,9 @@ export const online = {
    *   줄 = { player_id, nickname, car, total, best_lap, assist, license, build('stock' | 'g1.t2'…), stock, ghostOk }
    *   ghostOk = 서버 고스트가 이 줄 기록의 것 ('순정만'에서 그 사람의 가장 빠른 기록이 조립 기록이면 false → 👻 숨김)
    */
-  async board(map, car = null, limit = 50, opts = {}) {
+  async board(mapId, car = null, limit = 50, opts = {}) {
     if (!this.enabled) return [];
+    const map = recKey(mapId);
     const stockOnly = !!(opts && opts.stockOnly);
     // 기억해 둔 순위표 (같은 맵·차, 더 긴 목록을 받아 둔 것도 앞부분만 잘라 씀)
     const key = (fake() ? 'fake|' : '') + map + '|' + (car || '') + (stockOnly ? '|stock' : '');
@@ -432,7 +436,8 @@ export const online = {
     return this.board(map, opts.car || null, opts.limit || 50, { stockOnly: !!opts.stockOnly });
   },
   /** 순위표를 서버에서 받기 (기억 안 함). 고스트·바퀴별 기록은 안 받음 (화면에 쓰는 칸만) */
-  async _board(map, car, limit, stockOnly = false) {
+  async _board(mapId, car, limit, stockOnly = false) {
+    const map = recKey(mapId);
     const fields = 'player_id,nickname,car,total,best_lap,assist';
     const filters = '&map=eq.' + encodeURIComponent(map) +
       (car ? '&car=eq.' + encodeURIComponent(car) : '') + '&order=total.asc&limit=' + limit;
@@ -507,8 +512,9 @@ export const online = {
     return { ok: true, sig: r.sig, wanted, same: pSig(r.build) === pSig(want), missing, levels };
   },
   /** 다른 사람(또는 나)의 고스트 (예전 v 2 JSON 문자열 또는 v 3을 푼 v 2 객체, 없으면 null). 👻 같이 달리기를 누를 때만 받음 */
-  async ghost(map, car, playerId) {
+  async ghost(mapId, car, playerId) {
     if (!this.enabled) return null;
+    const map = recKey(mapId);
     const rows = await select('ghosts', `select=data&map=eq.${encodeURIComponent(map)}&car=eq.${encodeURIComponent(car)}&player_id=eq.${encodeURIComponent(playerId)}&limit=1`);
     if (!rows || !rows[0] || !rows[0].data) return null;
     // v 3(줄인 고스트)은 풀어서 ghost.js가 읽는 v 2 객체로, 예전 v 2 문자열은 그대로

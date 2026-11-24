@@ -2,7 +2,10 @@
 //   localStorage 'gimmick.records' = { 맵id: { 차id: { lap, race, laps, date, lapBuild, raceBuild } } }
 //   부품 조립 (2026-11-15, 부품 조립 1차 ⑤): lapBuild·raceBuild = 그 기록을 낼 때의 조립 표시 (parts.js buildSig, 예 'g1.t2' / 'stock')
 //     최고 기록은 조립과 상관없이 하나 (맵+차마다). 예전 기록(칸 없음) = 'stock'으로 읽음 — 지우거나 바꾸지 않음
+//   코스 버전 (mapver, 2026-11-24): 모든 함수는 맵 id를 받고 안에서 저장 키 recKey(map)로 바꿈 (ver 1 맵 = 맵 id 그대로 = 예전과 같음)
+//     코스가 바뀐 맵(maps.json ver 2 이상)은 'glacier@2' 칸에 새로 쌓이고, 예전 'glacier' 칸은 지우지 않음 → legacy()로만 보임
 import { gridStart } from './ghostStart.js';
+import { recKey, baseMap, keyVer, isCurrentKey } from './mapVer.js';
 const KEY = 'gimmick.records';
 
 function readAll() {
@@ -34,12 +37,25 @@ function comparable(v) {
   return result;
 }
 export const records = {
+  /** 지금 코스 기록만, 맵 id로 → { 맵id: { 차id: 기록 } } (예전 코스 칸은 빠짐) */
   all() {
-    return Object.fromEntries(Object.entries(readAll()).map(([map, cars]) => [map,
-      Object.fromEntries(Object.entries(cars).map(([car, v]) => [car, comparable(v)]))]));
+    return Object.fromEntries(Object.entries(readAll()).filter(([key]) => isCurrentKey(key)).map(([key, cars]) => [baseMap(key),
+      Object.fromEntries(Object.entries(cars || {}).map(([car, v]) => [car, comparable(v)]))]));
+  },
+  /** 예전 코스 기록 (코스가 바뀌기 전, 비교·순위에는 안 씀) → [{ ver, key, cars: { 차id: 기록 } }] 새 버전부터 */
+  legacy(map) {
+    return Object.entries(readAll())
+      .filter(([key, cars]) => baseMap(key) === map && !isCurrentKey(key) && cars && typeof cars === 'object' && Object.keys(cars).length)
+      .map(([key, cars]) => ({ ver: keyVer(key), key, cars: Object.fromEntries(Object.entries(cars).map(([car, v]) => [car, comparable(v)])) }))
+      .sort((a, b) => b.ver - a.ver);
+  },
+  /** 저장된 기록이 하나라도 있나 (예전 코스 포함) */
+  any() {
+    return Object.keys(readAll()).length > 0;
   },
   /** 옛 기록과 같은 완주 고스트가 그리드에서 출발한 경우만 표시. 지우거나 추측하지 않음. */
-  classifyLegacy(map, track, laps) {
+  classifyLegacy(mapId, track, laps) {
+    const map = recKey(mapId);
     const all = readAll();
     let changed = false;
     for (const [car, v] of Object.entries(all[map] || {})) {
@@ -68,19 +84,19 @@ export const records = {
   },
   /** 이 맵 + 이 차의 기록 (없으면 null) */
   get(map, car) {
-    const r = readAll()[map];
+    const r = readAll()[recKey(map)];
     return comparable(r && r[car]);
   },
   /** 이 맵에서 가장 빠른 랩 (어느 차든) → { lap, car, build } */
   bestOfMap(map) {
-    const r = readAll()[map] || {};
+    const r = readAll()[recKey(map)] || {};
     let best = null;
     for (const [car, v] of Object.entries(r)) if (!v.lapRivals && v.lap && (!best || v.lap < best.lap)) best = { lap: v.lap, car, build: cleanBuild(v.lapBuild) };
     return best;
   },
   /** 이 맵에서 가장 빠른 완주 기록 (어느 차든, 여러 바퀴면 합) → { race, car, build } */
   bestRaceOfMap(map) {
-    const r = readAll()[map] || {};
+    const r = readAll()[recKey(map)] || {};
     let best = null;
     for (const [car, v] of Object.entries(r)) if (!v.raceRivals && v.race && (!best || v.race < best.race)) best = { race: v.race, car, build: cleanBuild(v.raceBuild) };
     return best;
@@ -88,7 +104,8 @@ export const records = {
   /** 한 바퀴 기록 저장. 새 최고 기록이면 true (build = 조립 표시, 안 주면 'stock') */
   saveLap(map, car, lap, assist = false, mode = 'solo', build = STOCK_BUILD) {
     const all = readAll();
-    const m = (all[map] = all[map] || {});
+    const key = recKey(map);
+    const m = (all[key] = all[key] || {});
     const v = (m[car] = m[car] || {});
     if (!v.lapRivals && v.lap && v.lap <= lap) return false;
     v.lap = +lap.toFixed(3);
@@ -103,7 +120,8 @@ export const records = {
   /** 완주 기록 저장. 새 최고 기록이면 true (build = 조립 표시, 안 주면 'stock') */
   saveRace(map, car, total, laps, assist = false, mode = 'solo', build = STOCK_BUILD) {
     const all = readAll();
-    const m = (all[map] = all[map] || {});
+    const key = recKey(map);
+    const m = (all[key] = all[key] || {});
     const v = (m[car] = m[car] || {});
     if (!v.raceRivals && v.race && v.race <= total) return false;
     v.race = +total.toFixed(3);

@@ -1280,7 +1280,7 @@ export function buildGlacierScenery(track, scene) {
     spots.forEach(([i, sd, cell], k) => roadBoard(i, sd, 9 + (k % 3) * 3, cell, 13, 13 * (192 / 512), 2.2));
     // 출발 직선 끝 (T1 앞) 결빙 주의
     const secs = data.sections || {};
-    for (const nm of ['T1', 'T2', 'T3']) {
+    for (const nm of ['T1', 'T2', 'T3', 'T4']) { // brakemaps 2026-11-24: 제동 코너 4개
       if (!secs[nm]) continue;
       const i = idxAt(secs[nm][0]) - 70;
       const s = S[wrapI(i)], sN = S[wrapI(i + 100)];
@@ -1290,7 +1290,7 @@ export function buildGlacierScenery(track, scene) {
     // 다리 앞 간판
     for (const [a] of BRG) roadBoard(a - 60, outer, 6, 12, 8, 8 * (192 / 512), 2);
     // 결승 직전 FINISH · 오로라 전망대 간판
-    roadBoard(NS - 90, outer, 8, 14, 10, 10 * (192 / 512), 2.4);
+    roadBoard(Math.round(NS - (120 * NS) / L), outer, 12, 14, 10, 10 * (192 / 512), 2.4); // brakemaps: 마지막 코너(T4)가 제동 코너가 되어 탈출 바깥 런오프에서 비킴 (예전 NS-90·8 m)
     roadBoard(Math.round(NS * 0.3), inner, 14, 15, 12, 12 * (192 / 512), 2.4);
   }
 
@@ -1298,7 +1298,7 @@ export function buildGlacierScenery(track, scene) {
   {
     const list = [];
     const secs = data.sections || {};
-    for (const nm of ['S1', 'S3', 'S4', 'b']) {
+    for (const nm of ['S1', 'S3', 'S4']) { // brakemaps 2026-11-24: 'b'는 이제 T3 제동 코너 탈출 바깥이라 뺌 (S3도 이제 없음)
       const r = secs[nm];
       if (!r) continue;
       let a = idxAt(r[0]), b = idxAt(r[1]);
@@ -1403,6 +1403,26 @@ export function buildGlacierScenery(track, scene) {
   }
 
   // ---------------------------------------------------------------- 눈 모자 바위
+  // brakemaps 2026-11-24: 제동 코너(T1~T4) 구간 + 앞 60 m·뒤 160 m 샘플 → 그 근처(도로 가장자리 18 m 안)엔 바위를 안 둠
+  const brakeIdx = new Set();
+  {
+    const secs = data.sections || {}, per = NS / (track.length || NS * 2);
+    for (const nm of ['T1', 'T2', 'T3', 'T4']) {
+      if (!secs[nm]) continue;
+      const a = Math.round(secs[nm][0] * NS - 60 * per), b = Math.round(secs[nm][1] * NS + 160 * per);
+      for (let i = a; i <= b; i++) brakeIdx.add(((i % NS) + NS) % NS);
+    }
+  }
+  function nearBrakeCorner(x, z) {
+    const cx = Math.floor(x / RC), cz = Math.floor(z / RC);
+    for (let a = -1; a <= 1; a++)
+      for (let b = -1; b <= 1; b++) {
+        const list = rmap.get(rkey(cx + a, cz + b));
+        if (!list) continue;
+        for (const i of list) if (brakeIdx.has(i) && Math.hypot(x - S[i].pos.x, z - S[i].pos.z) < hwOf(i) + 22) return true;
+      }
+    return false;
+  }
   {
     const list = [];
     let tries = 0;
@@ -1411,6 +1431,7 @@ export function buildGlacierScenery(track, scene) {
       const d = roadClear(x, z);
       if (d < 6 || (d > 120 && rand() < 0.6) || !free(x, z, 2)) continue;
       if (lake && Math.hypot(x - lake.x, z - lake.z) < lake.r - 5) continue;
+      if (d < 18 && nearBrakeCorner(x, z)) continue; // brakemaps 2026-11-24: 제동 코너 앞·탈출 바깥으로 넓게 나가도 바위에 안 박히게
       const big = rand() < 0.15;
       const r = big ? 4 + rand() * 6 : 0.8 + rand() * 2.2;
       if (d < 3 + r + 2) continue;

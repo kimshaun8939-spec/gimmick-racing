@@ -1,4 +1,5 @@
 // 홈 화면·게임이 같이 쓰는 정보: 맵 목록(data/maps.json), 차 목록(carRoster.js), 마지막 선택, 맵 미리보기 그림
+import { setMapVers } from './mapVer.js';
 const LAST_KEY = 'gimmick.last'; // { map, car } 마지막으로 고른 맵·차
 
 async function loadJSON(url) {
@@ -36,7 +37,7 @@ const FALLBACK_MAPS = [
     "file": "data/glacier.json",
     "title": "빙하 고속도로",
     "subtitle": "오로라 눈밭 고속 코스 · 시원하게 쭉쭉",
-    "desc": "오로라가 춤추는 밤의 빙하 위를 달리는 빠른 코스. 코너가 적고 길이 넓어서 마음껏 밟을 수 있어요. 1 km 직선, 얼음 터널을 지나는 큰 내리막, 얼어붙은 강 위 다리, 살짝 기울어진 완만한 코너. 2바퀴.",
+    "desc": "오로라가 춤추는 밤의 빙하 위를 달리는 빠른 코스. 길이 넓어서 긴 직선과 빠른 굽이는 마음껏 밟고, 직선 끝 제동 코너 4곳(출발 헤어핀·얼음 터널 끝·다리 뒤·마지막 코너)에서는 브레이크! 1 km 직선, 얼음 터널을 지나는 큰 내리막, 얼어붙은 강 위 다리. 2바퀴.",
     "tags": [
       "🏔️ 눈밭",
       "🌌 오로라",
@@ -118,7 +119,7 @@ const FALLBACK_MAPS = [
     "file": "data/mirage.json",
     "title": "신기루 협곡",
     "subtitle": "모래폭풍 속 안내등 · 협곡 벽 타기 · 오아시스",
-    "desc": "붉은 바위 협곡을 달리며 비스듬한 벽을 타고 코너를 돌아요. 움직이는 모래폭풍 안에서는 청록색 안내등과 바닥 선이 길을 알려 줘요. 옆바람·뒷바람, 매끈한 모래 언덕, 태양 신전과 오아시스까지. 5.48 km · 2바퀴.",
+    "desc": "붉은 바위 협곡을 달리며 비스듬한 벽을 타고 코너를 돌아요. 움직이는 모래폭풍 안에서는 청록색 안내등과 바닥 선이 길을 알려 줘요. 옆바람·뒷바람, 매끈한 모래 언덕, 태양 신전과 오아시스까지. 5.67 km · 2바퀴.",
     "tags": [
       "🏜️ 사막 협곡",
       "💠 모래폭풍 안내등",
@@ -132,14 +133,14 @@ const FALLBACK_MAPS = [
       "#ffdc8c"
     ],
     "difficulty": 3,
-    "length": 5480
+    "length": 5671
   },
   {
     "id": "foundry",
     "file": "data/foundry.json",
     "title": "톱니바퀴 공장",
     "subtitle": "쇳물 공장 도시 · 교차 고가 · 움직이는 도로",
-    "desc": "거대한 톱니와 쇳물이 흐르는 공장 도시를 달려요. 25 m 높이로 엇갈리는 고가도로, 비스듬히 기운 쇳물 그릇 코너, 급커브와 지그재그, 빙글 도는 원판 길, 앞으로·뒤로 흐르는 벨트 길과 옆으로 미는 벨트. 머리 위 화물열차와 로봇팔도 움직여요. 5.73 km · 2바퀴.",
+    "desc": "거대한 톱니와 쇳물이 흐르는 공장 도시를 달려요. 25 m 높이로 엇갈리는 고가도로, 비스듬히 기운 쇳물 그릇 코너, 긴 고가 내리막 끝과 적재장의 급브레이크 코너, 급커브와 지그재그, 빙글 도는 원판 길, 앞으로·뒤로 흐르는 벨트 길과 옆으로 미는 벨트. 머리 위 화물열차와 로봇팔도 움직여요. 5.95 km · 2바퀴.",
     "tags": [
       "⚙️ 움직이는 벨트 길",
       "🔄 빙글 도는 원판",
@@ -153,7 +154,7 @@ const FALLBACK_MAPS = [
       "#ffdc91"
     ],
     "difficulty": 3,
-    "length": 5733
+    "length": 5952
   },
   {
     "id": "moon",
@@ -222,7 +223,7 @@ let mapsPromise = null;
 export function loadMaps() {
   if (!mapsPromise)
     mapsPromise = loadJSON('data/maps.json')
-      .then((d) => d.maps)
+      .then((d) => (setMapVers(d.maps), d.maps)) // 코스 버전 (mapVer.js): 기록 키 'glacier@2'
       .catch(() => FALLBACK_MAPS)
       .then((list) => [...list, ...EXTRA_MAPS.filter((e) => !list.some((m) => m.id === e.id))].sort((a, b) => MAP_ORDER.indexOf(a.id) - MAP_ORDER.indexOf(b.id)));
   return mapsPromise;

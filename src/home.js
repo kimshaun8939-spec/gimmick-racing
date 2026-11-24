@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { settings, SETTING_DEFS, createSettingsPanel, createControlsPage, spatialMove, uiSound, confirmDialog, dialogOpen } from './settings.js';
 import { loadMaps, loadRoster, loadCarClasses, getLast, setLast, raceUrl, tutorialUrl, RACE_MODES, sampleOutline, outlineLength, drawTrackThumb } from './gameData.js';
 import { records, fmtTime } from './records.js';
+import { recKey } from './mapVer.js'; // 코스 버전 (mapver): 구간 기록 칸 = 'glacier@2' (records·online·ghost는 안에서 바꿈)
 import { online } from './online.js';
 import { toastNext as cloudToastNext } from './cloudSave.js'; // 계정 저장: 새로 고침 뒤 알림
 import { createCarModel } from './carModel.js';
@@ -967,9 +968,11 @@ export async function runHome() {
     const chips = recMaps()
       .map((m) => {
         const best = Object.values(all[m.id] || {}).filter((v) => v.race).sort((a, b) => a.race - b.race)[0];
+        // 코스가 바뀐 맵 (mapver): 새 코스 기록이 없고 예전 코스 기록만 있으면 '새 코스'
+        const none = records.legacy(m.id).length ? '🆕 새 코스 · 기록 없음' : '기록 없음';
         return `<button class="gm-btn hr-mchip${m.id === olMap ? ' sel' : ''}" data-act="olMap" data-map="${m.id}" data-nav>
           <canvas width="160" height="90" data-map="${m.id}"></canvas>
-          <span class="tx"><b>${esc(m.title)}</b><small>${best ? `🏆 ${fmtTime(best.race)}` : '기록 없음'}</small></span></button>`;
+          <span class="tx"><b>${esc(m.title)}</b><small>${best ? `🏆 ${fmtTime(best.race)}` : none}</small></span></button>`;
       })
       .join('');
     const box = views.records.querySelector('.scroll');
@@ -1001,7 +1004,7 @@ export async function runHome() {
     if (!box) return;
     const m = mapOf(olMap), info = mapInfo[m.id];
     const r = records.all()[m.id] || {};
-    const sec = readSectors()[m.id] || {};
+    const sec = readSectors()[recKey(m.id)] || {};
     const runs = cars.filter((c) => r[c.id] && (r[c.id].race || r[c.id].lap)).map((c) => ({ c, v: r[c.id] }));
     const byRace = runs.filter((x) => x.v.race).sort((a, b) => a.v.race - b.v.race);
     const byLap = runs.filter((x) => x.v.lap).sort((a, b) => a.v.lap - b.v.lap);
@@ -1027,7 +1030,7 @@ export async function runHome() {
           : `<div class="hm-none">🏁 아직 이 맵을 달리지 않았어요<small>타임 어택이나 자유 연습을 완주하면 기록이 쌓여요</small></div>`}
         <button class="gm-btn primary small hm-go" data-act="recRace" data-nav>🏁 이 맵 달리기 ›</button></div></div>`;
     if (!runs.length) {
-      box.innerHTML = head + `<div class="hm-card empty">${hero}</div>` + foot();
+      box.innerHTML = head + `<div class="hm-card empty">${hero}</div>` + legacyHtml() + foot();
     } else {
       const top = byRace.length ? byRace[0].v.race : 0;
       const rows = byRace
@@ -1046,12 +1049,23 @@ export async function runHome() {
         </div>
         ${theo ? `<div class="hm-secs">${secBest.map((s, i) => `<span><small>S${i + 1}</small><b>${s.t.toFixed(2)}</b><em>${esc(carOf(s.car).name)}</em></span>`).join('')}</div>` : ''}
         ${rows ? `<div class="hm-lt">차마다 최고 기록</div><ol class="hm-cars">${rows}</ol>` : ''}
-      </div>` + foot();
+      </div>` + legacyHtml() + foot();
     }
     const cv = box.querySelector('.hm-hero canvas');
     try {
       drawTrackThumb(cv, info.pts || [], m.theme);
     } catch {}
+    // 예전 코스 기록 (mapver, 2026-11-24): 코스 모양이 바뀌기 전 기록 = 작게 보여 주기만 (비교·순위·고스트에는 안 씀)
+    function legacyHtml() {
+      const lines = records.legacy(m.id).map((g) => {
+        const list = Object.entries(g.cars).filter(([, v]) => v && (v.race || v.lap));
+        if (!list.length) return '';
+        const race = list.filter(([, v]) => v.race).sort((a, b) => a[1].race - b[1].race)[0];
+        const lap = list.filter(([, v]) => v.lap).sort((a, b) => a[1].lap - b[1].lap)[0];
+        return `<li><span class="v">코스 v${g.ver}</span><span>🏆 ${race ? `${fmtTime(race[1].race)} <em>${esc(carOf(race[0]).name)}</em>` : '—'}</span><span>⚡ ${lap ? fmtTime(lap[1].lap) : '—'}</span><span class="c">${list.length}대</span></li>`;
+      }).join('');
+      return lines ? `<div class="hm-legacy"><div class="hm-lt">🕰️ 예전 코스 기록 <small>코스가 바뀌기 전 · 비교·순위표에는 안 써요</small></div><ol>${lines}</ol></div>` : '';
+    }
     function foot() {
       return `<div class="hr-foot"><span>${online.enabled ? '타임 어택·자유 연습 완주 기록은 이름·비밀번호를 정하면 순위표에도 올라가요' : '기록은 이 브라우저에만 저장돼요'} · ${ASSIST_TAG} = 운전 도움을 켜고 낸 기록</span><button class="gm-btn small danger" data-act="clearRec" data-nav>모든 기록 지우기</button></div>`;
     }
@@ -2203,7 +2217,7 @@ export async function runHome() {
   else if (!startView || params.get('first') === '1') {
     let asked = null, ready = null;
     try { asked = localStorage.getItem(TUT_KEY); ready = localStorage.getItem('gimmick.firstRun'); } catch {}
-    const hasRecords = Object.keys(records.all() || {}).length > 0;
+    const hasRecords = records.any(); // 예전 코스 기록만 있어도 돌아온 사람 (mapver)
     const p = profile.get();
     const returning = hasRecords || p.races > 0 || p.xp > 0 || !!getNick() || !!asked || !!ready;
     if (params.get('first') === '1' || !returning) {
