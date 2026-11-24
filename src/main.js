@@ -635,7 +635,7 @@ const CAM = {
   // 같은 쪽으로 오래 돌 때 쏠림 되돌리기 (camturn, 사용자 요청 2026-11-24): 처음 꺾을 땐 지금처럼 카메라가 옆으로 갔다가,
   //   쏠림이 turnWashMinDeg°보다 큰 채로 turnWashFrom초가 지나면 turnWashFull초까지 쏠림의 turnWash만큼을 천천히 없애 차 뒤로 돌아옴.
   //   반대로 꺾으면(S자) 바로 처음부터. 미끄러짐이 turnWashSlipFrom~To rad이면 점점 꺼짐(드리프트 모습 유지). turnWash 0 = 예전 그대로
-  turnWash: 0.65, turnWashFrom: 0.4, turnWashFull: 1.7, turnWashMinDeg: 1.5, turnWashRise: 3, turnWashFall: 6, turnWashForget: 2,
+  turnWash: 0, turnWashFrom: 0.4, turnWashFull: 1.7, turnWashMinDeg: 1.5, turnWashRise: 3, turnWashFall: 6, turnWashForget: 2,
   turnWashSlipFrom: 0.12, turnWashSlipTo: 0.3,
   ...(carCfg.camera || {}),
 };
