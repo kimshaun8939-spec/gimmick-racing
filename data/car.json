@@ -43,6 +43,7 @@
   "_타이어": "traction: 바퀴가 헛돌기 전 최대 가속, brakeGrip: 최대 감속, lateral: 코너링 한계 (m/s²), rearGrip: 뒷바퀴가 앞보다 몇 배 잘 버티는지 (1보다 작으면 쉽게 미끄러짐). loadShift: 가속/브레이크 때 앞뒤로 쏠리는 무게 비율, rearSwing: 뒤가 미끄러질 때 꼬리가 돌아가는 정도",
   "tire": {
     "traction": 16.89, "brakeGrip": 25.08, "lateral": 19.79, "rearGrip": 1.516,
+    "latScale": 0.9, "_latScale": "brakecorners (2026-11-24, 사용자 \"고속 코너가 너무 많고 접지 좋은 차는 브레이크를 안 밟아도 됨, 차들이 전체적으로 덜 꺾이게\"): 모든 차의 옆 접지(tire.lateral, 차마다 tune 값)에 이 값을 똑같이 곱함 (src/car.js latBase). 차끼리 비율·등급 차이는 그대로, 코너 속도 약 5% ↓, 브레이크(brakeGrip)·가속(traction)·다운포스는 그대로 → 브레이크로 줄여야 하는 코너가 늘어남. 1 = 예전, 주소 &grip=old = 예전. 차마다 따로 넣지 말 것(tune에 넣으면 그 차만 바뀜)",
     "loadShift": 0.2, "loadAccel": 14,
     "wheelspinSlide": 0.55, "rearSwing": 0.3, "yawResponse": 9, "yawResponseHighSpeed": 0.3,
     "_swingFade": "꼬리가 돌아가는 힘(rearSwing)을 미끄러짐 각도(rad)가 앞 값을 넘으면 줄이기 시작해서 뒤 값에서 0 (크게 미끄러지면 스스로 계속 도는 것 방지)",

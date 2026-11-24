@@ -38,7 +38,7 @@
         "metrics": {
           "topKmh": 259,
           "zero100Sec": 1.95,
-          "lateral150": 19.1,
+          "lateral150": 17.2,
           "downforce": 0.69,
           "brake100M": 15,
           "offroadKeep": 38,
@@ -86,7 +86,7 @@
         "metrics": {
           "topKmh": 257,
           "zero100Sec": 2.1,
-          "lateral150": 20.5,
+          "lateral150": 18.5,
           "downforce": 1.15,
           "brake100M": 13,
           "offroadKeep": 38,
@@ -139,7 +139,7 @@
         "metrics": {
           "topKmh": 267,
           "zero100Sec": 1.86,
-          "lateral150": 18.6,
+          "lateral150": 16.7,
           "downforce": 0.35,
           "brake100M": 18,
           "offroadKeep": 38,
@@ -193,7 +193,7 @@
         "metrics": {
           "topKmh": 266,
           "zero100Sec": 1.81,
-          "lateral150": 17.6,
+          "lateral150": 15.9,
           "downforce": 0.37,
           "brake100M": 17,
           "offroadKeep": 38,
@@ -247,7 +247,7 @@
         "metrics": {
           "topKmh": 256,
           "zero100Sec": 2.36,
-          "lateral150": 20.1,
+          "lateral150": 18,
           "downforce": 0.78,
           "brake100M": 15,
           "offroadKeep": 38,
@@ -300,7 +300,7 @@
         "metrics": {
           "topKmh": 242,
           "zero100Sec": 2.24,
-          "lateral150": 15.6,
+          "lateral150": 14.1,
           "downforce": 0.14,
           "brake100M": 19,
           "offroadKeep": 38,
@@ -354,7 +354,7 @@
         "metrics": {
           "topKmh": 222,
           "zero100Sec": 2.07,
-          "lateral150": 22,
+          "lateral150": 19.8,
           "downforce": 0.75,
           "brake100M": 13,
           "offroadKeep": 62,
@@ -409,7 +409,7 @@
         "metrics": {
           "topKmh": 226,
           "zero100Sec": 2.21,
-          "lateral150": 16.4,
+          "lateral150": 14.7,
           "downforce": 0.1,
           "brake100M": 19,
           "offroadKeep": 38,
@@ -462,7 +462,7 @@
         "metrics": {
           "topKmh": 225,
           "zero100Sec": 2.57,
-          "lateral150": 22.5,
+          "lateral150": 20.2,
           "downforce": 1.19,
           "brake100M": 12,
           "offroadKeep": 38,
@@ -517,7 +517,7 @@
         "metrics": {
           "topKmh": 232,
           "zero100Sec": 2.24,
-          "lateral150": 19.3,
+          "lateral150": 17.4,
           "downforce": 0.15,
           "brake100M": 19,
           "offroadKeep": 86,
@@ -574,7 +574,7 @@
         "metrics": {
           "topKmh": 202,
           "zero100Sec": 2.69,
-          "lateral150": 20.7,
+          "lateral150": 18.6,
           "downforce": 0.18,
           "brake100M": 18,
           "offroadKeep": 82,
@@ -627,7 +627,7 @@
         "metrics": {
           "topKmh": 203,
           "zero100Sec": 2.62,
-          "lateral150": 22,
+          "lateral150": 19.8,
           "downforce": 0.72,
           "brake100M": 12,
           "offroadKeep": 38,
@@ -681,7 +681,7 @@
         "metrics": {
           "topKmh": 207,
           "zero100Sec": 2.37,
-          "lateral150": 20.1,
+          "lateral150": 18.1,
           "downforce": 0.29,
           "brake100M": 15,
           "offroadKeep": 50,
@@ -735,7 +735,7 @@
         "metrics": {
           "topKmh": 206,
           "zero100Sec": 2.28,
-          "lateral150": 16.2,
+          "lateral150": 14.6,
           "downforce": 0.1,
           "brake100M": 20,
           "offroadKeep": 38,
@@ -787,7 +787,7 @@
         "metrics": {
           "topKmh": 216,
           "zero100Sec": 2.56,
-          "lateral150": 18.4,
+          "lateral150": 16.5,
           "downforce": 0.15,
           "brake100M": 18,
           "offroadKeep": 76,
@@ -836,7 +836,7 @@
         "metrics": {
           "topKmh": 207,
           "zero100Sec": 2.41,
-          "lateral150": 20.3,
+          "lateral150": 18.3,
           "downforce": 0.32,
           "brake100M": 15,
           "offroadKeep": 50,
@@ -865,7 +865,7 @@
         "metrics": {
           "topKmh": 207,
           "zero100Sec": 2.63,
-          "lateral150": 19,
+          "lateral150": 17.1,
           "downforce": 0.16,
           "brake100M": 18,
           "offroadKeep": 82,
@@ -894,7 +894,7 @@
         "metrics": {
           "topKmh": 237,
           "zero100Sec": 2.18,
-          "lateral150": 15.8,
+          "lateral150": 14.2,
           "downforce": 0.15,
           "brake100M": 19,
           "offroadKeep": 38,
@@ -923,7 +923,7 @@
         "metrics": {
           "topKmh": 224,
           "zero100Sec": 2.12,
-          "lateral150": 22.1,
+          "lateral150": 19.9,
           "downforce": 0.77,
           "brake100M": 13,
           "offroadKeep": 62,
@@ -952,7 +952,7 @@
         "metrics": {
           "topKmh": 263,
           "zero100Sec": 2.06,
-          "lateral150": 18.6,
+          "lateral150": 16.8,
           "downforce": 0.4,
           "brake100M": 18,
           "offroadKeep": 38,
@@ -981,7 +981,7 @@
         "metrics": {
           "topKmh": 262,
           "zero100Sec": 2.11,
-          "lateral150": 20.3,
+          "lateral150": 18.3,
           "downforce": 1.05,
           "brake100M": 13,
           "offroadKeep": 38,

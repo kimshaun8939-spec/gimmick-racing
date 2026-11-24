@@ -8,7 +8,7 @@
 //   실수: 실수 동작 코드는 유지하지만 기본 단계에서는 의도적 실수를 끔 (접전 중 사고·복귀 줄이기).
 //   부스터(E): 앞에 브레이크 구간이 없는 긴 직선에서 씀 (보통·어려움)
 import * as THREE from 'three';
-import { lineCarModel, STEER_OLD, steerLatCap, steerLatCapMax, steerLoadFor } from './car.js';
+import { lineCarModel, STEER_OLD, steerLatCap, steerLatCapMax, steerLoadFor, latBase } from './car.js';
 import { hitboxFor, obbOverlap } from './carHitbox.js';
 import { createShortcutDriver } from './botShortcut.js'; // 그랑프리 판자 지름길 (2026-11-14)
 import { learnedLineFor } from './learnedLine.js'; // [learned hook 1] 학습 라인 (2026-11-14, &learned=0 = 예전)
@@ -298,7 +298,7 @@ function masterDriveModel(cfg) {
     // 원래 물리는 가속 모드의 gripFactor를 타이어에만 적용한다.
     // 제동 무게 이동으로 더 도는 여유도 계획에만 반영한다 (cfg를 바꾸지 않음).
     // steergrip: 새 방식은 핸들 한계 = 접지 × steerGripUse라 무게 이동으로 더 도는 여유가 뒤 접지(rearGrip)만큼만 → 그 최대값을 넘지 않게
-    aLat: STEER_OLD ? v => 1.08 * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), cfg.tire.lateral * (1 + df(v)) * grip(v))
+    aLat: STEER_OLD ? v => 1.08 * Math.min(cfg.steerLat * (1 + (cfg.steerLatDownforce || 0) * df(v)), latBase(cfg) * (1 + df(v)) * grip(v))
       : v => Math.min(1.08 * steerLatCap(cfg, v, 0, 0, grip(v)), 0.97 * steerLatCapMax(cfg, v, grip(v))),
     aBrake: v => .96 * Math.min(cfg.brake, cfg.tire.brakeGrip * (1 + df(v)) * grip(v)) + cfg.aero.drag * v * v + cfg.aero.rolling,
   };
@@ -355,6 +355,7 @@ function aeroPlan(line, cfg, base, car, cache, master = false, circuit = false) 
 //   + 페달이 차오르는 0.2초(input.brakeRise) 때문에 늘 곡선보다 약 10 km/h 빠르게 코너에 들어가 핸들 한계에 걸려 밖으로 나갔음.
 //   = 곡선 위에 있으면 곡선이 가정한 감속만큼 미리 밟고(앞먹임), 페달이 차오르는 거리만큼 일찍 봄. 차 물리·접지는 그대로. &mbrake=0 = 예전
 const MBRAKE = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('mbrake') === '1'; // 시험해 보니 혼자 달리기 코스 밖은 그대로·레이스는 나빠져서 기본 끔 (&mbrake=1 = 켜기)
+const PASS_SAT = typeof location === 'undefined' || new URLSearchParams(location.search).get('passsat') !== '0'; // brakecorners: 고속 스위퍼 추월 중 핸들 모자라면 액셀 뗌
 // mastoff 2: 제동 거리 계산에 지금 공기 저항 배수(car.dragMul: 슬립스트림·기차·견인·DRS)를 넣음. 예전엔 계획의 aBrake가 늘 공기 저항 전부를 감속으로 쳐서,
 //   앞차 뒤(공기 저항 −50~70%)에서 브레이크를 밟으면 생각보다 덜 줄어 코너에 빠르게 들어갔음 (200 km/h에서 약 2~3 m/s² 차이). 모든 단계, &dragbrake=0 = 예전
 // mastoff 3: 마스터 계획은 코너를 '무게 이동 0' 한계보다 최대 8% 빠르게 잡음(앞이 눌려야 낼 수 있는 속도) → 액셀을 꽉 밟은 채(하중 +) 빠른 코너에 들어가면
@@ -1329,7 +1330,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
     //   접전(CLOSE)으로 빨라진 봇(eq.keep > 1)도 같은 규칙 (화산에서 사람보다 뒤인 봇이 계속 빨라져 낭떠러지로 떨어졌음)
     const sBrake = st.circuitClear ? 1.5 : (level.master && level.master.saturBrake) || (st.closeOn && eq.keep > 1.001 ? 8 : 3);
-    const straightPass = !!st.overtake && st.overtake.phase === 'pass' && !cornerSoon && !brakeSoon && !risky && !mergeHazard;
+    // brakecorners (2026-11-24): 반지름 150 m 넘는 고속 스위퍼는 cornerSoon이 아니라 '직선 추월'로 쳐서, 추월 줄에서 핸들이 끝까지 꺾여 바깥으로 밀려도
+    //   액셀을 안 뗐음(빙하 R300 스위퍼 290 km/h에서 코스 밖) → 지금 곡선이 반지름 600 m보다 급하고 핸들이 모자라면 직선 추월로 안 침 (&passsat=0 = 예전)
+    const straightPass = !!st.overtake && st.overtake.phase === 'pass' && !cornerSoon && !brakeSoon && !risky && !mergeHazard
+      && !(PASS_SAT && st.satur > 0.15 && Math.abs(L.curvature[i0]) > 1 / 600 && (st.saturRoom ?? 99) < 3 + speed * 0.04); // 바깥 도로 끝이 가까울 때만 (추월 중 일찍 떼면 뒤차가 박음)
     // 2026-11-14 (사용자 장면 저장, 파운드리 마스터): 옆 차를 피하거나 추월을 포기하고 라인으로 돌아올 때도 핸들이 끝까지 꺾여
     //   도로 끝이 한참 남았는데 0.5~0.7초 풀 브레이크(−70 km/h)를 밟았음 → 바깥 도로 끝이 멀면 액셀만 뗌, 가까우면 예전처럼 브레이크 (&satlift=0 = 예전)
     let saturLift = false;

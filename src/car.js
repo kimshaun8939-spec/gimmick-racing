@@ -928,7 +928,7 @@ export class Car {
     // 리프트오프: 빠른 코너에서 액셀을 꽉 밟고 있다가(0.6초 이상) 확 떼면 무게가 앞으로 쏠려 뒤가 순간 가벼워짐
     //   (코너 중에 W를 톡톡 끊어 밟는 것으로는 안 생김 → 키보드로 속도 맞추기는 그대로 편함). 0.45초 동안 줄어듦
     // steergrip: 쓰는 비율 = 지금 뒤 접지(다운포스·노면 포함, rearGrip 1.25 기준) 대비 (예전 = tire.lateral 고정값 대비)
-    const latUse = THREE.MathUtils.clamp((Math.abs(this.yawRate) * v) / Math.max(1, STEER_OLD ? tire.lateral : (tire.lateral * (1 + df) * surfGrip * (tire.rearGrip ?? 1.25)) / 1.25), 0, 1);
+    const latUse = THREE.MathUtils.clamp((Math.abs(this.yawRate) * v) / Math.max(1, STEER_OLD ? tire.lateral : (latBase(cfg) * (1 + df) * surfGrip * (tire.rearGrip ?? 1.25)) / 1.25), 0, 1);
     if (this.thr > 0.8) this.thrHeld = (this.thrHeld || 0) + dt;
     else if (this.thr < 0.3) {
       if (this.thrHeld > 0.6 && latUse > 0.5 && v > 15) this.liftKick = 1;
@@ -964,7 +964,9 @@ export class Car {
       const dir = Math.sign(this.steerIn * (f || 1)) || Math.sign(this.yawRate);
       bankLat = 9.81 * downSlopeRight * dir * cfg.bankGrip;
     }
-    const lat = Math.max(0.5 * tire.lateral, tire.lateral * (1 + df) * surfGrip + bankLat * surfGrip); // 코너링 한계 (m/s², 경사 포함)
+    // brakecorners (2026-11-24): 옆 접지 = tire.lateral × tire.latScale(0.9, 모든 차 같게) — latBase(cfg). &grip=old = 예전(×1)
+    const latB = latBase(cfg);
+    const lat = Math.max(0.5 * latB, latB * (1 + df) * surfGrip + bankLat * surfGrip); // 코너링 한계 (m/s², 경사 포함)
     // steergrip: 핸들 끝 = 지금 접지 한계(앞·뒤 중 약한 쪽, 무게 이동 포함, 브레이크 쪽 뒤 감소는 빼고)의 steerGripUse배 (steerLatCap과 같은 식)
     const sLold = cfg.steerLatOld ?? cfg.steerLat;
     const latCap = STEER_OLD ? Math.max(0.5 * sLold, sLold * (1 + (cfg.steerLatDownforce || 0) * df) * (1 - (cfg.steerLatLoad || 0) * this.load) + bankLat)
@@ -1874,7 +1876,7 @@ export function lineCarModel(cfg) {
   return {
     vMax: autoV < Infinity ? cfg.maxSpeed * A.speedFactor : cfg.maxSpeed,
     // steergrip: 핸들 한계 = 접지 한계 × steerGripUse (차 물리와 같은 식, 무게 이동 0). &steer=old = 예전 min(steerLat 식, 타이어)
-    aLat: (v) => 0.94 * (STEER_OLD ? (hi(v) ? A.gripFactor : 1) * Math.min(steerLatCap(cfg, v), cfg.tire.lateral * (1 + df(v))) : steerLatCap(cfg, v, 0, 0, hi(v) ? A.gripFactor : 1)),
+    aLat: (v) => 0.94 * (STEER_OLD ? (hi(v) ? A.gripFactor : 1) * Math.min(steerLatCap(cfg, v), latBase(cfg) * (1 + df(v))) : steerLatCap(cfg, v, 0, 0, hi(v) ? A.gripFactor : 1)),
     // 그 속도에 맞는 기어의 엔진 힘 (토크 약 0.9) − 공기·구름 저항, 타이어 한계 안에서
     aAcc: (v) => {
       const gears = hi(v) ? cfg.gears.map((g) => g * A.gearFactor) : cfg.gears;
@@ -1904,13 +1906,21 @@ export function lineCarModel(cfg) {
 //   지금 접지 한계(노면·가속 모드·경사·무게 이동 포함, 앞·뒤 중 약한 쪽)의 steerGripUse(0.96)배 = 핸들만으로는 안 미끄러짐.
 //   브레이크·액셀·리프트오프로 뒤가 가벼워지는 미끄러짐(powerSlide·liftOff·휠스핀)은 그대로. &steer=old = 예전 steerLat 방식
 export const STEER_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('steer') === 'old';
+// brakecorners (2026-11-24, 사용자 "고속 코너가 너무 많고 접지 좋은 차는 브레이크를 안 밟아도 됨 → 차들이 전체적으로 덜 꺾이게"):
+//   모든 차의 옆 접지(tire.lateral)에 car.json tire.latScale(0.9)을 똑같이 곱함 → 차끼리 비율·등급 차이는 그대로, 코너 속도만 약 5% 낮아짐.
+//   브레이크(brakeGrip)·가속(traction)·다운포스는 그대로 → 브레이크로 줄여야 하는 코너가 늘어남. &grip=old = 예전(×1)
+export const GRIP_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('grip') === 'old';
+/** 옆 접지 기본값 (m/s²) = tire.lateral × tire.latScale */
+export function latBase(cfg) {
+  return cfg.tire.lateral * (GRIP_OLD ? 1 : cfg.tire.latScale ?? 1);
+}
 /** 다운포스 배수 (접지력 × (1 + df)) */
 export function steerDf(cfg, v) {
   return cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
 }
 /** 타이어 옆 접지 한계 (m/s², 노면·모드 배수 surf, 경사 몫 bankLat 포함) */
 export function gripLat(cfg, v, surf = 1, bankLat = 0) {
-  const L = cfg.tire.lateral;
+  const L = latBase(cfg);
   return Math.max(0.5 * L, L * (1 + steerDf(cfg, v)) * surf + bankLat * surf);
 }
 /**

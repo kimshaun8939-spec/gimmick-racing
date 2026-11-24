@@ -36,17 +36,20 @@ export const METRIC_KEYS = [
  *   car.js의 lineCarModel을 바꾸면 여기도 같이 (.debug/parts_test.mjs가 두 식이 같은지 확인)
  */
 const STEER_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('steer') === 'old';
+// brakecorners (2026-11-24): car.js latBase와 같음 = tire.lateral × tire.latScale (&grip=old = ×1)
+const GRIP_OLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('grip') === 'old';
+const latBase = (cfg) => cfg.tire.lateral * (GRIP_OLD ? 1 : cfg.tire.latScale ?? 1);
 export function lineModel(cfg) {
   const df = (v) => cfg.aero.downforce * Math.min(1.6, (v / cfg.maxSpeed) ** 2);
   // steergrip (2026-11-23): car.js steerLatCap(무게 이동 0)와 같은 식 = 접지 한계 × steerGripUse × min(1, rearGrip)
-  const capNew = (v, surf) => (cfg.steerGripUse ?? 0.96) * Math.max(0.5 * cfg.tire.lateral, cfg.tire.lateral * (1 + df(v)) * surf) * Math.min(1, cfg.tire.rearGrip ?? 1.25);
+  const capNew = (v, surf) => (cfg.steerGripUse ?? 0.96) * Math.max(0.5 * latBase(cfg), latBase(cfg) * (1 + df(v)) * surf) * Math.min(1, cfg.tire.rearGrip ?? 1.25);
   const sLold = cfg.steerLatOld ?? cfg.steerLat;
   const A = cfg.modes && cfg.modes.accel;
   const autoV = A && A.autoSpeed && !cfg.modes.manualSelect ? A.autoSpeed / 3.6 : Infinity;
   const hi = (v) => v >= autoV;
   return {
     vMax: autoV < Infinity ? cfg.maxSpeed * A.speedFactor : cfg.maxSpeed,
-    aLat: (v) => 0.94 * (STEER_OLD ? (hi(v) ? A.gripFactor : 1) * Math.min(Math.max(0.5 * sLold, sLold * (1 + (cfg.steerLatDownforce || 0) * df(v))), cfg.tire.lateral * (1 + df(v))) : capNew(v, hi(v) ? A.gripFactor : 1)),
+    aLat: (v) => 0.94 * (STEER_OLD ? (hi(v) ? A.gripFactor : 1) * Math.min(Math.max(0.5 * sLold, sLold * (1 + (cfg.steerLatDownforce || 0) * df(v))), latBase(cfg) * (1 + df(v))) : capNew(v, hi(v) ? A.gripFactor : 1)),
     aAcc: (v) => {
       const gears = hi(v) ? cfg.gears.map((g) => g * A.gearFactor) : cfg.gears;
       const G = gears.find((g) => g >= v * 1.06) ?? gears[gears.length - 1];

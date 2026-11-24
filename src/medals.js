@@ -1,5 +1,6 @@
 ﻿// 기준 = 순정 f1, 혼자 달린 어려움 운전사의 완주 실측(보고서 참고).
-export const MEDAL_BASE = {"starter":85,"gp":190,"sea":140,"neon":140,"moon":155,"jungle":145,"volcano":165,"glacier":160,"foundry":200,"mirage":190}; // mirage: 관제탑이 같은 방법(f1·어려움 봇·시드 99·타임 어택)으로 185.633초 측정 → 190
+// brakecorners (2026-11-24): 옆 접지 ×0.9(car.json tire.latScale)로 모든 차가 1.6~5.7% 느려져서, 같은 어려움으로 맞추려고 맵마다 f1 어려움 봇 혼자 완주 시간 비율(지금 ÷ 예전 &grip=old)만큼 올림 (starter는 9맵 평균 1.034). 예전 값 = {"starter":85,"gp":190,"sea":140,"neon":140,"moon":155,"jungle":145,"volcano":165,"glacier":160,"foundry":200,"mirage":190}
+export const MEDAL_BASE = {"starter":88,"gp":196,"sea":144,"neon":145,"moon":161,"jungle":153,"volcano":172,"glacier":164,"foundry":203,"mirage":196}; // mirage: 관제탑이 같은 방법(f1·어려움 봇·시드 99·타임 어택)으로 185.633초 측정 → 190
 export const CLASS_FACTOR = {A:1,B:1.06,C:1.24};
 export const MEDAL_REWARDS = [{pit:25,up:5},{pit:40,up:10,custom:5},{pit:60,up:15,custom:15}];
 export const MEDAL_NAMES=['동','은','금'];
