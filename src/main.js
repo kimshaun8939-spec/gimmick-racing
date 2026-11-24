@@ -632,12 +632,60 @@ const CAM = {
   fovBase: 68, fovSpeed: 16, fovBooster: 7, fovRate: 3, fxFromKmh: 60, topKmh: 250,
   followLead: 0.75, speedBack: -0.5, speedUp: -0.3, accelPull: 0.05, accelPullMax: 0.8, brakePullMax: 0.45,
   lookAhead: 3, lookSlip: 0.5, buzz: 0.012, buzzFromKmh: 190,
+  // 같은 쪽으로 오래 돌 때 쏠림 되돌리기 (camturn, 사용자 요청 2026-11-24): 처음 꺾을 땐 지금처럼 카메라가 옆으로 갔다가,
+  //   쏠림이 turnWashMinDeg°보다 큰 채로 turnWashFrom초가 지나면 turnWashFull초까지 쏠림의 turnWash만큼을 천천히 없애 차 뒤로 돌아옴.
+  //   반대로 꺾으면(S자) 바로 처음부터. 미끄러짐이 turnWashSlipFrom~To rad이면 점점 꺼짐(드리프트 모습 유지). turnWash 0 = 예전 그대로
+  turnWash: 0.65, turnWashFrom: 0.4, turnWashFull: 1.7, turnWashMinDeg: 1.5, turnWashRise: 3, turnWashFall: 6, turnWashForget: 2,
+  turnWashSlipFrom: 0.12, turnWashSlipTo: 0.3,
   ...(carCfg.camera || {}),
 };
 const cam = { sk: 0, acc: 0, pull: 0, prevSpeed: 0, boostK: 0, t: 0 };
 // 표시 자세에서만 계산: 물리/표시 보간의 이력에는 손대지 않음.
 const chaseFeel = { yawVel: 0, side: 0, strength: 0, turn: 0, lastFwd: null };
 const chaseSide = new THREE.Vector3();
+// camturn: 쏠림 되돌리기 상태 (w1·w2 = 쏠림 각을 두 번 늦게 따라간 값, hold = 같은 쪽으로 쏠려 있던 시간, on = 켜짐 정도, slipK = 미끄러짐 때문에 줄이는 정도)
+const turnWashSt = { w1: 0, w2: 0, hold: 0, sign: 0, on: 0, slipK: 1, angle: 0 };
+const _camOutPos = new THREE.Vector3(), _camOutLook = new THREE.Vector3(), _washRel = new THREE.Vector3(), _washF = new THREE.Vector3(), _washV = new THREE.Vector3();
+function resetTurnWash() {
+  turnWashSt.w1 = turnWashSt.w2 = turnWashSt.hold = turnWashSt.angle = 0;
+  turnWashSt.sign = 0;
+}
+// 쏠림 각(차 앞 방향 → 차를 보는 방향, 위쪽 축 기준)을 재고, 카메라를 차 둘레로 얼마나 되돌릴지(rad) 돌려줌.
+//   따라가기 상태(camPos·camLook·camFwd)는 건드리지 않고 화면에 쓰는 값만 돌리므로 되먹임이 없음. 모든 필터는 1−exp(−k·dt).
+function turnWashAngle(car, dt, enabled) {
+  const st = turnWashSt;
+  st.on = THREE.MathUtils.lerp(st.on, enabled && CAM.turnWash > 0 ? 1 : 0, 1 - Math.exp(-4 * dt));
+  _washRel.copy(car.pos).sub(camPos);
+  _washRel.addScaledVector(camUp, -_washRel.dot(camUp));
+  _washF.copy(car.fwd).addScaledVector(camUp, -car.fwd.dot(camUp));
+  if (_washRel.lengthSq() < 1 || _washF.lengthSq() < 0.25) return (st.angle = 0);
+  const raw = Math.atan2(_washV.crossVectors(_washF, _washRel).dot(camUp), _washF.dot(_washRel));
+  if (car.grounded) { // 공중(점프)에서는 그대로 멈춰 둠
+    const follow = (s, x) => s + (x - s) * (1 - Math.exp(-((Math.abs(x) > Math.abs(s) && x * s >= 0) ? CAM.turnWashRise : CAM.turnWashFall) * dt));
+    st.w1 = follow(st.w1, raw);
+    st.w2 = follow(st.w2, st.w1);
+    // 쏠려 있는 시간: 기준(turnWashMinDeg°) 근처에서 늘고 줄기가 부드럽게 바뀜 (카메라 되돌림 속도가 툭 바뀌지 않게)
+    const th = CAM.turnWashMinDeg * Math.PI / 180;
+    if (Math.abs(raw) > th && Math.sign(raw) !== st.sign) { st.sign = Math.sign(raw); st.hold = 0; } // 반대로 꺾음 = 처음부터
+    const on = smoothK(Math.abs(raw), th * 0.6, th * 1.4);
+    st.hold = Math.max(0, st.hold + dt * (on - CAM.turnWashForget * (1 - on)));
+    // 미끄러짐(드리프트)이 크면 되돌리지 않음: 차가 옆으로 틀어진 모습은 남김
+    let slipK = 1;
+    if (Math.abs(car.speed) > 3) {
+      _washV.copy(car.vel).addScaledVector(camUp, -car.vel.dot(camUp));
+      if (_washV.lengthSq() > 1) slipK = 1 - smoothK(_washV.angleTo(_washF), CAM.turnWashSlipFrom, CAM.turnWashSlipTo);
+    }
+    st.slipK = THREE.MathUtils.lerp(st.slipK, slipK, 1 - Math.exp(-6 * dt));
+  }
+  const q = CAM.turnWash * smoothK(st.hold, CAM.turnWashFrom, CAM.turnWashFull) * st.on * st.slipK;
+  // 되돌리는 양 = 늦게 따라간 쏠림(w2)의 q배: 갑자기 바뀌는 것(새로 꺾기·미끄러짐)은 그대로 보이고 오래 남은 것만 빠짐.
+  //   지금 쏠림과 같은 쪽, 지금 쏠림보다 크지 않게만(부드러운 최소: x²/(1+x⁸)^¼ ≤ x) → 반대쪽으로 넘어가 보이는 일 없고,
+  //   쏠림이 0을 지나는 순간(S자·코너 출구)에도 카메라가 멈칫하지 않음 (0 근처에서는 되돌림도 0으로 매끈하게)
+  const back = q * st.w2;
+  if (!(back * raw > 0)) return (st.angle = 0);
+  const x = Math.abs(raw / back);
+  return (st.angle = -Math.sign(raw) * Math.abs(back) * (x * x) / Math.pow(1 + x ** 8, 0.25));
+}
 
 // 화면만 직전/현재 물리 상태 사이에 그림 (물리·충돌·기록은 원래 Car 그대로).
 // 고주사율 화면의 60 제한은 1/120초 스텝 수가 매번 달라지므로 같은 alpha를 모든 차와 카메라에 사용.
@@ -742,6 +790,7 @@ function snapCamera(resetPoses = true) {
   cam.pull = cam.acc = 0;
   chaseFeel.yawVel = chaseFeel.side = chaseFeel.turn = 0;
   chaseFeel.lastFwd = car.fwd.clone();
+  resetTurnWash();
   cam.sk = smoothK(Math.abs(car.forwardSpeed) * 3.6, CAM.fxFromKmh, CAM.topKmh);
   cam.prevSpeed = car.forwardSpeed;
   cameraTarget(camPos, camLook);
@@ -823,9 +872,17 @@ function updateCamera(dt) {
   if (!car.grounded) camPos.y = y + (tPos.y - y) * (1 - Math.exp(-2.5 * dt));
   tLook.addScaledVector(car.vel, CAM.followLead / 12);
   camLook.lerp(tLook, 1 - Math.exp(-12 * dt));
-  camera.position.copy(camPos);
+  // camturn: 같은 쪽으로 오래 돌면 카메라를 차 둘레로 조금씩 되돌려 차 뒤로 (화면에 쓰는 값만)
+  const washAng = turnWashAngle(car, dt, !special && !car.flying && car.mode !== 'fly' && camUp.y > 0.65);
+  _camOutPos.copy(camPos);
+  _camOutLook.copy(camLook);
+  if (washAng !== 0) {
+    _camOutPos.sub(car.pos).applyAxisAngle(camUp, washAng).add(car.pos);
+    _camOutLook.sub(car.pos).applyAxisAngle(camUp, washAng).add(car.pos);
+  }
+  camera.position.copy(_camOutPos);
   camera.up.copy(camUp);
-  camera.lookAt(camLook);
+  camera.lookAt(_camOutLook);
   // 최고 속도 근처에서만 아주 작게 노면 떨림 (흔들림이 아니라 잔진동, 1 cm 정도)
   const buzzK = car.grounded && !car.flying ? smoothK(kmh, CAM.buzzFromKmh, CAM.topKmh + 20) : 0;
   if (buzzK > 0 && CAM.buzz > 0) camera.position.addScaledVector(camUp, CAM.buzz * buzzK * (Math.sin(cam.t * 83) * 0.6 + Math.sin(cam.t * 131 + 1.3) * 0.4));
@@ -838,7 +895,7 @@ function updateCamera(dt) {
   camera.updateProjectionMatrix();
   // 시점 (camViews.js): 보닛·운전석이면 카메라를 차에 붙임. 그리드 소개·결과 화면·튜토리얼 시범·테스트 카메라에서는 기본 시점
   const tut = window.game && window.game.tutorial;
-  camViews.apply(dt, { lock: intro.on || race.phase === 'finished' || !!(window.game && window.game.cameraOverride) || !!(tut && tut.phase === 'demo'), chaseLook: camLook });
+  camViews.apply(dt, { lock: intro.on || race.phase === 'finished' || !!(window.game && window.game.cameraOverride) || !!(tut && tut.phase === 'demo'), chaseLook: _camOutLook });
 
   // 그림자가 차 주변에 생기도록 태양도 따라감
   sun.position.copy(car.pos).add(SUN_OFFSET);
