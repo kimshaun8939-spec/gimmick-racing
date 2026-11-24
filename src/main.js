@@ -637,11 +637,78 @@ const CAM = {
   //   반대로 꺾으면(S자) 바로 처음부터. 미끄러짐이 turnWashSlipFrom~To rad이면 점점 꺼짐(드리프트 모습 유지). turnWash 0 = 예전 그대로
   turnWash: 0, turnWashFrom: 0.4, turnWashFull: 1.7, turnWashMinDeg: 1.5, turnWashRise: 3, turnWashFall: 6, turnWashForget: 2,
   turnWashSlipFrom: 0.12, turnWashSlipTo: 0.3,
+  // camfeel6 (사용자 피드백 2026-11-24 "위빙할 때 뚝뚝, 꺾을 때 이상함"): 문턱·타이머 없이 이어지는 필터만 쓰는 새 추격 방향.
+  //   카메라 늦음 L = feelLag × (차 회전 속도를 feelLagT초 늦게 따라간 값) × 새로움 w
+  //   새로움 = 같은 쪽으로 계속 돌면 feelWashT초로 줄어 feelKeep까지 (→ 몇 초에 걸쳐 차 뒤로 돌아옴), 회전이 줄거나 반대면 feelBackT초로 다시 1
+  //   → 꺾기 시작하면 카메라가 차보다 늦게 돌아 차가 화면에서 돌아가 보이고, 핸들을 풀거나 반대로 꺾어도 반대쪽으로 넘어가지 않음.
+  //   늦음은 feelMax(rad)까지 부드럽게(tanh). 방향은 목표 회전 속도를 미리 넣은 임계 감쇠 용수철(feelOmega)로 따라가고(회전 속도는 feelSmoothK로 매끈하게),
+  //   위치·보는 점은 카메라 방향이 돈 만큼 차 둘레로 같이 돌린 뒤 따라감 → 계속 돌 때 용수철·위치 따라가기가 늦음을 더하지 않음 (늦음은 L 하나로만).
+  //   &cam=old = camturn 전 예전 카메라
+  feelLag: 0.5, feelLagT: 0.22, feelWashT: 1.2, feelBackT: 0.7, feelKeep: 0.3, feelMax: 0.2, feelOmega: 8, feelRateK: 25, feelSmoothK: 9, feelFirm: 0.35,
   ...(carCfg.camera || {}),
 };
 const cam = { sk: 0, acc: 0, pull: 0, prevSpeed: 0, boostK: 0, t: 0 };
 // 표시 자세에서만 계산: 물리/표시 보간의 이력에는 손대지 않음.
-const chaseFeel = { yawVel: 0, side: 0, strength: 0, turn: 0, lastFwd: null };
+const chaseFeel = { yawVel: 0, side: 0, strength: 0, turn: 0, lastFwd: null, rf: 0, fresh: 1, fresh1: 1, rt: 0, lag: 0, target: null, dYaw: 0 };
+// &cam=old: camturn(2026-11-24) 전 예전 추격 카메라 (turnWash는 그쪽에서만, game.camCfg.turnWash)
+const CAM_OLD = params.get('cam') === 'old';
+const _feelMove = new THREE.Vector3(), _feelX = new THREE.Vector3();
+const signedYaw = (a, b, up) => Math.atan2(_feelX.crossVectors(a, b).dot(up), a.dot(b));
+// 새 추격 방향 (camfeel6): camFwd를 목표 f 쪽으로. 모든 것이 이어지는 필터라 키를 떼고 누를 때 툭 튀지 않음.
+//   k = 늦음 세기 (설정 '카메라 따라오기': 단단하게 feelFirm / 보통 1 / 부드럽게 1.5, 배 0.45배)
+function chaseHeadingNew(car, f, dt, strength, k) {
+  const cf = chaseFeel;
+  // 미끄러질 때(드리프트)는 차가 실제로 가는 쪽을 조금 섞음 (예전과 같음, smoothK라 이어짐)
+  _feelMove.copy(car.vel).addScaledVector(camUp, -car.vel.dot(camUp));
+  if (car.forwardSpeed > 5 && _feelMove.lengthSq() > 25) {
+    _feelMove.normalize();
+    const slip = Math.acos(THREE.MathUtils.clamp(f.dot(_feelMove), -1, 1));
+    f.lerp(_feelMove, strength * smoothK(slip, 0.06, 0.4) * 0.7).normalize();
+  }
+  const ddt = Math.max(dt, 1e-4);
+  const a = 1 - Math.exp(-CAM.feelRateK * ddt);
+  // 차 회전 속도 (표시 자세, 도로 면 기준) → 잡음만 거르고
+  const last = cf.lastFwd || car.fwd;
+  cf.turn += (signedYaw(last, car.fwd, camUp) / ddt - cf.turn) * a;
+  // 늦음 = feelLag × (늦게 따라간 회전 속도 rf) × 새로움 w.  w = feelKeep + (1−feelKeep)·F
+  //   F(새로움, 0~1): 같은 쪽으로 계속 돌면 feelWashT초로 줄고(→ 차 뒤로 돌아옴), 회전이 줄거나 반대로 바뀌면 feelBackT초로 1로 돌아감.
+  //   F는 상태라 이어서 바뀌고, 늦음 = rf × w라서 rf가 0을 지날 때(S자·핸들 풀기)도 반대쪽으로 넘어가지 않고 매끈함
+  cf.rf += (cf.turn - cf.rf) * (1 - Math.exp(-ddt / CAM.feelLagT));
+  const qs = 0.05; // rad/s: '줄어듦' 판단이 부드럽게 바뀌는 폭
+  const R = 0.5 + 0.5 * Math.tanh(cf.rf * (cf.rf * 0.85 - cf.turn) / (qs * qs)); // 1 = 회전이 줄거나 반대, 0 = 계속(또는 더) 돎
+  { // 두 단계로 이어서 (F1 → F): F' = (위 단계 − F)·… 를 정확히 풀어 (프레임 길이와 상관없이 같음)
+    //   계속 돌 때 F = (1 + t/τ)·e^(−t/τ), τ = feelWashT/2 → 처음 0.5초쯤은 늦음이 거의 그대로, 그 뒤 차 뒤로 천천히
+    const ka = R / CAM.feelBackT, kb = (1 - R) / (CAM.feelWashT / 2);
+    const eq1 = ka / (ka + kb);
+    cf.fresh1 = eq1 + (cf.fresh1 - eq1) * Math.exp(-(ka + kb) * ddt);
+    cf.fresh = cf.fresh1 + (cf.fresh - cf.fresh1) * Math.exp(-(ka + kb) * ddt);
+  }
+  const w = CAM.feelKeep + (1 - CAM.feelKeep) * cf.fresh;
+  const lim = CAM.feelMax * Math.max(0.6, Math.min(1.3, k));
+  const raw = CAM.feelLag * k * cf.rf * w;
+  cf.lag = lim * Math.tanh(raw / lim);
+  f.applyAxisAngle(camUp, -cf.lag);
+  // 목표 방향의 회전 속도 (용수철에 미리 넣음)
+  if (!cf.target) cf.target = f.clone();
+  const step = signedYaw(cf.target, f, camUp);
+  cf.rt += (step / ddt - cf.rt) * (1 - Math.exp(-CAM.feelSmoothK * ddt)); // 회전 시작·끝을 부드럽게 (세상 도는 빠르기가 툭 바뀌지 않게)
+  cf.target.copy(f);
+  // 임계 감쇠 용수철: 목표가 프레임 안에서 고르게 움직였다고 보고 작은 간격으로 적분 (느린 프레임에서도 같음)
+  const om = CAM.feelOmega;
+  const steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps;
+  const base = signedYaw(camFwd, f, camUp);
+  let moved = 0;
+  for (let i = 0; i < steps; i++) {
+    const e = base - moved - step * (1 - (i + 1) / steps);
+    cf.yawVel += (om * om * e + 2 * om * (cf.rt - cf.yawVel)) * h;
+    moved += cf.yawVel * h;
+  }
+  camFwd.applyAxisAngle(camUp, moved);
+  cf.dYaw = moved;
+  // 안전: 복귀처럼 갑자기 크게 벌어지면(정상 주행에선 안 생김) 0.5 rad 안으로
+  const left = signedYaw(camFwd, f, camUp);
+  if (Math.abs(left) > 0.5) { camFwd.applyAxisAngle(camUp, left - Math.sign(left) * 0.5); cf.yawVel = cf.rt; cf.dYaw += left - Math.sign(left) * 0.5; }
+}
 const chaseSide = new THREE.Vector3();
 // camturn: 쏠림 되돌리기 상태 (w1·w2 = 쏠림 각을 두 번 늦게 따라간 값, hold = 같은 쪽으로 쏠려 있던 시간, on = 켜짐 정도, slipK = 미끄러짐 때문에 줄이는 정도)
 const turnWashSt = { w1: 0, w2: 0, hold: 0, sign: 0, on: 0, slipK: 1, angle: 0 };
@@ -789,6 +856,8 @@ function snapCamera(resetPoses = true) {
   camUp.copy(car.up);
   cam.pull = cam.acc = 0;
   chaseFeel.yawVel = chaseFeel.side = chaseFeel.turn = 0;
+  chaseFeel.rf = chaseFeel.rt = chaseFeel.lag = 0; chaseFeel.fresh = chaseFeel.fresh1 = 1;
+  chaseFeel.target = null;
   chaseFeel.lastFwd = car.fwd.clone();
   resetTurnWash();
   cam.sk = smoothK(Math.abs(car.forwardSpeed) * 3.6, CAM.fxFromKmh, CAM.topKmh);
@@ -810,7 +879,13 @@ function updateCamera(dt) {
   camUp.lerp(car.up, 1 - Math.exp(-(car.grounded ? 5 : 2.5) * dt)).normalize();
   // 앞 방향은 차가 바라보는 방향을 부드럽게 따라감 (위쪽 방향과 직각으로 유지)
   const f = car.fwd.clone().addScaledVector(camUp, -car.fwd.dot(camUp)).normalize();
-  if (strength > 0.001 && camUp.y > 0.65 && f.lengthSq() > 0.5) {
+  chaseFeel.dYaw = 0;
+  if (!CAM_OLD && camUp.y > 0.65 && f.lengthSq() > 0.5) {
+    // 새 방식: 단단하게(0) → feelFirm, 보통(0.3) → 1, 부드럽게(0.6) → 1.5 (이어지게), 배 0.45배
+    const s0 = chaseFeel.strength;
+    const k = (s0 <= 0.3 ? CAM.feelFirm + (1 - CAM.feelFirm) * s0 / 0.3 : 1 + (s0 - 0.3) / 0.6) * (car.mode === 'boat' ? 0.45 : 1);
+    chaseHeadingNew(car, f, dt, strength, k);
+  } else if (CAM_OLD && strength > 0.001 && camUp.y > 0.65 && f.lengthSq() > 0.5) {
     // 도로 면 안의 각도만 지연. 감쇠 스프링을 작은 시간 간격으로 적분해 느린 프레임에서도 안정.
     const moving = car.vel.clone().addScaledVector(camUp, -car.vel.dot(camUp));
     if (car.forwardSpeed > 5 && moving.lengthSq() > 25) {
@@ -840,11 +915,14 @@ function updateCamera(dt) {
   } else {
     camFwd.lerp(f, 1 - Math.exp(-5 * dt));
     chaseFeel.yawVel = 0;
+    chaseFeel.rf = chaseFeel.rt = chaseFeel.lag = 0; chaseFeel.fresh = chaseFeel.fresh1 = 1;
+    chaseFeel.target = null;
   }
   if (!chaseFeel.lastFwd) chaseFeel.lastFwd = car.fwd.clone();
   chaseFeel.lastFwd.copy(car.fwd);
-  if (strength <= 0.001) chaseFeel.turn = 0;
-  const sideTarget = -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008, -0.06, 0.06) * strength;
+  if (CAM_OLD && strength <= 0.001) chaseFeel.turn = 0;
+  const sideTarget = CAM_OLD ? -THREE.MathUtils.clamp(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008, -0.06, 0.06) * strength
+    : -0.06 * Math.tanh(chaseFeel.yawVel * Math.abs(car.forwardSpeed) * 0.008 / 0.06) * strength; // 새 방식: 한도에서 꺾이지 않게 tanh
   chaseFeel.side = THREE.MathUtils.lerp(chaseFeel.side, sideTarget, 1 - Math.exp(-6 * dt));
   camFwd.addScaledVector(camUp, -camFwd.dot(camUp)).normalize();
 
@@ -867,13 +945,19 @@ function updateCamera(dt) {
   if (!car.grounded) _lead.y = 0;
   tPos.add(_lead);
   // 공중에서는 높이를 천천히 따라가서 점프가 더 높아 보이게
+  // 새 방식: 카메라 방향이 이번 프레임에 돈 만큼 위치·보는 점도 차 둘레로 같이 돌린 뒤 따라감
+  //   (예전엔 위치가 돌아가는 뒤쪽 자리를 8/초로 늦게 따라가서 계속 돌 때 약 0.12초 × 회전 속도만큼 더 쏠렸음)
+  if (!CAM_OLD && chaseFeel.dYaw !== 0) {
+    camPos.sub(car.pos).applyAxisAngle(camUp, chaseFeel.dYaw).add(car.pos);
+    camLook.sub(car.pos).applyAxisAngle(camUp, chaseFeel.dYaw).add(car.pos);
+  }
   const y = camPos.y;
   camPos.lerp(tPos, 1 - Math.exp(-8 * dt));
   if (!car.grounded) camPos.y = y + (tPos.y - y) * (1 - Math.exp(-2.5 * dt));
   tLook.addScaledVector(car.vel, CAM.followLead / 12);
   camLook.lerp(tLook, 1 - Math.exp(-12 * dt));
   // camturn: 같은 쪽으로 오래 돌면 카메라를 차 둘레로 조금씩 되돌려 차 뒤로 (화면에 쓰는 값만)
-  const washAng = turnWashAngle(car, dt, !special && !car.flying && car.mode !== 'fly' && camUp.y > 0.65);
+  const washAng = CAM_OLD ? turnWashAngle(car, dt, !special && !car.flying && car.mode !== 'fly' && camUp.y > 0.65) : 0;
   _camOutPos.copy(camPos);
   _camOutLook.copy(camLook);
   if (washAng !== 0) {
