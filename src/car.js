@@ -24,6 +24,8 @@ const WALL_STEER = !(typeof location !== 'undefined' && new URLSearchParams(loca
 // 비행 기술 (2026-11-15 fly2, 사용자 "비행 모드만의 특징이 없음"): 상승 기류·급강하 가속·부드러운 착지 (modes.fly.thermal·dive·flare).
 //   사람·봇 같은 규칙, 통과 판정·점수 없음. &fly2=0 = 예전 비행 그대로
 const FLY2 = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('fly2') === '0');
+// nospin (2026-11-24, 사용자 "스핀은 모든 차에서 일어나지 않게, 대신 스핀이 일어나지 않을 정도로만 꺾이게"): car.json nospin. &spin=1 = 예전(스핀 가능)
+const NOSPIN = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('spin') === '1');
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
@@ -744,6 +746,17 @@ export class Car {
     this.steerVisual = this.steerIn;
   }
 
+  /**
+   * nospin: 이 차가 스핀 없이 버틸 수 있는 최대 미끄럼각 (rad). tire.slipMax가 있으면 그 값,
+   * 없으면 차 성격(tire.tuckMax = 파워·리프트오프로 꼬리가 흐르는 각도) + nospin.slipMargin, [slipMin, slipMaxCap] 안
+   *   → 꼬리가 가벼운 차(머슬·버기·GT)는 조금 더 흐르고(약 23°), 안정한 차(프로토·카트)는 덜(약 14°)
+   */
+  spinSlipMax() {
+    const t = this.cfg.tire, N = this.cfg.nospin || {};
+    if (t.slipMax != null) return t.slipMax;
+    return THREE.MathUtils.clamp((t.tuckMax ?? 0.2) + (N.slipMargin ?? 0.1), N.slipMin ?? 0.25, N.slipMaxCap ?? 0.42);
+  }
+
   // main.js가 플레이어 인스턴스에만 켠다. 특수 도로·충돌 회복은 기존 경로.
   feel2Allowed() {
     if (this.drivingFeel !== 'new' || !this.cfg.feel2 || !this.grounded || this.magnet || this.form || this.hitT > 0 || this._impactGrip || this.wallSliding()) return false;
@@ -973,6 +986,14 @@ export class Car {
       : (cfg.steerGripUse ?? 0.96) * lat * Math.min(1 - (cfg.steerLatLoad || 0) * this.load, tire.rearGrip * (1 + tire.loadShift * steerRearLoad(cfg, this.load)));
     const highK = Math.min(1, latCap / (cfg.steerRate * Math.max(1, vNow)));
     const fastK = THREE.MathUtils.clamp(vNow / cfg.maxSpeed, 0, 1);
+    // 뒷바퀴 한계: 브레이크로 앞에 쏠리거나, 바퀴가 헛돌면 뒤가 약해짐
+    //   + 파워 오버스티어: 뒷바퀴 굴림이 코너에서 힘을 많이 쓰면(powerUse) 뒤가 옆으로 덜 버팀 (tire.powerSlide)
+    //   + 리프트오프 오버스티어: 코너에서 액셀을 확 떼면 잠깐 뒤가 가벼워짐 (tire.liftOff)
+    //   (nospin: 아래 조향 한계에도 쓰려고 조향 앞에서 계산, 값은 예전과 같음)
+    const powerSlide = (tire.powerSlide ?? 0.3) * rearSpinK * powerUse * powerUse;
+    const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * rearSpinK * this.wheelspin) * (1 - (tire.capShare ?? 0.5) * Math.min(0.6, powerSlide + (tire.liftOff ?? 0.4) * this.liftOff));
+    const NS = NOSPIN ? cfg.nospin || {} : null;
+    const slip0 = this.slip; // nospin: 이 스텝 시작 때 미끄럼각 (이보다, 그리고 한계보다 더 커지는 회전은 막음)
     let turn;
     this.understeer = 0;
     {
@@ -985,6 +1006,13 @@ export class Car {
       if (Math.abs(want) > yawMax) {
         this.understeer = Math.min(1, (1 - yawMax / Math.abs(want)) * 1.6);
         want = Math.sign(want) * yawMax;
+      }
+      // nospin: 핸들로 도는 빠르기 ≤ 지금 뒷바퀴가 따라 돌 수 있는 빠르기 × rearUse (0.97 ≥ steerGripUse 0.96 → 무게 이동만으로는 핸들 한계(latCap)가 먼저라 그대로)
+      //   (휠스핀·파워·리프트오프·브레이크로 뒤가 약해져도, 꺾는 만큼은 꼬리가 버틸 수 있는 데까지만 돎 → 핸들만으로는 꼬리가 안 돌아 나감)
+      //   보통 땐 rearCap이 핸들 한계(latCap)보다 커서 아무 차이 없음. 사람·봇 같은 규칙
+      if (NS && vNow > 2) {
+        const rMax = ((NS.rearUse ?? 0.97) * rearCap) / vNow;
+        if (Math.abs(want) > rMax) want = Math.sign(want) * rMax;
       }
       // 차체는 무게가 있어서 회전도 서서히 붙음
       // 빠를수록 차체가 묵직하게 늦게 돎
@@ -1030,11 +1058,7 @@ export class Car {
       let grip = cfg.grip * (1 - 0.4 * offK);
       if (spike) grip *= cfg.booster.gripFactor;
       const natural = (feel2 ? this.slip - this.feel2Beta : this.slip) * (1 - Math.exp(-grip * dt));
-      // 뒷바퀴 한계: 브레이크로 앞에 쏠리거나, 바퀴가 헛돌면 뒤가 약해짐
-      //   + 파워 오버스티어: 뒷바퀴 굴림이 코너에서 힘을 많이 쓰면(powerUse) 뒤가 옆으로 덜 버팀 (tire.powerSlide)
-      //   + 리프트오프 오버스티어: 코너에서 액셀을 확 떼면 잠깐 뒤가 가벼워짐 (tire.liftOff)
-      const powerSlide = (tire.powerSlide ?? 0.3) * rearSpinK * powerUse * powerUse;
-      const rearCap = lat * tire.rearGrip * (1 + tire.loadShift * this.load) * (1 - tire.wheelspinSlide * rearSpinK * this.wheelspin) * (1 - (tire.capShare ?? 0.5) * Math.min(0.6, powerSlide + (tire.liftOff ?? 0.4) * this.liftOff));
+      // 뒷바퀴 한계 rearCap (위 조향 앞에서 계산)
       const capStep = vNow > 2 ? (rearCap / vNow) * dt : Infinity;
       if (Math.abs(natural) > capStep) {
         // 뒤가 버티지 못함 → 꼬리가 바깥으로 돌아 차가 더 돌아감 (오버스티어)
@@ -1043,8 +1067,16 @@ export class Car {
         // swingFade [a, b]: 미끄러짐이 a rad를 넘으면 꼬리가 돌아가는 힘이 줄어 b rad에서 0
         //   (예전엔 미끄러짐이 클수록 더 세게 돌아서, 크게 미끄러지면 스스로 멈추지 못하고 계속 돌았음)
         const sf = tire.swingFade;
-        const fade = this.hitT > 0 ? 0 : sf ? THREE.MathUtils.clamp((sf[1] - Math.abs(this.slip)) / (sf[1] - sf[0]), 0, 1) : 1;
-        const swing = -sgn * (Math.abs(natural) - capStep) * tire.rearSwing * fade;
+        let fade = this.hitT > 0 ? 0 : sf ? THREE.MathUtils.clamp((sf[1] - Math.abs(this.slip)) / (sf[1] - sf[0]), 0, 1) : 1;
+        let swingMag = (Math.abs(natural) - capStep) * tire.rearSwing;
+        if (NS) {
+          // nospin: 꼬리 돌림은 미끄럼 한계(slipMax) 가까이 가면 0으로 줄고, 뒤가 진행 방향을 끌어오는 몫(capStep)의 swingCap배를 못 넘음
+          //   → 핸들을 놓으면(회전 0) 미끄럼이 늘 줄어듦 = 스스로 잡힘 (예전엔 고속에서 손을 놓아도 꼬리 돌림이 더 커서 약 37°에 머물렀음)
+          const L = this.spinSlipMax();
+          fade = Math.min(fade, THREE.MathUtils.clamp((L - Math.abs(this.slip)) / ((NS.fadeZone ?? 0.35) * L), 0, 1));
+          swingMag = Math.min(swingMag, (NS.swingCap ?? 0.6) * capStep);
+        }
+        const swing = -sgn * swingMag * fade;
         this.fwd.applyAxisAngle(this.up, swing);
         this.slip -= swing;
       } else this.slip -= natural;
@@ -1066,6 +1098,21 @@ export class Car {
         }
       }
       this.slip = THREE.MathUtils.clamp(this.slip, -1.3, 1.3);
+    }
+    // nospin: 이 스텝의 모든 회전(핸들·꼬리 돌림·파워/리프트오프·연석 흔들림) 뒤 미끄럼각이 한계(slipMax)와 시작 값 중 큰 쪽을 넘으면
+    //   넘친 만큼 차 머리를 되돌림 = 차는 한계까지만 돌고 꼬리가 돌아 나가지 않음. 머리를 되돌린 만큼 회전 속도도 줄임(돌지 못한 몫).
+    //   충돌로 이미 크게 미끄러진 경우(시작 값 > 한계)는 더 커지지만 않게 (줄어드는 것은 그대로)
+    if (NS) {
+      // (새 운전 감각 feel2는 저속에서 뒷바퀴 쪽 회전축 몫 feel2Beta를 뺀 미끄럼으로 봄 = 타이어가 실제로 미끄러지는 각)
+      const b = feel2 ? this.feel2Beta : 0;
+      const lim = Math.max(this.spinSlipMax(), Math.abs(slip0 - b)), a = Math.abs(this.slip - b);
+      if (a > lim) {
+        const sg = Math.sign(this.slip - b), e = a - lim;
+        this.fwd.applyAxisAngle(this.up, sg * e);
+        this.slip -= sg * e;
+        if (Math.sign(this.yawRate) === sg) this.yawRate = sg * Math.max(0, Math.abs(this.yawRate) - e / dt);
+        this.spinGuardT = (this.spinGuardT || 0) + dt; // 시험용: 막은 시간 합
+      }
     }
     // wallstick2: preserve steering away from a wall while the nose realigns.
     // Work in the curved wall's frame: repeated tangent clipping must not reset
@@ -1718,7 +1765,17 @@ export class Car {
     // 공중 조작: 살짝 방향 전환 (배가 파도에서 뜬 동안은 modes.boat.swell.airTurn배: 배는 공중에서 거의 못 돎 → 반듯하게 착수하기 쉬움, boat3)
     const SWa = this.mode === 'boat' && this.swellK != null ? cfg.modes.boat.swell : null;
     const turn = -c.steer * 0.8 * (SWa ? SWa.airTurn ?? 1 : 1) * dt;
+    // nospin: 공중에서 핸들로 돌릴 수 있는 건 날아가는 방향과 airSlip(또는 이 차 slipMax) 각도까지만
+    //   (예전엔 저중력·긴 점프에서 계속 돌려 옆·뒤로 착지 = 착지 스핀). 날아가는 방향 쪽으로 돌리는 건 그대로
+    const NSa = NOSPIN ? this.cfg.nospin || {} : null;
+    const hv = NSa ? _v1.set(this.vel.x, 0, this.vel.z) : null;
+    const aB = hv && hv.lengthSq() > 9 ? signedAngle(_v2.copy(this.fwd).setY(0).normalize(), hv.normalize(), WORLD_UP) : null;
     this.fwd.applyAxisAngle(WORLD_UP, turn);
+    if (aB != null) {
+      const aA = signedAngle(_v2.copy(this.fwd).setY(0).normalize(), hv, WORLD_UP);
+      const lim = Math.max(Math.max(NSa.airSlip ?? 0.35, this.spinSlipMax()), Math.abs(aB));
+      if (Math.abs(aA) > lim) this.fwd.applyAxisAngle(WORLD_UP, Math.sign(aA) * (Math.abs(aA) - lim));
+    }
     // 공기 저항: 초당 airDragPerSec 비율 (2026-11-10: 예전엔 물리 스텝(1/120초)마다 airDrag 0.2%씩이라 초당 21%나 줄었음
     //   → 점프·저중력에서 착지 속도가 30~40% 깎였음. 지금은 시간 기준 초당 약 5%). 파도에서 뜬 배는 × swell.airDrag (boat3)
     this.vel.multiplyScalar(Math.exp(-(cfg.airDragPerSec ?? 0.05) * (SWa ? SWa.airDrag ?? 1 : 1) * dt));
