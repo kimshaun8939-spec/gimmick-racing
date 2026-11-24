@@ -115,3 +115,6 @@
 #loading.ls[data-loadstyle="2"] .ls-stats{gap:10px 14px}
 #loading.ls[data-loadstyle="3"].out .ls-tips{transform:translateX(40px)}
 @media(max-width:850px) and (min-height:501px){#loading.ls[data-loadstyle="2"] .ld{bottom:calc(4vh + 190px)!important}}
+/* wheelout (2026-11-24): 바퀴가 나가는 동안 배경·카드를 그대로 두고 index.html lsReveal이 바퀴를 따라 걷어 냄 (&lsout=0 = 예전) */
+#loading.ls .ls-back{background-color:#09121d}
+#loading.wf.ls.out.wf-lsout .ls-back,#loading.wf.ls.out.wf-lsout .ls-shade,#loading.wf.ls.out.wf-lsout .ls-content{opacity:1;transition:none}

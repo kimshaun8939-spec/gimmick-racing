@@ -522,10 +522,20 @@ function skipIntro() {
 }
 window.addEventListener('keydown', skipIntro);
 window.addEventListener('pointerdown', skipIntro);
+// wheelout (2026-11-24, 사용자 "바퀴가 굴러가는데 경기 화면으로 넘어감"): 화면 전환 바퀴(#loading)가 아직 화면에 있으면
+//   출발 신호·그리드 소개를 기다림 (바퀴가 끝나고 지워지면 시작). game.tick(manual) 테스트는 안 기다림, 바퀴가 이상하게 남아도 4초 뒤엔 안 기다림. &lsout=0 = 예전
+const WHEEL_WAIT = params.get('lsout') !== '0';
+let wheelOutAt = 0;
+function wheelOnScreen(manual) {
+  if (!WHEEL_WAIT || manual) return false;
+  if (!document.querySelector('#loading.out')) return false; // 아직 불러오는 중이면 원래대로 (출발 신호는 불러오기가 끝난 뒤에만 흐름)
+  if (!wheelOutAt) wheelOutAt = performance.now();
+  return performance.now() - wheelOutAt < 4000;
+}
 /** 소개 카메라 (updateCamera 뒤에 덮어씀). 끝나면 false */
 function applyIntro(dt) {
   if (!intro.on) return false;
-  intro.t += dt;
+  if (!wheelOnScreen(false)) intro.t += dt;
   if (intro.t >= intro.dur || race.phase !== 'countdown') {
     intro.on = false;
     hud.intro(null);
@@ -1589,7 +1599,7 @@ function frame(now, manual = false) {
 
   if (race.phase === 'countdown') {
     // 출발 전: 차는 움직이지 않음. 빨간불 5개가 꺼지는 순간 출발
-    if (!race.hold && !intro.on) race.lightsT += dt; // 온라인: 모두 준비될 때까지 출발 신호를 멈춰 둠 (raceCtl.holdStart). 그리드 소개 중에도 멈춤
+    if (!race.hold && !intro.on && !wheelOnScreen(manual)) race.lightsT += dt; // 온라인: 모두 준비될 때까지 출발 신호를 멈춰 둠 (raceCtl.holdStart). 그리드 소개 중에도 멈춤
     race.countdown = race.lightsOutAt - race.lightsT;
     race.lights = Math.max(0, Math.min(5, Math.floor((race.lightsT - 0.6) / 0.7) + 1));
     const pre = input.read();
