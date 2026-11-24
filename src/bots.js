@@ -421,6 +421,17 @@ const NF_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && 
 const CORNERPASS = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('cornerpass') === '1';
 const CP_OFF = new Set((new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('cpoff') || '').split(/[,.]/));
 const SAT_LIFT = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('satlift') !== '0';
+// botpush (2026-11-24, 사용자 "봇이 풀 악셀을 밟아도 될 때 계속 밟고 있어?", "내가 브레이킹 실패해도 추월을 안 당함"): 운전(조작)만, 차 성능·물리 그대로
+//   lift: 핸들이 모자랄 때(saturLift) 액셀을 0으로 떼지 않고 바깥 도로 끝 여유·모자란 정도·미끄러짐만큼만 줄임 (헤어핀 탈출에서 1초씩 굴러가던 것)
+//   top : 직선 최고 속도 상한('top') 때문에는 브레이크를 밟지 않음(액셀만 뗌). 어려움·마스터는 추월 중·슬립스트림을 받은 뒤 1.5초 동안 상한 없음
+//   lane: 옆 줄(추월·나란히) 커브 한계 속도를 6 m 간격 대신 매끈한 간격으로 계산 (길 끝에 눌린 꺾임 때문에 라인 계획의 30~40%로 나와 사람보다 1초 먼저 브레이크)
+//   &botpush=0 = 예전 전부, &bpoff=lift,top = 부분 끄기, lane은 기본 끔(&bplane=1 사람 추월 중만, &bplane=all 모든 옆 줄)
+const BP_Q = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+const BOTPUSH = BP_Q.get('botpush') !== '0', BP_OFF = new Set((BP_Q.get('bpoff') || '').split(/[,.]/));
+const BP_LIFT = BOTPUSH && !BP_OFF.has('lift'), BP_TOP = BOTPUSH && !BP_OFF.has('top'), BP_LANE = BOTPUSH && /^(1|human|all)$/.test(BP_Q.get('bplane') || ''); // lane은 기본 끔 (7봇 시험에서 사람 추월 중 새 계산이 강한 접촉을 늘림, gp 마스터 46→64) → &bplane=1로 켬
+const BP_TOP_FREE = BP_Q.get('bptopfree') === '1'; // (시험) 슬립스트림 뒤 1.5초·추월 중 상한 없음 — 7봇 시험에서 강한 접촉이 늘어 기본 끔
+const BP_LANE_ALL = BP_Q.get('bplane') === 'all'; // (시험) 모든 옆 줄에 새 계산 (&bplane=1: 사람 추월 중일 때만)
+const BP_LANE_H = +(BP_Q.get('bplaneh') || 20), BP_LANE_E = +(BP_Q.get('bplanee') || 0.5), BP_LANE_K = +(BP_Q.get('bplanek') || 1); // (시험) 옆 거리 변화 간격(m)·무게·한계 여유
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const LL = opts.line !== undefined ? opts.line : learnedLineFor(track, car.cfg, level); // [learned hook 2] 학습 라인이 있으면 그 라인·속도 계획
   if (LL) prof = profileFor(LL, car.cfg);
@@ -700,6 +711,16 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (cut) return onLine ? pathCurvature(j, 0) : pathCurvature(j, lane, 15);
     }
     return pathCurvature(j, lane);
+  }
+  // botpush lane: 옆 줄 곡률 = 라인 곡률(매끈한 값)을 '안쪽으로 비킨 거리'만큼 작은 반지름으로 + 비킨 거리가 바뀌는 몫(앞뒤 20 m, 절반)
+  //   예전 pathCurvature(6 m 간격)는 라인이 연석 위(길 끝 −0.2 m 밖)로 가는 곳·비킨 줄이 길 끝에 눌리는 곳에서 꺾임이 생겨
+  //   빙하 T1 안쪽 2.7 m 줄 한계가 라인 계획 102 km/h의 64%(65 km/h)로 나왔음 → 이 식은 92~105 km/h
+  function laneCurvBP(j, lane) {
+    const e = (k) => clamp(L.offset[k] + lane, L.lo[k] + 0.2, L.hi[k] - 0.2) - L.offset[k];
+    const k0 = L.curvature[j], a = Math.abs(k0), dIn = -e(j) * Math.sign(k0); // 곡률 < 0 = 오른쪽으로 도는 코너 → 안쪽 = +옆
+    const h = Math.max(1, Math.round(BP_LANE_H / ds));
+    const e2 = Math.abs(e(W(j - h)) - 2 * e(j) + e(W(j + h))) / (h * ds) ** 2;
+    return (Math.sign(k0) || 1) * (a / Math.max(0.3, 1 - dIn * a) + BP_LANE_E * e2);
   }
   function pathCurvature(j, lane, span = 6) {
     const h = Math.max(1, Math.round(span / ds));
@@ -1281,7 +1302,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 브레이크를 얼마나 늦게(세게) 밟는지 (어려움일수록 1에 가까움). 추월 중 확실히 빠를 때만 최대 +5% (성격 비례)
     const kB = Math.min(1.03, (level.brakeK ?? 0.95) * Math.min(1, k) * (1 + 0.05 * lateBrake));
     const reach = Math.round(Math.min(500, (speed * speed) / (2 * kB * gHere * cm.aBrake(30)) + 10) / ds);
-    let tgt = Infinity, tgtWhy = 'plan';
+    let tgt = Infinity, tgtWhy = 'plan', tgtQ = -1, tgtVq = 0, tgtVl = 0; // tgtQ·Vq·Vl: (진단) 목표를 정한 앞 지점·그 지점 한계·라인 한계
     const mbOn = MBRAKE && exactMaster && car.grounded && car.mode !== 'fly' && car.mode !== 'boat';
     const rampT = mbOn ? 0.5 * Math.max(0, 1 - (car.brk || 0)) / ((car.cfg.input && car.cfg.input.brakeRise) || 5) : 0; // 페달이 다 차오를 때까지 평균 걸리는 시간
     let ffDec = 0;
@@ -1298,6 +1319,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     const drivingProf = st.circuitClear ? circuitProf : prof;
     const activeProf = st.calm || trafficPlan ? prof : aeroPlan(L,car.cfg,drivingProf,car,st.circuitClear?circuitAeroPlans:aeroPlans,exactMaster,st.circuitClear);
     st.aeroPlan = activeProf !== prof && activeProf !== circuitProf;
+    // 새 옆 줄 계산은 사람을 추월하는 중(pass, 앞뒤 25 m 안)일 때만 (봇끼리·모든 옆 줄에 쓰면 7봇 시험에서 코스 밖·강한 접촉이 1.6~1.9배)
+    const bpLaneOn = BP_LANE && !(CORNERPASS && !CP_OFF.has('clamp')) && (BP_LANE_ALL || !!(move && move.phase === 'pass' && leader && leader.human && Math.abs(leader.dm) < 25));
     for (let q = 0; q <= reach; q += q < 8 ? 1 : 3) {
       const iq = W(lead + q);
       const free = boosting && activeProf.speed[iq] >= vTop * 0.97 && !activeProf.brake[iq];
@@ -1309,12 +1332,13 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
 
       const vqLine = vq;
       if (Math.abs(lane) > 0.5 && car.mode !== 'boat' && car.surface !== 'magnet' && !S[iq].roll && !S[iq].gap) {
-        const signedCurve = laneCurvature(iq, lane), curve = Math.abs(signedCurve);
+        const bpLane = bpLaneOn;
+        const signedCurve = bpLane ? laneCurvBP(iq, lane) : laneCurvature(iq, lane), curve = Math.abs(signedCurve);
         const bankLat = 9.81 * Math.sin(S[iq].bank || 0) * Math.sign(signedCurve) * (cm.bankGrip || 0);
         const A0 = car.cfg.modes && car.cfg.modes.accel;
         const lat = MLANE && exactMaster ? Math.min(cm.aLat(vq), 0.97 * steerLatCap(car.cfg, vq, 0, 0, A0 && !car.cfg.modes.manualSelect && vq >= A0.autoSpeed / 3.6 ? A0.gripFactor : 1)) : cm.aLat(vq);
         if (curve > 0.001) {
-          const cap = Math.sqrt(Math.max(lat*.5, lat+bankLat) / curve) * Math.min(1, k);
+          const cap = Math.sqrt(Math.max(lat*.5, lat+bankLat) / curve) * Math.min(1, k) * (bpLane ? BP_LANE_K : 1);
           vq = Math.min(vq, cap); legacyVq = Math.min(legacyVq, cap);
         }
       }
@@ -1324,7 +1348,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (jumpCap.size && jumpCap.has(iq)) vq = Math.min(vq, jumpCap.get(iq) * Math.min(jumpK, 1.12));
       const dq = mbOn ? Math.max(0, q * ds - speed * rampT) : q * ds;
       const allow = Math.sqrt(vq * vq + 2 * kB * gHere * aBrk(vq) * dq);
-      if (allow < tgt) { tgt = allow; tgtWhy = vq < vqLine - 0.5 ? 'lane' : 'plan'; ffDec = q > 0 ? kB * gHere * aBrk(vq) : 0; } // 장면 저장(F8) 진단: 옆 차선 커브 계산이 깎았는지
+      if (allow < tgt) { tgt = allow; tgtQ = q; tgtVq = vq; tgtVl = vqLine; tgtWhy = vq < vqLine - 0.5 ? 'lane' : 'plan'; ffDec = q > 0 ? kB * gHere * aBrk(vq) : 0; } // 장면 저장(F8) 진단: 옆 차선 커브 계산이 깎았는지
     }
     // 마스터(level.master.saturBrake): 도움으로 빨라진 만큼 핸들이 모자라면(끝까지 꺾어도 원하는 만큼 못 돎) 바로 액셀을 떼고 줄임
     //   (화산 T7 출구·H1 출구에서 핸들 끝까지 꺾은 채 바깥 벽에 박혔음. 어려움은 이 규칙 없음 = 예전 그대로)
@@ -1347,9 +1371,16 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 최고 속도 (직선이 긴 맵에서도 실력 차이가 나게). 부스터 중에는 제한 없음
     //   (aeroTop: 위 슬립스트림·견인·DRS 몫, 상한에도 같이)
     const tgtPreTop = tgt;
-    if (level.topK && !boosting) tgt = Math.min(tgt, vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul) * aeroTop);
+    let topCap = Infinity;
+    if (level.topK && !boosting) topCap = vTop * level.topK * pm * (st.calm ? Math.min(eq.topMul, eq.topCalm) : eq.topMul) * aeroTop;
     // 따라잡기 효과로 늦추는 중(paceMul < 1)이면 직선 최고 속도도 같이 낮춤 (코너만 늦추면 효과가 거의 없음)
-    else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) tgt = Math.min(tgt, vTop * st.paceMul * eq.topMul * aeroTop);
+    else if ((st.paceMul < 0.999 || eq.topMul < 0.999) && !boosting) topCap = vTop * st.paceMul * eq.topMul * aeroTop;
+    // botpush top: 슬립스트림(앞차 공기)을 받은 뒤 1.5초·추월 중에는 어려움·마스터의 직선 상한 없음 (사람처럼 모은 속도를 그대로 가져감)
+    if (BP_TOP) {
+      st.draftT = (car.draft || 0) > 0.05 ? 0 : (st.draftT ?? 99) + dt;
+      if (BP_TOP_FREE && (level.topK || 1) >= 0.99 && !st.calm && car.grounded && (st.draftT < 1.5 || (st.overtake && st.overtake.phase === 'pass'))) topCap = Infinity;
+    }
+    tgt = Math.min(tgt, topCap);
     if (tgt < tgtPreTop - 0.01) tgtWhy = 'top';
     // 앞이 막혀 거의 멈춰 있으면 추월 경로를 다시 준비
     if (follow < 3 && Math.abs(speed) < 3 && ctx.since > 1) st.blockedT += dt;
@@ -1369,10 +1400,12 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       if (follow < tgt) tgtWhy = 'follow';
       tgt = Math.min(tgt, follow);
     }
+    // botpush top: 브레이크는 상한을 뺀 목표로 (상한 때문에는 액셀만 뗌)
+    const tgtBrake = BP_TOP ? (onMagnet ? tgtPreTop : Math.min(tgtPreTop, follow)) : tgt;
     if (st.passT > 0) st.passT -= dt;
     if (speed > tgt + 0.4) {
       c.throttle = 0;
-      c.brake = clamp((speed - tgt) / 3, 0, 1);
+      c.brake = clamp((speed - tgtBrake) / 3, 0, 1);
     }
     if (mbOn && ffDec > 0 && (tgtWhy === 'plan' || tgtWhy === 'lane') && speed > tgt - 1.5) {
       // 앞먹임 제동: 곡선이 가정한 감속(ffDec) 중 공기·구름 저항이 해 주는 몫을 뺀 만큼을 지금 브레이크 힘으로 나눔
@@ -1383,7 +1416,14 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const ff = clamp(need / bF, 0, 1) * clamp((speed - tgt + 1.5) / 1.5, 0, 1);
       if (ff > 0.05) { c.throttle = 0; c.brake = clamp(Math.max(c.brake || 0, ff + Math.max(0, speed - tgt) / 3), 0, 1); }
     }
-    if (saturLift) c.throttle = 0;
+    if (saturLift) {
+      if (BP_LIFT && !hold && !shove) { // 옆 차와 나란히(hold)·밀리는 중(shove)이면 예전처럼 액셀 0 (마스터 7봇 시험에서 그때 덜 떼면 강한 접촉이 2배)
+        // 바깥 도로 끝 여유가 '필요 거리'의 2배면 다 밟음, 필요 거리에 가까울수록·많이 모자랄수록·미끄러질수록 덜 밟음 (여유가 필요 거리 아래면 위 'satur' 브레이크)
+        const need = 3 + speed * 0.04, m = clamp(((st.saturRoom ?? 0) - need) / need, 0, 1);
+        const slipK = clamp(1 - (Math.abs(car.slip || 0) - 0.08) / 0.06, 0, 1);
+        c.throttle = Math.min(c.throttle, m * clamp(1.2 - 0.6 * st.saturLast, 0, 1) * slipK); // 모자람 0.5 → 0.9, 1 → 0.6, 2 넘으면 0
+      } else c.throttle = 0;
+    }
     if (MTRAIL && exactMaster && trailL > -0.95 && c.brake > 0.05 && car.grounded && car.mode !== 'fly' && car.mode !== 'boat' && car.surface !== 'magnet' && speed > 12
         && st.mNeed > 0.85 * steerLatCap(car.cfg, speed, trailL, 0, botSurf(car))) {
       const cf = car.cfg, dfv = cf.aero.downforce * Math.min(1.6, (speed / cf.maxSpeed) ** 2);
@@ -1405,7 +1445,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, satur: st.saturLast || 0 };
+    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, satur: st.saturLast || 0, tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {
