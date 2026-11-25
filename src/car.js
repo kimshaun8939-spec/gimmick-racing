@@ -26,6 +26,9 @@ const WALL_STEER = !(typeof location !== 'undefined' && new URLSearchParams(loca
 const FLY2 = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('fly2') === '0');
 // nospin (2026-11-24, 사용자 "스핀은 모든 차에서 일어나지 않게, 대신 스핀이 일어나지 않을 정도로만 꺾이게"): car.json nospin. &spin=1 = 예전(스핀 가능)
 const NOSPIN = !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('spin') === '1');
+// spin2 (2026-11-25, 사용자 장면 파일: 브레이크·액셀 뗌·다시 밟기 + 끝까지 꺾기에서 꼬리가 12~17°까지 흘러 머리가 초당 40~50° 돎 = '스핀처럼'):
+//   미끄럼각 상한을 '지금 회전을 따라가는 데 필요한 각 × needMul + slipExtra'로 낮춤 (car.json spin2). &spin2=0 = 예전(nospin 한계만)
+const SPIN2 = NOSPIN && !(typeof location !== 'undefined' && new URLSearchParams(location.search).get('spin2') === '0');
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 
@@ -1112,6 +1115,25 @@ export class Car {
         this.slip -= sg * e;
         if (Math.sign(this.yawRate) === sg) this.yawRate = sg * Math.max(0, Math.abs(this.yawRate) - e / dt);
         this.spinGuardT = (this.spinGuardT || 0) + dt; // 시험용: 막은 시간 합
+      }
+    }
+    // spin2: 꼬리 흐름(오버스티어) 상한을 '필요한 만큼'으로. 핸들로 도는 빠르기(yawRate)를 진행 방향이 따라오려면 미끄럼 need가 있으면 되고
+    //   (타이어가 진행 방향을 끌어오는 몫 1-exp(-grip·dt) 기준), 그보다 needMul배 + slipExtra(rad) 넘게 커지는 회전은 막음
+    //   → 브레이크·액셀 뗌·파워로 뒤가 버거워도 꼬리가 바깥으로 흘러 머리가 휙 돌지 않고, 차는 뒤 타이어가 따라 돌 수 있는 만큼만 돎.
+    //   진행 방향이 도는 빠르기(코너링 한계)·브레이크는 그대로 (막은 회전만큼 scrub으로 살짝 감속). 이미 큰 미끄럼(충돌 등)은 더 커지지만 않게 (nospin과 같음). 사람·봇 같은 규칙
+    if (SPIN2 && cfg.spin2 && vNow > (cfg.spin2.minSpeed ?? 8)) {
+      const S2 = cfg.spin2, b = feel2 ? this.feel2Beta : 0, a = this.slip - b, sg = Math.sign(a);
+      const kG = 1 - Math.exp(-cfg.grip * (1 - 0.4 * offK) * (spike ? cfg.booster.gripFactor : 1) * dt);
+      const need = Math.sign(this.yawRate) === sg ? (Math.abs(this.yawRate) * dt) / kG : 0;
+      const lim = Math.max(Math.min(this.spinSlipMax(), need * (S2.needMul ?? 1.1) + (S2.slipExtra ?? 0.05)), Math.abs(slip0 - b));
+      if (Math.abs(a) > lim) {
+        const e = Math.abs(a) - lim;
+        this.fwd.applyAxisAngle(this.up, sg * e);
+        this.slip -= sg * e;
+        // 막은 회전만큼 살짝 감속 (자세 제어가 바퀴를 잡아 꼬리를 잡는 느낌): 예전엔 꼬리가 흐르며 옆 미끄럼으로 깎이던 속도를
+        //   막은 각 × scrub만큼 → 같은 입력이면 예전처럼 코너 안으로 들어감 (안 깎으면 더 빨라 넓게 밀려 벽에 닿았음)
+        f -= f * Math.min(0.02, (S2.scrub ?? 0.6) * e);
+        this.spin2T = (this.spin2T || 0) + dt; // 시험용: 막은 시간 합
       }
     }
     // wallstick2: preserve steering away from a wall while the nose realigns.

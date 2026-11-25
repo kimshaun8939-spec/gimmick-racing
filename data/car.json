@@ -54,6 +54,7 @@
     "slipDrag": 0.6
   },
   "_impact": "세게 부딪혔을 때 (벽·블록·건물·가드레일). 들이받는 속도(벽 쪽 성분)가 minSpeed m/s부터 효과가 생겨 minSpeed+fullSpeed에서 최대. friction: 긁히는 마찰로 잃는 속도 = 들이받는 속도 × 이 값 (최대 maxLoss 비율), align: 차 방향을 새 진행 방향 쪽으로 돌리는 비율, maxSlip: 부딪힌 뒤 남는 미끄러짐 최대(rad), yawKeep: 돌던 회전이 남는 비율, recover: 이 시간(초) 동안 꼬리가 더 돌아가지 않고 드리프트도 다시 안 걸림, alignRate: 차 방향이 돌아가는 빠르기 (클수록 확 돎, 15면 0.1초에 약 78%)",
+  "spin2": { "_설명": "spin2 (2026-11-25, 사용자 장면 F8 '스핀이 일어난 거 같음'): src/car.js. 땅 위 미끄럼각 상한 = min(nospin 한계, 지금 핸들 회전을 진행 방향이 따라가는 데 필요한 각 × needMul + slipExtra rad). 브레이크·액셀 뗌·다시 밟기로 꼬리가 12~17°까지 흐르던 것을 약 3~6°로. scrub = 막은 회전 각(rad) × 이 값만큼 속도를 깎음(예전 꼬리 미끄럼이 깎던 속도 대신, 같은 입력이면 코너 안으로 들어감). minSpeed(m/s) 아래는 안 봄. 주소 &spin2=0 = 예전", "needMul": 1.1, "slipExtra": 0.05, "scrub": 0.6, "minSpeed": 8 },
   "nospin": { "_설명": "nospin (2026-11-24, 사용자 \"스핀은 모든 차에서 일어나지 않게, 대신 스핀이 안 날 정도로만 꺾이게\"): src/car.js. rearUse = 핸들로 도는 빠르기 ≤ 지금 뒤 타이어 한계(휠스핀·파워·리프트오프·브레이크 포함) × 이 값. slipMax = 미끄럼각 한계(rad) = 차 tire.tuckMax + slipMargin, slipMin~slipMaxCap 안 (차마다 tire.slipMax로 직접 정할 수도 있음). 한계에서는 머리가 더 안 돎. swingCap = 꼬리 돌림 ≤ 뒤가 진행 방향을 끌어오는 몫 × 이 값 (1 미만이면 손을 놓으면 늘 스스로 잡힘), fadeZone = 한계 아래 이 비율 구간에서 꼬리 돌림이 0으로 줄어듦. airSlip = 공중에서 날아가는 방향과 벌어질 수 있는 최대 각(rad). 주소 &spin=1 = 예전", "rearUse": 0.97, "slipMargin": 0.1, "slipMin": 0.25, "slipMaxCap": 0.42, "swingCap": 0.6, "fadeZone": 0.35, "airSlip": 0.35 },
   "impact": { "minSpeed": 6, "fullSpeed": 14, "friction": 0.35, "maxLoss": 0.45, "align": 0.7, "maxSlip": 0.3, "yawKeep": 0.25, "recover": 0.7, "alignRate": 15,
     "wallClearance": 0.18,
