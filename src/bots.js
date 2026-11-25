@@ -458,6 +458,47 @@ const BK_EARLY = BRAKEPASS && !BK_OFF.has('early'), BK_LATE = BRAKEPASS && !BK_O
 const DODGE = BK_Q.get('dodge') !== '0', DG_OFF = new Set((BK_Q.get('dgoff') || '').split(/[,.]/));
 const DG_START = DODGE && !DG_OFF.has('start'), DG_FOLLOW = DODGE && !DG_OFF.has('follow'), DG_CURVE = DODGE && !DG_OFF.has('curve');
 const DG_PRED_OV = BK_Q.get('dgpred') !== 'abs', DG_PROJ = BK_Q.get('dgproj') === '1', DG_T = +(BK_Q.get('dgt') || 1.6);
+// boldpass (2026-11-25, 사용자 "봇들이 충돌에 너무 쫄지 않게 … 빈틈에서 충돌하면서 들어가면 파고들 수 있는데 통과할 만해도 멈춤"):
+//   차끼리 닿아도 스핀이 안 나고(nospin·softContact) 사람·봇 같은 물리 → '닿을 것 같다'는 이유로 브레이크·양보·추월 포기를 덜 함. 운전 판단만 (성능·물리 그대로)
+//   (side)  내 앞 끝이 상대 뒤 끝보다 1 m 넘게 앞(= 나란히, 닿아도 옆으로 비빔)이면 그 차 때문에 브레이크 안 함 = 먼저 코를 넣은 쪽이 줄을 지킴
+//   (yield) 나란히 코를 넣은 뒤에는 옆 차가 내 줄로 들어와도 양보 브레이크 안 함 (줄은 지금 자리 유지, 밀어내지는 않음)
+//   (hold)  사람 옆에서 비켜 있을 줄이 도로 밖이라 뒤로 빠지던 것: 코가 들어가 있고 지금 줄이 도로 안이면 늦추지 않고 지금 줄 유지
+//   (rear)  추월 중 뒤에서 다가갈 때: 범퍼가 닿는 순간의 옆 겹침(지금 옆 간격 + 두 차 옆 움직임으로 예측)이 없으면 브레이크 안 함,
+//           조금(≤0.9 m, 차 반 대 안)이면 3.5 m/s 넘게 빠르게 닿지 않을 만큼만, 많이 겹치면(뒤에서 정면으로 박음) 예전 그대로
+//   조건: 땅 위·위험/좁은 길/합류 위험 아님·12 m/s 넘음·내 차 전체가 앞 0.6초 동안 도로 안. 사람 상대만 (&bold=2 = 봇끼리도, 시험)
+//   (dodge) 사용자 "옆으로 피해서 정확한 타이밍에 브레이크를 밟으면 되잖아": 앞차에 크게 빨리 다가가도 먼저 브레이크부터 밟지 않음.
+//           옆으로 비킬 줄(차 전체 도로 안, 그 줄 근처·나와 앞차 사이에 다른 차 없음)이 있으면 dodge로 비키고, 브레이크는 내 계획대로(코너 앞이면 그 코너 브레이크 지점).
+//           비킬 수 있는지는 핸들 지연(약 0.45초)+옆으로 옮기는 속도로 다 비키는 시간 < 범퍼가 닿을 때까지 시간(아래 예측)으로. 못 비키면 예전처럼 범퍼에 안 닿을 만큼만
+//           (예전 dodge는 앞차가 사람이고 앞 45 m에 다른 차가 없을 때만, 비키는 동안에도 사람 속도 −0.5 m/s까지는 줄였음)
+//   (bpred) 앞차 예측 (bpPredict, 사용자 추가 요청 2): 앞차가 라인 쪽으로 돌아가며 코너를 돌고, 앞에 브레이크 구간이 있으면 계획 브레이크 지점 근처에서 줄인다고 보고
+//           범퍼가 닿을 시간·그때 앞차 줄을 계산 → dodge 시작·비킬 쪽 고르기·추월 중 뒤 겹침 판단에 씀. 매 스텝 실제 위치·속도로 다시 계산
+//   (satur) contact2 제안: 사람과 옆으로 닿은 뒤 0.3초는 핸들이 끝까지 꺾여도 브레이크 대신 액셀만 뗌 (바깥 도로 끝 1.5 m 넘게 남고 낭떠러지·용암 아닐 때)
+//   &bold=0 = 예전 그대로, &bdoff=side,yield,hold,rear,dodge,satur = 하나만 끄기, &bpred=1 = 앞차 예측 켜기(기본 끔, 끄면 예전 dodge 예측), (시험) &bdnose=·&bdovl=·&bdcv=
+const BOLD = BK_Q.get('bold') !== '0', BD_ALL = BK_Q.get('bold') === '2', BD_OFF = new Set((BK_Q.get('bdoff') || '').split(/[,.]/));
+const BD_SIDE = BOLD && !BD_OFF.has('side'), BD_YIELD = BOLD && !BD_OFF.has('yield'), BD_HOLD = BOLD && !BD_OFF.has('hold'), BD_REAR = BOLD && !BD_OFF.has('rear');
+const BD_DODGE = BOLD && !BD_OFF.has('dodge'), BD_PRED = BOLD && BK_Q.get('bpred') === '1' /* 2026-11-25 기본 끔: gpB 시험에서 큰 속도 차 dodge를 너무 일찍 시작해 코너에서 핸들 한계 감속(satur)이 커짐. &bpred=1이면 켬 */, BD_SATUR = BOLD && !BD_OFF.has('satur');
+const BD_NOSE = +(BK_Q.get('bdnose') || 1), BD_OVL = +(BK_Q.get('bdovl') || 0.9), BD_CV = +(BK_Q.get('bdcv') || 3.5);
+// boldpass bpred: 앞차가 T초 뒤 어디 있을지 (위치·속도만 보고 사람·봇 같은 방법, 사람 입력은 안 봄)
+//   옆: 라인 기준 옆 거리(lane)가 지금 옆 속도(ov)로 움직이다가 점점 라인 쪽으로 돌아감 (ov는 tv초로 줄고, lane은 tr초로 라인에 붙음)
+//       → 코너 앞에서 바깥에 있던 앞차가 곧 에이펙스(라인) 쪽으로 꺾어 들어온다는 것을 앎. 도로 안으로 자름
+//   앞뒤: 앞차가 지금 '계획 대비 빠르기'(k = 속도 / 그 자리 계획 속도)로 계획 속도를 따라감 = 앞에 브레이크 구간이 있으면 계획 브레이크 지점 근처에서 줄이기 시작
+//         실제 감속(acc < −3 m/s²)이 보이면 그걸 우선 (계획보다 더 줄이는 쪽, 처음 속도의 35%까지)
+//   매 스텝 지금 위치·속도로 다시 계산 → 예측이 틀리면 바로 실제 움직임으로 고쳐짐. 오차 (미라지 장면 8개, 사람/봇, 옆 m): 0.5초 1.6/1.1, 1초 2.9/1.5, 2초 4.3/1.9 (예전 1.8/1.4, 3.8/2.6, 6.5/3.5)
+export function bpPredict(L, sp, ds, j0, lane, ov, v0, acc, T, hb = 1.2, tv = .6, tr = 3, out = {}, each = null) {
+  const N = L.N, h = .05, n = Math.max(0, Math.ceil(T / h - 1e-6)), k = Math.min(1.12, Math.max(.7, v0 / Math.max(5, sp[j0])));
+  let s = 0, v = Math.max(0, v0), ln = lane, lv = ov;
+  for (let q = 0; q < n; q++) {
+    const hh = Math.min(h, T - q * h), j = ((j0 + Math.round(s / ds)) % N + N) % N;
+    let vn = Math.min(v + 6 * hh, k * sp[j]);
+    if (acc < -3) vn = Math.max(.35 * v0, Math.min(vn, v + acc * hh));
+    s += (v + vn) * .5 * hh; v = Math.max(0, vn);
+    lv *= Math.exp(-hh / tv); ln += (lv - ln / tr) * hh;
+    const jj = ((j0 + Math.round(s / ds)) % N + N) % N;
+    ln = Math.min(L.hi[jj] - hb - L.offset[jj], Math.max(L.lo[jj] + hb - L.offset[jj], ln));
+    if (each && each(s, v, ln, (q + 1) * h - h + hh, hh)) break; // 한 칸마다 (지나간 거리, 속도, 줄, 시간, 칸 길이), true면 멈춤
+  }
+  out.s = s; out.v = v; out.lane = ln; out.j = ((j0 + Math.round(s / ds)) % N + N) % N; return out;
+}
 export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
   const LL = opts.line !== undefined ? opts.line : learnedLineFor(track, car.cfg, level); // [learned hook 2] 학습 라인이 있으면 그 라인·속도 계획
   if (LL) prof = profileFor(LL, car.cfg);
@@ -864,9 +905,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     }
 
     // --- pack2: 차 사이의 공간을 먼저 확인하고, 같은 줄 앞차만 따라감 ---
-    let follow = Infinity, busy = false, lateBrake = 0, hold = 0, shove = 0, attack = null;
+    let follow = Infinity, fsrc = '', busy = false, lateBrake = 0, hold = 0, shove = 0, attack = null;
     // 실제 지상 제동력에는 중력 배수가 없음. 마스터는 그 제동력으로 계획한다.
     // 다른 단계의 기존 여유와 물리는 그대로 둔다.
+    const setF = (x, tag) => { const nf = Math.min(follow, x); if (nf !== follow) fsrc = tag; follow = nf; }; // (진단 boldpass) 어느 판단이 앞차 속도 맞추기를 정했나
     const myLat = ti.lateral, gHere = level.master ? 1 : gAt(i0), pushing = st.passT > 0;
     const jumpSoon = !!jumpZone && !!jumpZone[i0];
     const boatQueue = car.mode === 'boat' && car.surface === 'water';
@@ -1013,6 +1055,24 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         const raw=old&&dA>1e-4&&dA<.1?clamp((o.lat-old.lat)/dA,-8,8):0;lm.set(k,{lat:o.lat,lv:old?old.lv+(raw-old.lv)*Math.min(1,dA*10):0});}
       for(const k of lm.keys())if(!seen.has(k))lm.delete(k);
     }
+    // boldpass bpred: 앞차 예측(bpPredict) + 내 계획 속도(브레이크 구간이면 내 계획 브레이크 지점에서 줄임)로 범퍼가 닿을 때 T(2.5초 안에 없으면 Infinity)·그때 앞차 줄·속도 차
+    const bpMemo=new Map();
+    const bpSt=o=>{const sg=st.sideSight?.get(keyOf(o)),g=actualGap(o);return {sg,g,jO:W(i0+Math.round(Math.max(0,g)/ds)),hb:boxOf(o).half+.2};};
+    const bpLaneAt=(o,T)=>{const b=bpSt(o);return bpPredict(L,prof.speed,ds,b.jO,o.lane,b.sg?.ov||0,o.speed,b.sg?.acc||0,clamp(T,0,2),b.hb).lane;};
+    const bpMeet=o=>{
+      const key=keyOf(o);let M=bpMemo.get(key);if(M)return M;
+      const b=bpSt(o),rsp=rearSpace(o),kMe=clamp(speed/Math.max(5,prof.speed[i0]),1,1.1);
+      let sMe=0,vMe=speed;M={T:Infinity,lane:o.lane,vT:o.speed,closeP:0};
+      if(b.g<=rsp)Object.assign(M,{T:0,closeP:speed-o.speed});
+      else bpPredict(L,prof.speed,ds,b.jO,o.lane,b.sg?.ov||0,o.speed,b.sg?.acc||0,2.5,b.hb,.6,3,{},(s,vl,ln,t,hh)=>{
+        const tv=kMe*prof.speed[W(i0+Math.round(sMe/ds))],vn=tv<vMe?Math.max(tv,vMe-14*hh):Math.min(tv,vMe+5*hh);
+        sMe+=(vMe+vn)*.5*hh;vMe=vn;
+        if(t<=2.0001){M.lane=ln;M.vT=vl;}
+        if(b.g+s-sMe<=rsp){M.T=t;M.lane=ln;M.vT=vl;M.closeP=vMe-vl;return true;}
+        return false;
+      });
+      bpMemo.set(key,M);return M;
+    };
     const dgInfo=o=>{
       const sg=st.sideSight?.get(keyOf(o)),acc=sg?.acc||0,lv=st.dgLat?.get(keyOf(o))?.lv||0;
       const gap=actualGap(o),closeV=Math.max(0,speed-o.speed),rel=Math.max(0,(st.dgAcc||0)-acc);
@@ -1021,6 +1081,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const jM=W(i0+Math.round((Math.max(0,gap)+Math.max(0,o.speed+acc*Tm*.5)*Tm)/ds)),hb=boxOf(o).half+.2;
       const jO=W(i0+Math.round(Math.max(0,gap)/ds));
       const pred=DG_PRED_OV?clamp(o.lane+(sg?.ov||0)*Tm,L.lo[jO]+hb-L.offset[jO],L.hi[jO]-hb-L.offset[jO]):clamp(o.lat+lv*Tm-L.offset[jM],L.lo[jM]+hb-L.offset[jM],L.hi[jM]-hb-L.offset[jM]);
+      if(BD_PRED&&car.grounded){const M=bpMeet(o);return {acc,lv,gap,closeV,rel,T:M.T,pred:M.lane,closeP:M.closeP};}
       return {acc,lv,gap,closeV,rel,T,pred};
     };
     const dgChoose=(o,I,prefer=0)=>{
@@ -1161,6 +1222,12 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       sideContactAnswer = true;
       return true;
     };
+    // boldpass: 이 차와는 과감하게 (사람 상대, 땅 위, 내 줄이 앞 0.6초 도로 안)
+    let bdRoomA;
+    const bdFor = o => BOLD && bold && !!o && !o.fin && (BD_ALL || !!o.human) && car.grounded && car.mode !== 'boat' && car.mode !== 'fly' && car.surface !== 'magnet'
+      && !risky && !narrowSoon && !mergeHazard && speed > 12 && (bdRoomA ??= fits(actualLane, .6));
+    const noseIn = o => rearSpace(o) - actualGap(o); // + = 내 앞 끝이 상대 뒤 끝보다 그만큼 앞 (나란히)
+    let bdTag = '';
 
     let want=st.laneTarget;
     // merge: 코너 안에서는 바깥쪽으로 라인에 돌아올 때만 (안쪽으로 조이면 핸들이 모자라 크게 감속)
@@ -1190,10 +1257,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       }
       if(DG_START&&bold&&!ctx.finished&&!risky&&!narrowSoon&&!mergeHazard&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&speed>15&&ctx.since>2&&!(move&&move.bp==='dodge')){
         let o=null,og=90;
-        for(const p of peers){if(!p.human||p.fin)continue;const g=actualGap(p);if(g>rearSpace(p)+.3&&g<og&&nfOK(p)){o=p;og=g;}}
+        for(const p of peers){if(p.fin||!(p.human||BD_ALL&&BD_DODGE))continue;const g=actualGap(p);if(g>rearSpace(p)+.3&&g<og&&(nfOK(p)||BD_DODGE&&bdFor(p)&&!peers.some(q=>q!==p&&q.dm>-rearSpace(q)-1&&q.dm<g+3))){o=p;og=g;}}
         if(o&&(!move||keyOf(o)===move.key)){
           const I=dgInfo(o),w=sideSpace(o);
-          const urgent=I.closeV+Math.min(25,I.rel)*.5>Math.max(6,.08*speed)&&I.T<DG_T&&(Math.abs(I.pred-actualLane)<w+1||Math.abs(o.lat-myLat)<w+1);
+          const urgent=Math.max(I.closeV+Math.min(25,I.rel)*.5,I.closeP||0)>Math.max(6,.08*speed)&&I.T<DG_T&&(Math.abs(I.pred-actualLane)<w+1||Math.abs(o.lat-myLat)<w+1);
           const conflict=!move||move.phase==='approach'||Math.abs(move.off-I.pred)<w+.2||Math.abs(move.off-o.lane)<w+.2;
           if(urgent&&conflict){
             const c=dgChoose(o,I,move?.side||0);st.dgSeen=(st.dgSeen||0)+1;
@@ -1215,7 +1282,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         st.otWhy=!(gap>closeOK)?(DBG_OT?'close'+gap.toFixed(2)+'/'+rearSpace(front).toFixed(2)+'c'+closing.toFixed(1):'close'):!(gap<Math.min(65,Math.max(30,v*1.1)))?'far':!(closing>minClosing||trapped)?'noclose':!(bold||!cornerSoon)?'corner':(cooperative&&!(!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2)))?'coop':'';
         if(gap>closeOK&&gap<Math.min(65,Math.max(30,v*1.1))&&(closing>minClosing||trapped)&&(bold||!cornerSoon)&&(!cooperative||!brakeSoon&&!cornerSoon&&(closing>1.2||st.heldT>2))){
           const choices=options(front).sort((a,b)=>{
-            const cost=x=>Math.abs(x-st.lane)+(brakeSoon&&Math.sign(x-front.lane)!==turnSide?1.1:0);
+            const fP=BD_PRED&&bdFor(front)?bpLaneAt(front,1):null;
+            const cost=x=>Math.abs(x-st.lane)+(brakeSoon&&Math.sign(x-front.lane)!==turnSide?1.1:0)+(fP!=null&&Math.abs(x-fP)<sideSpace(front)+.2?1.5:0);
             return cost(a)-cost(b);
           });
           let off=choices[0],short=false;
@@ -1300,14 +1368,14 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
           if(sd*(want-minL)>=0)continue;
           // 그 줄이 앞으로 도로 안에 다 들어가면 버팀, 아니면(코너 바깥으로 밀려남) 줄은 그대로 두고 살짝 늦춰서 사람 뒤로 빠짐
           const keep=sd*(actualLane-minL)<0?actualLane:minL;
-          if(fits(keep,.6))want=keep;else{want=actualLane;follow=Math.min(follow,Math.max(3,o.speed-1.5));}
+          if(fits(keep,.6))want=keep;else{want=actualLane;if(BD_HOLD&&bdFor(o)&&noseIn(o)>=BD_NOSE)bdTag='hold';else setF(Math.max(3,o.speed-1.5),'holdback'+(o.human?'H':'B'));}
         }
       }
     }
     if(!launchColumns&&Math.abs(want-actualLane)>.15&&crosses(want)) {
       // 자기 줄로 되돌아오는 작은 보정은 버티고, 옆 차를 가로지르는 합류만 보류.
       const blockedBy=beside.filter(o=>(want-o.lane)*(actualLane-o.lane)<0||Math.abs(want-o.lane)<sideSpace(o)+.12);
-      for(const o of blockedBy)if(!briefSideContact(o)&&yieldTo(o)&&Math.abs(actualLane-o.lane)<sideSpace(o)*.75)follow=Math.min(follow,Math.max(3,o.speed-1));
+      for(const o of blockedBy)if(!briefSideContact(o)&&yieldTo(o)&&Math.abs(actualLane-o.lane)<sideSpace(o)*.75&&!(BD_YIELD&&bdFor(o)&&noseIn(o)>=BD_NOSE&&(bdTag='yield')))setF(Math.max(3,o.speed-1),'yield'+(o.human?'H':'B'));
       want=actualLane;
     }
     if(beside.length&&!risky&&!mergeHazard)hold=bold?.25:.1;
@@ -1336,6 +1404,23 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       const dLat=o.lat-myLat,gap=actualGap(o),closing=Math.max(0,speed-o.speed),width=sideSpace(o);
       if(!briefSideContact(o)&&gap>0&&gap<100&&Math.abs(dLat)<width+.08){
         const target=!!move&&o===leader;
+        if((BD_SIDE||BD_REAR)&&bdFor(o)){
+          const nose=noseIn(o);
+          // side: 이미 나란히 (내 앞 끝이 상대 뒤 끝보다 1 m 넘게 앞, 옆으로 비켜 있음) → 닿아도 옆으로 비빔, 브레이크 안 함
+          if(BD_SIDE&&nose>=BD_NOSE&&Math.abs(dLat)>=width*.4){bdTag='side';continue;}
+          // rear: 추월 중 뒤에서 다가감 → 범퍼가 닿는 순간 옆으로 얼마나 겹칠지
+          if(BD_REAR&&target&&move.phase==='pass'&&nose<BD_NOSE){
+            const sg=sight.get(keyOf(o)),gN=gap-rearSpace(o),Tp=clamp(Math.max(0,gN)/Math.max(closing,.5),0,1.2);
+            // 내 옆 움직임: 지금 움직임(mv), 가려는 줄 쪽이면 핸들 지연(0.35초) 뒤 줄 이동 속도의 70%까지, 가려는 줄을 넘지 않음
+            const want=clamp(L.offset[i0]+st.laneTarget,L.lo[i0]+.2,L.hi[i0]-.2)-myLat,mv=sg?.mv||0;
+            const mvE=Math.sign(want)===Math.sign(mv)||Math.abs(want)<.05?Math.max(Math.abs(mv),laneRate*.7*clamp((Tp-.35)/Math.max(Tp,.01),0,1)):0;
+            const myMove=Math.abs(want)<.05?mv*Tp:Math.sign(want)*Math.min(Math.abs(want),mvE*Tp);
+            const sepT=dLat+(BD_PRED?bpLaneAt(o,Tp)-o.lane:(sg?.ov||0)*Math.min(Tp,.6))-myMove;
+            const ovl=Math.sign(sepT)!==Math.sign(dLat)&&Math.abs(dLat)>.05?width:width-Math.abs(sepT);
+            if(ovl<=0){bdTag='clear';continue;}
+            if(ovl<=BD_OVL){bdTag='nudge';setF(Math.sqrt((o.speed+BD_CV)**2+2*6*gHere*Math.max(0,gN-.3)),'bold'+(o.human?'H':'B'));continue;}
+          }
+        }
         const desired=clamp(L.offset[i0]+st.laneTarget,L.lo[i0]+.2,L.hi[i0]-.2);
         const toSide=target&&move.sepV>.25?Math.max(0,width+.12-Math.abs(dLat))/move.sepV:Infinity;
         const envelope=rearSpace(o)+.25;
@@ -1355,16 +1440,16 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
             const aL=Math.min(0,sight.get(keyOf(o))?.acc||0),room=gap-envelope-.35;
             let fv=Math.max(0,o.speed+(room>0?room/Tc:-Math.sqrt(10*gHere*-room))+aL*Tc*.5);
             if(dgF&&room>0&&move.dgOk)fv=Math.max(fv,o.speed+aL*Math.min(Tc,.3)-.5); // dodge: 비킬 수 있으면 사람보다 느려지지 않을 만큼만 (마지막 안전 브레이크는 그대로)
-            follow=Math.min(follow,fv);
+            if(!(BD_DODGE&&dgF&&move.dgOk&&room>0&&bdFor(o)&&Tc+.1<dgInfo(o).T&&(bdTag='dodge')))setF(fv,'evade'+(o.human?'H':'B'));
             evadeTc=Tc;
           }
-          else if(target){if(!(slingNow&&(move.passAge||0)<1.2&&Math.abs(desired-o.lat)>width+.12)){const room=gap-gapM;follow=Math.min(follow,Math.max(0,o.speed+Math.sign(room)*Math.sqrt(10*gHere*Math.abs(room))));}}
-          else if(Math.abs(o.lane-lane)<width+.25||gap<gapM+closing*2+3)follow=Math.min(follow,Math.sqrt(Math.max(0,o.speed*o.speed+2*7*gHere*(o.dm-gapM))));
+          else if(target){if(!(slingNow&&(move.passAge||0)<1.2&&Math.abs(desired-o.lat)>width+.12)){const room=gap-gapM;setF(Math.max(0,o.speed+Math.sign(room)*Math.sqrt(10*gHere*Math.abs(room))),'target'+(o.human?'H':'B'));}}
+          else if(Math.abs(o.lane-lane)<width+.25||gap<gapM+closing*2+3)setF(Math.sqrt(Math.max(0,o.speed*o.speed+2*7*gHere*(o.dm-gapM))),'lane'+(o.human?'H':'B'));
         }
         // 앞날개가 뒷범퍼에 닿기 전에는 반드시 제동. 나란히 확보한 옆 접촉과 구별.
         // 슬립스트림 추월로 옆으로 빠르게 비키는 중이면, 다 비키는 시간이 범퍼에 닿는 시간의 70%보다 짧을 때는 안 밟음
         const sideClear=target&&evadeTc<Infinity&&evadeTc<Math.max(0,gap-rearSpace(o))/Math.max(closing,.1)*.7||target&&slingNow&&move.sepV>1&&Math.max(0,width+.08-Math.abs(dLat))/move.sepV<Math.max(0,gap-rearSpace(o))/Math.max(closing,.1)*.7;
-        if(!sideClear&&gap<envelope+closing*.2+closing*closing/(16*gHere))follow=Math.min(follow,Math.max(0,o.speed-2));
+        if(!sideClear&&gap<envelope+closing*.2+closing*closing/(16*gHere))setF(Math.max(0,o.speed-2),'safe'+(o.human?'H':'B'));
       }
     }
     const inSide=move&&turnSide===move.side?1:0;
@@ -1567,6 +1652,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     let saturLift = false;
     if (sBrake && !straightPass && car.grounded && speed > 12 && st.satur > 0.05) {
       if (SAT_LIFT && st.saturSafe && !(BRAKEPASS && move && move.bp) && (st.saturRoom ?? 0) > 3 + speed * 0.04 && !(MSAT && exactMaster && !hold && !shove && !(MSATL && trailL > -0.95 && (car.load || 0) < trailL + 0.1))) { saturLift = true; tgtWhy = 'saturLift'; }
+      else if (BD_SATUR && bold && car.simT - (car._sideContactAt ?? -Infinity) < .3 && car.simT >= (car._sideContactAt ?? 0) && (BD_ALL || peers.some(o => o.human && o.pos === car._sideContactOther))
+        && (st.saturRoom ?? 0) > 1.5 && !(track.EDGE && track.edgeAt && [track.EDGE.cliff, track.EDGE.lava].includes(track.edgeAt(i0, steerCmd > 0 ? -1 : 1)))) { saturLift = true; tgtWhy = 'saturLift'; bdTag = 'satur'; } // boldpass satur: 옆으로 닿은 직후
       else if (speed - 1 - sBrake * st.satur < tgt) { tgt = speed - 1 - sBrake * st.satur; tgtWhy = 'satur'; }
     }
     if (MEDGE && exactMaster && st.edgeRisk > MEDGE_B && car.grounded && speed > 20 && speed - 1 - 3 * (st.edgeRisk - MEDGE_B) < tgt) { tgt = speed - 1 - 3 * (st.edgeRisk - MEDGE_B); tgtWhy = 'edge'; }
@@ -1649,7 +1736,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, bp: move && move.bp || '', satur: st.saturLast || 0, tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
+    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, fsrc, bold: bdTag, bp: move && move.bp || '', satur: st.saturLast || 0, tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {
