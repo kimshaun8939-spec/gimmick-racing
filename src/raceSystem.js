@@ -55,6 +55,8 @@ export async function createRaceSystem(o) {
   //   NOSPIN: 부딪혀도 차 방향·회전·미끄럼각(slip)은 그대로, 옆으로 살짝 밀리기만 (car.cNudge, 금방 사라짐). &nospin=0 = 예전 몸싸움(비교용)
   const CC = car.cfg.contact || {};
   const NOSPIN = QS.get('nospin') !== '0' && CC.nospin !== false;
+  // contact2 (2026-11-25, 사용자 "충돌에서 사람이 계속 이득 / 부딪히는 동안 회전이 안 됨"): 사람·봇 순서와 상관없이 같은 결과. &contact2=0 = 예전
+  const C2 = QS.get('contact2') !== '0';
   // DRS (2026-11-12, src/drs.js): 설정 'DRS' 또는 주소 &drs=0이면 끔
   const DRS_URL_OFF = QS.get('drs') === '0';
   const NO_TRAIN = QS.get('train') === '0'; // 슬립스트림 기차 끔 (비교 시험용)
@@ -266,9 +268,11 @@ export async function createRaceSystem(o) {
     let sideHit = false;
     if (Math.abs(a.fwd.dot(b.fwd)) > 0.8) {
       const ah = hitboxFor(a), bh = hitboxFor(b);
-      const along = Math.abs(_pa.copy(b.pos).sub(a.pos).dot(a.fwd));
+      // contact2: 예전엔 a(늘 플레이어)의 앞 방향으로만 판단 → 두 차 앞 방향의 평균으로 (누가 a든 같은 결과)
+      const fd = C2 ? _wo.copy(b.fwd).multiplyScalar(Math.sign(a.fwd.dot(b.fwd))).add(a.fwd).normalize() : a.fwd;
+      const along = Math.abs(_pa.copy(b.pos).sub(a.pos).dot(fd));
       const sideLimit = Math.min(ah.front + ah.back, bh.front + bh.back) * .55;
-      _pb.crossVectors(a.up || car.up, a.fwd).normalize();
+      _pb.crossVectors(a.up || car.up, fd).normalize();
       sideHit = Math.abs(_pb.dot(_n)) > .7 && along < sideLimit;
     }
     stats.contacts++;
@@ -423,7 +427,16 @@ export async function createRaceSystem(o) {
       // 거의 같은 쪽을 보는 두 차(앞 방향 차이 37° 안): 똑바로 뒤에서 박은 경우(밀어내는 방향이 앞뒤 성분 70% 넘음)만 앞 속도를 주고받고,
       //   나란히·비스듬히 파고든 경우는 옆으로만 밀어냄 (예전엔 비스듬히 밀면 두 차 모두 스텝마다 앞 속도를 잃어 0.3초에 20~35 km/h 느려졌음)
       const par = Math.abs(a.fwd.x * b.fwd.x + a.fwd.z * b.fwd.z) > 0.8;
-      const fa = flatDir(a, _fa), nf = Math.abs(_n.x * fa.x + _n.z * fa.z);
+      let nf;
+      if (C2 && !bStatic) {
+        // contact2: 두 차 진행 방향의 평균 기준 (예전엔 a = 늘 플레이어 기준)
+        const fa = flatDir(a, _fa), ax = fa.x, az = fa.z, fb = flatDir(b, _fa), sg = Math.sign(ax * fb.x + az * fb.z) || 1;
+        const mx = ax + fb.x * sg, mz = az + fb.z * sg, ml = Math.hypot(mx, mz) || 1;
+        nf = Math.abs((_n.x * mx + _n.z * mz) / ml);
+      } else {
+        const fa = flatDir(a, _fa);
+        nf = Math.abs(_n.x * fa.x + _n.z * fa.z);
+      }
       const latOnly = par && (sideHit || nf < 0.7);
       const jAll = -(1 + (latOnly ? CC.rest ?? 0.15 : CC.restRear ?? 0)) * rel;
       kick(a, jAll * share, latOnly);
@@ -458,7 +471,11 @@ export async function createRaceSystem(o) {
     if (a === car || b === car) {
       stats.pDv = (stats.pDv || 0) + (a === car ? a.speed - sa0 : b.speed - sb0);
       if (!bStatic) stats.bDv = (stats.bDv || 0) + (a === car ? b.speed - sb0 : a.speed - sa0);
+      if (rel < -6) stats.hardP = (stats.hardP || 0) + 1;
     }
+    // 시험용 기록 (차마다 접촉이 바꾼 앞 속도·밀린 거리 합, .debug/contact2_race.js)
+    if (a._c2dv != null) { const d = a.speed - sa0; a._c2dv += d; if (d > 0) a._c2gain += d; else a._c2lose += d; a._c2push += separate * share; }
+    if (!bStatic && b._c2dv != null) { const d = b.speed - sb0; b._c2dv += d; if (d > 0) b._c2gain += d; else b._c2lose += d; b._c2push += separate * (1 - share); }
   }
   /** 매 스텝: 옆으로 밀리는 속도만큼 위치를 옮기고 줄임. 벽 쪽이면 그 성분은 버림 (레일은 car.keepInsideRail이 다음 스텝에 막음) */
   function applyNudge(c, dt) {
