@@ -459,7 +459,7 @@ const BK_EARLY = BRAKEPASS && !BK_OFF.has('early'), BK_LATE = BRAKEPASS && !BK_O
 //   (시험용) &dgpred=abs = 사람 예측을 절대 옆 속도로, &dgproj=1 = 속도 계획에 돌아오는 옆 거리 미리 반영, &dgt=초 = 시작 남은 시간
 // planner (2026-11-26): &planner=1 = 봇의 추월·차 사이 판단을 botPlanner.js로 (예전 follow/lane 차선 바꾸기/dodge/bold/sling/stuck 규칙 대신). 기본 끔
 const PLANNER = BK_Q.get('planner') === '1';
-const BFOLLOW = BK_Q.get('bfollow') === '1'; // brakefollow: 브레이크 구간·코너 앞 앞차 판단 = botBrakeFollow.js 하나. 기본 끔(강한 접촉이 늘어 보류), &bfollow=1 = 켬, 0·없음 = 예전 규칙들
+const BFOLLOW = BK_Q.get('bfollow') !== '0'; // brakefollow: 브레이크 구간·코너 앞 앞차 판단 = botBrakeFollow.js 하나. 기본 켬(2차 hGap 0.25), &bfollow=0 = 예전 규칙들
 const PL_DUMP = BK_Q.get('pldump') === '1'; // (진단) 후보 전부의 점수를 st.plDump.all에
 const DODGE = BK_Q.get('dodge') !== '0', DG_OFF = new Set((BK_Q.get('dgoff') || '').split(/[,.]/));
 const DG_START = DODGE && !DG_OFF.has('start'), DG_FOLLOW = DODGE && !DG_OFF.has('follow'), DG_CURVE = DODGE && !DG_OFF.has('curve');
