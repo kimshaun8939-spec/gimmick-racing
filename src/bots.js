@@ -459,6 +459,7 @@ const BK_EARLY = BRAKEPASS && !BK_OFF.has('early'), BK_LATE = BRAKEPASS && !BK_O
 //   (시험용) &dgpred=abs = 사람 예측을 절대 옆 속도로, &dgproj=1 = 속도 계획에 돌아오는 옆 거리 미리 반영, &dgt=초 = 시작 남은 시간
 // planner (2026-11-26): &planner=1 = 봇의 추월·차 사이 판단을 botPlanner.js로 (예전 follow/lane 차선 바꾸기/dodge/bold/sling/stuck 규칙 대신). 기본 끔
 const PLANNER = BK_Q.get('planner') === '1';
+const SIDEJOIN = BK_Q.get('sidejoin') !== '0'; // sidejoin (2026-11-26): 브레이크 구간에서 나란히 차가 곧 쓸 줄을 보고 내 줄 정하기 (botBrakeFollow.js besideLane), &sidejoin=0 = brakefollow 2차 그대로
 const BFOLLOW = BK_Q.get('bfollow') !== '0'; // brakefollow: 브레이크 구간·코너 앞 앞차 판단 = botBrakeFollow.js 하나. 기본 켬(2차 hGap 0.25), &bfollow=0 = 예전 규칙들
 const PL_DUMP = BK_Q.get('pldump') === '1'; // (진단) 후보 전부의 점수를 st.plDump.all에
 const DODGE = BK_Q.get('dodge') !== '0', DG_OFF = new Set((BK_Q.get('dgoff') || '').split(/[,.]/));
@@ -1117,10 +1118,11 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     function bfDecide(){
       const kPlan=(exactMaster?1:pace*st.paceMul)*eq.kMul;
       const me={v:speed,lane:actualLane,cmdLane:st.lane,turnSide,pedal:1/3,aBrake:(level.brakeK??0.95)*gHere*cm.aBrake(speed),planAt:m=>prof.speed[W(i0+Math.round(Math.max(0,m)/ds))]*kPlan};
-      const cars=peers.filter(o=>actualGap(o)>0).map(o=>({key:keyOf(o),gap:actualGap(o)-rearSpace(o),dLat:o.lat-myLat,width:sideSpace(o),lane:o.lane,v:o.speed,acc:st.sideSight?.get(keyOf(o))?.acc||0}));
+      const sgOf=o=>st.sideSight?.get(keyOf(o)),lenOf=o=>(ownBox.front+ownBox.back+boxOf(o).front+boxOf(o).back)*.5; // sidejoin: 범퍼가 겹친 뒤쪽 차도 넘김
+      const cars=peers.filter(o=>actualGap(o)>(SIDEJOIN?-lenOf(o):0)).map(o=>({key:keyOf(o),dm:actualGap(o),len:lenOf(o),gap:actualGap(o)-rearSpace(o),dLat:o.lat-myLat,width:sideSpace(o),lane:o.lane,latV:sgOf(o)?.ov||0,v:o.speed,acc:sgOf(o)?.acc||0}));
       const lo=off=>Math.min(off,actualLane),hi=off=>Math.max(off,actualLane); // 지금 자리 → 그 줄까지 지나가는 폭 전체에 다른 차가 없어야 함
       const laneOK=(off,key)=>fits(off,.9)&&!crosses(off)&&!bpLaneSlow(off)&&!peers.some(p=>keyOf(p)!==key&&p.dm>-rearSpace(p)-2&&p.dm<rearSpace(p)+12&&p.lane>lo(off)-sideSpace(p)-.15&&p.lane<hi(off)+sideSpace(p)+.15);
-      return brakeZoneFollow(me,cars,{laneOK,room:bpRoom});
+      return brakeZoneFollow(me,cars,{sidejoin:SIDEJOIN,laneOK,room:bpRoom});
     }
     // planner: 땅 위·위험/좁은 길/합류 위험/출발 줄 아님·근처(뒤 25 m ~ 앞 max(60, 속도×2.5+30) m)에 차가 있을 때만. 아니면 예전 운전 그대로
     const plNear=!!planner&&peers.some(o=>!(o.fin&&!o.human)&&o.dm>-25&&o.dm<Math.max(60,v*2.5+30));
@@ -1803,7 +1805,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, fsrc, bold: bdTag, bp: move && move.bp || '', satur: st.saturLast || 0, bf: bfC ? bfC.mode || '-' : '', pl: plC ? `${plC.pol}${plC.tag}${plC.i}/${plC.nc} e${plC.eT.toFixed(1)} r${plC.r} s${plC.sc.toFixed(1)}|p${plC.P.prog.toFixed(0)} h${plC.P.hit.toFixed(1)} u${plC.P.rub.toFixed(1)} o${plC.P.off.toFixed(1)} t${plC.P.sat.toFixed(1)} x${plC.P.pass.toFixed(1)} m${(plC.P.term||0).toFixed(1)}` : '', tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
+    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, fsrc, bold: bdTag, bp: move && move.bp || '', satur: st.saturLast || 0, bf: bfC ? bfC.mode || '-' : '', sj: bfC ? bfC.sj || '-' : '', sjKey: bfC ? bfC.sjKey : null, pl: plC ? `${plC.pol}${plC.tag}${plC.i}/${plC.nc} e${plC.eT.toFixed(1)} r${plC.r} s${plC.sc.toFixed(1)}|p${plC.P.prog.toFixed(0)} h${plC.P.hit.toFixed(1)} u${plC.P.rub.toFixed(1)} o${plC.P.off.toFixed(1)} t${plC.P.sat.toFixed(1)} x${plC.P.pass.toFixed(1)} m${(plC.P.term||0).toFixed(1)}` : '', tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {

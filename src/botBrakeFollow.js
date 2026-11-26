@@ -28,6 +28,11 @@ export const BF = {
   backRate: 2.0,   // 따라갈 때 라인으로 돌아오는 속도 (m/s)
   steerLag: 0.35,  // 핸들 지연 (초)
   clearK: 0.8,     // 다 비키는 시간이 범퍼 닿는 시간의 이 비율 안이면 그 차 때문에는 안 밟음
+  // sidejoin (2026-11-26): 나란히(범퍼가 겹친) 차
+  noseK: 0.5,      // 내 코가 그 차보다 (범퍼 겹침 길이 × 이 값) 넘게 앞이면 내 줄 유지 = 그 차가 비킴 (앞선 쪽 우선)
+  predT: 0.8,      // 나란히 차가 곧 쓸 줄 = 지금 줄 + 옆 속도 × 이 시간 (초), 그쪽 도로 끝 안으로 자름
+  besideGap: 0.3,  // 나란히 차와 남길 옆 여유 (차 폭 위에, m)
+  dropV: 1.0,      // 비킬 자리가 길 안에 없으면 그 차 속도 − 이 값으로 뒤로 빠짐 (m/s)
 };
 
 // 범퍼가 닿을 때까지 시간: 내 속도 그대로, 앞차는 지금 감속도 그대로라고 봄
@@ -58,8 +63,36 @@ function matchSpeed(o, me) {
 // 따라갈 때 줄: 지금 지시한 줄 그대로 (코너 안에서 라인으로 모이면 핸들이 모자라 브레이크, 밀려난 실제 자리를 따라가면 점점 바깥으로).
 //   길이 좁아지면 길 끝 안으로 자름 (라인을 넘어 반대쪽으로는 안 밂)
 function keepLane(me, env) {
-  const lane = me.cmdLane;
+  return inRoom(me.cmdLane, env);
+}
+function inRoom(lane, env) {
   return lane > 0 ? Math.min(lane, Math.max(0, env.room(1, BF.keepSec))) : Math.max(lane, Math.min(0, env.room(-1, BF.keepSec)));
+}
+
+// 나란히 차가 predT 뒤에 있을 줄: 지금 옆 속도로 가다 도로 끝 안으로 잘림, 단 predT 동안 max(backRate, 지금 옆 속도)보다 빨리는 못 옮김
+function predLane(o, env) {
+  const m = Math.max(BF.backRate, Math.abs(o.latV)) * BF.predT, tgt = inRoom(o.lane + o.latV * BF.predT, env);
+  return o.lane + Math.min(m, Math.max(-m, tgt - o.lane));
+}
+
+// sidejoin: 나란히(범퍼가 겹친) 차가 곧 쓸 줄(지금 줄 + 옆 속도, 도로 끝 안 = 라인 쪽으로 모여 오는 것)을 보고 내 줄을 정함.
+//   내 코가 반 대 넘게 앞이면 내 줄 유지(hold), 아니면 그 차 줄 + 차 폭만큼 내 쪽에 머묾(yield: 바깥이면 바깥, 안쪽이면 안쪽),
+//   길 안에 그 자리가 없으면 코가 더 앞인 차 뒤로 빠짐(drop; 내가 조금이라도 앞이면 내 줄 유지). 사람·봇 같은 판단(위치·속도만) → { lane, rate, speed, sj }
+function besideLane(me, cars, env, home) {
+  let lo = -Infinity, hi = Infinity, vAhead = Infinity, sj = null, key = null;
+  for (const o of cars) {
+    if (Math.abs(o.dm) >= o.len) continue;
+    if (o.dm < -BF.noseK * o.len) { sj = sj || 'hold'; continue; }
+    const sd = Math.sign(me.lane - o.lane) || 1, edge = predLane(o, env) + sd * (o.width + BF.besideGap);
+    if (sd > 0 ? edge <= home : edge >= home) continue;
+    if (sd > 0) lo = Math.max(lo, edge); else hi = Math.min(hi, edge);
+    if (o.dm > 0 && o.v < vAhead) { vAhead = o.v; key = o.key; }
+    key = key ?? o.key;
+  }
+  if (lo === -Infinity && hi === Infinity) return { lane: home, rate: BF.backRate, speed: Infinity, sj, key };
+  const a = Math.max(lo, inRoom(-99, env)), b = Math.min(hi, inRoom(99, env));
+  if (a <= b) return { lane: Math.min(Math.max(home, a), b), rate: BF.sideRate, speed: Infinity, sj: 'yield', key };
+  return { lane: home, rate: BF.backRate, speed: vAhead - BF.dropV, sj: vAhead < Infinity ? 'drop' : 'hold', key };
 }
 
 // 옆 줄 고르기: 내가 이미 있는 쪽으로만 (브레이크 구간에서 앞차 뒤를 가로지르지 않음), 차 폭만큼 비킴,
@@ -83,17 +116,18 @@ function sideLimit(o, isLead, side, me) {
 
 /**
  * me:   { v, lane(라인 기준 지금 옆 거리), cmdLane(지금 지시한 줄), turnSide, aBrake(내 제동 m/s²), pedal(브레이크 = (속도−목표)×pedal), planAt(m 앞 → 내 계획 속도) }
- * cars: [{ key, gap(범퍼 간격 m), dLat(옆 간격, 도로 기준), width(겹치지 않을 옆 간격), lane(라인 기준), v, acc(실제 가감속) }]
- * env:  { laneOK(off, key): 그 줄에 차 전체가 들어가고 그 줄 근처에 (key 말고) 다른 차가 없나, room(side, sec): 앞 (25+속도×sec) m 동안 그쪽 도로 끝 }
+ * cars: [{ key, dm(가운데끼리 앞뒤, + = 앞), len(범퍼가 겹치는 앞뒤 길이), gap(범퍼 간격 m), dLat(옆 간격, 도로 기준), width(겹치지 않을 옆 간격), lane(라인 기준), latV(라인 기준 옆 속도), v, acc(실제 가감속) }]
+ * env:  { sidejoin(나란히 차 판단 켬), laneOK(off, key): 그 줄에 차 전체가 들어가고 그 줄 근처에 (key 말고) 다른 차가 없나, room(side, sec): 앞 (25+속도×sec) m 동안 그쪽 도로 끝 }
  * → { mode: 'side'|'match'|'safety'|null, side(옆으로 빠지는 중), lane, rate, speed(앞차 때문의 속도 한계, 없으면 Infinity), key }
  */
 export function brakeZoneFollow(me, cars, env) {
-  const homeLane = keepLane(me, env);
+  const bs = env.sidejoin ? besideLane(me, cars, env, keepLane(me, env)) : { lane: keepLane(me, env), rate: BF.backRate, speed: Infinity, sj: null, key: null };
+  const homeLane = bs.lane;
   // 앞차 = 지금 내 앞을 막는 차 + (길이 좁아져 내 줄이 밀려 들어가면) 그 줄에 있는 앞차. 범퍼가 겹친 채 옆으로 비켜 있는 차는 나란히 = 앞차 아님
   const pushed = Math.abs(homeLane - me.lane) > BF.pushed;
   const blocks = (o) => (Math.abs(o.dLat) < o.width + BF.overlap && !(o.gap < 0 && Math.abs(o.dLat) > o.width * BF.besideK)) || (pushed && Math.abs(o.lane - homeLane) < o.width);
-  const front = cars.filter((o) => o.gap < BF.look && blocks(o));
-  if (!front.length) return { mode: null, lane: homeLane, rate: BF.backRate, speed: Infinity, key: null };
+  const front = cars.filter((o) => o.dm > 0 && o.gap < BF.look && blocks(o));
+  if (!front.length) return { mode: bs.speed < Infinity ? 'beside' : null, lane: homeLane, rate: bs.rate, speed: bs.speed, key: null, sj: bs.sj, sjKey: bs.key };
   const lead = front.reduce((a, b) => (b.gap < a.gap ? b : a));
   const vSoon = lead.v + Math.min(0, lead.acc) * BF.tauAcc;
   const faster = me.planAt(lead.gap) > vSoon + BF.faster && me.v > lead.v - 0.5;
@@ -104,5 +138,6 @@ export function brakeZoneFollow(me, cars, env) {
     const v = typeof lim === 'number' ? lim : lim.v;
     if (v < speed) { speed = v; mode = side ? (v < Infinity ? 'safety' : 'side') : lim.safety ? 'safety' : 'match'; }
   }
-  return { mode, side: !!side, lane: side ? side.lane : homeLane, rate: side ? BF.sideRate : BF.backRate, speed, key: lead.key };
+  if (bs.speed < speed) { speed = bs.speed; mode = 'beside'; }
+  return { mode, side: !!side, lane: side ? side.lane : homeLane, rate: side ? BF.sideRate : bs.rate, speed, key: lead.key, sj: bs.sj, sjKey: bs.key };
 }
