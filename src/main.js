@@ -365,6 +365,7 @@ const raceSys = await createRaceSystem({
   botLevel: (ONLINE && params.get('botLevel')) || (CHAMP && CHAMP.state.level) || settings.values.botLevel || 'normal',
   seed: ONLINE ? params.get('room') : CHAMP ? 'champ' + CHAMP.state.seed : null,
   loadCarConfig: (id) => (rosterMod ? rosterMod.loadCarConfig(id) : Promise.resolve(carCfg)),
+  offlineRace: MODE === 'race' && !ITEM && !ONLINE && !FREE && !params.get('tutorial') && !params.get('academy'), // learnA7: 봇 추월 계획·깜빡이는 길 안전 폭
 });
 // 기록 비교 전에 이 맵에서 확정할 수 있는 옛 그리드 기록만 표시.
 if (!FREE) records.classifyLegacy(mapName, track, trackData.laps);

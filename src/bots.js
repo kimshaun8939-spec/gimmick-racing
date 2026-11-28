@@ -1,3 +1,6 @@
+// A6는 사라지는 노면 앞에서 차 폭과 안전 여유를 남긴 줄만 써요.
+// A5는 난간이 있는 다리의 급한 굽이 앞에서 바깥 추월을 피하고 앞차를 따라가요.
+// A4는 A2에서 첫 포털 진입부만 기존 지상 운전에 맡겨요.
 // AI 봇 운전사: 자기 차의 원래 물리 + 단계별 운전 실력. 견인·슬립스트림·DRS 조건은 사람과 공통.
 //
 //   조향 (땅): 원하는 회전 속도 = 라인 곡률×속도 + 방향 오차 + 옆 오차 → 이 차가 핸들 1로 도는 회전 속도로 나눔 (2026-11-10 hard2)
@@ -458,7 +461,8 @@ const BK_EARLY = BRAKEPASS && !BK_OFF.has('early'), BK_LATE = BRAKEPASS && !BK_O
 //   운전(줄·페달 타이밍)만, 차 성능·물리 그대로. &dodge=0 = 예전 그대로, &dgoff=start,follow,curve,hold,back = 하나만 끄기
 //   (시험용) &dgpred=abs = 사람 예측을 절대 옆 속도로, &dgproj=1 = 속도 계획에 돌아오는 옆 거리 미리 반영, &dgt=초 = 시작 남은 시간
 // planner (2026-11-26): &planner=1 = 봇의 추월·차 사이 판단을 botPlanner.js로 (예전 follow/lane 차선 바꾸기/dodge/bold/sling/stuck 규칙 대신). 기본 끔
-const PLANNER = BK_Q.get('planner') === '1';
+// 2026-11-28 learnA7: 판마다 raceSystem이 opts.planner(오프라인 봇 레이스의 마스터·어려움)·opts.cliffSafety(오프라인 봇 레이스)를 넘김. &planner=0이면 끔
+const PLANNER_Q = BK_Q.get('planner');
 const SIDEJOIN = BK_Q.get('sidejoin') !== '0'; // sidejoin (2026-11-26): 브레이크 구간에서 나란히 차가 곧 쓸 줄을 보고 내 줄 정하기 (botBrakeFollow.js besideLane), &sidejoin=0 = brakefollow 2차 그대로
 const BFOLLOW = BK_Q.get('bfollow') !== '0'; // brakefollow: 브레이크 구간·코너 앞 앞차 판단 = botBrakeFollow.js 하나. 기본 켬(2차 hGap 0.25), &bfollow=0 = 예전 규칙들
 const PL_DUMP = BK_Q.get('pldump') === '1'; // (진단) 후보 전부의 점수를 st.plDump.all에
@@ -761,10 +765,48 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     return c;
   }
 
+  const portalA = track.dimension?.portalA;
+  const portalIndex = portalA ? W(Math.round(portalA.t * N)) : -1;
+  const portalRadius = track.dimension?.portalRadius ?? track.width / 2;
+  const portalApproach = PL.look + portalRadius;
+  const PLANNER = !!opts.planner && PLANNER_Q !== '0';
   const cmAcc = PLANNER ? lineCarModel(car.cfg) : null;
   const plEdge = (j, side) => { const E = track.EDGE; if (!E || !track.edgeAt) return 1; const e = track.edgeAt(j, side); return e === E.cliff || e === E.lava ? 6 : e === E.wall || e === E.rail ? 2.5 : 1; };
   let planner = null; // laneCurvature는 아래에서 정의됨 (함수 선언이라 여기서 써도 됨)
   if (PLANNER) planner = createPlanner({ L, N, ds, S, prof, laneCurvature: (j, lane) => laneCurvature(j, lane), bpPredict, aLat: (x) => cm.aLat(x), aAcc: (x) => cmAcc.aAcc(x) * Math.min(1, thrK), aBrake: (x) => cm.aBrake(x), bankGrip: cm.bankGrip || 0, edgeK: plEdge });
+  // 평소에도 절벽인 곳과 달리, 이 가장자리는 노면이 있는 순간에도 가용 폭에서 뺀다.
+  const flicker = opts.cliffSafety ? track.flicker : null;
+  const cliffEdge = track.EDGE?.cliff;
+  const cliffs = cliffEdge == null ? [] : (flicker?.zones ?? []).filter((z) => track.edgeAt?.(z.a, z.side) === cliffEdge);
+  const cliffApproach = flicker?.cfg?.ramp ?? 25, cliffClear = flicker?.cfg?.clear ?? 1.8;
+  function cliffLaneRoom(i, half) {
+    let lo = -Infinity, hi = Infinity;
+    for (const z of cliffs) {
+      if (W(z.a - i) * ds > cliffApproach && W(i - z.a) * ds > (z.b - z.a) * ds + 8) continue;
+      const edge = z.pe - cliffClear - half;
+      if (z.side > 0) hi = Math.min(hi, edge - L.offset[i]);
+      else lo = Math.max(lo, -edge - L.offset[i]);
+    }
+    return lo === -Infinity && hi === Infinity ? null : { lo, hi };
+  }
+  // 같은 옆 거리라도 기준 라인이 옮겨 가면 먼 곳의 절벽을 넘을 수 있다.
+  const cliffLines = cliffs.map((z) => {
+    let outward = -Infinity;
+    for (let j = z.a; j <= z.b; j++) outward = Math.max(outward, z.side * L.offset[W(j)]);
+    return { ...z, outward };
+  });
+  function legacyCliffLaneRoom(i, half, look, local) {
+    let lo = local?.lo ?? -Infinity, hi = local?.hi ?? Infinity;
+    const center = clamp(0, lo, hi);
+    for (const z of cliffLines) {
+      if (W(z.a - i) * ds > cliffApproach + look && W(i - z.a) * ds > (z.b - z.a) * ds + 8) continue;
+      // 접근 중에는 안전한 쪽으로 추월 거리를 줄인다. 라인 자체가 너무 가깝다면 현재 폭에서 안쪽으로 더 옮긴다.
+      const room = Math.max(0, z.pe - cliffClear - half - z.outward);
+      if (z.side > 0) hi = Math.min(hi, Math.max(center, room));
+      else lo = Math.max(lo, Math.min(center, -room));
+    }
+    return lo === -Infinity && hi === Infinity ? null : { lo, hi };
+  }
   st.plT = (seed % 12) / 120; st.plC = null;
   const scDrive = createShortcutDriver({ car, track, cm, level, pace, thrK, st, prof, vTop, queueSpeed: (ctx, v) => queueSpeed(ctx, v),
     onRelease: (i) => { const ti = car.trackInfo; if (ti) st.lane = st.laneTarget = clamp(ti.lateral - L.offset[i % N], -12, 12); st.laneHold = 0; } });
@@ -942,6 +984,10 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     }).filter(o=>Math.abs(o.dm)<130);
     const actualLane = myLat-L.offset[i0];
     const ownBox = hitboxFor(car);
+    const carHalf = Math.max(1, ownBox.half);
+    const localCliffRoom = cliffs.length ? cliffLaneRoom(i0, carHalf) : null;
+    const cliffRoom = planner ? localCliffRoom : null;
+    let laneRoom = cliffRoom;
     const boxOf = o => o.hitbox || ownBox;
     const tangent = ti.sample?.tan || car.fwd;
     const tl = Math.hypot(tangent.x,tangent.z)||1, tx=tangent.x/tl, tz=tangent.z/tl;
@@ -966,6 +1012,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       return o.dm>0 || (o.dm===0&&myLat>o.lat);
     };
     const fits = (off,seconds=1.1,wide=false) => {
+      if (laneRoom && (off < laneRoom.lo || off > laneRoom.hi)) return false;
       const margin=wide?Math.max(.2,projection(ownBox,car.fwd,null)-1+.4):Math.max(1,ownBox.half);
       for(let q=0;q<(25+v*seconds)/ds;q+=3){const j=W(i0+q),lat=L.offset[j]+off;if(lat<L.lo[j]+margin||lat>L.hi[j]-margin)return false;}
       return true;
@@ -1023,7 +1070,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // brakepass: 비킨 줄은 앞 (25+v*초) m 동안 차 전체가 도로 안이어야 함. 안쪽 방(side 쪽 도로 끝까지)이 모자라면 그만큼 줄여서 씀
     //   (처음엔 안쪽 길 끝에 눌리는 것을 허용했는데, 라인 기준 옆 거리가 잘리는 곳에서 줄이 꺾여 핸들이 좌우로 끝까지 흔들리고 바깥으로 밀려났음)
     const bpRoom=(side,seconds)=>{
-      const m=Math.max(1,ownBox.half);let r=side>0?Infinity:-Infinity;
+      const m=Math.max(1,ownBox.half);let r=side>0?(laneRoom?.hi ?? Infinity):(laneRoom?.lo ?? -Infinity);
       for(let q=0;q<(25+v*seconds)/ds;q+=3){const j=W(i0+q);r=side>0?Math.min(r,L.hi[j]-m-L.offset[j]):Math.max(r,L.lo[j]+m-L.offset[j]);}
       return r;
     };
@@ -1115,22 +1162,39 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     };
     const safeWindow=()=>{for(let q=0;q<(25+v*2.5)/ds;q+=3){const j=W(i0+q);if(narrowAt(j)||jumpZone?.[j]||S[j].roll||S[j].gap||track.isWaterT?.(j/N))return false;}return true;};
     const mergeHazard=!safeWindow();
+    // 난간이 있는 다리의 급한 굽이 앞에서 BF가 바깥 추월 줄을 더 벌리지 않게 한다.
+    let bfRailBlocked = null;
+    function outsideRailBend(off) {
+      const side = Math.sign(off);
+      if (!planner || !track.EDGE || !track.edgeAt || Math.abs(off) < .5 || side * (off - st.lane) <= 0) return false;
+      for (let q = 0; q < (25 + v * .9) / ds; q += 3) {
+        const j = W(i0 + q);
+        if (S[j].bridge && side * L.curvature[j] > 1 / 150 && track.edgeAt(j, side) === track.EDGE.rail) {
+          bfRailBlocked = { off, t: S[j].t };
+          return true;
+        }
+      }
+      return false;
+    }
     function bfDecide(){
       const kPlan=(exactMaster?1:pace*st.paceMul)*eq.kMul;
       const me={v:speed,lane:actualLane,cmdLane:st.lane,turnSide,pedal:1/3,aBrake:(level.brakeK??0.95)*gHere*cm.aBrake(speed),planAt:m=>prof.speed[W(i0+Math.round(Math.max(0,m)/ds))]*kPlan};
       const sgOf=o=>st.sideSight?.get(keyOf(o)),lenOf=o=>(ownBox.front+ownBox.back+boxOf(o).front+boxOf(o).back)*.5; // sidejoin: 범퍼가 겹친 뒤쪽 차도 넘김
       const cars=peers.filter(o=>actualGap(o)>(SIDEJOIN?-lenOf(o):0)).map(o=>({key:keyOf(o),dm:actualGap(o),len:lenOf(o),gap:actualGap(o)-rearSpace(o),dLat:o.lat-myLat,width:sideSpace(o),lane:o.lane,latV:sgOf(o)?.ov||0,v:o.speed,acc:sgOf(o)?.acc||0}));
       const lo=off=>Math.min(off,actualLane),hi=off=>Math.max(off,actualLane); // 지금 자리 → 그 줄까지 지나가는 폭 전체에 다른 차가 없어야 함
-      const laneOK=(off,key)=>fits(off,.9)&&!crosses(off)&&!bpLaneSlow(off)&&!peers.some(p=>keyOf(p)!==key&&p.dm>-rearSpace(p)-2&&p.dm<rearSpace(p)+12&&p.lane>lo(off)-sideSpace(p)-.15&&p.lane<hi(off)+sideSpace(p)+.15);
+      const laneOK=(off,key)=>fits(off,.9)&&!crosses(off)&&!outsideRailBend(off)&&!bpLaneSlow(off)&&!peers.some(p=>keyOf(p)!==key&&p.dm>-rearSpace(p)-2&&p.dm<rearSpace(p)+12&&p.lane>lo(off)-sideSpace(p)-.15&&p.lane<hi(off)+sideSpace(p)+.15);
       return brakeZoneFollow(me,cars,{sidejoin:SIDEJOIN,laneOK,room:bpRoom});
     }
     // planner: 땅 위·위험/좁은 길/합류 위험/출발 줄 아님·근처(뒤 25 m ~ 앞 max(60, 속도×2.5+30) m)에 차가 있을 때만. 아니면 예전 운전 그대로
     const plNear=!!planner&&peers.some(o=>!(o.fin&&!o.human)&&o.dm>-25&&o.dm<Math.max(60,v*2.5+30));
-    const plOn=!!planner&&plNear&&!ctx.finished&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&!risky&&!narrowSoon&&!mergeHazard&&speed>8&&!(ctx.since<6&&!brakeSoon&&!cornerSoon)&&ctx.since>st.react&&!(PL.noCorner===1&&(brakeSoon||cornerSoon));
+    // planner의 후보 경로에는 포털 주변 구조물이 없어서 진입부는 기존 지상 운전에 맡겨요.
+    const atPortalEntry = portalIndex >= 0 && (W(portalIndex - i0) * ds <= portalApproach || W(i0 - portalIndex) * ds <= portalRadius);
+    const plOn=!!planner&&plNear&&!atPortalEntry&&!ctx.finished&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&!risky&&!narrowSoon&&!mergeHazard&&speed>8&&!(ctx.since<6&&!brakeSoon&&!cornerSoon)&&ctx.since>st.react&&!(PL.noCorner===1&&(brakeSoon||cornerSoon));
     if(plOn){st.overtake=null;st.sideRetreat=null;}else if(planner)st.plC=null;
     // brakefollow: 브레이크 구간·코너 앞이면 앞차 판단은 brakeZoneFollow 하나 (예전 추월 줄·따라가기 규칙은 legacy일 때만)
     const bfOn=BFOLLOW&&!plOn&&!ctx.finished&&car.grounded&&car.mode!=='boat'&&car.mode!=='fly'&&car.surface!=='magnet'&&!risky&&!narrowSoon&&!mergeHazard&&(brakeSoon||cornerSoon)&&speed>12&&ctx.since>Math.max(6,st.react);
     const bfC=bfOn?bfDecide():null, legacy=!plOn&&!bfOn;
+    if (legacy && cliffs.length) laneRoom = legacyCliffLaneRoom(i0, carHalf, 25 + v * 1.1, localCliffRoom);
     if(bfOn){st.overtake=null;st.sideRetreat=null;}
     let move=st.overtake;
     let leader=move&&peers.find(o=>move.key!=null&&keyOf(o)===move.key);
@@ -1421,7 +1485,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         for(const o of peers){if(o.fin&&!o.human)continue;const g=actualGap(o);if(g<-30||g>v*PL.T+70)continue;const sg=st.sideSight?.get(keyOf(o));
           oth.push({key:keyOf(o),g,lane:o.lane,ov:sg?.ov||0,acc:sg?.acc||0,v:o.speed,Lf:rearSpace(o),Lb:projection(ownBox,car.fwd,false)+projection(boxOf(o),o.fwd,true),W:sideSpace(o),hb:boxOf(o).half+.2,human:!!o.human});}
         const t0=performance.now();
-        st.plC=planner.plan({holdOnly:PL.noCorner===2&&(brakeSoon||cornerSoon),m:Math.max(1,ownBox.half),i0,v:speed,e0:actualLane,ev:st.plEv,c0:st.lane,d0:car.draft||0,k:kPl,kB:kBPl,g:gHere,lead:level.lead||0,topCap:level.topK?vTop*level.topK*(car.aeroTopMul?car.aeroTopMul(true):1):Infinity,aeroTop:car.aeroTopMul?car.aeroTopMul(true):1,vTop,drag:car.cfg.aero.drag,bold,others:oth,prev:st.plC,dump:PL_DUMP?(st.plDump={}):null});
+        st.plC=planner.plan({cliffRoom,holdOnly:PL.noCorner===2&&(brakeSoon||cornerSoon),m:Math.max(1,ownBox.half),i0,v:speed,e0:actualLane,ev:st.plEv,c0:st.lane,d0:car.draft||0,k:kPl,kB:kBPl,g:gHere,lead:level.lead||0,topCap:level.topK?vTop*level.topK*(car.aeroTopMul?car.aeroTopMul(true):1):Infinity,aeroTop:car.aeroTopMul?car.aeroTopMul(true):1,vTop,drag:car.cfg.aero.drag,bold,others:oth,prev:st.plC,dump:PL_DUMP?(st.plDump={}):null});
         st.plMs=(st.plMs||0)+(performance.now()-t0);st.plN=(st.plN||0)+1;
       }
       plC=st.plC;want=plC.eT;
@@ -1431,6 +1495,8 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
       st.laneHold=Math.abs(want)>.3?.5:0;
     }
     st.laneTarget=plOn?clamp(want,Math.min(0,L.lo[i0]+Math.max(1,ownBox.half)-L.offset[i0]),Math.max(0,L.hi[i0]-Math.max(1,ownBox.half)-L.offset[i0])):move?.wideRetry||move?.bp||bfOn?clamp(want,L.lo[i0]+.2-L.offset[i0],L.hi[i0]-.2-L.offset[i0]):clamp(want,-6.4,6.4);
+    let cliffBlocked = laneRoom && (st.laneTarget < laneRoom.lo || st.laneTarget > laneRoom.hi);
+    if (cliffBlocked) st.laneTarget = clamp(st.laneTarget, laneRoom.lo, laneRoom.hi);
     // 앞차가 브레이크 중(감속 3 m/s² 넘음)이면 슬립스트림 추월의 '브레이크 안 밟기'를 쓰지 않음 (NOFOLLOW: 아래 '빠지는 중' 제동으로)
     const leaderBraking=nfFor(leader)&&!NF_OFF.has('evade')&&(sight.get(keyOf(leader))?.acc||0)<-3;
     const slingNow=!!(move&&move.sling&&move.phase==='pass'&&slingOK&&!leaderBraking&&!beside.some(o=>o!==leader));
@@ -1450,6 +1516,11 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     if(bfOn)laneRate=bfC.rate;
     const laneRateS=MLANE2&&exactMaster?Math.min(laneRate,Math.sqrt(2*3.5*Math.abs(st.laneTarget-st.lane))+.3):laneRate;
     st.lane+=clamp(st.laneTarget-st.lane,-laneRateS*dt,laneRateS*dt);
+    // 목표가 0이어도 이전 줄이 남는다. 현재 절벽 폭을 넘어선 조향 줄은 바로 안쪽으로 자른다.
+    if (legacy && localCliffRoom && (st.lane < localCliffRoom.lo || st.lane > localCliffRoom.hi)) {
+      st.lane = clamp(st.lane, localCliffRoom.lo, localCliffRoom.hi);
+      cliffBlocked = true;
+    }
     let lane=st.lane;
 
     let evadeTc=Infinity;
@@ -1461,12 +1532,15 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
         if(!o)for(const p of peers){const gp=actualGap(p);if(gp>rearSpace(p)*.6&&Math.abs(p.lat-myLat)<sideSpace(p)-.1&&(!o||gp<actualGap(o)))o=p;}
         if(o&&actualGap(o)>rearSpace(o)*.6&&Math.abs(o.lat-myLat)<sideSpace(o)+.3)setF(planner.followSpeed(speed,actualGap(o),rearSpace(o),o.speed,kBPl,gHere),'plF');
       }
-      // 마지막 안전망: 바로 앞(옆으로 많이 겹침)에 0.45초 안에 닿고 그 전에 옆으로 못 비키면 앞차 속도 −1
-      for(const o of peers){if(o.fin&&!o.human)continue;const gap=actualGap(o),dLat=o.lat-myLat,width=sideSpace(o),closing=speed-o.speed;
-        if(!(gap>0&&gap<60&&closing>.5&&Math.abs(dLat)<width*.75))continue;
-        const tc=Math.max(0,gap-rearSpace(o))/closing,want=clamp(L.offset[i0]+st.laneTarget,L.lo[i0]+.2,L.hi[i0]-.2);
-        const away=Math.abs(want-o.lat)>width+.1,tClear=away?Math.max(0,width+.1-Math.abs(dLat))/Math.max(.8,laneRate*.6)+.3:Infinity;
-        if(tc<.45&&tClear>tc)setF(Math.max(0,o.speed-1),'plSafe');}
+      // 목표 줄만 보고 통과하지 않고 현재 옆 간격과 필요한 제동 거리를 확인.
+      const wantLat = clamp(L.offset[i0] + st.laneTarget, L.lo[i0] + .2, L.hi[i0] - .2);
+      for (const o of peers) {
+        if (o.fin && !o.human) continue;
+        const observed = sight.get(keyOf(o));
+        const cap = planner.rearGuardSpeed(speed, o.speed, observed?.acc ?? 0, actualGap(o), rearSpace(o),
+          myLat - o.lat, (observed?.mv ?? 0) - (observed?.ov ?? 0), wantLat - o.lat, sideSpace(o), gHere);
+        setF(cap, 'plSafe');
+      }
     }
     else if(bfOn){if(bfC.speed<Infinity)setF(bfC.speed,'bf'+bfC.mode);}
     else for(const o of peers){
@@ -1805,7 +1879,7 @@ export function createBotDriver(car, track, prof, level, seed = 1, opts = {}) {
     // 실력별 액셀 (쉬움일수록 덜 밟음: 직선·비행 구간에서도 차이). 추월 시도 중에는 성격만큼 더 밟음
     const thrNow = pushing ? Math.min(1, thrK + 0.05 + 0.1 * aggr) : thrK;
     if (thrNow < 1 && !boosting) c.throttle = Math.min(c.throttle, thrNow);
-    st.dbg = { overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, fsrc, bold: bdTag, bp: move && move.bp || '', satur: st.saturLast || 0, bf: bfC ? bfC.mode || '-' : '', sj: bfC ? bfC.sj || '-' : '', sjKey: bfC ? bfC.sjKey : null, pl: plC ? `${plC.pol}${plC.tag}${plC.i}/${plC.nc} e${plC.eT.toFixed(1)} r${plC.r} s${plC.sc.toFixed(1)}|p${plC.P.prog.toFixed(0)} h${plC.P.hit.toFixed(1)} u${plC.P.rub.toFixed(1)} o${plC.P.off.toFixed(1)} t${plC.P.sat.toFixed(1)} x${plC.P.pass.toFixed(1)} m${(plC.P.term||0).toFixed(1)}` : '', tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
+    st.dbg = { cliffRoom: laneRoom, cliffBlocked, overtake:st.overtake?{phase:st.overtake.phase,kind:st.overtake.kind,side:st.overtake.side,switched:st.overtake.switched,age:st.overtake.age}:null, follow, tgt, lane: st.lane, laneT: st.laneTarget, lateBrake, inSide, shove, hold, pass: +st.passT.toFixed(1), why: tgtWhy, fsrc, bold: bdTag, bp: move && move.bp || '', satur: st.saturLast || 0, bf: bfC ? bfC.mode || '-' : '', bfRailBlocked, sj: bfC ? bfC.sj || '-' : '', sjKey: bfC ? bfC.sjKey : null, pl: plC ? `${plC.pol}${plC.tag}${plC.i}/${plC.nc} e${plC.eT.toFixed(1)} r${plC.r} s${plC.sc.toFixed(1)}|p${plC.P.prog.toFixed(0)} h${plC.P.hit.toFixed(1)} u${plC.P.rub.toFixed(1)} o${plC.P.off.toFixed(1)} t${plC.P.sat.toFixed(1)} x${plC.P.pass.toFixed(1)} m${(plC.P.term||0).toFixed(1)}` : '', tq: tgtQ, tqm: tgtQ * ds, tvq: tgtVq, tvl: tgtVl };
 
     // 출발: 불이 꺼진 뒤 반응 시간만큼 기다림
     if (ctx.since < st.react) {

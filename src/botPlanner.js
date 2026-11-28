@@ -1,3 +1,5 @@
+// A6는 사라지는 노면 앞에서 가용 폭을 넘는 추월 줄을 후보에서 빼요.
+// 6회차 A2. 앞차 옆으로 이미 움직이고 있고 제동 여유 안에 비킬 때만 A의 안전 제동을 잠깐 미뤄요.
 // botPlanner (2026-11-26, 사용자 "봇이 추월을 너무 못해, 규칙으로 하는 건 한계"): 봇의 차 사이 판단을 '후보 길 여러 개를 미리 달려 보고 점수로 고르기'로.
 //   bots.js가 &planner=1일 때만 부름 (땅 위·좁은 길/점프/물/비행/자석/출발 줄 아님·근처에 차 있음). 라인 따라가기·조향·비행·배·점프·지름길은 bots.js 그대로.
 //   0.1초마다 (봇마다 시점을 엇갈려서):
@@ -102,6 +104,11 @@ export function createPlanner(E) {
     const jA = W(i0 + Math.round((v0 * 0.8) / ds)), loA = L.lo[jA] - L.offset[jA], hiA = L.hi[jA] - L.offset[jA];
     const m = ctx.m ?? 1; // 줄 가장자리 여유 (bots.js fits()와 같은 max(1, 차 반폭)) — 예전 운전보다 가장자리로 더 가지 않게
     let LO = Math.min(0, Math.max(lo0, loA) + m), HI = Math.max(0, Math.min(hi0, hiA) - m); // 라인 자리(0)는 늘 됨 (라인이 가장자리에 붙어 있어도)
+    if (ctx.cliffRoom) {
+      // 안전 줄과 앞뒤 폭의 공통 부분. 서로 어긋나면 안전한 쪽 경계까지 물러난다.
+      LO = clamp(LO, ctx.cliffRoom.lo, ctx.cliffRoom.hi);
+      HI = clamp(HI, ctx.cliffRoom.lo, ctx.cliffRoom.hi);
+    }
     if (LO > HI) LO = HI = (LO + HI) / 2; // 아주 좁으면 가운데 하나
     const lanes = [];
     const addLane = (x, tag) => {
@@ -245,5 +252,29 @@ export function createPlanner(E) {
     const gp = gap - Lf - (1 + 0.02 * v), b = PL.fB * kB * g * aBrake(vo);
     return gp >= 0 ? Math.sqrt(vo * vo + 2 * b * gp) : Math.max(0, vo + gp * 2);
   }
-  return { plan, followSpeed, curvAt };
+  /** 실제로 옆이 비었는지와 남은 제동 거리를 함께 보는 안전 제동. */
+  function rearGuardSpeed(v, vo, acc, gap, Lf, sep, sepV, targetSep, width, g) {
+    if (gap <= 0 || gap >= 60) return Infinity;
+    const sideRoom = width + 0.25;
+    const side = Math.sign(sep);
+    if (side * sep > sideRoom && side * (sep + 0.35 * sepV) > sideRoom && side * targetSep > sideRoom) return Infinity;
+
+    const brake = Math.max(2, 0.8 * aBrake(v) * g);
+    const leadSpeed = Math.max(0, vo + clamp(acc, -brake, 0) * 0.25);
+    const closing = v - leadSpeed;
+    const room = gap - Lf - 0.35;
+    if (closing <= 0.5) return Infinity;
+    const brakeRoom = closing * closing / (2 * brake);
+    if (room > closing * 0.25 + brakeRoom) return Infinity;
+
+    // 같은 쪽으로 실제 움직이는 중이고 목표 줄도 비어 있을 때 비킬 시간을 계산해요.
+    const outward = side * sepV;
+    if (outward > 0 && side * targetSep > sideRoom) {
+      const clearTime = (sideRoom - side * sep) / outward;
+      const spareTime = (room - brakeRoom) / closing; // 속도 차를 줄일 제동 거리를 남기고 기다릴 수 있는 시간
+      if (clearTime + 0.08 < spareTime && clearTime + 0.25 < room / closing) return Infinity;
+    }
+    return Math.max(0, leadSpeed - 1);
+  }
+  return { plan, followSpeed, curvAt, rearGuardSpeed };
 }

@@ -28,6 +28,9 @@ export async function createRaceSystem(o) {
   const QS = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
   const levelName = BOT_LEVELS[QS.get('botLevel')] ? QS.get('botLevel') : BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal';
   const level = BOT_LEVELS[levelName];
+  // learnA7 (2026-11-28): 오프라인 봇 레이스만 깜빡이는 길 안전 폭(모든 단계) + 추월 계획 planner(마스터·어려움). &planner=1 = 다른 단계도 켬, &planner=0 = 끔
+  const PQ = QS.get('planner');
+  const botOpts = { cliffSafety: !!o.offlineRace, planner: !!o.offlineRace && PQ !== '0' && (PQ === '1' || levelName === 'master' || levelName === 'hard') };
   const line = track.racingLine;
   const nBots = line && !track.arena ? Math.max(0, Math.min(7, o.botCount | 0)) : 0;
   // 씨앗: 온라인이면 방 코드로 (모든 사람에게 같은 봇 이름·차·성격), 아니면 무작위
@@ -92,7 +95,7 @@ export async function createRaceSystem(o) {
       bc.manual = false;
       const prof = profileFor(line, cfg);
       bc._lineProfile = prof; // 복귀할 때 굴러가는 속도 계산용
-      const driver = createBotDriver(bc, track, prof, level, seed + i * 101);
+      const driver = createBotDriver(bc, track, prof, level, seed + i * 101, botOpts);
       const h = opponents.add(
         { id: `bot${i + 1}`, name: names[i % names.length], look: p.look, carName: cfg.carName || p.name },
         { car: bc, driver, cfg, lastT: 0, lapsDone: 0, lapStart: 0, slowT: 0, offT: 0, wrongT: 0, chkT: 0, chkProg: 0, grace: 0, respawns: 0 },
